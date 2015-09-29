@@ -1,0 +1,2 @@
+# nkdomain
+Distributed configuration
