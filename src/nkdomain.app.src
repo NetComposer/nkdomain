@@ -1,0 +1,21 @@
+{application, nkdomain, [
+    {description, "NkCORE Domain Framework"},
+    {vsn, "0.1.0"},
+    {modules, []},
+    {registered, []},
+    {mod, {nkdomain_app, []}},
+    {applications, [
+        kernel,
+        stdlib,
+        crypto,
+        sasl,
+        ssl,
+        lager,
+        yamler,
+        nkdist,
+        nkrole,
+        nkbase
+    ]},
+    {env, [
+    ]}
+]}.

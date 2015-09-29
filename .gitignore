@@ -1,0 +1,8 @@
+*.beam
+deps
+.eunit
+log
+.DS_Store
+doc
+erlcinfo
+data
