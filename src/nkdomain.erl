@@ -18,20 +18,6 @@
 %%
 %% -------------------------------------------------------------------
 
-%% TODO
-%% - roles sólo se pueden reemplazar completos con load
-%% - replace borra todo lo que no esté
-%% - api especial para añadir o quitar roles
-%% - mirar conflictos en riak core metadata (ver cómo accede riak)
-%% - usar nkbase (y poner tokens)
-%%
-%%
-%%
-
-
-
-
-
 -module(nkdomain).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
