@@ -23,7 +23,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -behaviour(application).
 
--export([start/0, start/2, stop/1]).
+-export([start/0, start/1, start/2, stop/1]).
 -export([get/1, put/2, del/1]).
 
 -include("nkdomain.hrl").
@@ -39,8 +39,16 @@
     ok | {error, Reason::term()}.
 
 start() ->
+    start(temporary).
+
+
+%% @doc Starts NkDOMAIN stand alone.
+-spec start(permanent|transient|temporary) -> 
+    ok | {error, Reason::term()}.
+
+start(Type) ->
     nkdist_util:ensure_dir(),
-    case nklib_util:ensure_all_started(?APP, temporary) of
+    case nklib_util:ensure_all_started(?APP, Type) of
         {ok, _Started} ->
             ok;
         Error ->
