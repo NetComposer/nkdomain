@@ -72,7 +72,7 @@ start(_Type, _Args) ->
         role_proxy_timeout => 10000,
         user_password_pbkdf2_iters => 1
     },
-    case nklib_config:load_env(?APP, ?APP, Syntax, Defaults) of
+    case nklib_config:load_env(?APP, Syntax, Defaults) of
         {ok, _} ->
             {ok, Pid} = nkdomain_sup:start_link(),
             ok = riak_core_ring_events:add_guarded_handler(nkdomain_ring_handler, []),
