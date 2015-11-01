@@ -1,6 +1,6 @@
 {application, nkdomain, [
     {description, "NkCORE Domain Framework"},
-    {vsn, "0.1.0"},
+    {vsn, "develop"},
     {modules, []},
     {registered, []},
     {mod, {nkdomain_app, []}},

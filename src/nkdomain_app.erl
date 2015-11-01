@@ -23,7 +23,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -behaviour(application).
 
--export([start/0, start/2, stop/1]).
+-export([start/0, start/1, start/2, stop/1]).
 -export([get/1, put/2, del/1]).
 
 -include("nkdomain.hrl").
@@ -39,8 +39,16 @@
     ok | {error, Reason::term()}.
 
 start() ->
+    start(temporary).
+
+
+%% @doc Starts NkDOMAIN stand alone.
+-spec start(permanent|transient|temporary) -> 
+    ok | {error, Reason::term()}.
+
+start(Type) ->
     nkdist_util:ensure_dir(),
-    case nklib_util:ensure_all_started(?APP, temporary) of
+    case nklib_util:ensure_all_started(?APP, Type) of
         {ok, _Started} ->
             ok;
         Error ->
@@ -50,7 +58,7 @@ start() ->
 
 %% @private OTP standard start callback
 start(_Type, _Args) ->
-    ConfigSpec = #{
+    Syntax = #{
         user_timeout => {integer, 1, none},
         alias_timeout => {integer, 1, none},
         token_timeout => {integer, 1, none},
@@ -64,8 +72,8 @@ start(_Type, _Args) ->
         role_proxy_timeout => 10000,
         user_password_pbkdf2_iters => 1
     },
-    case nklib_config:load_env(?APP, ?APP, Defaults, ConfigSpec) of
-        ok ->
+    case nklib_config:load_env(?APP, Syntax, Defaults) of
+        {ok, _} ->
             {ok, Pid} = nkdomain_sup:start_link(),
             ok = riak_core_ring_events:add_guarded_handler(nkdomain_ring_handler, []),
             {ok, Vsn} = application:get_key(nkdomain, vsn),
