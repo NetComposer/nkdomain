@@ -58,6 +58,7 @@ start(Type) ->
 
 %% @private OTP standard start callback
 start(_Type, _Args) ->
+    riak_core:wait_for_service(nkbase),
     Syntax = #{
         user_timeout => {integer, 1, none},
         alias_timeout => {integer, 1, none},
