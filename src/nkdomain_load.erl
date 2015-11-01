@@ -533,7 +533,7 @@ do_parse(Data, Syntax, Path, Opts) when is_list(Data); is_map(Data) ->
                     {ok, Parsed}
             end;
         {ok, _, Unknown} ->
-            First = hd(maps:keys(Unknown)),
+            First = nklib_util:to_binary(hd(maps:keys(Unknown))),
             {error, {syntax_error, <<Path/binary, $., First/binary>>}};
         {error, Error} ->
             {error, Error}

@@ -45,6 +45,7 @@ tokens_test_() ->
 
 basic() ->
 	YamlData1 = data1:yaml(),
+	timer:sleep(2000),		% Wait for NkBASE
 	{ok, _} = nkdomain_load:load(yaml, YamlData1, #{replace=>true}),
 
 	stop_tokens(),
