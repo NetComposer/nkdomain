@@ -170,9 +170,9 @@ You can define any number of aliases, that can point to one or several objects. 
 
 ### Services
 
-Objects belonging to class `service` will not only be stored on database as any other object, but also 
+Objects belonging to class `service` will not only be stored on database as any other object, but also will be sent to the nkdomain_service server at every node. They will also be stored in the riak_core metadata database.
 
-Services must register a callback module for any new service, calling nkdomain_service_mngr:register/2. The callback module must implement the `nkdomain_service` behaviour, where they an offer an specific syntax, and are called when 
+Services must register a callback module for any new service, calling nkdomain_service_mngr:register/2. The callback module must implement the `nkdomain_service` behaviour, where they an offer an specific syntax, and are called when a service is updated.
 
 
 
