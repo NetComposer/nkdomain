@@ -383,7 +383,7 @@ parse_services(Path, [{Name, Data}|Rest], Acc) ->
                     case get_service_syntax(RawClass) of
                         {ok, Class, ClassSyntax} ->
                             Syntax1 = (base_syntax())#{
-                                class => binary,
+                                class => ignore,
                                 users => fun parse_domain_obj_role/3
                             },
                             Syntax2 = maps:merge(ClassSyntax, Syntax1),
@@ -571,7 +571,7 @@ get_service_syntax(RawClass) ->
             {'EXIT', _} -> throw(class);
             Atom -> Atom
         end,
-        Module = case catch nkdomain_service:get_module(Class) of
+        Module = case catch nkdomain:get_service_module(Class) of
             {'EXIT', _} -> throw(class);
             Module0 -> Module0
         end,

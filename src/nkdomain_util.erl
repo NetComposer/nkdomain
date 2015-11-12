@@ -22,7 +22,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([make_user_id/1, get_module/1, get_all/1, meta_get_all/1]).
--export([register_classes/1, resolve/1]).
+-export([register_classes/1, resolve/1, get_parts/1]).
 -include_lib("nklib/include/nklib.hrl").
 
 

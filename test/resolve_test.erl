@@ -30,8 +30,8 @@ resolve_test_() ->
   	{setup, 
     	fun() -> 
     		ok = nkdomain_app:start(),
-            nkdomain_service:register(admin, test_srv_admin),
-            nkdomain_service:register(dns, test_srv_dns)
+            nkdomain:register_service(admin, test_srv_admin),
+            nkdomain:register_service(dns, test_srv_dns)
         end,
 		fun(_) -> 
 			ok 

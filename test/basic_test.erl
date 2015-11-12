@@ -45,8 +45,8 @@ basic_test_() ->
 
 
 load() ->
-    nkdomain_service:register(admin, test_srv_admin),
-    nkdomain_service:register(dns, test_srv_dns),
+    nkdomain:register_service(admin, test_srv_admin),
+    nkdomain:register_service(dns, test_srv_dns),
 	YamlData1 = data1:yaml(),
 	{ok, _} = nkdomain_load:load(yaml, YamlData1, #{replace=>true}),
     {ok, Res1} = nkdomain_load:load(yaml, YamlData1, #{}),
@@ -56,9 +56,9 @@ load() ->
         <<"domainA">> := not_modified,
         <<"proy1.domainA">> := not_modified
     } = Res1,
-    {ok, RootUp1} = nkdomain_obj:get_updated(domain, root),
-    {ok, DomAUp1} = nkdomain_obj:get_updated(domain, "domainA"),
-    {ok, Proy1Up1} = nkdomain_obj:get_updated(domain, "proy1.domainA"),
+    {ok, #{updated:=RootUp1}} = nkdomain_obj:get_meta(domain, root),
+    {ok, #{updated:=DomAUp1}} = nkdomain_obj:get_meta(domain, "domainA"),
+    {ok, #{updated:=Proy1Up1}} = nkdomain_obj:get_meta(domain, "proy1.domainA"),
 
     YamlData2 = 
         re:replace(YamlData1, "desc: Domain A", "desc: Domain 'A'", [{return, binary}]),
@@ -68,21 +68,21 @@ load() ->
         <<"domainA">> := loaded,
         <<"proy1.domainA">> := not_modified
     } = Res2,
-    {ok, RootUp1} = nkdomain_obj:get_updated(domain, root),
-    {ok, DomAUp2} = nkdomain_obj:get_updated(domain, "domainA"),
-    {ok, Proy1Up1} = nkdomain_obj:get_updated(domain, "proy1.domainA"),
+    {ok, #{updated:=RootUp1}} = nkdomain_obj:get_meta(domain, root),
+    {ok, #{updated:=DomAUp2}} = nkdomain_obj:get_meta(domain, "domainA"),
+    {ok, #{updated:=Proy1Up1}} = nkdomain_obj:get_meta(domain, "proy1.domainA"),
     true = DomAUp2 > DomAUp1,
 
     {ok, Exp1} = nkdomain:export(<<"root">>),
     Json1 = nklib_json:encode_pretty(#{<<"root">>=>Exp1}),
 
     {ok, #{<<"root">> := not_modified}} = nkdomain_load:load(json, Json1, #{}),
-    {ok, RootUp2} = nkdomain_obj:get_updated(domain, root),
+    {ok, #{updated:=RootUp2}} = nkdomain_obj:get_meta(domain, root),
 
     Json2 = re:replace(Json1, "\"status\": \"ready\"", "\"status\": \"standby\"", 
                        [{return, binary}]),
     {ok, #{<<"root">> := loaded}} = nkdomain_load:load(json, Json2, #{}),
-    {ok, RootUp3} = nkdomain_obj:get_updated(domain, root),
+    {ok, #{updated:=RootUp3}} = nkdomain_obj:get_meta(domain, root),
     true = RootUp3 > RootUp2,
 
     [

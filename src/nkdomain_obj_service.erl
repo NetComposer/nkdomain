@@ -18,6 +18,8 @@
 %%
 %% -------------------------------------------------------------------
 
+%% @doc Service Objects
+%% Services must have a class that is previously registered
 -module(nkdomain_obj_service).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -behaviour(nkdomain_obj).
@@ -28,6 +30,7 @@
 -type service() ::
     nkdomain_obj:base_obj() |
 	#{
+        class => atom(),
         term() => term()
 	}.
 
@@ -58,9 +61,14 @@ load(Data, _Opts, Service, #state{id=ServiceId}=State) ->
     case do_load(maps:to_list(Data), Service, State) of
         {ok, Service, State1} ->
             {ok, Service, State1};
-        {ok, NewService, State1} ->
-            nkdomain_service:updated(ServiceId, NewService),
-            {ok, NewService, State1}
+        {ok, #{class:=Class}=NewService, State1} ->
+            case catch nkdomain:get_service_module(Class) of
+                {'EXIT', _} ->
+                    {error, {unknown_service_class, Class}};
+                Module ->
+                    ok = Module:updated(ServiceId, NewService),
+                    {ok, NewService, State1}
+            end
     end.
 
 
@@ -68,8 +76,10 @@ load(Data, _Opts, Service, #state{id=ServiceId}=State) ->
 -spec removed(service(), #state{}) ->
     ok.
 
-removed(_Service, #state{id=ServiceId}) ->
-    nkdomain_service:removed(ServiceId).
+removed(#{class:=Class}, #state{id=ServiceId}) ->
+    Module = nkdomain:get_service_module(Class),
+    ok = Module:removed(ServiceId),
+    ok.
    
 
 

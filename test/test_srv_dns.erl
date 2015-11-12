@@ -20,7 +20,6 @@
 
 -module(test_srv_dns).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
--behaviour(nkdomain_service).
 -compile([export_all]).
 
 
@@ -30,12 +29,12 @@ get_syntax() ->
     }.
 
 
-update(_ServiceId, _Data) ->
+updated(_ServiceId, _Data) ->
 	% lager:warning("UP ~s: ~p", [ServiceId, Data]),
-	{ok, #{status=>ok}}.
+	ok.
 
 
-remove(_ServiceId) ->
+removed(_ServiceId) ->
 	% lager:warning("REM ~s", [ServiceId]),
 	ok.
 
