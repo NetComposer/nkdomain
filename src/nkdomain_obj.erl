@@ -20,20 +20,8 @@
 %%
 
 %% @doc Core obj behaviour
+%% One of this objects is started for each object, distributed in the cluster
 %%
-%% Loading of domain objects
-%% - We try to locate the process, if it exists, loads the data, if old version
-%%   or same, do nothing
-%% - Domain loads other objects. They are first read from disk, if similar, 
-%%   do nothing, if not write to disk
-%%
-%% Loading of independent objects (only domain objects and independent objects 
-%% will be loaded directly, the rest will be loaded by domain objects)
-%% - We try to locate the process, if not load the object (like the user) from disk
-%% - If modified, is updated on disk
-%%
-%% Removal of domains
-%% - we call the remove/3 at the domain, it calls the remove/3 of each object
 
 -module(nkdomain_obj).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').

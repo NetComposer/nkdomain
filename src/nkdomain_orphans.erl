@@ -18,6 +18,7 @@
 %%
 %% -------------------------------------------------------------------
 
+%% @doc Utility functions to find and manage orphans
 -module(nkdomain_orphans).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 

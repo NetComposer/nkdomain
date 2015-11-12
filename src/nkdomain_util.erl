@@ -22,9 +22,8 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([make_user_id/1, get_module/1, get_all/1, meta_get_all/1]).
+-export([register_classes/1, resolve/1]).
 -include_lib("nklib/include/nklib.hrl").
-
-
 
 
 %% ===================================================================
@@ -32,8 +31,8 @@
 %% ===================================================================
 
 
-%% @doc
-%% Generates a valid user_obj_id() from any valid term
+%% @doc Generates a valid user_obj_id() from a pair of class and obj_id() or
+%% any valid term
 -spec make_user_id(string()|binary()|{nkdomain:class(), nkdomain:obj_id()}) ->
     {ok, nkdomain:user_obj_id()} | {error, term()}.
 
@@ -108,18 +107,11 @@ index_domain({nkdomain, _Class, Key}, _Obj) ->
     end.
 
 
+%% @doc Extracts class and obj_id and gets obj's pid() from an user_obj_id()
+-spec resolve(binary()) ->
+    {ok, nkdomain:class(), nkdomain:obj_id(), pid()} | {error, term()}.
 
-%% ===================================================================
-%% Internal
-%% ===================================================================
-
--compile([export_all]).
-
-%% @private
--spec do_resolve(binary()) ->
-    {ok, nkdomain:class(), Name::binary(), Domain::binary()} | {error, term()}.
-
-do_resolve(UserObjId) ->
+resolve(UserObjId) ->
     case get_parts(UserObjId) of
         {ok, {Class, ObjId}} ->
             case nkdomain_obj:get_pid(Class, ObjId) of
@@ -132,8 +124,10 @@ do_resolve(UserObjId) ->
                                 [<<"domain:", Domain2/binary>>] ->
                                     ObjId2 = <<Name/binary, $@, Domain2/binary>>,
                                     case nkdomain_obj:get_pid(Class, ObjId2) of
-                                        {ok, Pid} -> {ok, {Class, ObjId2, Pid}};
-                                        {error, Error} -> {error, Error}
+                                        {ok, Pid} -> {ok, 
+                                            {Class, ObjId2, Pid}};
+                                        {error, Error} -> 
+                                            {error, Error}
                                     end;
                                 _ ->
                                     {error, not_found}
@@ -149,8 +143,8 @@ do_resolve(UserObjId) ->
     end.
 
 
-%% @private
-%% Ids without '@' are 'domain' if no class is found.
+%% @private Extracts class and obj_id from a obj_user_id
+%% Ids without '@' are of class 'domain' if no class is found.
 %% Ids without class are 'alias'
 -spec get_parts(nkdomain:user_obj_id()) ->
     {ok, {nkdomain:class(), nkdomain:obj_id()}} | {error, term()}.
@@ -199,8 +193,6 @@ get_parts(Id) ->
                     end
             end
     end.
-
-
 
 
 %% @private

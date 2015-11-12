@@ -32,6 +32,7 @@
 
 -type domain_status() :: ready | standby | stopping | stopped.
 
+%% Internal object
 -type domain() ::
     nkdomain_obj:base_opt() |
     #{
@@ -98,6 +99,7 @@ load(Data, Opts, Domain, #state{id=_DomainId}=State) ->
         List = maps:to_list(Data),
         Load = case Data of
             #{users:=Users} ->
+                %% Process users first
                 [{users, Users}|lists:keydelete(users, 1, List)];
             _ ->
                 List
@@ -140,6 +142,7 @@ export(DomainId, Domain) ->
 -spec handle_call(term(), {pid(), term()}, nkdomain:user(), #state{}) ->
     {noreply, tuple()} | {stop, term(), #state{}}.
 
+%% Called from nkdomain_orphans
 handle_call({check_orphan, domain, _}, _From, _Domain, State) ->
     {reply, {ok, true}, State};
 

@@ -31,12 +31,6 @@
 %% @private
 start_link() ->
     ChildsSpec = [
-        % {nkdomain_ctx_coverage_fsm_sup, 
-        %     {?MODULE, start_ctx_coverage_fsm_sup, []},
-        %     permanent,
-        %     infinity,
-        %     supervisor,
-        %     [?MODULE]},
         {nkdomain_service_mngr,
             {nkdomain_service_mngr, start_link, []},
             permanent,

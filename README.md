@@ -141,6 +141,40 @@ Some other features are:
 
 NkDOMAIN is not yet ready for normal use, but most of it is complete. See the included tests for examples of use.
 
+## Internal
+
+NkDOMAIN maintains a tree of Erlang objects (`nkdomain:obj()`), each of one belongs to a class (`nkdomain:class()`). Objects are defined by their class and object's id (`nkdomain:obj_id()`) or by a full id (`nkdomain:obj_usr_id()`) that usually includes the class, like <<"user:name@domain">> (but can be omitted for domain objects) All objects must be created inside other object, except the object <<"domain:root">>. 
+
+Each class of objects have their own rules and accept the creation of other specific types of object.
+
+Objects must implement the `nkdomain_obj` behaviour.
+
+Each time you access an object, it is located in disk and loaded into an Erlang process distributed in the cluster unsing NkDIST. It then stay in memory permanently or it is removed after a timeout, depending on each specific class. 
+
+
+
+### Loading and Removing
+
+Any object and be created or updated loading and specific syntax with nkdomain:load/4. Each object class must implement a load/4 callback function and be able to update itself. The update object will be updated on disk.
+
+Objects can be removed loading a specification with the key `remove=true`.
+
+Usually, you will only load `domain` objects, calling nkdomain:load_file/1. The domain object will load itself all dependant objects. You can also export a domain, along all of it dependant object, calling nkdomain:export/1.
+
+
+
+### Aliases
+
+You can define any number of aliases, that can point to one or several objects. You can use nkdomain:resolve/1 or nkdomain:multi_resolve/1 to find all pointed objects from an alias or user id.
+
+
+### Services
+
+Objects belonging to class `service` will not only be stored on database as any other object, but also 
+
+Services must register a callback module for any new service, calling nkdomain_service_mngr:register/2. The callback module must implement the `nkdomain_service` behaviour, where they an offer an specific syntax, and are called when 
+
+
 
 
 

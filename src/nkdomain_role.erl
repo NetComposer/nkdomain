@@ -18,6 +18,7 @@
 %%
 %% -------------------------------------------------------------------
 
+%% @doc Utility functions to manage roles
 -module(nkdomain_role).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
