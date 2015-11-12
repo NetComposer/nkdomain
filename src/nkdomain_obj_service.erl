@@ -22,7 +22,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -behaviour(nkdomain_obj).
 
--export([init/2, load/4, remove/2]).
+-export([init/2, load/4, removed/2]).
 
 
 -type service() ::
@@ -59,17 +59,17 @@ load(Data, _Opts, Service, #state{id=ServiceId}=State) ->
         {ok, Service, State1} ->
             {ok, Service, State1};
         {ok, NewService, State1} ->
-            nkdomain_service_mngr:save_updated(ServiceId, NewService),
+            nkdomain_service:updated(ServiceId, NewService),
             {ok, NewService, State1}
     end.
 
 
 %% @private
--spec remove(service(), #state{}) ->
+-spec removed(service(), #state{}) ->
     ok.
 
-remove(_Service, #state{id=ServiceId}) ->
-    nkdomain_service_mngr:save_removed(ServiceId).
+removed(_Service, #state{id=ServiceId}) ->
+    nkdomain_service:removed(ServiceId).
    
 
 

@@ -45,8 +45,8 @@ basic_test_() ->
 
 
 load() ->
-    nkdomain_service_mngr:register(admin, test_srv_admin),
-    nkdomain_service_mngr:register(dns, test_srv_dns),
+    nkdomain_service:register(admin, test_srv_admin),
+    nkdomain_service:register(dns, test_srv_dns),
 	YamlData1 = data1:yaml(),
 	{ok, _} = nkdomain_load:load(yaml, YamlData1, #{replace=>true}),
     {ok, Res1} = nkdomain_load:load(yaml, YamlData1, #{}),

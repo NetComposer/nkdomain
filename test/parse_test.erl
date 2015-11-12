@@ -29,8 +29,8 @@ basic_test_() ->
   	{setup, 
     	fun() -> 
     		ok = nkdomain_app:start(),
-		    nkdomain_service_mngr:register(admin, test_srv_admin),
-		    nkdomain_service_mngr:register(dns, test_srv_dns)
+		    nkdomain_service:register(admin, test_srv_admin),
+		    nkdomain_service:register(dns, test_srv_dns)
 		end,
 		fun(_) -> 
 			ok 
