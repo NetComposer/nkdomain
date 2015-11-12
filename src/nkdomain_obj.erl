@@ -28,7 +28,7 @@
 -behaviour(nkdist_proc).
 -behaviour(gen_server).
 
--export([get_pid/2, get_obj/2, get_updated/2, load/4, export/2, remove_obj/2]).
+-export([get_pid/2, get_obj/2, get_meta/2, load/4, export/2, remove_obj/2]).
 -export([do_call/4, do_cast/3]).
 -export([start/2, start_and_join/2, join/2, init/1, init_and_join/1]).
 -export([terminate/2, code_change/3, handle_call/3,
@@ -38,21 +38,21 @@
 
 -type call_opts() :: #{timeout=>timeout()}.
 
+%% All objects have at least these values
 -type base_obj() ::
     #{
         desc => binary(),
         roles => nkrole:rolemap(),
-        disabled => boolean,
-        remove => boolean
+        disabled => boolean
     }.
 
+%% Metadata stored on disk
 -type meta_obj() ::
     #{
         updated => nklib_util:l_timestamp()
     }.
 
 
--define(ROLE_OP_TRIES, 5).
 -define(LG(Level, Class, ObjId, Text, Args),
     lager:Level("NkDOMAIN ~p '~s' "++Text, [Class, nklib_util:to_binary(ObjId) | Args])).
 
@@ -68,6 +68,9 @@
 %%
 %% -callback get_backend(nkbase:class_meta) ->
 %%      nkbase:class_meta().
+%%
+%% -callback removed(nkdomain:obj(), mod_state()) ->
+%%    ok.
 %%
 %% -callback handle_call(term(), {pid(), term()}, nkdomain:obj(), mod_state()) ->
 %%     {reply, term(), mod_state()} |
@@ -104,14 +107,17 @@
         timeout => timeout()
     }.
 
+
+%% Called  when the object is intializaed
 -callback init(nkdomain:obj_id(), nkdomain:obj()) ->
     {ok, init_opts(), nkdomain:obj(), mod_state()}.
 
+
+%% Called when a new specification must be loaded into the object
 -callback load(map(), nkdomain_load:load_opts(), nkdomain:obj(), mod_state()) ->
     {ok, nkdomain:obj(), mod_state()} | removed | {error, term()}.
 
--callback remove(nkdomain:obj(), mod_state()) ->
-    ok | {error, term()}.
+
 
 
 
@@ -151,12 +157,12 @@ get_obj(Class, ObjId) ->
     do_call(Class, ObjId, get_obj, #{}).
 
 
-%% @doc Get object's last update
--spec get_updated(nkdomain:class(), nkdomain:obj_id()) ->
-    {ok, nklib_util:l_timestamp()} | {error, term()}.
+%% @doc Get object's metadata
+-spec get_meta(nkdomain:class(), nkdomain:obj_id()) ->
+    {ok, meta_obj()} | {error, term()}.
 
-get_updated(Class, ObjId) ->
-    do_call(Class, ObjId, get_updated, #{}).
+get_meta(Class, ObjId) ->
+    do_call(Class, ObjId, get_meta, #{}).
 
 
 %% @doc Loads an object definition
@@ -183,13 +189,13 @@ load(Class, ObjId, Data, Opts) ->
     {ok, map()} | {error, term()}.
 
 export(Class, ObjId) ->
-    ObjId1 = nklib_util:to_binary(ObjId),
-    case get_obj(Class, ObjId1) of
+    case get_obj(Class, ObjId) of
         {ok, Obj} ->
             Obj1 = maps:remove(owner, Obj),
             Module = nkdomain_util:get_module(Class),
             case erlang:function_exported(Module, export, 2) of
                 true ->
+                    ObjId1 = nklib_util:to_binary(ObjId),
                     {ok, Module:export(ObjId1, Obj1)};
                 false ->
                     {ok, Obj1}
@@ -320,16 +326,12 @@ handle_call(get_rolemap, _From, #state{obj=Obj}=State) ->
     Owner = maps:get(owner, Obj, <<"root">>),
     reply({ok, Roles#{owner=>Owner}}, State);
 
-handle_call(get_updated, _From, #state{meta=#{updated:=Updated}}=State) ->
-    reply({ok, Updated}, State);
+handle_call(get_meta, _From, #state{meta=Meta}=State) ->
+    reply({ok, Meta}, State);
 
 handle_call({load, #{remove:=true}, _Opts}, _From, State) ->
-    case remove(State) of
-        ok -> 
-            {stop, normal, removed, State};
-        {error, Error} ->
-            reply({error, Error}, State)
-    end;
+    remove(State),
+    {stop, normal, removed, State};
 
 handle_call({load, Data, Opts}, _From, State) ->
     case load(Data, Opts, State) of
@@ -344,12 +346,8 @@ handle_call(transfer, _From, State) ->
     {stop, normal, {ok, State}, State};
 
 handle_call(remove, _From, State) ->
-    case remove(State) of
-        ok ->
-            {stop, normal, ok, State};
-        {error, Error} ->
-            reply({error, Error}, State)
-    end;
+    remove(State),
+    {stop, normal, ok, State};
 
 handle_call(Msg, From, #state{obj=Obj}=State) -> 
     case nklib_gen_server:handle_any(handle_call, [Msg, From, Obj], State, ?GS1, ?GS2) of
@@ -456,7 +454,8 @@ terminate(Reason, #state{class=Class, id=ObjId, obj=Obj}=State) ->
 %% @private
 start_obj(Class, ObjId, Meta, Data) ->
     Module = nkdomain_util:get_module(Class),
-    case nkdist:start_proc(?MODULE, {Class, ObjId}, {Module, Meta, Data}) of
+    ObjId1 = nklib_util:to_binary(ObjId),
+    case nkdist:start_proc(?MODULE, {Class, ObjId1}, {Module, Meta, Data}) of
         {ok, Pid} -> 
             {ok, Pid};
         {error, 
@@ -471,7 +470,6 @@ start_obj(Class, ObjId, Meta, Data) ->
     {{loaded, map()} | not_modified | removed | {error, term()}, #state{}}.
 
 load(Data, Opts, #state{obj=OldObj}=State) ->
-    % we remove the roles because they are going to change in load_roles/4,
     Args = [Data, Opts, OldObj],
     case nklib_gen_server:handle_any(load, Args, State, ?GS1, ?GS2) of
         {ok, NewObj, State1} ->
@@ -559,22 +557,15 @@ send_updated_roles(Class, ObjId, RoleMap) ->
 
 %% @private
 -spec remove(#state{}) ->
-    ok | {error, term()}.
+    ok.
 
 remove(#state{class=Class, id=ObjId, obj=Obj}=State) ->
-    case nklib_gen_server:handle_any(remove, [Obj], State, ?GS1, ?GS2) of
+   nklib_gen_server:handle_any(removed, [Obj], State, ?GS1, ?GS2),
+    case nkbase:del(nkdomain, Class, ObjId) of
         ok ->
-            ?LG(info, Class, ObjId, "removed", []),
-            case nkbase:del(nkdomain, Class, ObjId) of
-                ok ->
-                    ok;
-                {error, Error} ->
-                    ?LG(warning, Class, ObjId, "could not delete: ~p", [Error]),
-                    {error, Error}
-            end;
-        {error, Error} -> 
-            ?LG(warning, Class, ObjId, "could not remove: ~p", [Error]),
-            {error, Error}
+            ?LG(info, Class, ObjId, "removed", []);
+        {error, Error} ->
+            ?LG(warning, Class, ObjId, "could not delete: ~p", [Error])
     end.
 
 
@@ -589,7 +580,9 @@ noreply(#state{timeout=Timeout}=State) ->
 
 
 
-%% @private
+%% @private Safe call to an object with retries
+%% Objects with timeouts can disappear betwen the pid get and the call, 
+%% so the call if retries if it fails
 -spec do_call(nkdomain:class(), nkdomain:obj_id(), term(), call_opts()) ->
     term().
 

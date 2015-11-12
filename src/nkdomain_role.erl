@@ -37,8 +37,10 @@
 
 get_roles(Id) ->
     case get_role_op(Id) of
-        {ok, ObjUserId, Opts} -> nkrole:get_roles(ObjUserId, Opts);
-        {error, Error} -> {error, Error}
+        {ok, ObjUserId, Opts} -> 
+            nkrole:get_roles(ObjUserId, Opts);
+        {error, Error} -> 
+            {error, Error}
     end.
 
 
@@ -47,10 +49,12 @@ get_roles(Id) ->
     {ok, [nkrole:role_spec()]} | {error, term()}.
 
 get_role_objs(Role, Id) ->
-    Role1 = case is_list(Role) of true -> list_to_binary(Role); false -> Role end,
+    Role1 = to_binrole(Role),
     case get_role_op(Id) of
-        {ok, ObjUserId, Opts} -> nkrole:get_role_objs(Role1, ObjUserId, Opts);
-        {error, Error} -> {error, Error}
+        {ok, ObjUserId, Opts} -> 
+            nkrole:get_role_objs(Role1, ObjUserId, Opts);
+        {error, Error} -> 
+            {error, Error}
     end.
 
 
@@ -59,10 +63,12 @@ get_role_objs(Role, Id) ->
     {ok, [nkdomain:obj_id()]} | {error, term()}.
 
 find_role_objs(Role, Id) ->
-    Role1 = case is_list(Role) of true -> list_to_binary(Role); false -> Role end,
+    Role1 = to_binrole(Role),
     case get_role_op(Id) of
-        {ok, ObjUserId, Opts} -> nkrole:find_role_objs(Role1, ObjUserId, Opts);
-        {error, Error} -> {error, Error}
+        {ok, ObjUserId, Opts} -> 
+            nkrole:find_role_objs(Role1, ObjUserId, Opts);
+        {error, Error} -> 
+            {error, Error}
     end.
 
 
@@ -71,7 +77,7 @@ find_role_objs(Role, Id) ->
     {ok, boolean()} | {error, term()}.
 
 has_role(Id, Role, Target) ->
-    Role1 = case is_list(Role) of true -> list_to_binary(Role); false -> Role end,
+    Role1 = to_binrole(Role),
     case nkdomain:resolve(Id) of
         {ok, {Class, ObjId, _Pid}} ->
             {ok, ObjUserId1} = nkdomain_util:make_user_id({Class, ObjId}),
@@ -93,7 +99,7 @@ has_role(Id, Role, Target) ->
     {ok, [nkdomain:obj_id()]} | {error, term()}.
 
 set_role(Role, Id, RoleSpecs) ->
-    Role1 = case is_list(Role) of true -> list_to_binary(Role); false -> Role end,
+    Role1 = to_binrole(Role),
     case get_role_op(Id) of
         {ok, ObjUserId, Opts} -> 
             nkrole:set_role(Role1, ObjUserId, RoleSpecs, Opts);
@@ -122,7 +128,7 @@ stop(Id) ->
 %% ===================================================================
 
 
-%% @private
+%% @private Gets role's user id and call options
 -spec get_role_op(nkdomain:user_obj_id()|{nkdomain:class(), nkdomain:obj_id()}) ->
     {ok, nkdomain:user_obj_id(), nkrole:opts()} | {error, term()}.
 
@@ -204,6 +210,11 @@ do_resolve_role(Term) ->
             lager:warning("Error loading role ~p: ~p", [Term, Error]),
             false
     end.
+
+
+%% @private
+to_binrole(Role) when is_list(Role) -> list_to_binary(Role);
+to_binrole(Role) -> Role.
 
 
 % update_rolemap(NewRoleMap, OldRoleMap, Replace) ->

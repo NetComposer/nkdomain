@@ -571,7 +571,7 @@ get_service_syntax(RawClass) ->
             {'EXIT', _} -> throw(class);
             Atom -> Atom
         end,
-        Module = case catch nkdomain_service_mngr:get_module(Class) of
+        Module = case catch nkdomain_service:get_module(Class) of
             {'EXIT', _} -> throw(class);
             Module0 -> Module0
         end,

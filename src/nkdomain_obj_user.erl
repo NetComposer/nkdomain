@@ -23,7 +23,7 @@
 -behaviour(nkdomain_obj).
 
 -export([get_tokens/1, user_pass/1, make_pass/1]).
--export([init/2, load/4, remove/2, handle_call/4, handle_cast/3, handle_info/3]).
+-export([init/2, load/4, removed/2, handle_call/4, handle_cast/3, handle_info/3]).
 
 -include("nkdomain.hrl").
 
@@ -99,10 +99,10 @@ load(Data, Opts, User, State) ->
 
 
 %% @private
--spec remove(user(), #state{}) ->
+-spec removed(user(), #state{}) ->
     ok.
 
-remove(User, State) ->
+removed(User, State) ->
     do_load([{alias, []}], #{replace=>true}, User, State),
     ok.
     

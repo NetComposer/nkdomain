@@ -22,7 +22,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -behaviour(nkdomain_obj).
 
--export([init/2, load/4, remove/2]).
+-export([init/2, load/4]).
 
 
 -type nodeset() ::
@@ -56,13 +56,6 @@ load(Data, _Opts, Nodeset, State) ->
     do_load(maps:to_list(Data), Nodeset, State).
 
 
-%% @private
--spec remove(nodeset(), #state{}) ->
-    ok.
-
-remove(_Nodeset, _State) ->
-    ok.
-    
 
 %% ===================================================================
 %% Internal

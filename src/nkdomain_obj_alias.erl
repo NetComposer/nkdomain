@@ -23,7 +23,7 @@
 -behaviour(nkdomain_obj).
 
 -export([add_alias/2, remove_alias/2]).
--export([init/2, load/4, remove/2, handle_info/3, terminate/3]).
+-export([init/2, load/4, handle_info/3]).
 
 -include("nkdomain.hrl").
 
@@ -91,37 +91,6 @@ load(Data, _Opts, Alias, State) ->
 
 
 %% @private
--spec remove(alias(), #state{}) ->
-    ok.
-
-remove(_Data, _State) ->
-    ok.
-    
-
-% %% @private
-% -spec handle_call(term(), {pid(), term()}, alias(), #state{}) ->
-%     {reply, #state{}}.
-
-% handle_call({get_alias, Module}, _From, Alias, #state{id=AliasId}=State) ->
-%     Reply = nklib_util:filtermap(
-%         fun(Id) ->
-%             case nkdomain_obj:get_pid(Module, Id) of
-%                 {ok, Pid} -> 
-%                     {true, {Id, Pid}};
-%                 _ ->
-%                     spawn(fun() -> remove_alias(AliasId, Module, Id) end),
-%                     false
-%             end
-%         end,
-%         maps:get(Module, Alias, [])),
-%     {reply, {ok, Reply}, State};
-
-% handle_call(Msg, _From,  _Alias, State) -> 
-%     lager:warning("Module ~p received unexpected call: ~p (~p)", [?MODULE, Msg, State]),
-%     {noreply, State}.
-
-
-%% @private
 -spec handle_info(term(), alias(), #state{}) ->
     {noreply, tuple()} | {stop, term(), #state{}} | remove.
 
@@ -136,13 +105,6 @@ handle_info(timeout, Alias, State) ->
 handle_info(Info, _Alias, State) -> 
     lager:warning("Module ~p received unexpected info: ~p (~p)", [?MODULE, Info, State]),
     {noreply, State}.
-
-%% @private
--spec terminate(term(), alias(), #state{}) ->
-    ok.
-
-terminate(_Reason, _Alias, #state{}) ->
-    ok.
 
 
 %% ===================================================================

@@ -62,7 +62,7 @@ export(DomainId) ->
     nkdomain_obj:export(domain, DomainId).
 
 
-%% @doc Finds all aliases forn an alias
+%% @doc Finds all pointing objects for an alias
 -spec get_aliases(binary()) ->
     [user_obj_id()].
 
@@ -81,9 +81,9 @@ resolve(UserObjId) ->
     UserObjId1 = nklib_util:to_binary(UserObjId),
     case get_aliases(UserObjId1) of
         [] ->
-            nkdomain_util:do_resolve(UserObjId1);
+            nkdomain_util:resolve(UserObjId1);
         [UserObjId2] -> 
-            nkdomain_util:do_resolve(UserObjId2);
+            nkdomain_util:resolve(UserObjId2);
         _ ->
             {error, multiple_aliases}
     end.
@@ -97,16 +97,18 @@ multi_resolve(UserObjId) ->
     UserObjId1 = nklib_util:to_binary(UserObjId),
     case get_aliases(UserObjId1) of
         [] ->
-            case nkdomain_util:do_resolve(UserObjId1) of
+            case nkdomain_util:resolve(UserObjId1) of
                 {ok, Data} -> [Data];
                 {error, _} -> []
             end;
         UserObjIdList ->
             lists:foldl(
                 fun(Id, Acc) ->
-                    case nkdomain_util:do_resolve(Id) of
-                        {ok, {Class, ObjId, Pid}} -> [{Class, ObjId, Pid}|Acc];
-                        {error, _} -> Acc
+                    case nkdomain_util:resolve(Id) of
+                        {ok, {Class, ObjId, Pid}} -> 
+                            [{Class, ObjId, Pid}|Acc];
+                        {error, _} -> 
+                            Acc
                     end
                 end,
                 [],

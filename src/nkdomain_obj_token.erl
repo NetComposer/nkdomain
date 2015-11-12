@@ -23,7 +23,7 @@
 -behaviour(nkdomain_obj).
 
 -export([new_token/3, renew_token/2, check_token/2, remove_token/1]).
--export([init/2, load/4, remove/2, get_backend/1, handle_call/4, handle_info/3]).
+-export([init/2, load/4, get_backend/1, handle_call/4, handle_info/3]).
 -export_type([token_data/0]).
 
 -include("nkdomain.hrl").
@@ -133,14 +133,6 @@ load(#{set:={Class, ObjId, Data}}, _Opts, Token, #state{id=TokenId}=State) ->
     nkdomain_obj:do_cast(Class, ObjId, {new_token, TokenId, self()}),
     {ok, Token, State2}.
 
-
-%% @private
--spec remove(nkdomain:token(), #state{}) ->
-    ok.
-
-remove(_Token, _State) ->
-    ok.
-    
 
 %% @private
 -spec get_backend(nkbase:class_meta()) ->

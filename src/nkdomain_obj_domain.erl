@@ -25,7 +25,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -behaviour(nkdomain_obj).
 
--export([init/2, load/4, remove/2, export/2, handle_call/4]).
+-export([init/2, load/4, removed/2, export/2, handle_call/4]).
 
 -include("nkdomain.hrl").
 
@@ -112,10 +112,10 @@ load(Data, Opts, Domain, #state{id=_DomainId}=State) ->
 
 
 %% @private
--spec remove(domain(), #state{}) ->
+-spec removed(domain(), #state{}) ->
     ok | {error, term()}.
 
-remove(Domain, State) ->
+removed(Domain, State) ->
     RemoveData = [
         {alias, []}, 
         {groups, #{}}, 
