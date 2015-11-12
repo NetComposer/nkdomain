@@ -62,12 +62,11 @@ load(Data, _Opts, Service, #state{id=ServiceId}=State) ->
         {ok, Service, State1} ->
             {ok, Service, State1};
         {ok, #{class:=Class}=NewService, State1} ->
-            case catch nkdomain:get_service_module(Class) of
-                {'EXIT', _} ->
-                    {error, {unknown_service_class, Class}};
-                Module ->
-                    ok = Module:updated(ServiceId, NewService),
-                    {ok, NewService, State1}
+            case catch Class:nkdomain_updated(ServiceId, NewService) of
+                ok ->
+                    {ok, NewService, State1};
+                _ ->
+                    {error, {invalid_service, Class}}
             end
     end.
 
@@ -77,8 +76,7 @@ load(Data, _Opts, Service, #state{id=ServiceId}=State) ->
     ok.
 
 removed(#{class:=Class}, #state{id=ServiceId}) ->
-    Module = nkdomain:get_service_module(Class),
-    ok = Module:removed(ServiceId),
+    catch Class:nkdomain_removed(ServiceId),
     ok.
    
 

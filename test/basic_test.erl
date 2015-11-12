@@ -45,8 +45,6 @@ basic_test_() ->
 
 
 load() ->
-    nkdomain:register_service(admin, test_srv_admin),
-    nkdomain:register_service(dns, test_srv_dns),
 	YamlData1 = data1:yaml(),
 	{ok, _} = nkdomain_load:load(yaml, YamlData1, #{replace=>true}),
     {ok, Res1} = nkdomain_load:load(yaml, YamlData1, #{}),
@@ -116,7 +114,7 @@ load() ->
         {{service, <<"admin@domainA">>}, _},
         {{service, <<"admin@root">>}, _},
         {{service, <<"dns@proy1.domainA">>}, _},
-        {{service, <<"dns@root">>}, _},
+        {{service, <<"test_srv_dns@root">>}, _},
         {{user, <<"admin@domainA">>}, _},
         {{user, <<"admin@root">>}, _},
         {{user, <<"root1@root">>}, _},
@@ -138,7 +136,7 @@ data() ->
         groups := #{<<"nodes">>:=_, <<"people">>:=_, <<"zones">>:=_},
         users := #{<<"admin">>:=_, <<"root1">>:=_, <<"root2">>:=_},
         nodesets := #{<<"group1">>:=_, <<"group2">>:=_},
-        services := #{<<"admin">>:=_, <<"dns">>:=_},
+        services := #{<<"admin">>:=_, <<"test_srv_dns">>:=_},
         owner := <<"root">>,
         roles := #{
             <<"admin">> := [
@@ -195,7 +193,7 @@ data() ->
         <<"admin@domainA">>,
         <<"admin@root">>,
         <<"dns@proy1.domainA">>,
-        <<"dns@root">>
+        <<"test_srv_dns@root">>
     ] = 
         lists:sort(nkdomain_util:get_all(service)),
 

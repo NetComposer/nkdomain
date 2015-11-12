@@ -23,18 +23,18 @@
 -compile([export_all]).
 
 
-get_syntax() ->
+nkdomain_syntax() ->
     #{
         hosts => {ulist, binary}
     }.
 
 
-updated(_ServiceId, _Data) ->
+nkdomain_updated(_ServiceId, _Data) ->
 	% lager:warning("UP ~s: ~p", [ServiceId, Data]),
 	ok.
 
 
-removed(_ServiceId) ->
+nkdomain_removed(_ServiceId) ->
 	% lager:warning("REM ~s", [ServiceId]),
 	ok.
 

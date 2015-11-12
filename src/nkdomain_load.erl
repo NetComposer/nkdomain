@@ -368,6 +368,18 @@ parse_nodesets(_, _, _) ->
 
 
 %% @private
+%% Services must have a class, and it must a valid Erlang module that must export
+%% the following callbacks:
+%%
+%% -callback nkdomain_syntax() ->
+%%     map().
+%%
+%% -callback nkdomain_updated(nkdomain:obj_id(), nkdomain_obj_service:service()) ->
+%%     ok.
+%%
+%% -callback nkdomain_removed(nkdomain_obj_id()) ->
+%%     ok.
+%%
 parse_services(_Path, [], Acc) ->
     {ok, Acc};
 
@@ -379,9 +391,10 @@ parse_services(Path, [{Name, Data}|Rest], Acc) ->
             case do_parse(Data, #{class=>binary}, Path1, #{unknown_ok=>true}) of
                 {ok, Data1} ->
                     Data2 = maps:merge(#{class=>Name1}, Data1),
-                    RawClass = maps:get(class, Data2),
-                    case get_service_syntax(RawClass) of
-                        {ok, Class, ClassSyntax} ->
+                    Class = binary_to_atom(maps:get(class, Data2), utf8),
+                    code:ensure_loaded(Class),
+                    case catch Class:nkdomain_syntax() of
+                        ClassSyntax when is_map(ClassSyntax) -> 
                             Syntax1 = (base_syntax())#{
                                 class => ignore,
                                 users => fun parse_domain_obj_role/3
@@ -395,8 +408,8 @@ parse_services(Path, [{Name, Data}|Rest], Acc) ->
                                 {error, Error} ->
                                     {error, Error}
                             end;
-                        {error, Error} ->
-                            {error, Error}
+                        _ ->
+                            {error, {unknown_service, Class}}
                     end;
                 {error, Error} ->
                     {error, Error}
@@ -564,26 +577,26 @@ sort_domains(Map) ->
     [{Name, Data} || {_, Name, Data} <- lists:sort(L1)].
 
 
-%% @private
-get_service_syntax(RawClass) ->
-    try
-        Class = case catch binary_to_existing_atom(RawClass, utf8) of
-            {'EXIT', _} -> throw(class);
-            Atom -> Atom
-        end,
-        Module = case catch nkdomain:get_service_module(Class) of
-            {'EXIT', _} -> throw(class);
-            Module0 -> Module0
-        end,
-        case catch Module:get_syntax() of
-            Syntax when is_map(Syntax) -> 
-                {ok, Class, Syntax};
-            _ -> 
-                throw(class)
-        end
-    catch
-        throw:class -> {error, {invalid_domain_class, RawClass}}
-    end.
+% %% @private
+% get_service_syntax(Class) ->
+%     try
+%         Class = case catch binary_to_existing_atom(RawClass, utf8) of
+%             {'EXIT', _} -> throw(class);
+%             Atom -> Atom
+%         end,
+%         Module = case catch nkdomain:get_service_module(Class) of
+%             {'EXIT', _} -> throw(class);
+%             Module0 -> Module0
+%         end,
+%         case catch Module:get_syntax() of
+%             Syntax when is_map(Syntax) -> 
+%                 {ok, Class, Syntax};
+%             _ -> 
+%                 throw(class)
+%         end
+%     catch
+%         throw:class -> {error, {invalid_domain_class, RawClass}}
+%     end.
 
 
 %% @private

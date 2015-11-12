@@ -28,9 +28,7 @@
 tokens_test_() ->
   	{setup, 
     	fun() -> 
-    		ok = nkdomain_app:start(),
-		    nkdomain:register_service(admin, test_srv_admin),
-		    nkdomain:register_service(dns, test_srv_dns)
+    		ok = nkdomain_app:start()
   		end,
 		fun(_) -> 
 			ok 

@@ -29,9 +29,7 @@
 resolve_test_() ->
   	{setup, 
     	fun() -> 
-    		ok = nkdomain_app:start(),
-            nkdomain:register_service(admin, test_srv_admin),
-            nkdomain:register_service(dns, test_srv_dns)
+    		ok = nkdomain_app:start()
         end,
 		fun(_) -> 
 			ok 
@@ -62,7 +60,7 @@ basic() ->
     {error, not_found} = resolve("group1@root"),
     [] = multi_resolve("group2@root"),
     {ok, {nodeset, <<"group1@root">>, _}} = resolve("nodeset:group1@root"),
-    {ok, {service, <<"dns@root">>, _}} = resolve("service:dns"),
+    {ok, {service, <<"test_srv_dns@root">>, _}} = resolve("service:test_srv_dns"),
     {ok, {group, <<"people@root">>, _}} = resolve("group:people"),
     {ok, {group, <<"admins.people@root">>, _}} = resolve("group:admins.people"),
     {ok, {group, <<"b1.b.zones@root">>, _}} = resolve("group:b1.b.zones@root"),

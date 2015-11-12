@@ -42,8 +42,9 @@ root:
                     - member: group:admins.people@root
     services:
         admin:
+            class: test_srv_admin
             disabled: true
-        dns:                                    
+        test_srv_dns:                                    
             users:
                 - member: group:people@root
     groups:
@@ -97,6 +98,7 @@ domainA:
             meta: domainA
     services:
         admin:
+            class: test_srv_admin
             disabled: false
             users:
                 - member: group:all.people@root
@@ -113,6 +115,7 @@ proy1.domainA:
         user2:
     services:
         dns:
+            class: test_srv_dns
 ">>.
 
 
@@ -139,6 +142,7 @@ update1() ->
     nodesets:
     services:
         admin:
+            class: test_srv_admin
             disabled: true
 
 ">>.

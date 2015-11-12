@@ -170,5 +170,5 @@ You can define any number of aliases, that can point to one or several objects. 
 
 ### Services
 
-Available services must be registered before being used, calling nkdomain:register_service/3.
+All services must have a 'class', that must be an Erlang module implementing several callback functions (see nkdomain_load:parse_services/3).
 

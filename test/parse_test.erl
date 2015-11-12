@@ -28,9 +28,7 @@
 basic_test_() ->
   	{setup, 
     	fun() -> 
-    		ok = nkdomain_app:start(),
-		    nkdomain:register_service(admin, test_srv_admin),
-		    nkdomain:register_service(dns, test_srv_dns)
+    		ok = nkdomain_app:start()
 		end,
 		fun(_) -> 
 			ok 
@@ -92,12 +90,12 @@ map() ->
     {ok, E09A} = p_yaml(data1:yaml()),
     {ok, E09A} = p_map(maps:from_list(E09A)),
 
-	{ok, _} = p_map(#{root=>#{services=>#{admin=>#{path=>"my path"}}}}),
+	{ok, _} = p_map(#{root=>#{services=>#{admin=>#{class=>test_srv_admin, path=>"my path"}}}}),
 	{error,{syntax_error,<<"root.services.admin.hosts">>}} = 
-		p_map(#{root=>#{services=>#{admin=>#{hosts=>"my host"}}}}),
+		p_map(#{root=>#{services=>#{admin=>#{class=>test_srv_admin, hosts=>"my host"}}}}),
 	{error,{syntax_error,<<"root.services.dns.path">>}} = 
-		p_map(#{root=>#{services=>#{dns=>#{path=>"my path"}}}}),
-	{ok, _} = p_map(#{root=>#{services=>#{dns=>#{hosts=>"my host"}}}}),
+		p_map(#{root=>#{services=>#{dns=>#{class=>test_srv_dns, path=>"my path"}}}}),
+	{ok, _} = p_map(#{root=>#{services=>#{dns=>#{class=>test_srv_dns, hosts=>"my host"}}}}),
 	ok.
 
 
@@ -123,7 +121,8 @@ json() ->
 	E08 = #{root=>#{roles=>#{member=>[#{member=>'none:a@b'}]}}},
 	{error, {syntax_error, <<"root.roles.member.member:none:a@b">>}} = p_json(E08),
     {ok, E09A} = p_yaml(data1:yaml()),
-    {ok, E09A} = p_json(maps:from_list(E09A)).
+    {ok, E09A} = p_json(maps:from_list(E09A)),
+    ok.
 
 
 

@@ -28,9 +28,7 @@
 role_test_() ->
   	{setup, 
     	fun() -> 
-    		ok = nkdomain_app:start(),
- 		   	nkdomain:register_service(admin, test_srv_admin),
-    		nkdomain:register_service(dns, test_srv_dns)
+    		ok = nkdomain_app:start()
 		end,
 		fun(_) -> 
 			ok 
@@ -53,7 +51,7 @@ basic() ->
     {ok, [owner, <<"admin">>]} = get_roles("user:root2@root"),
 	{ok, [owner, <<"user">>]} = get_roles("nodeset:group1@root"),
 	{ok, [owner]} = get_roles("service:admin@root"),
-	{ok, [owner, <<"user">>]} = get_roles("service:dns@root"),
+	{ok, [owner, <<"user">>]} = get_roles("service:test_srv_dns@root"),
 
 	{ok, []} = get_role_objs("member", root),
 	{ok, [#{<<"member">> := <<"group:admins.people@root">>}, 
