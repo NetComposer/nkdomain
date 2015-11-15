@@ -56,7 +56,7 @@ init(GroupId, Group) ->
 
 %% @private
 -spec load(map(), nkdomain_load:load_opts(), group(), #state{}) ->
-    {ok, group(), #state{}} | removed | {error, term()}.
+    {ok, nkdomain:obj(), #state{}} | {removed, #state{}} | {error, term(), #state{}}.
 
 load(Data, Opts, Group, State) ->
     do_load(maps:to_list(Data), Opts, Group, State).

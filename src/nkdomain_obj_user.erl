@@ -92,7 +92,7 @@ init(UserId, User) ->
 
 %% @private
 -spec load(map(), nkdomain_load:load_opts(), user(), #state{}) ->
-    {ok, nkdomain:obj(), term()} | removed | {error, term()}.
+    {ok, nkdomain:obj(), #state{}} | {removed, #state{}} | {error, term(), #state{}}.
 
 load(Data, Opts, User, State) ->
     do_load(maps:to_list(Data), Opts, User, State).

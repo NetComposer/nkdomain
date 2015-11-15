@@ -73,8 +73,8 @@ init(DomainId, Domain) ->
 
 
 %% @private
--spec load(map(), nkdomain_load:load_opts(), nkdomain:obj(), #state{}) ->
-    {ok, nkdomain:obj(), #state{}} | removed | {error, #state{}}.
+-spec load(map(), nkdomain_load:load_opts(), domain(), #state{}) ->
+    {ok, nkdomain:obj(), #state{}} | {removed, #state{}} | {error, term(), #state{}}.
 
 load(Data, Opts, Domain, #state{id=_DomainId}=State) ->
     try
@@ -271,7 +271,7 @@ do_load_class(Key, DomainId, [{Name, Data}|Rest], Opts, Acc) ->
         removed ->
             maps:remove(Name, Acc);
         {error, Error} ->
-            lager:notice("Could not load ~p ~s: ~p", [Key, ObjId, Error]),
+            lager:warning("Could not load ~s (~p): ~p", [ObjId, Key, Error]),
             maps:remove(Name, Acc)
     end,
     do_load_class(Key, DomainId, Rest, Opts, Acc1).

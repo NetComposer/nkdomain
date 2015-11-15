@@ -50,7 +50,7 @@ init(_NodesId, Nodeset) ->
 
 %% @private
 -spec load(map(), nkdomain_load:load_opts(), nodeset(), #state{}) ->
-    {ok, nkdomain:obj(), #state{}} | removed | {error, term()}.
+    {ok, nkdomain:obj(), #state{}} | {removed, #state{}} | {error, term(), #state{}}.
 
 load(Data, _Opts, Nodeset, State) ->
     do_load(maps:to_list(Data), Nodeset, State).

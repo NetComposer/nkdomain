@@ -119,8 +119,8 @@ init(TokenId, Token) ->
 
 
 %% @private
--spec load(map(), nkdomain_load:load_opts(), nkdomain:token(), #state{}) ->
-    {ok, nkdomain:obj(), #state{}} | removed | {error, term()}.
+-spec load(map(), nkdomain_load:load_opts(), token_data(), #state{}) ->
+    {ok, nkdomain:obj(), #state{}} | {removed, #state{}} | {error, term(), #state{}}.
 
 load(#{set:={Class, ObjId, Data}}, _Opts, Token, #state{id=TokenId}=State) ->
     State1 = State#state{
@@ -149,7 +149,7 @@ get_backend(Base) ->
 handle_call({check, Data}, _From, _Token, State) ->
     case check(Data, State) of
         {error, not_found} -> 
-            {removed, {error, not_found}};
+            {removed, {error, not_found}, State};
         Reply -> 
             {reply, Reply, State}
     end;
@@ -160,7 +160,7 @@ handle_call({renew, Data}, _From, _Token, State) ->
             State1 = schedule(Data, State),
             {reply, ok, State1};
         {error, not_found} ->
-            {removed, {error, not_found}};
+            {removed, {error, not_found}, State};
         {error, Error} ->
             {reply, {error, Error}, State}
     end;
@@ -205,8 +205,6 @@ check(Data, #state{class=Class, obj_id=ObjId}=State) ->
             end;
         false ->
             lager:warning("T: ~p, ~p", [nklib_util:l_timestamp(), State#state.stop]),
-
-
             {error, not_found}
     end.
 

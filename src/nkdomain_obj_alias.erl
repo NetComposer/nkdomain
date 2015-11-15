@@ -84,7 +84,7 @@ init(AliasId, Alias) ->
 
 %% @private
 -spec load(map(), nkdomain_load:load_opts(), alias(), #state{}) ->
-    {ok, nkdomain:obj(), #state{}} | removed | {error, term()}.
+    {ok, nkdomain:obj(), #state{}} | {removed, #state{}} | {error, term(), #state{}}.
 
 load(Data, _Opts, Alias, State) ->
     do_load(maps:to_list(Data), Alias, State).
@@ -97,7 +97,7 @@ load(Data, _Opts, Alias, State) ->
 handle_info(timeout, Alias, State) ->
     case Alias of
         #{aliases:=[]} -> 
-            removed;
+            {removed, State};
         _ ->
             {stop, normal, State}
     end;

@@ -79,20 +79,20 @@
 %%     {noreply, mod_state(), timeout() | hibernate} |
 %%     {stop, term(), term(), mod_state()} |
 %%     {stop, term(), mod_state()} |
-%%     {removed, term() |
-%%     removed.
+%%     {removed, term(), mod_state()} |
+%%     {removed, mod_state()}
 %%
 %% -callback handle_cast(term(), nkdomain:ob(), mod_state()) ->
 %%     {noreply, mod_state()} |
 %%     {noreply, mod_state(), timeout() | hibernate} |
 %%     {stop, term(), mod_state()} |
-%%     removed.
+%%     {removed, mod_state()}
 %%
 %% -callback handle_info(term(), nkdomain:obj(), mod_state()) ->
 %%     {noreply, mod_state()} |
 %%     {noreply, mod_state(), timeout() | hibernate} |
 %%     {stop, term(), mod_state()} |
-%%     removed.
+%%     {removed, mod_state()}
 %%
 %% -callback code_change(term()|{down, term()}, mod_state(), term()) ->
 %%     {ok, NewState :: term()} | {error, Reason :: term()}.
@@ -115,10 +115,8 @@
 
 %% Called when a new specification must be loaded into the object
 -callback load(map(), nkdomain_load:load_opts(), nkdomain:obj(), mod_state()) ->
-    {ok, nkdomain:obj(), mod_state()} | removed | {error, term()}.
-
-
-
+    {ok, nkdomain:obj(), mod_state()} | {removed, mod_state()} | 
+    {error, term(), mod_state()}.
 
 
 %% ===================================================================
@@ -362,12 +360,12 @@ handle_call(Msg, From, #state{obj=Obj}=State) ->
         ok ->
             lager:warning("Module ~p received unexpected call: ~p", [?MODULE, Msg]),
             noreply(State);
-        {removed, Reply} ->
-            remove(State),
-            {stop, normal, Reply, State};
-        removed ->
-            remove(State),
-            {stop, normal, State};
+        {removed, Reply, State1} ->
+            remove(State1),
+            {stop, normal, Reply, State1};
+        {removed, State1} ->
+            remove(State1),
+            {stop, normal, State1};
         Other ->
             Other
     end.
@@ -398,9 +396,9 @@ handle_cast(Msg, #state{obj=Obj}=State) ->
         ok ->
             lager:warning("Module ~p received unexpected cast: ~p", [?MODULE, Msg]),
             noreply(State);
-        removed ->
-            remove(State),
-            {stop, normal, State};
+        {removed, State1} ->
+            remove(State1),
+            {stop, normal, State1};
         Other -> 
             Other
     end.
@@ -419,9 +417,9 @@ handle_info(Msg, #state{obj=Obj}=State) ->
         ok ->
             lager:warning("Module ~p received unexpected info: ~p", [?MODULE, Msg]),
             noreply(State);
-        removed ->
-            remove(State),
-            {stop, normal, State};
+        {removed, State1} ->
+            remove(State1),
+            {stop, normal, State1};
         Other -> 
             Other
     end.
@@ -475,9 +473,9 @@ load(Data, Opts, #state{obj=OldObj}=State) ->
         {ok, NewObj, State1} ->
             RoleMap = maps:get(roles, Data, #{}),
             load_roles(RoleMap, NewObj, Opts, State1);
-        removed -> 
-            remove(State),
-            {removed, State};
+        {removed, State1} -> 
+            remove(State1),
+            {removed, State1};
         {error, Error, State1} -> 
             {{error, Error}, State1}
     end.

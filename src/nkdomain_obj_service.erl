@@ -55,7 +55,7 @@ init(ServiceId, Service) ->
 
 %% @private
 -spec load(map(), nkdomain_load:load_opts(), service(), #state{}) ->
-    {ok, nkdomain:obj(), #state{}} | removed | {error, term()}.
+    {ok, nkdomain:obj(), #state{}} | {removed, #state{}} | {error, term(), #state{}}.
 
 load(Data, _Opts, Service, #state{id=ServiceId}=State) ->
     case do_load(maps:to_list(Data), Service, State) of
@@ -66,7 +66,7 @@ load(Data, _Opts, Service, #state{id=ServiceId}=State) ->
                 ok ->
                     {ok, NewService, State1};
                 _ ->
-                    {error, {invalid_service, Class}}
+                    {error, {invalid_service, Class}, State}
             end
     end.
 
