@@ -57,18 +57,8 @@ init(ServiceId, Service) ->
 -spec load(map(), nkdomain_load:load_opts(), service(), #state{}) ->
     {ok, nkdomain:obj(), #state{}} | {removed, #state{}} | {error, term(), #state{}}.
 
-load(Data, _Opts, Service, #state{id=ServiceId}=State) ->
-    case do_load(maps:to_list(Data), Service, State) of
-        {ok, Service, State1} ->
-            {ok, Service, State1};
-        {ok, #{class:=Class}=NewService, State1} ->
-            case catch Class:nkdomain_updated(ServiceId, NewService) of
-                ok ->
-                    {ok, NewService, State1};
-                _ ->
-                    {error, {invalid_service, Class}, State}
-            end
-    end.
+load(Data, _Opts, Service, State) ->
+    do_load(maps:to_list(Data), Service, State).
 
 
 %% @private

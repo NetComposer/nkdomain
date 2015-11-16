@@ -368,18 +368,6 @@ parse_nodesets(_, _, _) ->
 
 
 %% @private
-%% Services must have a class, and it must a valid Erlang module that must export
-%% the following callbacks:
-%%
-%% -callback nkdomain_syntax() ->
-%%     map().
-%%
-%% -callback nkdomain_updated(nkdomain:obj_id(), nkdomain_obj_service:service()) ->
-%%     ok.
-%%
-%% -callback nkdomain_removed(nkdomain_obj_id()) ->
-%%     ok.
-%%
 parse_services(_Path, [], Acc) ->
     {ok, Acc};
 
@@ -391,25 +379,23 @@ parse_services(Path, [{Name, Data}|Rest], Acc) ->
             case do_parse(Data, #{class=>binary}, Path1, #{unknown_ok=>true}) of
                 {ok, Data1} ->
                     Data2 = maps:merge(#{class=>Name1}, Data1),
-                    Class = binary_to_atom(maps:get(class, Data2), utf8),
-                    code:ensure_loaded(Class),
-                    case catch Class:nkdomain_syntax() of
+                    SrvClass = maps:get(class, Data2),
+                    case nkdomain_util:get_syntax(service, SrvClass) of
                         ClassSyntax when is_map(ClassSyntax) -> 
                             Syntax1 = (base_syntax())#{
-                                class => ignore,
+                                class => binary,
                                 users => fun parse_domain_obj_role/3
                             },
                             Syntax2 = maps:merge(ClassSyntax, Syntax1),
                             case do_parse(Data, Syntax2, Path1, #{}) of
                                 {ok, Data3} ->
-                                    Data4 = Data3#{class=>Class},
-                                    Acc1 = maps:put(Name1, Data4, Acc),
+                                    Acc1 = maps:put(Name1, Data3, Acc),
                                     parse_services(Path, Rest, Acc1);
                                 {error, Error} ->
                                     {error, Error}
                             end;
                         _ ->
-                            {error, {unknown_service, Class}}
+                            {error, {unknown_service, SrvClass}}
                     end;
                 {error, Error} ->
                     {error, Error}

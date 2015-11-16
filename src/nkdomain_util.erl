@@ -21,6 +21,9 @@
 -module(nkdomain_util).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
+-export([register_syntax/3, get_syntax/2]).
+-export([register_update_callback/3, call_update_callback/3]).
+
 -export([make_user_id/1, get_module/1, get_all/1, meta_get_all/1]).
 -export([register_classes/1, resolve/1, get_parts/1]).
 -include_lib("nklib/include/nklib.hrl").
@@ -29,6 +32,53 @@
 %% ===================================================================
 %% Public
 %% ===================================================================
+
+
+%% @doc Registers a service's syntax
+%% It will be used when processing (for now) service elements.
+-spec register_syntax(nkdomain:class(), binary(), map()) ->
+    ok.
+
+register_syntax(Class, Name, Syntax) when is_atom(Class), is_map(Syntax) ->
+    ok = nkdomain_app:put({syntax, Class, nklib_util:to_binary(Name)}, Syntax).
+
+
+%% @doc Gets a service's syntax
+-spec get_syntax(nkdomain:class(), binary()) ->
+    {ok, map()} | undefined.
+
+get_syntax(Class, Name) when is_atom(Class) ->
+    nkdomain_app:get({syntax, Class, nklib_util:to_binary(Name)}).
+
+
+%% @doc Registers a callback that will be called any time and object is updated
+%% as Module:Fun(ObjId, Spec|removed)
+-spec register_update_callback(nkdomain:class(), atom(), atom()) ->
+    ok.
+
+register_update_callback(Class, Module, Fun) when is_atom(Class) ->
+    code:ensure_loaded(Module),
+    ok = nkdomain_app:put({update, Class}, {Module, Fun}).
+
+
+%% @doc Gets update callback
+-spec call_update_callback(nkdomain:class(), nkdomain:obj_id(), nkdomain:obj()) ->
+    ok | error.
+
+call_update_callback(Class, ObjId, Obj) when is_atom(Class) ->
+    case nkdomain_app:get({update, Class}) of
+        {Module, Fun} ->
+            % lager:warning("Calling ~p:~p(~s, ~p)", [Module, Fun, ObjId, Obj]),
+            case catch Module:Fun(ObjId, Obj) of
+                ok ->
+                    ok;
+                Other ->
+                    lager:error("Error calling ~p:~p: ~p", [Module, Fun, Other]),
+                    error
+            end;
+        undefined ->
+            ok
+    end.
 
 
 %% @doc Generates a valid user_obj_id() from a pair of class and obj_id() or

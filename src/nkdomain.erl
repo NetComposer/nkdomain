@@ -116,35 +116,3 @@ multi_resolve(UserObjId) ->
     end.
 
 
-% %% @doc Register a new service class with a callback module
-% %% The callback module must implement the following callbacks:
-% %%
-% %% -callback get_syntax() ->
-% %%     map().
-% %%
-% %% -callback updated(id(), nkdomain_obj_service:service()) ->
-% %%     ok.
-% %%
-% %% -callback removed(obj_id()) ->
-% %%     ok.
-% %%
-% -spec register_service(Class::atom(), module()) ->
-%     ok.
-
-% register_service(ServiceClass, Module) when is_atom(ServiceClass) ->
-%     {module, Module} = code:ensure_loaded(Module),
-%     nklib_config:put(?MODULE, {srv, ServiceClass}, Module).
-
-
-% %% @doc Gets a service class callback module
-% -spec get_service_module(class()) ->
-%     module().
-
-% get_service_module(Class) ->
-%     case nklib_config:get(?MODULE, {srv, Class}, not_found) of
-%         not_found -> 
-%             error({service_class_not_found, Class});
-%         Module -> 
-%             Module
-%     end.
-
