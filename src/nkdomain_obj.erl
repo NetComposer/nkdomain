@@ -168,6 +168,7 @@ get_meta(Class, ObjId) ->
     {loaded, map()} | not_modified | removed | {error, term()}.
 
 load(Class, ObjId, Data, Opts) ->
+    lager:info("LOAD ~p, ~s, ~p", [Class, ObjId, Data]),
     CallOpts = #{timeout=>180000},
     case get_pid(Class, ObjId) of
         {error, not_found} ->

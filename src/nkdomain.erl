@@ -18,11 +18,12 @@
 %%
 %% -------------------------------------------------------------------
 
-
 -module(nkdomain).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([load_file/1, export/1, get_aliases/1, resolve/1, multi_resolve/1]).
+-export([load_file/1, load/2, export/1, get_aliases/1, get_pid/1, get_obj/1, remove/1]).
+-export([get_roles/1, get_role_objs/2, find_role_objs/2, has_role/3]).
+-export([resolve/1, multi_resolve/1]).
 -export_type([user_obj_id/0, obj_id/0, obj/0, class/0]).
 -export_type([token/0]).
 
@@ -54,8 +55,16 @@ load_file(File) ->
     nkdomain_load:load_file(File, #{token=>admin}).
 
 
+%% @doc Loads a domain configuration from an erlang map string or binary
+-spec load(map(), nkdomain_load:load_opts()) ->
+    {ok, #{nkdomain:obj_id() => nkdomain_load:load_result()}} | {error, term()}.
+
+load(Data, Opts) ->
+    nkdomain_load:load(map, Data, Opts).
+
+
 %% @doc Exports a full domain specification as a map
--spec export(obj_id()) ->
+-spec export(string()|binary()) ->
     {ok, map()} | {error, term()} .
 
 export(DomainId) ->
@@ -63,7 +72,7 @@ export(DomainId) ->
 
 
 %% @doc Finds all pointing objects for an alias
--spec get_aliases(binary()) ->
+-spec get_aliases(string()|binary()) ->
     [user_obj_id()].
 
 get_aliases(Alias) ->
@@ -71,6 +80,83 @@ get_aliases(Alias) ->
         {ok, #{aliases:=Aliases}} -> Aliases;
         {error, _} -> []
     end.
+
+
+%% @doc Get's de pid for an object
+-spec get_pid(string()|binary()) ->
+    {ok, pid()} | {error, not_found|term()}.
+
+get_pid(UserObjId) ->
+    case resolve(UserObjId) of
+        {ok, _Class, _ObjId, Pid} ->
+            {ok, Pid};
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
+%% @doc Gets a full object
+-spec get_obj(string()|binary()) ->
+    {ok, nkdomain:obj()} | {error, term()}.
+ 
+get_obj(UserObjId) ->
+    case resolve(UserObjId) of
+        {ok, {Class, ObjId, _Pid}} ->
+            case nkdomain_obj:get_obj(Class, ObjId) of
+                {ok, Obj} ->
+                    {ok, Class, ObjId, Obj};
+                {error, Error} ->
+                    {error, Error}
+            end;
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
+%% @doc Removes an object
+%% Most objects can also be removed loading a remove => true field
+-spec remove(string()|binary()) ->
+    ok | {error, term()}.
+
+remove(UserObjId) ->
+    case resolve(UserObjId) of
+        {ok, {Class, ObjId, _Pid}} ->
+            nkdomain_obj:remove_obj(Class, ObjId);
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
+%% @doc Gets an object's roles
+-spec get_roles(string()|binary()) ->
+    {ok, [nkrole:role()]} | {error, term()}.
+
+get_roles(UserObjId) ->
+    nkdomain_role:get_roles(UserObjId).
+
+
+%% @doc Gets object direct roles
+-spec get_role_objs(nkrole:role(), string()|binary()) ->
+    {ok, [nkrole:role_spec()]} | {error, term()}.
+
+get_role_objs(Role, UserObjId) ->
+    nkdomain_role:get_role_objs(Role, UserObjId).
+
+
+%% @doc Gets an object's roles iterating at all levels
+-spec find_role_objs(nkrole:role(), string()|binary()) ->
+    {ok, [nkdomain:obj_id()]} | {error, term()}.
+
+find_role_objs(Role, UserObjId) ->
+    nkdomain_role:find_role_objs(Role, UserObjId).
+
+
+%% @doc Check if Id has Role over Target
+-spec has_role(string()|binary(), nkrole:role(), string()|binary()) ->
+    {ok, boolean()} | {error, term()}.
+
+has_role(Id, Role, Target) ->
+    nkdomain_role:has_role(Id, Role, Target).
 
 
 %% @doc Resolves any id or alias

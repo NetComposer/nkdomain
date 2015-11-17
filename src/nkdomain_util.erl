@@ -63,7 +63,7 @@ register_update_callback(Class, Module, Fun) when is_atom(Class) ->
 
 %% @doc Gets update callback
 -spec call_update_callback(nkdomain:class(), nkdomain:obj_id(), nkdomain:obj()) ->
-    ok | error.
+    ok | {error, callback_error}.
 
 call_update_callback(Class, ObjId, Obj) when is_atom(Class) ->
     case nkdomain_app:get({update, Class}) of
@@ -74,7 +74,7 @@ call_update_callback(Class, ObjId, Obj) when is_atom(Class) ->
                     ok;
                 Other ->
                     lager:error("Error calling ~p:~p: ~p", [Module, Fun, Other]),
-                    error
+                    {error, {callback_error, Other}}
             end;
         undefined ->
             ok

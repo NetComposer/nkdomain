@@ -378,8 +378,7 @@ parse_services(Path, [{Name, Data}|Rest], Acc) ->
         nomatch ->
             case do_parse(Data, #{class=>binary}, Path1, #{unknown_ok=>true}) of
                 {ok, Data1} ->
-                    Data2 = maps:merge(#{class=>Name1}, Data1),
-                    SrvClass = maps:get(class, Data2),
+                    SrvClass = maps:get(class, Data, Name1),
                     case nkdomain_util:get_syntax(service, SrvClass) of
                         ClassSyntax when is_map(ClassSyntax) -> 
                             Syntax1 = (base_syntax())#{
@@ -387,7 +386,7 @@ parse_services(Path, [{Name, Data}|Rest], Acc) ->
                                 users => fun parse_domain_obj_role/3
                             },
                             Syntax2 = maps:merge(ClassSyntax, Syntax1),
-                            case do_parse(Data, Syntax2, Path1, #{}) of
+                            case do_parse(Data#{class=>SrvClass}, Syntax2, Path1, #{}) of
                                 {ok, Data3} ->
                                     Acc1 = maps:put(Name1, Data3, Acc),
                                     parse_services(Path, Rest, Acc1);
@@ -483,36 +482,6 @@ to_role(Term) ->
     end.
 
 
-
-% %% @private
-% parse_alias(Alias) when is_binary(Alias) ->
-%     parse_alias([Alias], []);
-
-% parse_alias(Alias) when is_list(Alias), is_integer(hd(Alias)) ->
-%     parse_alias([Alias], []);
-
-% parse_alias(Alias) when is_list(Alias) ->
-%     parse_alias(Alias, []);
-
-% parse_alias(_) ->
-%     error.
-
-
-% %% @private
-% parse_alias([], Acc) ->
-%     {ok, lists:reverse(Acc)};
-
-% parse_alias([Term|Rest], Acc) ->
-%     Term1 = nklib_util:to_binary(Term),
-%     case binary:split(Term1, <<"@">>, [global]) of
-%         [Name, Domain] when Name /= <<>>, Domain /= <<>> ->
-%             parse_alias(Rest, [Term1|Acc]);
-%         _ ->
-%             error
-%     end.
-
-
-
 %% @private
 do_parse(Data, Syntax, Path, Opts) when is_list(Data); is_map(Data) ->
     % lager:warning("DP: ~p, ~p", [Data, Syntax]),
@@ -561,28 +530,6 @@ sort_domains(Map) ->
         end,
         maps:to_list(Map)),
     [{Name, Data} || {_, Name, Data} <- lists:sort(L1)].
-
-
-% %% @private
-% get_service_syntax(Class) ->
-%     try
-%         Class = case catch binary_to_existing_atom(RawClass, utf8) of
-%             {'EXIT', _} -> throw(class);
-%             Atom -> Atom
-%         end,
-%         Module = case catch nkdomain:get_service_module(Class) of
-%             {'EXIT', _} -> throw(class);
-%             Module0 -> Module0
-%         end,
-%         case catch Module:get_syntax() of
-%             Syntax when is_map(Syntax) -> 
-%                 {ok, Class, Syntax};
-%             _ -> 
-%                 throw(class)
-%         end
-%     catch
-%         throw:class -> {error, {invalid_domain_class, RawClass}}
-%     end.
 
 
 %% @private
