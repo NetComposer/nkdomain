@@ -19,7 +19,6 @@
 %% -------------------------------------------------------------------
 
 %% @doc NkApps management module.
-
 -module(nkdomain_load).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
@@ -376,26 +375,23 @@ parse_services(Path, [{Name, Data}|Rest], Acc) ->
     Path1 = <<Path/binary, $., Name1/binary>>,
     case binary:match(Name1, <<"@">>) of
         nomatch ->
-            case do_parse(Data, #{class=>binary}, Path1, #{unknown_ok=>true}) of
-                {ok, Data1} ->
-                    SrvClass = maps:get(class, Data, Name1),
-                    case nkdomain_util:get_syntax(service, SrvClass) of
-                        ClassSyntax when is_map(ClassSyntax) -> 
-                            Syntax1 = (base_syntax())#{
-                                class => binary,
-                                users => fun parse_domain_obj_role/3
-                            },
-                            Syntax2 = maps:merge(ClassSyntax, Syntax1),
-                            case do_parse(Data#{class=>SrvClass}, Syntax2, Path1, #{}) of
-                                {ok, Data3} ->
-                                    Acc1 = maps:put(Name1, Data3, Acc),
-                                    parse_services(Path, Rest, Acc1);
-                                {error, Error} ->
-                                    {error, Error}
-                            end;
-                        _ ->
-                            {error, {unknown_service, SrvClass}}
+            case do_parse(Data, #{class=>atom}, Path1, #{unknown_ok=>true}) of
+                {ok, #{class:=ObjClass}} ->
+                    Def = (base_syntax())#{
+                        class => atom,
+                        users => fun parse_domain_obj_role/3
+                    },
+                    Syntax1 = nkdomain_util:get_syntax(ObjClass, Data),
+                    Syntax2 = maps:merge(Syntax1, Def),
+                    case do_parse(Data, Syntax2, Path1, #{}) of
+                        {ok, Data3} ->
+                            Acc1 = maps:put(Name1, Data3, Acc),
+                            parse_services(Path, Rest, Acc1);
+                        {error, Error} ->
+                            {error, Error}
                     end;
+                {ok, _} ->
+                    {error, {missing_class, Path1}};
                 {error, Error} ->
                     {error, Error}
             end;

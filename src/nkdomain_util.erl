@@ -21,7 +21,7 @@
 -module(nkdomain_util).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([register_syntax/3, get_syntax/2]).
+-export([get_syntax/2]).
 -export([register_update_callback/3, call_update_callback/3]).
 
 -export([make_user_id/1, get_module/1, get_all/1, meta_get_all/1]).
@@ -34,31 +34,63 @@
 %% ===================================================================
 
 
-%% @doc Registers a service's syntax
-%% It will be used when processing (for now) service elements.
--spec register_syntax(nkdomain:class(), binary(), map()) ->
-    ok.
+% %% @doc Registers a service's syntax
+% %% It will be used when processing (for now) service elements.
+% -spec register_syntax_callback(nkdomain:class(), atom(), atom(), atom()) ->
+%     ok.
 
-register_syntax(Class, Name, Syntax) when is_atom(Class), is_map(Syntax) ->
-    ok = nkdomain_app:put({syntax, Class, nklib_util:to_binary(Name)}, Syntax).
+% register_syntax_callback(Class, ObjClass, Mod, Fun) 
+%         when is_atom(Class), is_atom(ObjClass), is_atom(Mod), is_atom(Fun) ->
+%     ok = nkdomain_app:put({syntax, Class, ObjClass}, {Mod, Fun}).
+
+
+% %% @doc Gets a service's syntax
+% -spec get_syntax(nkdomain:class(), atom(), nkdomain:obj()) ->
+%     {ok, map()} | undefined.
+
+% get_syntax(Class, ObjClass, Obj) ->
+%     case nkdomain_app:get({syntax, Class, ObjClass}) of
+%         {Mod, Fun} ->
+%             case nklib_util:apply(Mod, Fun, [Obj]) of
+%                 {ok, Syntax} when is_map(Syntax) ->
+%                     Syntax;
+%                 Other ->
+%                     lager:warning("Invalid response calling ~p:~p: ~p",
+%                                   [Mod, Fun, Other]),
+%                     #{}
+%             end;
+%         undefined ->
+%             #{}
+%     end.
 
 
 %% @doc Gets a service's syntax
--spec get_syntax(nkdomain:class(), binary()) ->
-    {ok, map()} | undefined.
+-spec get_syntax(atom(), nkdomain:obj()) ->
+    map().
 
-get_syntax(Class, Name) when is_atom(Class) ->
-    nkdomain_app:get({syntax, Class, nklib_util:to_binary(Name)}).
+get_syntax(ObjClass, Obj) ->
+    code:ensure_loaded(ObjClass),
+    case nklib_util:apply(ObjClass, nkdomain_syntax, [Obj]) of
+        {ok, Syntax} when is_map(Syntax) ->
+            Syntax;
+        not_exported ->
+            #{};
+        Other ->
+            lager:warning("Invalid response calling ~p:~p: ~p",
+                          [ObjClass, nkdomain_syntax, Other]),
+            #{}
+    end.
+
 
 
 %% @doc Registers a callback that will be called any time and object is updated
-%% as Module:Fun(ObjId, Spec|removed)
+%% as Mod:Fun(ObjId, Spec|removed)
 -spec register_update_callback(nkdomain:class(), atom(), atom()) ->
     ok.
 
-register_update_callback(Class, Module, Fun) when is_atom(Class) ->
-    code:ensure_loaded(Module),
-    ok = nkdomain_app:put({update, Class}, {Module, Fun}).
+register_update_callback(Class, Mod, Fun) when is_atom(Class) ->
+    code:ensure_loaded(Mod),
+    ok = nkdomain_app:put({update, Class}, {Mod, Fun}).
 
 
 %% @doc Gets update callback
@@ -67,13 +99,13 @@ register_update_callback(Class, Module, Fun) when is_atom(Class) ->
 
 call_update_callback(Class, ObjId, Obj) when is_atom(Class) ->
     case nkdomain_app:get({update, Class}) of
-        {Module, Fun} ->
-            % lager:warning("Calling ~p:~p(~s, ~p)", [Module, Fun, ObjId, Obj]),
-            case catch Module:Fun(ObjId, Obj) of
+        {Mod, Fun} ->
+            % lager:warning("Calling ~p:~p(~s, ~p)", [Mod, Fun, ObjId, Obj]),
+            case nklib_util:apply(Mod, Fun, [ObjId, Obj]) of
                 ok ->
                     ok;
                 Other ->
-                    lager:error("Error calling ~p:~p: ~p", [Module, Fun, Other]),
+                    lager:error("Error calling ~p:~p: ~p", [Mod, Fun, Other]),
                     {error, {callback_error, Other}}
             end;
         undefined ->
@@ -132,16 +164,16 @@ register_classes([]) ->
     ok;
 
 register_classes([Class|Rest]) ->
-    Module = get_module(Class),
-    code:ensure_loaded(Module),
+    Mod = get_module(Class),
+    code:ensure_loaded(Mod),
     Base = #{
         n => 3, 
         backend => leveldb, 
         reconcile => lww, 
         indices=>[{domain, {func, fun index_domain/2}}]
     },
-    Data = case erlang:function_exported(Module, get_backend, 1) of
-        true -> Module:get_backend(Base);
+    Data = case erlang:function_exported(Mod, get_backend, 1) of
+        true -> Mod:get_backend(Base);
         false -> Base
     end,
     ok = nkbase:register_class(nkdomain, Class, Data),
