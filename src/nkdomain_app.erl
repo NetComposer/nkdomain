@@ -64,17 +64,25 @@ start(_Type, _Args) ->
         alias_timeout => {integer, 1, none},
         token_timeout => {integer, 1, none},
         role_proxy_timeout => {integer, 1, none},
-        user_password_pbkdf2_iters => {integer, 1, none}
+        user_password_pbkdf2_iters => {integer, 1, none},
+        syntax_callback_mod => atom,
+        syntax_callback_fun => atom
     },
     Defaults = #{
         user_timeout => 5000,
         alias_timeout => 5000,
         token_timeout => 60 * 60 * 1000,
         role_proxy_timeout => 10000,
-        user_password_pbkdf2_iters => 1
+        user_password_pbkdf2_iters => 1,
+        syntax_callback_mod => nkservice_util,
+        syntax_callback_fun => get_syntax
     },
     case nklib_config:load_env(?APP, Syntax, Defaults) of
         {ok, _} ->
+            SyntaxMod = nkdomain_app:get(syntax_callback_mod),
+            SyntaxFun = nkdomain_app:get(syntax_callback_fun),
+            code:ensure_loaded(SyntaxMod),
+            nkdomain_app:put(syntax_callback, {SyntaxMod, SyntaxFun}),
             {ok, Pid} = nkdomain_sup:start_link(),
             ok = riak_core_ring_events:add_guarded_handler(nkdomain_ring_handler, []),
             {ok, Vsn} = application:get_key(nkdomain, vsn),

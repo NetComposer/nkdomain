@@ -21,8 +21,7 @@
 -module(nkdomain_util).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([get_syntax/2]).
--export([register_update_callback/3, call_update_callback/3]).
+-export([syntax_callback/2, update_callback/3]).
 
 -export([make_user_id/1, get_module/1, get_all/1, meta_get_all/1]).
 -export([register_classes/1, resolve/1, get_parts/1]).
@@ -34,83 +33,44 @@
 %% ===================================================================
 
 
-% %% @doc Registers a service's syntax
-% %% It will be used when processing (for now) service elements.
-% -spec register_syntax_callback(nkdomain:class(), atom(), atom(), atom()) ->
-%     ok.
-
-% register_syntax_callback(Class, ObjClass, Mod, Fun) 
-%         when is_atom(Class), is_atom(ObjClass), is_atom(Mod), is_atom(Fun) ->
-%     ok = nkdomain_app:put({syntax, Class, ObjClass}, {Mod, Fun}).
-
-
-% %% @doc Gets a service's syntax
-% -spec get_syntax(nkdomain:class(), atom(), nkdomain:obj()) ->
-%     {ok, map()} | undefined.
-
-% get_syntax(Class, ObjClass, Obj) ->
-%     case nkdomain_app:get({syntax, Class, ObjClass}) of
-%         {Mod, Fun} ->
-%             case nklib_util:apply(Mod, Fun, [Obj]) of
-%                 {ok, Syntax} when is_map(Syntax) ->
-%                     Syntax;
-%                 Other ->
-%                     lager:warning("Invalid response calling ~p:~p: ~p",
-%                                   [Mod, Fun, Other]),
-%                     #{}
-%             end;
-%         undefined ->
-%             #{}
-%     end.
-
-
 %% @doc Gets a service's syntax
--spec get_syntax(atom(), nkdomain:obj()) ->
+-spec syntax_callback(nkdomain:class(), [atom()]) ->
     map().
 
-get_syntax(ObjClass, Obj) ->
-    code:ensure_loaded(ObjClass),
-    case nklib_util:apply(ObjClass, nkdomain_syntax, [Obj]) of
+syntax_callback(service, Plugins) ->
+    {Mod, Fun} = nkdomain_app:get(syntax_callback),
+    case nklib_util:apply(Mod, Fun, [Plugins]) of
         {ok, Syntax} when is_map(Syntax) ->
             Syntax;
         not_exported ->
             #{};
         Other ->
             lager:warning("Invalid response calling ~p:~p: ~p",
-                          [ObjClass, nkdomain_syntax, Other]),
+                          [Mod, Fun, Other]),
             #{}
     end.
 
 
-
-%% @doc Registers a callback that will be called any time and object is updated
-%% as Mod:Fun(ObjId, Spec|removed)
--spec register_update_callback(nkdomain:class(), atom(), atom()) ->
-    ok.
-
-register_update_callback(Class, Mod, Fun) when is_atom(Class) ->
-    code:ensure_loaded(Mod),
-    ok = nkdomain_app:put({update, Class}, {Mod, Fun}).
-
-
 %% @doc Gets update callback
--spec call_update_callback(nkdomain:class(), nkdomain:obj_id(), nkdomain:obj()) ->
+-spec update_callback(nkdomain:class(), nkdomain:obj_id(), nkdomain:obj()|removed) ->
     ok | {error, callback_error}.
 
-call_update_callback(Class, ObjId, Obj) when is_atom(Class) ->
+update_callback(Class, ObjId, Obj) ->
     case nkdomain_app:get({update, Class}) of
         {Mod, Fun} ->
-            % lager:warning("Calling ~p:~p(~s, ~p)", [Mod, Fun, ObjId, Obj]),
             case nklib_util:apply(Mod, Fun, [ObjId, Obj]) of
                 ok ->
+                    ok;
+                not_exported ->
                     ok;
                 Other ->
                     lager:error("Error calling ~p:~p: ~p", [Mod, Fun, Other]),
                     {error, {callback_error, Other}}
             end;
-        undefined ->
+        _ ->
             ok
     end.
+
 
 
 %% @doc Generates a valid user_obj_id() from a pair of class and obj_id() or

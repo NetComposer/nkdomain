@@ -375,13 +375,15 @@ parse_services(Path, [{Name, Data}|Rest], Acc) ->
     Path1 = <<Path/binary, $., Name1/binary>>,
     case binary:match(Name1, <<"@">>) of
         nomatch ->
-            case do_parse(Data, #{class=>atom}, Path1, #{unknown_ok=>true}) of
-                {ok, #{class:=ObjClass}} ->
+            Base = #{class=>atom, plugins=>{list, atom}},
+            case do_parse(Data, Base, Path1, #{unknown_ok=>true}) of
+                {ok, #{class:=ObjClass}=Data1} ->
+                    Plugins = maps:get(plugins, Data1, []),
+                    Syntax1 = nkdomain_util:syntax_callback(service, [ObjClass|Plugins]),
                     Def = (base_syntax())#{
                         class => atom,
                         users => fun parse_domain_obj_role/3
                     },
-                    Syntax1 = nkdomain_util:get_syntax(ObjClass, Data),
                     Syntax2 = maps:merge(Syntax1, Def),
                     case do_parse(Data, Syntax2, Path1, #{}) of
                         {ok, Data3} ->

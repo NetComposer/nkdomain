@@ -24,6 +24,7 @@
 -export([load_file/1, load/2, export/1, get_aliases/1, get_pid/1, get_obj/1, remove/1]).
 -export([get_roles/1, get_role_objs/2, find_role_objs/2, has_role/3]).
 -export([resolve/1, multi_resolve/1]).
+-export([register_update_callback/3]).
 -export_type([user_obj_id/0, obj_id/0, obj/0, class/0]).
 -export_type([token/0]).
 
@@ -200,5 +201,17 @@ multi_resolve(UserObjId) ->
                 [],
                 UserObjIdList)
     end.
+
+
+
+%% @doc Registers a callback that will be called any time and object is updated
+%% as Mod:Fun(ObjId, Spec|removed)
+-spec register_update_callback(nkdomain:class(), atom(), atom()) ->
+    ok.
+
+register_update_callback(Class, Mod, Fun) when is_atom(Class) ->
+    code:ensure_loaded(Mod),
+    ok = nkdomain_app:put({update, Class}, {Mod, Fun}).
+
 
 

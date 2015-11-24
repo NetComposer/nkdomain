@@ -511,7 +511,7 @@ load_roles(RoleMap1, NewObj, Opts, State) ->
         OldObj when Updated/=0 ->
             {not_modified, State};
         _ ->
-            case nkdomain_util:call_update_callback(Class, ObjId, NewObj3) of
+            case nkdomain_util:update_callback(Class, ObjId, NewObj3) of
                 ok ->
                     load_save(NewObj3, State);
                 {error, Error} ->
@@ -565,7 +565,7 @@ send_updated_roles(Class, ObjId, RoleMap) ->
 
 remove(#state{class=Class, id=ObjId, obj=Obj}=State) ->
     nklib_gen_server:handle_any(removed, [Obj], State, ?GS1, ?GS2),
-    nkdomain_util:call_update_callback(Class, ObjId, removed),
+    nkdomain_util:update_callback(Class, ObjId, removed),
     case nkbase:del(nkdomain, Class, ObjId) of
         ok ->
             ?LG(info, Class, ObjId, "removed", []);
