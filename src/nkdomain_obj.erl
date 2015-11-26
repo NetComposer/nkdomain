@@ -169,17 +169,16 @@ get_meta(Class, ObjId) ->
 
 load(Class, ObjId, Data, Opts) ->
     lager:info("LOAD ~p, ~s, ~p", [Class, ObjId, Data]),
-    CallOpts = #{timeout=>180000},
     case get_pid(Class, ObjId) of
         {error, not_found} ->
             case start_obj(Class, ObjId, #{}, #{}) of
                 {ok, Pid} ->
-                    nklib_util:call(Pid, {load, Data, Opts}, CallOpts);
+                    nklib_util:call(Pid, {load, Data, Opts}, 180000);
                 {error, Error} ->
                     {error, Error}
             end;
         {ok, Pid} ->
-            nklib_util:call(Pid, {load, Data, Opts}, CallOpts)
+            nklib_util:call(Pid, {load, Data, Opts}, 180000)
     end.
 
 
@@ -599,7 +598,8 @@ do_call(Class, ObjId, Op, Opts) ->
 do_call(Class, ObjId, Op, Opts, Tries) ->
     case get_pid(Class, ObjId) of
         {ok, Pid} ->
-            case nklib_util:call(Pid, Op, Opts) of
+            Timeout = maps:get(timeout, Opts, 5000),
+            case nklib_util:call(Pid, Op, Timeout) of
                 {error, {exit, _}} when Tries > 1 ->
                     ObjId1 = nklib_util:to_binary(ObjId),
                     lager:notice("NkDOMAIN Obj ~s (~p) call exit (~p), retrying", 
