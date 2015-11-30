@@ -31,12 +31,12 @@
 %% @private
 start_link() ->
     ChildsSpec = [
-        {nkdomain_service_mngr,
-            {nkdomain_service_mngr, start_link, []},
-            permanent,
-            5000,
-            worker,
-            [nkdomain_service_mngr]}
+        % {nkdomain_service_mngr,
+        %     {nkdomain_service_mngr, start_link, []},
+        %     permanent,
+        %     5000,
+        %     worker,
+        %     [nkdomain_service_mngr]}
     ],
     supervisor:start_link({local, ?MODULE}, ?MODULE, {{one_for_one, 10, 60}, ChildsSpec}).
 
