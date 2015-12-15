@@ -18,7 +18,7 @@
 %%
 %% -------------------------------------------------------------------
 
-%% @private NkCORE main supervisor
+%% @private Main supervisor
 -module(nkdomain_sup).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -behaviour(supervisor).
