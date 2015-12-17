@@ -357,7 +357,7 @@ handle_call(Msg, From, #state{obj=Obj}=State) ->
             noreply(State1);
         {noreply, State1, Timeout} -> 
             noreply(State1#state{timeout=Timeout});
-        ok ->
+        nklib_not_exported ->
             lager:warning("Module ~p received unexpected call: ~p", [?MODULE, Msg]),
             noreply(State);
         {removed, Reply, State1} ->
@@ -393,7 +393,7 @@ handle_cast(Msg, #state{obj=Obj}=State) ->
             noreply(State1);
         {noreply, State1, Timeout} -> 
             noreply(State1#state{timeout=Timeout});
-        ok ->
+        nklib_not_exported ->
             lager:warning("Module ~p received unexpected cast: ~p", [?MODULE, Msg]),
             noreply(State);
         {removed, State1} ->
@@ -414,7 +414,7 @@ handle_info(Msg, #state{obj=Obj}=State) ->
             noreply(State1);
         {noreply, State1, Timeout} -> 
             noreply(State1#state{timeout=Timeout});
-        ok ->
+        nklib_not_exported ->
             lager:warning("Module ~p received unexpected info: ~p", [?MODULE, Msg]),
             noreply(State);
         {removed, State1} ->
