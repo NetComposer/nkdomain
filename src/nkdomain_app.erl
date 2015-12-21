@@ -86,7 +86,7 @@ start(_Type, _Args) ->
             {ok, Pid} = nkdomain_sup:start_link(),
             ok = riak_core_ring_events:add_guarded_handler(nkdomain_ring_handler, []),
             {ok, Vsn} = application:get_key(nkdomain, vsn),
-            lager:notice("NkDOMAIN v~s has started.", [Vsn]),
+            lager:info("NkDOMAIN v~s has started.", [Vsn]),
             Classes = [alias, domain, group, user, service, nodeset, token],
             nkdomain_util:register_classes(Classes),
             {ok, Pid};
