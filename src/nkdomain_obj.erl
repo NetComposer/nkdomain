@@ -30,7 +30,8 @@
 
 -export([get_pid/2, get_obj/2, get_meta/2, load/4, export/2, remove_obj/2]).
 -export([do_call/4, do_cast/3]).
--export([start/2, start_and_join/2, join/2, init/1, init_and_join/1]).
+-export([nkdist_start/2, nkdist_start_and_join/2, nkdist_join/2]).
+-export([init/1, init_and_join/1]).
 -export([terminate/2, code_change/3, handle_call/3,
          handle_cast/2, handle_info/2]).
 -export_type([base_obj/0]).
@@ -218,26 +219,26 @@ remove_obj(Class, ObjId) ->
 
 
 %% @doc Start a new process
--spec start(nkdist:proc_id(), Args::term()) ->
+-spec nkdist_start(nkdist:proc_id(), Args::term()) ->
     {ok, pid()} | {error, term()}.
 
-start({Class, ObjId}, {Module, Meta, Obj}) ->
+nkdist_start({Class, ObjId}, {Module, Meta, Obj}) ->
     proc_lib:start_link(?MODULE, init, [{Class, ObjId, Module, Meta, Obj}]).
 
 
 %% @doc Starts a new clone process
--spec start_and_join(nkdist:proc_id(), pid()) ->
+-spec nkdist_start_and_join(nkdist:proc_id(), pid()) ->
     {ok, pid()} | {error, term()}.
 
-start_and_join({Class, ObjId}, Pid) ->
+nkdist_start_and_join({Class, ObjId}, Pid) ->
     proc_lib:start_link(?MODULE, init_and_join, [{Class, ObjId, Pid}]).
 
 
 %% @doc Joins two existing processes
--spec join(Current::pid(), Old::pid()) ->
+-spec nkdist_join(Current::pid(), Old::pid()) ->
     ok | {error, term()}.
 
-join(Current, Old) ->
+nkdist_join(Current, Old) ->
     gen_server:cast(Current, {join, Old}).
 
 
