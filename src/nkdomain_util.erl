@@ -1,6 +1,6 @@
 %% -------------------------------------------------------------------
 %%
-%% Copyright (c) 2015 Carlos Gonzalez Florido.  All Rights Reserved.
+%% Copyright (c) 2017 Carlos Gonzalez Florido.  All Rights Reserved.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -40,8 +40,6 @@
 syntax_callback(service, Plugins) ->
     {Mod, Fun} = nkdomain_app:get(syntax_callback),
     case nklib_util:apply(Mod, Fun, [Plugins]) of
-        {ok, Syntax} when is_map(Syntax) ->
-            Syntax;
         not_exported ->
             #{};
         Other ->

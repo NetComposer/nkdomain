@@ -1,6 +1,6 @@
 %% -------------------------------------------------------------------
 %%
-%% Copyright (c) 2015 Carlos Gonzalez Florido.  All Rights Reserved.
+%% Copyright (c) 2017 Carlos Gonzalez Florido.  All Rights Reserved.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -18,7 +18,7 @@
 %%
 %% -------------------------------------------------------------------
 
-%% @doc NkApps management module.
+%% @doc NkDomain load utilities
 -module(nkdomain_load).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
@@ -187,7 +187,7 @@ parse_domains([], Acc) ->
 parse_domains([{Domain, Data}|Rest], Acc) ->
     Syntax = (base_syntax())#{
         members => fun parse_domain_obj_role/3,
-        status => {enum, [ready, standby, stopping, stopped]},
+        status => {atom, [ready, standby, stopping, stopped]},
         alias => {ulist, binary},
         groups => fun parse_domain_obj/3,
         users => fun parse_domain_obj/3,

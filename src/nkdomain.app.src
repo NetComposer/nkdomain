@@ -1,20 +1,13 @@
 {application, nkdomain, [
-    {description, "NkCORE Domain Framework"},
+    {description, "NetComposer Domain Framework"},
     {vsn, "develop"},
     {modules, []},
     {registered, []},
     {mod, {nkdomain_app, []}},
     {applications, [
-        kernel,
-        stdlib,
-        crypto,
-        sasl,
-        ssl,
-        lager,
-        yamler,
+        yamerl,
         nkdist,
-        nkrole,
-        nkbase
+        nkrole
     ]},
     {env, [
     ]}
