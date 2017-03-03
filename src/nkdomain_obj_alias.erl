@@ -20,7 +20,7 @@
 
 -module(nkdomain_obj_alias).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
--behaviour(nkdomain_obj).
+-behaviour(nkdomain_obj2).
 
 -export([add_alias/2, remove_alias/2]).
 -export([init/2, load/4, handle_info/3]).
@@ -29,7 +29,7 @@
 
 
 -type alias() ::
-    nkdomain_obj:base_opt() |
+    nkdomain_obj2:base_opt() |
     #{
         aliases => [nkdomain:user_obj_id()]
     }.
@@ -45,7 +45,7 @@
     ok | {error, term()}.
 
 add_alias(AliasId, UserObjId) ->
-    case nkdomain_obj:load(alias, AliasId, #{add_alias=>UserObjId}, #{}) of
+    case nkdomain_obj2:load(alias, AliasId, #{add_alias=>UserObjId}, #{}) of
         {error, Error} -> {error, Error};
         _ -> ok
     end.
@@ -56,7 +56,7 @@ add_alias(AliasId, UserObjId) ->
     ok | {error, term()}.
 
 remove_alias(AliasId, UserObjId) ->
-    case nkdomain_obj:load(alias, AliasId, #{remove_alias=>UserObjId}, #{}) of
+    case nkdomain_obj2:load(alias, AliasId, #{remove_alias=>UserObjId}, #{}) of
         {error, Error} -> {error, Error};
         _ -> ok
     end.
@@ -74,7 +74,7 @@ remove_alias(AliasId, UserObjId) ->
 
 %% @private
 -spec init(nkdomain:obj_id(), alias()) ->
-    {ok, nkdomain_obj:init_opts(), alias(), #state{}}.
+    {ok, nkdomain_obj2:init_opts(), alias(), #state{}}.
 
 init(AliasId, Alias) ->
     Timeout = nkdomain_app:get(alias_timeout),

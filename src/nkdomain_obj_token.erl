@@ -20,7 +20,7 @@
 
 -module(nkdomain_obj_token).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
--behaviour(nkdomain_obj).
+-behaviour(nkdomain_obj2).
 
 -export([new_token/3, renew_token/2, check_token/2, remove_token/1]).
 -export([init/2, load/4, get_backend/1, handle_call/4, handle_info/3]).
@@ -52,11 +52,11 @@
 
 new_token(Class, ObjId, Data) ->
     ObjId1 = nklib_util:to_binary(ObjId),
-    case nkdomain_obj:do_call(Class, ObjId1, {check_token_data, Data}, #{}) of
+    case nkdomain_obj2:do_call(Class, ObjId1, {check_token_data, Data}, #{}) of
         ok ->
             TokenId = nklib_util:luid(),
             Load = #{set=>{Class, ObjId1, Data}},
-            case nkdomain_obj:load(token, TokenId, Load, #{}) of
+            case nkdomain_obj2:load(token, TokenId, Load, #{}) of
                 {error, Error} -> {error, Error};
                 _ -> {ok, TokenId}
             end;
@@ -70,7 +70,7 @@ new_token(Class, ObjId, Data) ->
     ok | {error, term()}.
 
 renew_token(TokenId, Data) ->
-    nkdomain_obj:do_call(token, TokenId, {renew, Data}, #{}).
+    nkdomain_obj2:do_call(token, TokenId, {renew, Data}, #{}).
 
 
 %% @doc Get token's referring objecy
@@ -78,7 +78,7 @@ renew_token(TokenId, Data) ->
     {ok, nkdomain:class(), nkdomain:obj_id()} | {error, term()}.
 
 check_token(TokenId, Data) ->
-    nkdomain_obj:do_call(token, TokenId, {check, Data}, #{}).
+    nkdomain_obj2:do_call(token, TokenId, {check, Data}, #{}).
 
 
 %% @doc Removes token
@@ -86,7 +86,7 @@ check_token(TokenId, Data) ->
     ok | {error, term()}.
 
 remove_token(TokenId) ->
-    case nkdomain_obj:get_pid(token, TokenId) of
+    case nkdomain_obj2:get_pid(token, TokenId) of
         {ok, Pid} -> 
             Pid ! token_timeout,
             ok;
@@ -112,7 +112,7 @@ remove_token(TokenId) ->
 
 %% @private
 -spec init(nkdomain:obj_id(), nkdomain:token()) ->
-    {ok, nkdomain_obj:init_opts(), #state{}}.
+    {ok, nkdomain_obj2:init_opts(), #state{}}.
 
 init(TokenId, Token) ->
     {ok, #{backend=>none}, Token, #state{id=TokenId}}.
@@ -130,7 +130,7 @@ load(#{set:={Class, ObjId, Data}}, _Opts, Token, #state{id=TokenId}=State) ->
         port = maps:get(port, Data, undefined)
     },
     State2 = schedule(Data, State1),
-    nkdomain_obj:do_cast(Class, ObjId, {new_token, TokenId, self()}),
+    nkdomain_obj2:do_cast(Class, ObjId, {new_token, TokenId, self()}),
     {ok, Token, State2}.
 
 

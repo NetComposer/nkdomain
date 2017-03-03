@@ -187,7 +187,7 @@ load2() ->
       		status := ready,
       		users := #{<<"admin">>:=_, <<"root1">>:=_, <<"root2">>:=_}
       	}
-    } = nkdomain_obj:get_obj(domain, "root"),
+    } = nkdomain_obj2:get_obj(domain, "root"),
     0 = maps:size(Nodesets),
 
     {ok, [<<"user:root2@root">>]} = find_role_objs("admin", "root"),

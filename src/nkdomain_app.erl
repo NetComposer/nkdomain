@@ -24,11 +24,14 @@
 -behaviour(application).
 
 -export([start/0, start/1, start/2, stop/1]).
+-export([start_root/0]).
 -export([get/1, put/2, del/1]).
 
 -include("nkdomain.hrl").
 
 -define(APP, nkdomain).
+
+-compile({no_auto_import,[get/1, put/2]}).
 
 %% ===================================================================
 %% Private
@@ -39,7 +42,7 @@
     ok | {error, Reason::term()}.
 
 start() ->
-    start(temporary).
+    start(permanent).
 
 
 %% @doc Starts NkDOMAIN stand alone.
@@ -59,6 +62,10 @@ start(Type) ->
 %% @private OTP standard start callback
 start(_Type, _Args) ->
     Syntax = #{
+        start_root => boolean,
+        elastic_url => binary,
+        elastic_user => binary,
+        elastic_pass => binary,
         user_timeout => {integer, 1, none},
         alias_timeout => {integer, 1, none},
         token_timeout => {integer, 1, none},
@@ -67,6 +74,7 @@ start(_Type, _Args) ->
         syntax_callback_mod => atom,
         syntax_callback_fun => atom,
         '__defaults' => #{
+            start_root => false,
             user_timeout => 5000,
             alias_timeout => 5000,
             token_timeout => 60 * 60 * 1000,
@@ -78,16 +86,22 @@ start(_Type, _Args) ->
     },
     case nklib_config:load_env(?APP, Syntax) of
         {ok, _} ->
-            SyntaxMod = nkdomain_app:get(syntax_callback_mod),
-            SyntaxFun = nkdomain_app:get(syntax_callback_fun),
+            SyntaxMod = get(syntax_callback_mod),
+            SyntaxFun = get(syntax_callback_fun),
             code:ensure_loaded(SyntaxMod),
-            nkdomain_app:put(syntax_callback, {SyntaxMod, SyntaxFun}),
+            put(syntax_callback, {SyntaxMod, SyntaxFun}),
             {ok, Pid} = nkdomain_sup:start_link(),
             %% ok = riak_core_ring_events:add_guarded_handler(nkdomain_ring_handler, []),
             {ok, Vsn} = application:get_key(nkdomain, vsn),
             lager:info("NkDOMAIN v~s has started.", [Vsn]),
             Classes = [alias, domain, group, user, service, nodeset, token],
             nkdomain_util:register_classes(Classes),
+            case get(start_root) of
+                true ->
+                    start_root();
+                false ->
+                    lager:warning("Root domain not started")
+            end,
             {ok, Pid};
         {error, Error} ->
             lager:error("Error parsing config: ~p", [Error]),
@@ -99,6 +113,41 @@ start(_Type, _Args) ->
 %% @private OTP standard stop callback
 stop(_) ->
     ok.
+
+
+%% @doc Starts the root service
+start_root() ->
+    Spec1 = #{
+        plugins => [nkelastic, nkdomain, nkchat],
+        debug => [
+        ]
+    },
+    Spec2 = case get(elastic_url) of
+        undefined ->
+            lager:error("Could not start root, elastic_url not defined"),
+            error(start_root_error);
+        Url ->
+            Spec1#{elastic_url => Url}
+    end,
+    User = get(elastic_user),
+    Pass = get(elastic_pass),
+    Spec3 = case is_binary(User) and is_binary(Pass) of
+        true ->
+            Spec2#{
+                elastic_user => User,
+                elastic_pass => Pass
+            };
+        false ->
+            Spec2
+    end,
+    case nkservice:start(root, Spec3) of
+        {ok, _} ->
+            lager:info("Root service started");
+        {error, Error} ->
+            lager:error("Could not start root service: ~p", [Error]),
+            error(start_root_error)
+    end.
+
 
 
 %% @doc gets a configuration value

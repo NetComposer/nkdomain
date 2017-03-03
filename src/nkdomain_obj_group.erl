@@ -20,7 +20,7 @@
 
 -module(nkdomain_obj_group).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
--behaviour(nkdomain_obj).
+-behaviour(nkdomain_obj2).
 
 -export([init/2, load/4, removed/2, export/2, handle_call/4]).
 
@@ -28,7 +28,7 @@
 
 
 -type group() ::
-    nkdomain_obj:base_obj() |
+    nkdomain_obj2:base_obj() |
     #{
         groups => [{nkdomain:obj_id(), integer()}]
     }.
@@ -46,7 +46,7 @@
 
 %% @private
 -spec init(nkdomain:obj_id(), group()) ->
-    {ok, nkdomain_obj:init_opts(), group(), #state{}}.
+    {ok, nkdomain_obj2:init_opts(), group(), #state{}}.
 
 init(GroupId, Group) ->
     Base = #{groups => #{}},
@@ -79,7 +79,7 @@ export(GroupId, Group) ->
     Groups = maps:fold(
         fun(Id, _Hash, Acc) ->
             Id1 = list_to_binary([Id, ".", GroupId]),
-            case nkdomain_obj:export(group, Id1) of
+            case nkdomain_obj2:export(group, Id1) of
                 {ok, Map} ->
                     maps:put(Id, Map, Acc);
                 {error, Error} ->
@@ -153,7 +153,7 @@ do_load_groups(_GroupId, [], _Opts, Acc) ->
 
 do_load_groups(GroupId, [{Name, Data}|Rest], Opts, Acc) ->
     Name1 = list_to_binary([Name, ".", GroupId]),
-    Acc1 = case nkdomain_obj:load(group, Name1, Data, Opts) of
+    Acc1 = case nkdomain_obj2:load(group, Name1, Data, Opts) of
         not_modified ->
             Acc;
         {loaded, NewData} ->
@@ -172,7 +172,7 @@ do_load_groups(GroupId, [{Name, Data}|Rest], Opts, Acc) ->
 %% @private
 do_remove_group(GroupId, Name) ->
     Name1 = list_to_binary([Name, ".", GroupId]),
-    case nkdomain_obj:remove_obj(group, Name1) of
+    case nkdomain_obj2:remove_obj(group, Name1) of
         ok -> 
             ok;
         {error, Error} ->

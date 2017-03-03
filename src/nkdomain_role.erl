@@ -151,7 +151,7 @@ get_role_op(Term) ->
 get_rolemap(ObjUserId) when is_binary(ObjUserId) ->
     case nkdomain:resolve(ObjUserId) of
         {ok, {Class, ObjId, _Pid}} ->
-            nkdomain_obj:do_call(Class, ObjId, get_rolemap, #{});
+            nkdomain_obj2:do_call(Class, ObjId, get_rolemap, #{});
         {error, Error} ->
             {error, Error}
     end.

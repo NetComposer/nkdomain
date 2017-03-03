@@ -20,17 +20,29 @@
 
 -module(nkdomain_obj_user).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
--behaviour(nkdomain_obj).
+-behaviour(nkdomain_obj2).
 
+-export([get_store_mapping/0]).
 -export([get_tokens/1, user_pass/1, make_pass/1]).
 -export([init/2, load/4, removed/2, handle_call/4, handle_cast/3, handle_info/3]).
+-export_type([obj/0]).
+
 
 -include("nkdomain.hrl").
 
+
+
+%% ===================================================================
+%% Types
+%% ===================================================================
+
+
+
+-type obj() ::
+    nkdomain_obj:obj() | #{user => user()}.
+
 -type user() ::
-    nkdomain_obj:base_obj() |
     #{
-        alias => [binary()],
         name => binary(),
         surname => binary(),
         password => binary()
@@ -45,7 +57,7 @@
     {ok, [nkdomain:obj_id()]} | {error, term()}.
 
 get_tokens(ObjId) ->
-    nkdomain_obj:do_call(user, ObjId, get_tokens, #{}).
+    nkdomain_obj2:do_call(user, ObjId, get_tokens, #{}).
 
 
 %% @doc Generates a password from an user password or hash
@@ -74,6 +86,20 @@ make_pass(Pass) ->
 %% nkdomain_obj behaviour
 %% ===================================================================
 
+get_store_mapping() ->
+    #{
+        name => #{
+            type => text,
+            fields => #{keyword => #{type=>keyword}}
+        },
+        surname => #{
+            type => text,
+            fields => #{keyword => #{type=>keyword}}
+        },
+        password => #{type => keyword}
+    }.
+
+
 -record(state, {
     id :: nkdomain:obj_id(),
     tokens = [] :: [{nkdomain:obj_id(), pid()}]
@@ -82,7 +108,7 @@ make_pass(Pass) ->
 
 %% @private
 -spec init(nkdomain:obj_id(), user()) ->
-    {ok, nkdomain_obj:init_opts(), user(), #state{}}.
+    {ok, nkdomain_obj2:init_opts(), user(), #state{}}.
 
 init(UserId, User) ->
     Timeout = nkdomain_app:get(user_timeout),

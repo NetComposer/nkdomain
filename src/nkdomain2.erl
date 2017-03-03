@@ -19,65 +19,69 @@
 %% -------------------------------------------------------------------
 
 %% @doc NkDomain main module
--module(nkdomain).
+-module(nkdomain2).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([load_file/1, load/2, export/1, get_aliases/1, get_pid/1, get_obj/1, remove/1]).
 -export([get_roles/1, get_role_objs/2, find_role_objs/2, has_role/3]).
 -export([resolve/1, multi_resolve/1]).
 -export([register_update_callback/3]).
--export_type([obj_id/0, name/0, obj/0, path/0, type/0, class/0, history/0, history_op/0]).
+-export_type([user_obj_id/0, obj_id/0, obj/0, class/0]).
+-export_type([token/0]).
 
-%%-include_lib("nklib/include/nklib.hrl").
+-include_lib("nklib/include/nklib.hrl").
 
 
 %% ===================================================================
 %% Types
 %% ===================================================================
 
--type obj_id() :: binary().
-
--type name() :: binary().
+-type obj_id() :: binary().             %% "one@domain"
 
 -type path() :: [binary()].
 
 -type type() :: atom().
 
--type class() :: atom().
 
 -type history_op() :: term().
 
 -type history() :: [{nklib_util:m_timestamp(), User::obj_id(), history_op()}].
 
 
-%% @see nkdomain_callbacks:domain_store_base_mapping/0
 -type obj() :: #{
     obj_id => obj_id(),
-    domain => path(),
+    path => path(),
     type => type(),
-    subtype => atom(),
     description => binary(),
-    created_by => obj_id(),
     created_time => nklib_util:m_timestamp(),
-    parent_id => obj_id(),
+    created_by => obj_id(),
+    parent => obj_id(),
     enabled => boolean(),
     expires_time => nklib_util:m_timestamp(),
-    destroyed_time => nklib_util:m_timestamp(),
-    destroyed_reason => term(),
-    icon_id => binary(),
-    aliases => [binary()],
+    %%    groups => [obj_id()],
+    %%    services => [obj_id]
+    icon => binary(),
+    history => history(),
     class() => map()
 }.
 
-%%    register => nklib:link(),
-%%    events => [nkservice_events:type()],
-%%    history => history(),
 
 
 
-%% ===================================================================
-%% Public
-%% ===================================================================
+
+
+
+
+
+
+-type class() :: domain | group | user | nodeset | service | alias | atom().
+
+-type token() :: binary().
+
+
+
+-type user_obj_id() :: binary().        %% "group:one@domain"
+
 
 
 
@@ -117,7 +121,7 @@ export(DomainId) ->
 
 %% @doc Finds all pointing objects for an alias
 -spec get_aliases(string()|binary()) ->
-    [obj_id()].
+    [user_obj_id()].
 
 get_aliases(Alias) ->
     case nkdomain_obj2:get_obj(alias, Alias) of

@@ -7,7 +7,8 @@
     {applications, [
         yamerl,
         nkdist,
-        nkrole
+        nkrole,
+        nkservice
     ]},
     {env, [
     ]}

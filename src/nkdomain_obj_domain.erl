@@ -23,9 +23,9 @@
 
 -module(nkdomain_obj_domain).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
--behaviour(nkdomain_obj).
+-behaviour(nkdomain_obj2).
 
--export([init/2, load/4, removed/2, export/2, handle_call/4]).
+-export([init/2, load/4, removed/2, export/2, handle_call/4, get_store_mapping/0]).
 
 -include("nkdomain.hrl").
 
@@ -34,7 +34,7 @@
 
 %% Internal object
 -type domain() ::
-    nkdomain_obj:base_opt() |
+    nkdomain_obj2:base_opt() |
     #{
         status => domain_status(),
         alias => [binary()],
@@ -46,9 +46,23 @@
 
 
 
+
+
+
+
+
 %% ===================================================================
 %% nkdomain_obj behaviour
 %% ===================================================================
+
+
+get_store_mapping() ->
+    #{}.
+
+
+
+
+
 
 
 -record(state, {
@@ -58,7 +72,7 @@
 
 %% @private
 -spec init(nkdomain:obj_id(), domain()) ->
-    {ok, nkdomain_obj:init_opts(), domain(), #state{}}.
+    {ok, nkdomain_obj2:init_opts(), domain(), #state{}}.
 
 init(DomainId, Domain) ->
     Base = #{
@@ -261,7 +275,7 @@ do_load_class(_Key, _DomainId, [], _Opts, Acc) ->
 do_load_class(Key, DomainId, [{Name, Data}|Rest], Opts, Acc) ->
     Class = get_class(Key),
     ObjId = list_to_binary([Name, "@", DomainId]),
-    Acc1 = case nkdomain_obj:load(Class, ObjId, Data, Opts) of
+    Acc1 = case nkdomain_obj2:load(Class, ObjId, Data, Opts) of
         not_modified ->
             Acc;
         {loaded, NewData} ->
@@ -281,7 +295,7 @@ do_load_class(Key, DomainId, [{Name, Data}|Rest], Opts, Acc) ->
 do_remove_class(Key, DomainId, Name) ->
     Class = get_class(Key),
     ObjId = list_to_binary([Name, "@", DomainId]),
-    case nkdomain_obj:remove_obj(Class, ObjId) of
+    case nkdomain_obj2:remove_obj(Class, ObjId) of
         ok -> 
             ok;
         {error, Error} ->
@@ -324,7 +338,7 @@ export_key(Key, DomainId, Domain) ->
         fun(Id, _Hash, Acc) ->
             Class = get_class(Key),
             ObjId = list_to_binary([Id, "@", DomainId]),
-            case nkdomain_obj:export(Class, ObjId) of
+            case nkdomain_obj2:export(Class, ObjId) of
                 {ok, Map} ->
                     maps:put(Id, Map, Acc);
                 {error, Error} ->

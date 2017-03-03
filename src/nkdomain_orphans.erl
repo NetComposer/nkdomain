@@ -50,11 +50,11 @@ check_aliases(Itr, Acc) ->
                 {_, ['$deleted']} -> 
                     Acc;
                 {Key, _V} ->
-                    {ok, #{aliases:=Aliases1}} = nkdomain_obj:get_obj(alias, Key),
+                    {ok, #{aliases:=Aliases1}} = nkdomain_obj2:get_obj(alias, Key),
                     Aliases2 = lists:filter(
                         fun(ObjUserId) ->
                             {ok, {Class, ObjId}} = nkdomain_util:get_parts(ObjUserId),
-                            case nkdomain_obj:get_obj(Class, ObjId) of
+                            case nkdomain_obj2:get_obj(Class, ObjId) of
                                 {ok, Data} -> 
                                     case Data of
                                         #{alias:=ObjAliases} ->
@@ -142,7 +142,7 @@ check_orphan(Class, Name, Domain) ->
 
 %% @private
 do_check_orphan(Class, Name, BaseClass, BaseName) ->
-    Ok = case nkdomain_obj:do_call(BaseClass, BaseName, {check_orphan, Class, Name}, #{}) of
+    Ok = case nkdomain_obj2:do_call(BaseClass, BaseName, {check_orphan, Class, Name}, #{}) of
         {ok, Bool} -> 
             Bool;
         {error, not_found} -> 

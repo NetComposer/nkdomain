@@ -20,13 +20,13 @@
 
 -module(nkdomain_obj_nodeset).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
--behaviour(nkdomain_obj).
+-behaviour(nkdomain_obj2).
 
 -export([init/2, load/4]).
 
 
 -type nodeset() ::
-    nkdomain_obj:base_obj() |
+    nkdomain_obj2:base_obj() |
 	#{
         meta => binary()
 	}.
@@ -42,7 +42,7 @@
 
 %% @private
 -spec init(nkdomain:obj_id(), nodeset()) ->
-    {ok, nkdomain_obj:init_opts(), nodeset(), #state{}}.
+    {ok, nkdomain_obj2:init_opts(), nodeset(), #state{}}.
 
 init(_NodesId, Nodeset) ->
     {ok, #{}, Nodeset, #state{}}.

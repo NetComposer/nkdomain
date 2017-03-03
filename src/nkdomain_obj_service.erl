@@ -22,13 +22,13 @@
 %% Services must have a class that is previously registered
 -module(nkdomain_obj_service).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
--behaviour(nkdomain_obj).
+-behaviour(nkdomain_obj2).
 
 -export([init/2, load/4, removed/2]).
 
 
 -type service() ::
-    nkdomain_obj:base_obj() |
+    nkdomain_obj2:base_obj() |
 	#{
         class => atom(),
         term() => term()
@@ -47,7 +47,7 @@
 
 %% @private
 -spec init(service(), service()) ->
-    {ok, nkdomain_obj:init_opts(), service(), #state{}}.
+    {ok, nkdomain_obj2:init_opts(), service(), #state{}}.
 
 init(ServiceId, Service) ->
     {ok, #{}, Service, #state{id=ServiceId}}.

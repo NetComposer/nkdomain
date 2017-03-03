@@ -154,7 +154,7 @@ index_domain({nkdomain, _Class, Key}, _Obj) ->
 resolve(UserObjId) ->
     case get_parts(UserObjId) of
         {ok, {Class, ObjId}} ->
-            case nkdomain_obj:get_pid(Class, ObjId) of
+            case nkdomain_obj2:get_pid(Class, ObjId) of
                 {ok, Pid} ->
                     {ok, {Class, ObjId, Pid}};
                 {error, not_found} ->
@@ -163,7 +163,7 @@ resolve(UserObjId) ->
                             case nkdomain:get_aliases(Domain) of
                                 [<<"domain:", Domain2/binary>>] ->
                                     ObjId2 = <<Name/binary, $@, Domain2/binary>>,
-                                    case nkdomain_obj:get_pid(Class, ObjId2) of
+                                    case nkdomain_obj2:get_pid(Class, ObjId2) of
                                         {ok, Pid} -> {ok, 
                                             {Class, ObjId2, Pid}};
                                         {error, Error} -> 
