@@ -25,7 +25,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -behaviour(nkdomain_obj2).
 
--export([init/2, load/4, removed/2, export/2, handle_call/4, get_store_mapping/0]).
+-export([init/2, load/4, removed/2, export/2, handle_call/4]).
 
 -include("nkdomain.hrl").
 
@@ -54,15 +54,6 @@
 %% ===================================================================
 %% nkdomain_obj behaviour
 %% ===================================================================
-
-
-get_store_mapping() ->
-    #{}.
-
-
-
-
-
 
 
 -record(state, {

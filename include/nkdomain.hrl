@@ -27,12 +27,18 @@
 %% Defines
 %% ===================================================================
 
-% -define(O_DOMAIN, nkdomain_obj_domain).
-% -define(O_GROUP, nkdomain_obj_group).
-% -define(O_USER, nkdomain_obj_user).
-% -define(O_ALIAS, nkdomain_obj_alias).
-% -define(O_NODESET, nkdomain_obj_nodeset).
-% -define(O_SERVICE, nkdomain_obj_service).
+-define(ADD_TO_OBJ(Key, Val, Obj), maps:put(Key, Val, Obj)).
+-define(ADD_TO_OBJ(Map, Obj), maps:merge(Obj, Map)).
+-define(REMOVE_FROM_OBJ(Key, Obj), maps:remove(Key, Obj)).
+
+-define(ADD_TO_SESSION(Key, Val, Session), maps:put(Key, Val, Session)).
+-define(ADD_TO_SESSION(Map, Session), maps:merge(Session, Map)).
+-define(REMOVE_FROM_SESSION(Key, Session), maps:remove(Key, Session)).
+
+
+-define(TYPE_USER, user).
+-define(TYPE_DOMAIN, domain).
+
 
 -endif.
 

@@ -22,18 +22,18 @@
 -module(nkdomain_callbacks).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -export([plugin_deps/0, service_init/2, service_handle_cast/2]).
--export([domain_get_types/1, domain_get_module/1, domain_store_base_mapping/0,
-         domain_store_mapping/1, domain_load_obj/3]).
+-export([domain_store_base_mapping/0, domain_load_obj/3]).
 -export([object_init/2, object_terminate/3, object_event/3, object_reg_event/4,
          object_reg_down/4, object_start/2, object_stop/3,
-         object_handle_call/4, object_handle_cast/3, object_handle_info/3]).
+         object_handle_call/4, object_handle_cast/3, object_handle_info/3,
+         object_store/2, object_save/2]).
 -export([elastic_get_indices/2, elastic_get_mappings/3, elastic_get_aliases/3]).
 
--define(ES_INDEX, <<"nkobjects_v2">>).
--define(ES_ALIAS, <<"nkobjects">>).
 -define(TYPES, [domain, user]).
 
 -define(LLOG(Type, Txt, Args), lager:Type("NkDOMAIN Callbacks: "++Txt, Args)).
+
+-include("nkdomain.hrl").
 
 
 %% ===================================================================
@@ -46,38 +46,6 @@
 %% ===================================================================
 %% Offered Callbacks
 %% ===================================================================
-
-%% @doc Called to get all installed object types
--spec domain_get_types([nkdomain:type()]) ->
-    [nkdomain:type()].
-
-domain_get_types(Acc) ->
-    Acc ++ ?TYPES.
-
-
-%% @doc Called to map types to modules
--spec domain_get_module(nkdomain:type()) ->
-    module() | unknown.
-
-domain_get_module(domain) -> nkdomain_obj_domain;
-domain_get_module(group) -> nkdomain_obj_group;
-domain_get_module(user) -> nkdomain_obj_user;
-domain_get_module(token) -> nkdomain_obj_token;
-domain_get_module(alias) -> nkdomain_obj_alias;
-domain_get_module(service) -> nkdomain_obj_service;
-domain_get_module(nodeset) -> nkdomain_obj_nodeset;
-domain_get_module(_) -> unknown.
-
-
-%% @doc
-domain_store_mapping(domain) ->
-    nkdomain_obj_domain:get_store_mapping();
-domain_store_mapping(user) ->
-    nkdomain_obj_user:get_store_mapping();
-domain_store_mapping(Type) ->
-    ?LLOG(warning, "Missing mapping for type ~s", [Type]),
-    #{}.
-
 
 %% @doc In-store base mapping
 -spec domain_store_base_mapping() -> map().
@@ -103,20 +71,12 @@ domain_store_base_mapping() ->
         icon_id => #{type => keyword}
     }.
 
-
 %% @doc
 -spec domain_load_obj(nkservice:id(), nkdomain:type(), nkdomain:obj_id()) ->
-    {ok, Meta::map(), Obj::nkdomain:obj()} | not_found | {error, term()}.
+    {ok, Meta::nkdomain:meta(), Obj::nkdomain:obj()} | not_found | {error, term()}.
 
 domain_load_obj(SrvId, Type, ObjId) ->
-    case nkelastic_api:get(SrvId, ?ES_INDEX, Type, ObjId) of
-        {ok, Data, Vsn} ->
-            {ok, #{es_vsn=>Vsn}, Data};
-        {error, object_not_found} ->
-            not_found;
-        {error, Error} ->
-            {error, Error}
-    end.
+    nkdomain_types:load_es_obj(SrvId, Type, ObjId).
 
 
 
@@ -132,8 +92,8 @@ domain_load_obj(SrvId, Type, ObjId) ->
 -spec object_init(type(), session()) ->
     {ok, session()} | {stop, Reason::term()}.
 
-object_init(Type, _Session) ->
-    {stop, {unknown_type, Type}}.
+object_init(_Type, Session) ->
+    {ok, Session}.
 
 
 %% @doc Called when the session stops
@@ -211,6 +171,34 @@ object_handle_info(_Type, Msg, Session) ->
     {noreply, Session}.
 
 
+%% @doc Called to save the object to disk
+-spec object_save(type(), session()) ->
+    {ok, session()} | {error, term(), session()}.
+
+object_save(Type, #{srv_id:=SrvId, obj:=Obj}=Session) ->
+    BaseKeys = maps:keys(SrvId:domain_store_base_mapping()),
+    Store1 = maps:with(BaseKeys, Obj),
+    Store2 = SrvId:object_store(Type, Session),
+    Store3 = maps:merge(Store1, Store2),
+    case nkdomain_types:save_obj(SrvId, Store3) of
+        {ok, _Vsn} ->
+            {ok, ?ADD_TO_SESSION(is_dirty, false, Session)};
+        {error, Error} ->
+            {error, Error, Session}
+    end.
+
+
+%% @doc Called to get a "storable" version of the object
+-spec object_store(type(), nkdomain:obj()) -> map().
+
+object_store(_Type, #{callback:=Mod, obj:=Obj}) when Mod /= undefined ->
+    Mod:object_store(Obj);
+
+object_store(_Type, _Session) ->
+    #{}.
+
+
+
 
 
 
@@ -238,6 +226,7 @@ service_handle_cast(_Msg, _State) ->
     continue.
 
 
+
 %% ===================================================================
 %% NkElastic callbacks
 %% ===================================================================
@@ -245,34 +234,17 @@ service_handle_cast(_Msg, _State) ->
 
 %% @private
 elastic_get_indices(Acc, Service) ->
-    Acc2 = Acc#{
-        ?ES_INDEX => #{
-            number_of_replicas => 2
-        }
-    },
-    {continue, [Acc2, Service]}.
+    Indices = nkdomain_types:get_es_indices(),
+    {continue, [maps:merge(Acc, Indices), Service]}.
 
 
 %% @private
-elastic_get_mappings(?ES_INDEX, Acc, #{id:=SrvId}=Service) ->
-    Types = SrvId:domain_get_types([]),
-    Acc2 = lists:foldl(
-        fun(Type, FAcc) ->
-            Base = SrvId:domain_store_base_mapping(),
-            ObjMap = SrvId:domain_store_mapping(Type),
-            FAcc#{Type => maps:merge(ObjMap, Base)}
-        end,
-        Acc,
-        Types),
-    {continue, [?ES_INDEX, Acc2, Service]};
-
-elastic_get_mappings(_Index, _Acc, _Service) ->
-    continue.
+elastic_get_mappings(Index, Acc, #{id:=SrvId}=Service) ->
+    Mappings = nkdomain_types:get_es_mappings(Index, SrvId),
+    {continue, [Index, maps:merge(Acc, Mappings), Service]}.
 
 
 %% @private
-elastic_get_aliases(?ES_INDEX, Acc, Service) ->
-    {continue, [?ES_INDEX, Acc#{?ES_ALIAS => #{}}, Service]};
-
-elastic_get_aliases(_Index, _Acc, _Service) ->
-    continue.
+elastic_get_aliases(Index, Acc, Service) ->
+    Aliases = nkdomain_types:get_es_aliases(Index),
+    {continue, [Index, maps:merge(Acc, Aliases), Service]}.

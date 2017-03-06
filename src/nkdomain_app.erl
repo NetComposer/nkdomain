@@ -96,9 +96,14 @@ start(_Type, _Args) ->
             lager:info("NkDOMAIN v~s has started.", [Vsn]),
             Classes = [alias, domain, group, user, service, nodeset, token],
             nkdomain_util:register_classes(Classes),
+            register_types(),
             case get(start_root) of
                 true ->
-                    start_root();
+                    spawn_link(
+                        fun() ->
+                            timer:sleep(5000),
+                            start_root()
+                        end);
                 false ->
                     lager:warning("Root domain not started")
             end,
@@ -113,6 +118,12 @@ start(_Type, _Args) ->
 %% @private OTP standard stop callback
 stop(_) ->
     ok.
+
+
+%% @doc Register our types
+register_types() ->
+    ok = nkdomain_types:register_type(domain, nkdomain_domain_obj),
+    ok = nkdomain_types:register_type(user, nkdomain_user_obj).
 
 
 %% @doc Starts the root service
@@ -147,8 +158,6 @@ start_root() ->
             lager:error("Could not start root service: ~p", [Error]),
             error(start_root_error)
     end.
-
-
 
 %% @doc gets a configuration value
 get(Key) ->

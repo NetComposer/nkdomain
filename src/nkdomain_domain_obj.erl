@@ -18,31 +18,28 @@
 %%
 %% -------------------------------------------------------------------
 
-%% @private Main supervisor
--module(nkdomain_sup).
--author('Carlos Gonzalez <carlosj.gf@gmail.com>').
--behaviour(supervisor).
+%% @doc Domain Object
 
--export([init/1, start_link/0]).
+-module(nkdomain_domain_obj).
+-behavior(nkdomain_obj).
+-author('Carlos Gonzalez <carlosj.gf@gmail.com>').
+
+-export([object_get_mapping/0, object_store/1]).
+
 
 -include("nkdomain.hrl").
 
 
-%% @private
-start_link() ->
-    ChildsSpec = [
-        {nkdomain_types,
-        {nkdomain_types, start_link, []},
-        permanent,
-        5000,
-        worker,
-        [nkdomain_types]}
-    ],
-    supervisor:start_link({local, ?MODULE}, ?MODULE, {{one_for_one, 10, 60}, ChildsSpec}).
+
+%% ===================================================================
+%% nkdomain_obj behaviour
+%% ===================================================================
 
 
-%% @private
-init(ChildSpecs) ->
-    {ok, ChildSpecs}.
+
+object_get_mapping() ->
+    #{}.
 
 
+object_store(_) ->
+    #{}.

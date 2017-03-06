@@ -18,31 +18,47 @@
 %%
 %% -------------------------------------------------------------------
 
-%% @private Main supervisor
--module(nkdomain_sup).
--author('Carlos Gonzalez <carlosj.gf@gmail.com>').
--behaviour(supervisor).
+%% @doc User Object
 
--export([init/1, start_link/0]).
+-module(nkdomain_user_obj).
+-behavior(nkdomain_obj).
+-author('Carlos Gonzalez <carlosj.gf@gmail.com>').
+
+-export([object_get_mapping/0, object_store/1]).
+
 
 -include("nkdomain.hrl").
 
 
-%% @private
-start_link() ->
-    ChildsSpec = [
-        {nkdomain_types,
-        {nkdomain_types, start_link, []},
-        permanent,
-        5000,
-        worker,
-        [nkdomain_types]}
-    ],
-    supervisor:start_link({local, ?MODULE}, ?MODULE, {{one_for_one, 10, 60}, ChildsSpec}).
+%% ===================================================================
+%% nkdomain_obj behaviour
+%% ===================================================================
 
 
-%% @private
-init(ChildSpecs) ->
-    {ok, ChildSpecs}.
 
+object_get_mapping() ->
+    #{
+        name => #{
+            type => text,
+            fields => #{keyword => #{type=>keyword}}
+        },
+        surname => #{
+            type => text,
+            fields => #{keyword => #{type=>keyword}}
+        },
+        password => #{type => keyword},
+        base_url => #{type => keyword}
+    }.
+
+
+
+
+
+
+object_store(#{?TYPE_USER:=User}) ->
+    Keys = maps:keys(object_get_mapping()),
+    maps:with(Keys, User);
+
+object_store(_) ->
+    #{}.
 

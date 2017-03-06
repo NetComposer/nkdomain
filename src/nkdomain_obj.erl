@@ -27,8 +27,8 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -behaviour(gen_server).
 
--export([create/3]).
--export([do_call/3, do_call/4, do_cast/3, do_info/3]).
+-export([create/3, save/2, get_all/0]).
+-export([find/2, do_call/3, do_call/4, do_cast/3, do_info/3]).
 -export([init/1, terminate/2, code_change/3, handle_call/3,
          handle_cast/2, handle_info/2]).
 -export_type([event/0]).
@@ -51,6 +51,9 @@
 
 -define(SRV_DELAYED_DESTROY, 5000).
 -define(DEF_SYNC_CALL, 5000).
+-define(SAVE_RETRY, 5000).
+
+-include("nkdomain.hrl").
 
 
 %% ===================================================================
@@ -60,7 +63,6 @@
 
 -type create_opts() ::
     #{
-        obj_id => nkdomain:obj_id(),
         register => nklib:link(),
         user_id => nkdomain:obj_id(),
         user_session => nkservice:user_session(),
@@ -68,10 +70,15 @@
     }.
 
 -type session() ::
-    create_opts() |
     #{
+        obj_id => nkdomain:obj_id(),
         type => nkdomain:type(),
-        obj => nkdomain:obj()
+        obj => nkdomain:obj(),
+        srv_id => nkservice:id(),
+        callback => module(),
+        is_dirty => boolean(),
+        enabled => boolean(),            % 'Real' enabled or not (father)
+        meta => create_opts()
     }.
 
 
@@ -91,6 +98,12 @@
 %% ===================================================================
 %% Callbacks definitions
 %% ===================================================================
+
+-callback object_get_mapping() ->
+    map().
+
+-callback object_store(nkdomain:object()) ->
+    map().
 
 
 %% ===================================================================
@@ -134,12 +147,25 @@
 create(Srv, #{type:=Type}=Obj, Meta) ->
     case nkservice_srv:get_srv_id(Srv) of
         {ok, SrvId} ->
-            {ObjId, Meta2} = nkmedia_util:add_id(obj_id, Meta#{srv_id=>SrvId}, Type),
-            {ok, ObjPid} = gen_server:start(?MODULE, {create, Obj, Meta2}, []),
+            {ObjId, Obj2} = nkmedia_util:add_id(obj_id, Obj, Type),
+            {ok, ObjPid} = gen_server:start(?MODULE, {create, SrvId, Obj2, Meta}, []),
             {ok, ObjId, ObjPid};
         not_found ->
             {error, service_not_found}
     end.
+
+
+%% @doc
+save(Type, ObjId) ->
+    do_cast(Type, ObjId, do_save).
+
+
+%% @doc
+-spec get_all() ->
+    [{nkdomain:type(), nkdomain:obj_id()}].
+
+get_all() ->
+    nklib_proc:values(?MODULE).
 
 
 
@@ -151,11 +177,12 @@ create(Srv, #{type:=Type}=Obj, Meta) ->
 -record(state, {
     obj_id :: nkdomain:obj_id(),
     type :: nkdomain:type(),
+    callback :: module(),
     srv_id :: nkservice:id(),
     stop_reason = false :: false | nkservice:error(),
     links :: nklib_links:links(),
     session :: session(),
-    started :: nklib_util:l_timestamp(),
+    started :: nklib_util:m_timestamp(),
     timer :: reference(),
     timelog = [] :: [map()]
 }).
@@ -165,23 +192,33 @@ create(Srv, #{type:=Type}=Obj, Meta) ->
 -spec init(term()) ->
     {ok, #state{}} | {error, term()}.
 
-init({create, #{type:=Type}=Obj, #{obj_id:=Id, srv_id:=SrvId}=Meta}) ->
-    true = nklib_proc:reg({?MODULE, Type, Id}),
-    nklib_proc:put(?MODULE, {Type, Id}),
+init({create, SrvId, Obj, Meta}) ->
+    #{obj_id:=ObjId, type:=Type} = Obj,
+    true = nklib_proc:reg({?MODULE, Type, ObjId}),
+    nklib_proc:put(?MODULE, {Type, ObjId}),
     Obj2 = Obj#{
         created_time => nklib_util:m_timestamp()
     },
+    Callback = nkdomain_types:get_callback(Type),
+    Enabled = maps:get(enabled, Obj, true),
     Session = Meta#{
+        obj_id => ObjId,
         type => Type,
-        obj => Obj2
+        obj => Obj2,
+        srv_id => SrvId,
+        callback => Callback,
+        meta => Meta,
+        is_dirty => true,
+        enabled => Enabled
     },
     State1 = #state{
-        obj_id = Id,
+        obj_id = ObjId,
         type = Type,
+        callback = Callback,
         srv_id = SrvId,
         links = nklib_links:new(),
         session = Session,
-        started = nklib_util:l_timestamp()
+        started = nklib_util:m_timestamp()
     },
     State2 = case Meta of
          #{register:=Link} ->
@@ -193,6 +230,7 @@ init({create, #{type:=Type}=Obj, #{obj_id:=Id, srv_id:=SrvId}=Meta}) ->
     nkservice_util:register_for_changes(SrvId),
     ?LLOG(info, "starting (~p)", [self()], State2),
     gen_server:cast(self(), do_start),
+%%    gen_server:cast(self(), do_save),
     {ok, State3} = handle(object_init, [], State2),
     {ok, event(created, State3)}.
 
@@ -202,8 +240,8 @@ init({create, #{type:=Type}=Obj, #{obj_id:=Id, srv_id:=SrvId}=Meta}) ->
     {noreply, #state{}} | {reply, term(), #state{}} |
     {stop, Reason::term(), #state{}} | {stop, Reason::term(), Reply::term(), #state{}}.
 
-handle_call(get_obj, _From, #state{session=#{obj:=Obj}}=State) ->
-    reply({ok, Obj}, State);
+handle_call(get_session, _From, #state{session=Session}=State) ->
+    reply({ok, Session}, State);
 
 handle_call(get_timelog, _From, #state{timelog=Log}=State) ->
     reply({ok, Log}, State);
@@ -221,7 +259,10 @@ handle_call(Msg, From, State) ->
 
 handle_cast(do_start, State) ->
     {ok, State2} = handle(object_start, [], State),
-    {noreply, State2};
+    noreply(State2);
+
+handle_cast(do_save, State) ->
+    noreply(do_save(State));
 
 handle_cast({restart_timer, Time}, #state{timer=Timer}=State) ->
     nklib_util:cancel_timer(Timer),
@@ -253,8 +294,11 @@ handle_cast(Msg, State) ->
 -spec handle_info(term(), #state{}) ->
     {noreply, #state{}} | {stop, term(), #state{}}.
 
-handle_info({timeout, _, session_timeout}, State) ->
-    ?LLOG(info, "operation timeout", [], State),
+handle_info(do_save, State) ->
+    noreply(do_save(State));
+
+handle_info({timeout, Ref, session_timeout}, #state{timer=Ref}=State) ->
+    ?LLOG(info, "session timeout", [], State),
     do_stop(session_timeout, State);
 
 handle_info({'DOWN', Ref, process, _Pid, Reason}=Msg, State) ->
@@ -335,6 +379,23 @@ set_log(#state{srv_id=SrvId, type=Type}=State) ->
     State.
 
 
+%% @private
+do_save(#state{session=#{is_dirty:=false}}=State) ->
+    {ok, State};
+
+do_save(State) ->
+    ?LLOG(info, "saving object", [], State),
+    case handle(object_save, [], State) of
+        {ok, State2} ->
+            add_to_session(is_dirty, false, State2);
+        {error, Error, State2} ->
+            ?LLOG(warning, "could not save object: ~p", [Error], State2),
+            erlang:send_after(?SAVE_RETRY, self(), do_save),
+            State2
+    end.
+
+
+
 
 
 %% ===================================================================
@@ -354,16 +415,25 @@ noreply(State) ->
 %% @private
 do_stop(Reason, #state{srv_id=SrvId, stop_reason=false}=State) ->
     ?DEBUG("stopped: ~p", [Reason], State),
-    State2 = add_to_obj(destroyed_time, nklib_util:timestamp(), State),
+    State2 = State#state{stop_reason=Reason},
+    State3 = add_to_obj(destroyed_time, nklib_util:m_timestamp(), State2),
     % Give time for possible registrations to success and capture stop event
     timer:sleep(100),
-    State3 = event({stopped, Reason}, State2),
-    {ok, State4} = handle(object_stop, [Reason], State3),
+    State4 = event({stopped, Reason}, State3),
+    {ok, State5} = handle(object_stop, [Reason], State4),
     {_Code, Txt} = nkservice_util:error_code(SrvId, Reason),
-    State5 = do_add_timelog(#{msg=>stopped, reason=>Txt}, State4),
-    % Delay the destroyed event
-    erlang:send_after(?SRV_DELAYED_DESTROY, self(), destroy),
-    {noreply, State5#state{stop_reason=Reason}};
+    State6 = do_add_timelog(#{msg=>stopped, reason=>Txt}, State5),
+    case Reason of
+        session_stop ->
+            {stop, normal, State6};
+        _ ->
+            % Delay the destroyed event
+            erlang:send_after(?SRV_DELAYED_DESTROY, self(), destroy),
+            {noreply, State6}
+    end;
+
+do_stop(session_stop, State) ->
+    {stop, normal, State};
 
 do_stop(_Reason, State) ->
     % destroy already sent
@@ -389,8 +459,6 @@ event(Event, State) ->
 handle(Fun, Args, #state{type=Type}=State) ->
     nklib_gen_server:handle_any(Fun, [Type|Args], State,
                                 #state.srv_id, #state.session).
-
-
 
 
 %% @private
@@ -434,9 +502,13 @@ do_info(Type, ObjId, Msg) ->
 
 
 %% @private
-add_to_obj(Key, Val, #state{session=#{obj:=Obj}=Sess}=State) ->
-    Obj2 = maps:put(Key, Val, Obj),
-    State#state{session=Sess#{obj:=Obj2}}.
+add_to_obj(Key, Val, #state{session=#{obj:=Obj}}=State) ->
+    add_to_session(obj, ?ADD_TO_OBJ(Key, Val, Obj), State).
+
+
+%% @private
+add_to_session(Key, Val, #state{session=Session}=State) ->
+    State#state{session=?ADD_TO_SESSION(Key, Val, Session)}.
 
 
 %%%% @private
@@ -450,7 +522,7 @@ do_add_timelog(Msg, State) when is_atom(Msg); is_binary(Msg) ->
     do_add_timelog(#{msg=>Msg}, State);
 
 do_add_timelog(#{msg:=_}=Data, #state{started=Started, timelog=Log}=State) ->
-    Time = (nklib_util:l_timestamp() - Started) div 1000,
+    Time = nklib_util:m_timestamp() - Started,
     State#state{timelog=[Data#{time=>Time}|Log]}.
 
 

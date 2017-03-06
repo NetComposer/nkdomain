@@ -66,6 +66,7 @@
     destroyed_reason => term(),
     icon_id => binary(),
     aliases => [binary()],
+    service_id => [nkservice:id()],         % Only for service-related objects
     class() => map()
 }.
 
@@ -78,10 +79,6 @@
 %% ===================================================================
 %% Public
 %% ===================================================================
-
-
-
-
 
 
 
