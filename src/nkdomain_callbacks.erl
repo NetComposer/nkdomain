@@ -22,11 +22,11 @@
 -module(nkdomain_callbacks).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -export([plugin_deps/0, service_init/2, service_handle_cast/2]).
--export([domain_store_base_mapping/0, domain_load_obj/3]).
+-export([object_base_mapping/0, object_base_syntax/0]).
+-export([object_load/3, object_save/2, object_parse/2, object_store/2]).
 -export([object_init/2, object_terminate/3, object_event/3, object_reg_event/4,
-         object_reg_down/4, object_start/2, object_stop/3,
-         object_handle_call/4, object_handle_cast/3, object_handle_info/3,
-         object_store/2, object_save/2]).
+    object_reg_down/4, object_start/2, object_stop/3,
+    object_handle_call/4, object_handle_cast/3, object_handle_info/3]).
 -export([elastic_get_indices/2, elastic_get_mappings/3, elastic_get_aliases/3]).
 
 -define(TYPES, [domain, user]).
@@ -47,10 +47,14 @@
 %% Offered Callbacks
 %% ===================================================================
 
-%% @doc In-store base mapping
--spec domain_store_base_mapping() -> map().
+-type type() :: nkdomain:type().
+-type session() :: nkdomain_obj:session().
 
-domain_store_base_mapping() ->
+
+%% @doc In-store base mapping
+-spec object_base_mapping() -> map().
+
+object_base_mapping() ->
     #{
         obj_id => #{type => keyword},
         domain => #{type => keyword},
@@ -71,21 +75,87 @@ domain_store_base_mapping() ->
         icon_id => #{type => keyword}
     }.
 
-%% @doc
--spec domain_load_obj(nkservice:id(), nkdomain:type(), nkdomain:obj_id()) ->
-    {ok, Meta::nkdomain:meta(), Obj::nkdomain:obj()} | not_found | {error, term()}.
 
-domain_load_obj(SrvId, Type, ObjId) ->
-    nkdomain_types:load_es_obj(SrvId, Type, ObjId).
+%% @doc Base syntax
+-spec object_base_syntax() -> nklib_syntax:syntax().
+
+object_base_syntax() ->
+    #{
+        obj_id => binary,
+        domain => binary,
+        type => atom,
+        subtype => binary,
+        description => binary,
+        created_by => binary,
+        created_time => integer,
+        parent_id => binary,
+        enabled => boolean,
+        expires_time => integer,
+        destroyed_time => integer,
+        destroyed_reason => binary,
+        aliases => {list, binary},
+        icon_id => binary
+    }.
 
 
 
-%% ===================================================================
-%% Object Callbacks
-%% ===================================================================
+%% @doc Called to parse an object's syntax
+-spec object_load(nkdomain:type(), nkdomain:obj_id(), session()) ->
+    {ok, nkdomain:obj()} | {error, term()}.
 
--type type() :: nkdomain:type().
--type session() :: nkdomain_obj:session().
+object_load(Type, ObjId, #{srv_id:=SrvId}=Session) ->
+    case nkdomain_types:read_obj(SrvId, Type, ObjId) of
+        {ok, Store} ->
+            SrvId:object_parse(Store, Session);
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
+%% @doc Called to save the object to disk
+-spec object_save(type(), session()) ->
+    {ok, session()} | {error, term(), session()}.
+
+object_save(Type, #{srv_id:=SrvId, obj:=Obj}=Session) ->
+    BaseKeys = maps:keys(SrvId:object_base_mapping()),
+    Store1 = maps:with(BaseKeys, Obj),
+    Store2 = SrvId:object_store(Type, Session),
+    Store3 = maps:merge(Store1, Store2),
+    case nkdomain_types:save_obj(SrvId, Store3) of
+        {ok, _Vsn} ->
+            {ok, ?ADD_TO_SESSION(is_dirty, false, Session)};
+        {error, Error} ->
+            {error, Error, Session}
+    end.
+
+
+%% @doc Called to parse an object's syntax
+-spec object_parse(map(), session()) ->
+    {ok, nkdomain:obj()} | {error, term()}.
+
+object_parse(#{type:=Type}=Obj, #{srv_id:=SrvId}) ->
+    Base = SrvId:object_base_syntax(),
+    Syntax = Type:object_get_syntax(),
+    case nklib_syntax:parse(Obj, maps:merge(Base, Syntax), #{}) of
+        {ok, Obj2, _Exp, []} ->
+            {ok, Obj2};
+        {ok, Obj2, _Exp, Missing} ->
+            #{type:=Type, obj_id:=ObjId} = Obj,
+            ?LLOG(notice, "Object ~s (~s) has unknown fields: ~p", [Type, ObjId, Missing]),
+            {ok, Obj2};
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
+%% @doc Called to get a "storable" version of the object
+-spec object_store(type(), nkdomain:obj()) -> map().
+
+object_store(Type, #{obj:=Obj}) ->
+    Type:object_store(Obj);
+
+object_store(_Type, _Session) ->
+    #{}.
 
 
 %% @doc Called when a new session starts
@@ -169,33 +239,6 @@ object_handle_cast(_Type, Msg, Session) ->
 object_handle_info(_Type, Msg, Session) ->
     lager:warning("Module nkdomain_obj received unexpected info: ~p", [Msg]),
     {noreply, Session}.
-
-
-%% @doc Called to save the object to disk
--spec object_save(type(), session()) ->
-    {ok, session()} | {error, term(), session()}.
-
-object_save(Type, #{srv_id:=SrvId, obj:=Obj}=Session) ->
-    BaseKeys = maps:keys(SrvId:domain_store_base_mapping()),
-    Store1 = maps:with(BaseKeys, Obj),
-    Store2 = SrvId:object_store(Type, Session),
-    Store3 = maps:merge(Store1, Store2),
-    case nkdomain_types:save_obj(SrvId, Store3) of
-        {ok, _Vsn} ->
-            {ok, ?ADD_TO_SESSION(is_dirty, false, Session)};
-        {error, Error} ->
-            {error, Error, Session}
-    end.
-
-
-%% @doc Called to get a "storable" version of the object
--spec object_store(type(), nkdomain:obj()) -> map().
-
-object_store(_Type, #{callback:=Mod, obj:=Obj}) when Mod /= undefined ->
-    Mod:object_store(Obj);
-
-object_store(_Type, _Session) ->
-    #{}.
 
 
 

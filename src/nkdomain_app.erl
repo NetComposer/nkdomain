@@ -122,8 +122,8 @@ stop(_) ->
 
 %% @doc Register our types
 register_types() ->
-    ok = nkdomain_types:register_type(domain, nkdomain_domain_obj),
-    ok = nkdomain_types:register_type(user, nkdomain_user_obj).
+    ok = nkdomain_types:register_type(nkdomain_domain),
+    ok = nkdomain_types:register_type(nkdomain_user).
 
 
 %% @doc Starts the root service

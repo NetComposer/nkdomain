@@ -41,7 +41,7 @@
 
 -type path() :: [binary()].
 
--type type() :: atom().
+-type type() :: module().
 
 -type class() :: atom().
 
@@ -69,11 +69,6 @@
     service_id => [nkservice:id()],         % Only for service-related objects
     class() => map()
 }.
-
-%%    register => nklib:link(),
-%%    events => [nkservice_events:type()],
-%%    history => history(),
-
 
 
 %% ===================================================================

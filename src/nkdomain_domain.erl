@@ -18,47 +18,36 @@
 %%
 %% -------------------------------------------------------------------
 
-%% @doc User Object
+%% @doc Domain Object
 
--module(nkdomain_user_obj).
+-module(nkdomain_domain).
 -behavior(nkdomain_obj).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([object_get_mapping/0, object_store/1]).
-
+-export([object_get_desc/0, object_get_mapping/0, object_get_syntax/0,
+         object_store/1]).
 
 -include("nkdomain.hrl").
+
 
 
 %% ===================================================================
 %% nkdomain_obj behaviour
 %% ===================================================================
 
-
-
-object_get_mapping() ->
+object_get_desc() ->
     #{
-        name => #{
-            type => text,
-            fields => #{keyword => #{type=>keyword}}
-        },
-        surname => #{
-            type => text,
-            fields => #{keyword => #{type=>keyword}}
-        },
-        password => #{type => keyword},
-        base_url => #{type => keyword}
+        name => <<"domain">>
     }.
 
 
+object_get_mapping() ->
+    #{}.
 
 
+object_get_syntax() ->
+    #{}.
 
-
-object_store(#{?TYPE_USER:=User}) ->
-    Keys = maps:keys(object_get_mapping()),
-    maps:with(Keys, User);
 
 object_store(_) ->
     #{}.
-

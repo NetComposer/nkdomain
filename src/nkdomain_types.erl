@@ -24,8 +24,9 @@
 -behaviour(gen_server).
 
 
--export([get_types/0, get_callback/1, register_type/2, reload_types/1]).
--export([get_es_indices/0, get_es_mappings/2, get_es_aliases/1, load_es_obj/3, save_obj/2]).
+-export([get_types/0, register_type/1, reload_types/1]).
+-export([get_es_indices/0, get_es_mappings/2, get_es_aliases/1, load_es_obj/3]).
+-export([read_obj/3, save_obj/2, find_obj_path/2, find_childs/3]).
 -export([start_link/0]).
 -export([init/1, terminate/2, code_change/3, handle_call/3,
     handle_cast/2, handle_info/2]).
@@ -54,6 +55,9 @@
 %%-define(SRV_DELAYED_DESTROY, 5000).
 %%-define(DEF_SYNC_CALL, 5000).
 
+-define(LLOG(Type, Txt, Args),
+    lager:Type("NkDOMAIN Types "++Txt, Args)).
+
 
 %% ===================================================================
 %% Types
@@ -78,23 +82,23 @@ get_types() ->
     end.
 
 
+%%%% @doc Gets the obj module for a type
+%%-spec get_callback(nkdomain:type()) ->
+%%    module() | undefined.
+%%
+%%get_callback(Type) ->
+%%    case ets:lookup(?MODULE, {type, Type}) of
+%%        [] -> undefined;
+%%        [{_, Mod}] -> Mod
+%%    end.
+
+
 %% @doc Gets the obj module for a type
--spec get_callback(nkdomain:type()) ->
-    module() | undefined.
-
-get_callback(Type) ->
-    case ets:lookup(?MODULE, {type, Type}) of
-        [] -> undefined;
-        [{_, Mod}] -> Mod
-    end.
-
-
-%% @doc Gets the obj module for a type
--spec register_type(nkdomain:type(), module()) ->
+-spec register_type(nkdomain:type()) ->
     ok.
 
-register_type(Type, Module) ->
-    gen_server:call(?MODULE, {register_type, Type, Module}).
+register_type(Module) ->
+    gen_server:call(?MODULE, {register_type, Module}).
 
 
 %% @doc Reload new types
@@ -122,9 +126,44 @@ reload_types(SrvId, [{Type, Data}|Rest]) ->
     end.
 
 
+%% @doc Reads an object
+read_obj(SrvId, Type, ObjId) ->
+    nkelastic_api:get(SrvId, ?ES_INDEX, Type, ObjId).
+
+
 %% @doc Saves an object
 save_obj(SrvId, #{obj_id:=ObjId, type:=Type}=Store) ->
     nkelastic_api:put(SrvId, ?ES_INDEX, Type, ObjId, Store).
+
+
+%% @doc Finds an object from its path
+-spec find_obj_path(nkservice:id(), nkdomain:domain()) ->
+    {ok, nkdomain:type(), nkdomain:obj_id()} | {error, object_not_found}.
+
+find_obj_path(SrvId, Path) ->
+    case find_path(SrvId, Path, #{}) of
+        {ok, 1, [{Type, ObjId}]} ->
+            {ok, Type, ObjId};
+        {ok, _, [{Type, ObjId}|_]} ->
+            ?LLOG(warning, "Multiple objects for path ~s", [Path]),
+            {ok, Type, ObjId};
+        not_found ->
+            object_not_found
+    end.
+
+
+%% @doc Finds all objects on a path
+-spec find_childs(nkservice:id(), nkdomain:domain(), nkelastic_api:list_opts()) ->
+    {ok, integer(), [{nkdomain:type(), nkdomain:obj_id()}]} |
+    {error, object_not_found}.
+
+find_childs(SrvId, Path, Spec) ->
+    case find_path(SrvId, list_to_binary([Path, "*"]), Spec) of
+        {ok, N, List} ->
+            {ok, N, List};
+        not_found ->
+            object_not_found
+    end.
 
 
 %% ===================================================================
@@ -146,11 +185,10 @@ get_es_indices() ->
 get_es_mappings(?ES_INDEX, SrvId) ->
     Types = get_types(),
     lager:info("Installed types: ~p", [Types]),
-    Base = SrvId:domain_store_base_mapping(),
+    Base = SrvId:object_base_mapping(),
     lists:foldl(
         fun(Type, Acc) ->
-            Mod = get_callback(Type),
-            Map = Mod:object_get_mapping(),
+            Map = Type:object_get_mapping(),
             Acc#{Type => maps:merge(Map, Base)}
         end,
         #{},
@@ -211,11 +249,11 @@ init([]) ->
     {noreply, #state{}} | {reply, term(), #state{}} |
     {stop, Reason::term(), #state{}} | {stop, Reason::term(), Reply::term(), #state{}}.
 
-handle_call({register_type, Type, Module}, _From, State) ->
+handle_call({register_type, Type}, _From, State) ->
     AllTypes1 = get_types(),
     AllTypes2 = lists:usort([Type|AllTypes1]),
     ets:insert(?MODULE, {all_types, AllTypes2}),
-    ets:insert(?MODULE, {{type, Type}, Module}),
+    %%    ets:insert(?MODULE, {{type, Type}, Module}),
     {reply, ok, State};
 
 handle_call(Msg, _From, State) ->
@@ -262,3 +300,62 @@ terminate(_Reason, _State) ->
 %% Internal
 %% ===================================================================
 
+%% @private
+find_path(SrvId, Path, Spec) ->
+    Spec2 = Spec#{
+        fields => [<<"type">>],
+        filter => #{<<"domain">> => escape_url(Path)}
+    },
+    case nkelastic_api:list(SrvId, ?ES_INDEX, <<"*">>, Spec2) of
+        {ok, 0, _} ->
+            not_found;
+        {ok, N, List} ->
+            Data = lists:map(
+                fun(#{<<"_id">>:=ObjId, <<"type">>:=BType}) ->
+                    case catch binary_to_existing_atom(BType, utf8) of
+                        {'EXIT', _} ->
+                            ?LLOG(warning, "Invalid type in store: ~s", [BType]),
+                            {BType, ObjId};
+                        Type ->
+                            {Type, ObjId}
+                    end
+                end,
+                List),
+            {ok, N, Data};
+        _ ->
+            not_found
+    end.
+
+
+%%-compile(export_all).
+
+%% @private
+escape_url(<<"/", _/binary>> = Url) ->
+    escape_url(binary_to_list(Url), []);
+
+escape_url([$/|_]=Url) ->
+    escape_url(Url, []);
+
+%% a@b.c -> /c/b/a
+%% a.b.c -> /c/b/a
+escape_url(Term) ->
+    Url = case binary:split(nklib_util:to_binary(Term), <<"@">>) of
+        [Name, Path1] ->
+            Path2 = binary:split(Path1, <<".">>, [global]),
+            Path3 = nklib_util:bjoin(lists:reverse(Path2), <<"/">>),
+            <<"/", Path3/binary, "/", Name/binary>>;
+        [Path1] ->
+            Path2 = binary:split(Path1, <<".">>, [global]),
+            Path3 = nklib_util:bjoin(lists:reverse(Path2), <<"/">>),
+            <<"/", Path3/binary>>
+    end,
+    escape_url(Url).
+
+
+%% @private
+escape_url([], Acc) ->
+    list_to_binary(lists:reverse(Acc));
+escape_url([$/|Rest], Acc) ->
+    escape_url(Rest, [$/, 92 | Acc]);
+escape_url([Char|Rest], Acc) ->
+    escape_url(Rest, [Char|Acc]).
