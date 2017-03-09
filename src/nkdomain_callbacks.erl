@@ -23,12 +23,13 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -export([plugin_deps/0, service_init/2, service_handle_cast/2]).
 -export([object_base_mapping/0, object_base_syntax/0]).
--export([object_load/2, object_save/2, object_parse/3, object_store/2]).
+-export([object_load/2, object_save/2, object_remove/2, object_parse/3, object_store/2,
+         object_updated/3, object_enabled/3]).
 -export([object_init/2, object_terminate/3, object_event/3, object_reg_event/4,
          object_reg_down/4, object_start/2, object_stop/3,
          object_handle_call/4, object_handle_cast/3, object_handle_info/3]).
 -export([object_store_reload_types/1, object_store_read_raw/2, object_store_save_raw/3,
-         object_store_find_path/2, object_store_find_childs/3]).
+         object_store_remove_raw/2, object_store_find_path/2, object_store_find_childs/3]).
 
 -define(LLOG(Type, Txt, Args), lager:Type("NkDOMAIN Callbacks: "++Txt, Args)).
 
@@ -131,6 +132,19 @@ object_save(Type, #{srv_id:=SrvId, obj_id:=ObjId, obj:=Obj}=Session) ->
     end.
 
 
+%% @doc Called to save the object to disk
+-spec object_remove(type(), session()) ->
+    {ok, session()} | {error, term(), session()}.
+
+object_remove(_Type, #{srv_id:=SrvId, obj_id:=ObjId}=Session) ->
+    case SrvId:object_store_remove_raw(SrvId, ObjId) of
+        ok ->
+            {ok, Session};
+        {error, Error} ->
+            {error, Error, Session}
+    end.
+
+
 %% @doc Called to parse an object's syntax
 -spec object_parse(nkdomain:type(), map(), session()) ->
     {ok, nkdomain:obj()} | {error, term()}.
@@ -157,6 +171,22 @@ object_store(Type, #{obj:=Obj}) ->
 
 object_store(_Type, _Session) ->
     #{}.
+
+
+%% @doc Called when an object is modified
+-spec object_updated(map(), type(), session()) ->
+    {ok, session()}.
+
+object_updated(_Update, _Type, Session) ->
+    {ok, Session}.
+
+
+%% @doc Called when an object is enabled or disabled
+-spec object_enabled(boolean(), type(), session()) ->
+    {ok, session()}.
+
+object_enabled(_Enabled, _Type, Session) ->
+    {ok, Session}.
 
 
 %% @doc Called when a new session starts
@@ -268,6 +298,14 @@ object_store_read_raw(_SrvId, _ObjId) ->
     {ok, Vsn::term()} | {error, term()}.
 
 object_store_save_raw(_SrvId, _ObjId, _Map) ->
+    {error, store_not_implemented}.
+
+
+%% @doc
+-spec object_store_remove_raw(nkservice:id(), nkdomain:obj_id()) ->
+    ok | {error, term()}.
+
+object_store_remove_raw(_SrvId, _ObjId) ->
     {error, store_not_implemented}.
 
 

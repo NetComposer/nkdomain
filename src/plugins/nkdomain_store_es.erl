@@ -24,7 +24,7 @@
 
 -export([plugin_deps/0, plugin_syntax/0, plugin_defaults/0, plugin_config/2]).
 -export([object_store_reload_types/1, object_store_read_raw/2, object_store_save_raw/3,
-         object_store_find_path/2, object_store_find_childs/3]).
+         object_store_remove_raw/2, object_store_find_path/2, object_store_find_childs/3]).
 -export([elastic_get_indices/2, elastic_get_mappings/3, elastic_get_aliases/3]).
 -export([reload_types/1, remove_index/1]).
 
@@ -123,6 +123,11 @@ object_store_save_raw(SrvId, ObjId, Map) ->
 
 
 %% @doc
+object_store_remove_raw(SrvId, ObjId) ->
+    remove_obj(SrvId, ObjId).
+
+
+%% @doc
 object_store_find_path(SrvId, Path) ->
     find_obj_path(SrvId, Path).
 
@@ -204,6 +209,12 @@ read_obj(SrvId, ObjId) ->
 save_obj(SrvId, #{obj_id:=ObjId}=Store) ->
     #es_config{index=Index, type=IdxType} = SrvId:config_nkdomain_store_es(),
     nkelastic_api:put(SrvId, Index, IdxType, ObjId, Store).
+
+
+%% @doc Removes an object
+remove_obj(SrvId, ObjId) ->
+    #es_config{index=Index, type=IdxType} = SrvId:config_nkdomain_store_es(),
+    nkelastic_api:delete(SrvId, Index, IdxType, ObjId).
 
 
 %% @doc Finds an object from its path
