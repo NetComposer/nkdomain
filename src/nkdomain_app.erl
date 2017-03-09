@@ -75,6 +75,7 @@ start(_Type, _Args) ->
         syntax_callback_fun => atom,
         '__defaults' => #{
             start_root => false,
+            elastic_url => <<"http://127.0.0.1:9200/">>,
             user_timeout => 5000,
             alias_timeout => 5000,
             token_timeout => 60 * 60 * 1000,
@@ -129,29 +130,24 @@ register_types() ->
 %% @doc Starts the root service
 start_root() ->
     Spec1 = #{
-        plugins => [nkelastic, nkdomain, nkchat],
+        plugins => [nkelastic, nkdomain, nkchat, nkdomain_store_es],
+        domain_elastic_url => get(elastic_url),
         debug => [
+            {nkdomain_obj, all}
         ]
     },
-    Spec2 = case get(elastic_url) of
-        undefined ->
-            lager:error("Could not start root, elastic_url not defined"),
-            error(start_root_error);
-        Url ->
-            Spec1#{elastic_url => Url}
-    end,
     User = get(elastic_user),
     Pass = get(elastic_pass),
-    Spec3 = case is_binary(User) and is_binary(Pass) of
+    Spec2 = case is_binary(User) and is_binary(Pass) of
         true ->
-            Spec2#{
-                elastic_user => User,
-                elastic_pass => Pass
+            Spec1#{
+                domain_elastic_user => User,
+                domain_elastic_pass => Pass
             };
         false ->
-            Spec2
+            Spec1
     end,
-    case nkservice:start(root, Spec3) of
+    case nkservice:start(root, Spec2) of
         {ok, _} ->
             lager:info("Root service started");
         {error, Error} ->

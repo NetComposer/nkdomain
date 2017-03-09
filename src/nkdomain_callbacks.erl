@@ -23,13 +23,12 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -export([plugin_deps/0, service_init/2, service_handle_cast/2]).
 -export([object_base_mapping/0, object_base_syntax/0]).
--export([object_load/3, object_save/2, object_parse/2, object_store/2]).
+-export([object_load/2, object_save/2, object_parse/3, object_store/2]).
 -export([object_init/2, object_terminate/3, object_event/3, object_reg_event/4,
-    object_reg_down/4, object_start/2, object_stop/3,
-    object_handle_call/4, object_handle_cast/3, object_handle_info/3]).
--export([elastic_get_indices/2, elastic_get_mappings/3, elastic_get_aliases/3]).
-
--define(TYPES, [domain, user]).
+         object_reg_down/4, object_start/2, object_stop/3,
+         object_handle_call/4, object_handle_cast/3, object_handle_info/3]).
+-export([object_store_reload_types/1, object_store_read_raw/2, object_store_save_raw/3,
+         object_store_find_path/2, object_store_find_childs/3]).
 
 -define(LLOG(Type, Txt, Args), lager:Type("NkDOMAIN Callbacks: "++Txt, Args)).
 
@@ -44,7 +43,7 @@
 
 
 %% ===================================================================
-%% Offered Callbacks
+%% Offered Object Callbacks
 %% ===================================================================
 
 -type type() :: nkdomain:type().
@@ -56,9 +55,10 @@
 
 object_base_mapping() ->
     #{
-        obj_id => #{type => keyword},
-        domain => #{type => keyword},
         type => #{type => keyword},
+        obj_id => #{type => keyword},
+        path => #{type => keyword},
+        parent_id => #{type => keyword},
         subtype => #{type => keyword},
         description => #{
             type => text,
@@ -66,7 +66,6 @@ object_base_mapping() ->
         },
         created_by => #{type => keyword},
         created_time => #{type => date},
-        parent_id => #{type => keyword},
         enabled => #{type => boolean},
         expires_time => #{type => date},
         destroyed_time => #{type => date},
@@ -81,9 +80,10 @@ object_base_mapping() ->
 
 object_base_syntax() ->
     #{
-        obj_id => binary,
-        domain => binary,
         type => atom,
+        obj_id => binary,
+        path => binary,
+        parent_id => binary,
         subtype => binary,
         description => binary,
         created_by => binary,
@@ -94,19 +94,21 @@ object_base_syntax() ->
         destroyed_time => integer,
         destroyed_reason => binary,
         aliases => {list, binary},
-        icon_id => binary
+        icon_id => binary,
+        '_store_vsn' => any,
+        '__mandatory' => [type, obj_id, path, parent_id, created_time]
     }.
 
 
 
 %% @doc Called to parse an object's syntax
--spec object_load(nkdomain:type(), nkdomain:obj_id(), session()) ->
+-spec object_load(nkdomain:obj_id(), session()) ->
     {ok, nkdomain:obj()} | {error, term()}.
 
-object_load(Type, ObjId, #{srv_id:=SrvId}=Session) ->
-    case nkdomain_types:read_obj(SrvId, Type, ObjId) of
-        {ok, Store} ->
-            SrvId:object_parse(Store, Session);
+object_load(ObjId, #{srv_id:=SrvId}=Session) ->
+    case SrvId:object_store_read_raw(SrvId, ObjId) of
+        {ok, Type, Store} ->
+            SrvId:object_parse(Type, Store, Session);
         {error, Error} ->
             {error, Error}
     end.
@@ -116,12 +118,12 @@ object_load(Type, ObjId, #{srv_id:=SrvId}=Session) ->
 -spec object_save(type(), session()) ->
     {ok, session()} | {error, term(), session()}.
 
-object_save(Type, #{srv_id:=SrvId, obj:=Obj}=Session) ->
+object_save(Type, #{srv_id:=SrvId, obj_id:=ObjId, obj:=Obj}=Session) ->
     BaseKeys = maps:keys(SrvId:object_base_mapping()),
     Store1 = maps:with(BaseKeys, Obj),
     Store2 = SrvId:object_store(Type, Session),
     Store3 = maps:merge(Store1, Store2),
-    case nkdomain_types:save_obj(SrvId, Store3) of
+    case SrvId:object_store_save_raw(SrvId, ObjId, Store3) of
         {ok, _Vsn} ->
             {ok, ?ADD_TO_SESSION(is_dirty, false, Session)};
         {error, Error} ->
@@ -130,17 +132,16 @@ object_save(Type, #{srv_id:=SrvId, obj:=Obj}=Session) ->
 
 
 %% @doc Called to parse an object's syntax
--spec object_parse(map(), session()) ->
+-spec object_parse(nkdomain:type(), map(), session()) ->
     {ok, nkdomain:obj()} | {error, term()}.
 
-object_parse(#{type:=Type}=Obj, #{srv_id:=SrvId}) ->
+object_parse(Type, Obj, #{srv_id:=SrvId}) ->
     Base = SrvId:object_base_syntax(),
     Syntax = Type:object_get_syntax(),
     case nklib_syntax:parse(Obj, maps:merge(Base, Syntax), #{}) of
-        {ok, Obj2, _Exp, []} ->
+        {ok, #{type:=Type}=Obj2, _Exp, []} ->
             {ok, Obj2};
-        {ok, Obj2, _Exp, Missing} ->
-            #{type:=Type, obj_id:=ObjId} = Obj,
+        {ok, #{type:=Type, obj_id:=ObjId}=Obj2, _Exp, Missing} ->
             ?LLOG(notice, "Object ~s (~s) has unknown fields: ~p", [Type, ObjId, Missing]),
             {ok, Obj2};
         {error, Error} ->
@@ -241,7 +242,50 @@ object_handle_info(_Type, Msg, Session) ->
     {noreply, Session}.
 
 
+%% ===================================================================
+%% Offered Object Store Callbacks
+%% ===================================================================
 
+
+%% @doc
+-spec object_store_reload_types(nkservice:id()) ->
+    ok | {error, term()}.
+
+object_store_reload_types(_SrvId) ->
+    {error, store_not_implemented}.
+
+
+%% @doc
+-spec object_store_read_raw(nkservice:id(), nkdomain:obj_id()) ->
+    {ok, nkdomain:type(), map()} | {error, term()}.
+
+object_store_read_raw(_SrvId, _ObjId) ->
+    {error, store_not_implemented}.
+
+
+%% @doc
+-spec object_store_save_raw(nkservice:id(), nkdomain:obj_id(), map()) ->
+    {ok, Vsn::term()} | {error, term()}.
+
+object_store_save_raw(_SrvId, _ObjId, _Map) ->
+    {error, store_not_implemented}.
+
+
+%% @doc
+-spec object_store_find_path(nkservice:id(), nkdomain:path()) ->
+    {ok, nkdomain:type(), nkdomain:obj_id()} | {error, term()}.
+
+object_store_find_path(_SrvId, _Path) ->
+    {error, store_not_implemented}.
+
+
+%% @doc
+-spec object_store_find_childs(nkservice:id(), nkdomain:path(), Spec::map()) ->
+    {ok, Total::integer(), [{nkdomain:type(), nkdomain:obj_id()}]} |
+    {error, term()}.
+
+object_store_find_childs(_SrvId, _Path, _Spec) ->
+    {error, store_not_implemented}.
 
 
 
@@ -268,26 +312,3 @@ service_handle_cast(nkdomain_load_domain, State) ->
 service_handle_cast(_Msg, _State) ->
     continue.
 
-
-
-%% ===================================================================
-%% NkElastic callbacks
-%% ===================================================================
-
-
-%% @private
-elastic_get_indices(Acc, Service) ->
-    Indices = nkdomain_types:get_es_indices(),
-    {continue, [maps:merge(Acc, Indices), Service]}.
-
-
-%% @private
-elastic_get_mappings(Index, Acc, #{id:=SrvId}=Service) ->
-    Mappings = nkdomain_types:get_es_mappings(Index, SrvId),
-    {continue, [Index, maps:merge(Acc, Mappings), Service]}.
-
-
-%% @private
-elastic_get_aliases(Index, Acc, Service) ->
-    Aliases = nkdomain_types:get_es_aliases(Index),
-    {continue, [Index, maps:merge(Acc, Aliases), Service]}.

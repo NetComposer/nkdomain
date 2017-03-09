@@ -4,33 +4,45 @@
 root_create() ->
     Obj = #{
         obj_id => <<"root">>,
-        domain => <<"/">>,
+        path => <<"/">>,
         type => nkdomain_domain,
+        parent_id => <<>>,
         description => <<"NetComposer">>
     },
     nkdomain_obj:create(root, Obj, #{}).
 
 
 root_load() ->
-    nkdomain_obj:load(root, nkdomain_domain, <<"root">>, #{}).
+    nkdomain_obj:load(root, <<"root">>, #{}).
 
 
 
 sub1_create() ->
     Obj = #{
         obj_id => <<"sub1">>,
-        domain => <<"/sub1">>,
+        path => <<"/sub1">>,
         type => nkdomain_domain,
+        parent_id => <<"root">>,
         description => <<"Sub1">>
     },
     nkdomain_obj:create(root, Obj, #{}).
+
+sub1_load() ->
+    nkdomain_obj:load(root, <<"sub1">>, #{}).
+
+
+
 
 
 sub2_create() ->
     Obj = #{
         obj_id => <<"sub2">>,
-        domain => <<"/sub1/sub2">>,
+        path => <<"/sub1/sub2">>,
         type => nkdomain_domain,
+        parent_id => <<"sub1">>,
         description => <<"Sub2">>
     },
     nkdomain_obj:create(root, Obj, #{}).
+
+sub2_load() ->
+    nkdomain_obj:load(root, <<"sub2">>, #{}).
