@@ -136,7 +136,7 @@ object_save(Type, #{srv_id:=SrvId, obj_id:=ObjId, obj:=Obj}=Session) ->
 -spec object_remove(type(), session()) ->
     {ok, session()} | {error, term(), session()}.
 
-object_remove(_Type, #{srv_id:=SrvId, obj_id:=ObjId}=Session) ->
+object_remove(Type, #{srv_id:=SrvId, obj_id:=ObjId}=Session) ->
     case SrvId:object_store_remove_raw(SrvId, ObjId) of
         ok ->
             {ok, Session};
@@ -302,10 +302,10 @@ object_store_save_raw(_SrvId, _ObjId, _Map) ->
 
 
 %% @doc
--spec object_store_remove_raw(nkservice:id(), nkdomain:obj_id()) ->
-    ok | {error, term()}.
+-spec object_store__raw(nkservice:id(), nkdomain:obj_id(), map()) ->
+    {ok, Vsn::term()} | {error, term()}.
 
-object_store_remove_raw(_SrvId, _ObjId) ->
+object_store__raw(_SrvId, _ObjId, _Map) ->
     {error, store_not_implemented}.
 
 
