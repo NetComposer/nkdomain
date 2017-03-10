@@ -38,6 +38,7 @@
 
 object_get_desc() ->
     #{
+        type => <<"user">>,
         name => <<"user">>
     }.
 

@@ -23,7 +23,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -export([plugin_deps/0, service_init/2, service_handle_cast/2]).
 -export([object_base_mapping/0, object_base_syntax/0]).
--export([object_load/2, object_save/2, object_remove/2, object_parse/3, object_store/2,
+-export([object_load/2, object_save/2, object_remove/2, object_parse/3, object_store/1,
          object_updated/3, object_enabled/3]).
 -export([object_init/2, object_terminate/3, object_event/3, object_reg_event/4,
          object_reg_down/4, object_start/2, object_stop/3,
@@ -47,7 +47,6 @@
 %% Offered Object Callbacks
 %% ===================================================================
 
--type type() :: nkdomain:type().
 -type session() :: nkdomain_obj:session().
 
 
@@ -56,8 +55,9 @@
 
 object_base_mapping() ->
     #{
-        type => #{type => keyword},
         obj_id => #{type => keyword},
+        module => #{type => keyword},
+        type => #{type => keyword},
         path => #{type => keyword},
         parent_id => #{type => keyword},
         subtype => #{type => keyword},
@@ -81,8 +81,9 @@ object_base_mapping() ->
 
 object_base_syntax() ->
     #{
-        type => atom,
         obj_id => binary,
+        module => atom,
+        type => binary,
         path => binary,
         parent_id => binary,
         subtype => binary,
@@ -97,46 +98,45 @@ object_base_syntax() ->
         aliases => {list, binary},
         icon_id => binary,
         '_store_vsn' => any,
-        '__mandatory' => [type, obj_id, path, parent_id, created_time]
+        '__mandatory' => [module, type, obj_id, path, parent_id, created_time]
     }.
 
 
-
 %% @doc Called to parse an object's syntax
--spec object_load(nkdomain:obj_id(), session()) ->
+-spec object_load(nkservice:id(), nkdomain:obj_id()) ->
     {ok, nkdomain:obj()} | {error, term()}.
 
-object_load(ObjId, #{srv_id:=SrvId}=Session) ->
+object_load(SrvId, ObjId) ->
     case SrvId:object_store_read_raw(SrvId, ObjId) of
-        {ok, Type, Store} ->
-            SrvId:object_parse(Type, Store, Session);
+        {ok, Module, Map} ->
+            SrvId:object_parse(SrvId, Module, Map);
         {error, Error} ->
             {error, Error}
     end.
 
 
 %% @doc Called to save the object to disk
--spec object_save(type(), session()) ->
+-spec object_save(module(), session()) ->
     {ok, session()} | {error, term(), session()}.
 
-object_save(Type, #{srv_id:=SrvId, obj_id:=ObjId, obj:=Obj}=Session) ->
+object_save(Module, #obj_session{srv_id=SrvId, obj_id=ObjId, obj=Obj}=Session) ->
     BaseKeys = maps:keys(SrvId:object_base_mapping()),
     Store1 = maps:with(BaseKeys, Obj),
-    Store2 = SrvId:object_store(Type, Session),
+    Store2 = SrvId:object_store(Module, Session),
     Store3 = maps:merge(Store1, Store2),
     case SrvId:object_store_save_raw(SrvId, ObjId, Store3) of
         {ok, _Vsn} ->
-            {ok, ?ADD_TO_SESSION(is_dirty, false, Session)};
+            {ok, Session};
         {error, Error} ->
             {error, Error, Session}
     end.
 
 
 %% @doc Called to save the object to disk
--spec object_remove(type(), session()) ->
+-spec object_remove(module(), session()) ->
     {ok, session()} | {error, term(), session()}.
 
-object_remove(Type, #{srv_id:=SrvId, obj_id:=ObjId}=Session) ->
+object_remove(_Module, #obj_session{srv_id=SrvId, obj_id=ObjId}=Session) ->
     case SrvId:object_store_remove_raw(SrvId, ObjId) of
         ok ->
             {ok, Session};
@@ -146,17 +146,17 @@ object_remove(Type, #{srv_id:=SrvId, obj_id:=ObjId}=Session) ->
 
 
 %% @doc Called to parse an object's syntax
--spec object_parse(nkdomain:type(), map(), session()) ->
+-spec object_parse(nkservice:id(), module(), map()) ->
     {ok, nkdomain:obj()} | {error, term()}.
 
-object_parse(Type, Obj, #{srv_id:=SrvId}) ->
+object_parse(SrvId, Module, Map) ->
     Base = SrvId:object_base_syntax(),
-    Syntax = Type:object_get_syntax(),
-    case nklib_syntax:parse(Obj, maps:merge(Base, Syntax), #{}) of
-        {ok, #{type:=Type}=Obj2, _Exp, []} ->
+    Syntax = Module:object_get_syntax(),
+    case nklib_syntax:parse(Map, maps:merge(Base, Syntax), #{}) of
+        {ok, #{module:=Module}=Obj2, _Exp, []} ->
             {ok, Obj2};
-        {ok, #{type:=Type, obj_id:=ObjId}=Obj2, _Exp, Missing} ->
-            ?LLOG(notice, "Object ~s (~s) has unknown fields: ~p", [Type, ObjId, Missing]),
+        {ok, #{module:=Module, obj_id:=ObjId}=Obj2, _Exp, Missing} ->
+            ?LLOG(notice, "Object ~s (~s) has unknown fields: ~p", [Module, ObjId, Missing]),
             {ok, Obj2};
         {error, Error} ->
             {error, Error}
@@ -164,110 +164,126 @@ object_parse(Type, Obj, #{srv_id:=SrvId}) ->
 
 
 %% @doc Called to get a "storable" version of the object
--spec object_store(type(), nkdomain:obj()) -> map().
+-spec object_store(session()) -> map().
 
-object_store(Type, #{obj:=Obj}) ->
-    Type:object_store(Obj);
+object_store(#obj_session{module=Module, obj=Obj}) ->
+    Module:object_store(Obj);
 
-object_store(_Type, _Session) ->
+object_store(_Session) ->
     #{}.
 
 
 %% @doc Called when an object is modified
--spec object_updated(map(), type(), session()) ->
+-spec object_updated(map(), module(), session()) ->
     {ok, session()}.
 
-object_updated(_Update, _Type, Session) ->
+object_updated(_Update, _Module, Session) ->
     {ok, Session}.
 
 
 %% @doc Called when an object is enabled or disabled
--spec object_enabled(boolean(), type(), session()) ->
+-spec object_enabled(boolean(), module(), session()) ->
     {ok, session()}.
 
-object_enabled(_Enabled, _Type, Session) ->
+object_enabled(_Enabled, _Module, Session) ->
     {ok, Session}.
 
 
+-spec object_sync_op(term(), {pid(), reference()}, session()) ->
+    {reply, term(), session} |
+    
+
+object_sync_op(Op, From, Session) ->
+    {reply, {error, obj_op_not_implemented}, Session}.
+
+
+object_async_op(Op, Session) ->
+    {noreply, Session}.
+
+
+
+
+
+
 %% @doc Called when a new session starts
--spec object_init(type(), session()) ->
+-spec object_init(module(), session()) ->
     {ok, session()} | {stop, Reason::term()}.
 
-object_init(_Type, Session) ->
+object_init(_Module, Session) ->
     {ok, Session}.
 
 
 %% @doc Called when the session stops
--spec object_terminate(type(), Reason::term(), session()) ->
+-spec object_terminate(module(), Reason::term(), session()) ->
     {ok, session()}.
 
-object_terminate(_Type, _Reason, Session) ->
+object_terminate(_Module, _Reason, Session) ->
     {ok, Session}.
 
 
 %% @private
--spec object_start(type(), session()) ->
+-spec object_start(module(), session()) ->
     {ok, session()} | continue().
 
-object_start(_Type, Session) ->
+object_start(_Module, Session) ->
     {ok, Session}.
 
 
 %% @private
--spec object_stop(type(), nkservice:error(), session()) ->
+-spec object_stop(module(), nkservice:error(), session()) ->
     {ok, session()} | continue().
 
-object_stop(_Type, _Reason, Session) ->
+object_stop(_Module, _Reason, Session) ->
     {ok, Session}.
 
 
 %%  @doc Called when an event is sent
--spec object_event(type(), nkdomain_obj:event(), session()) ->
+-spec object_event(module(), nkdomain_obj:event(), session()) ->
     {ok, session()} | continue().
 
-object_event(_Type, _Event, Session) ->
+object_event(_Module, _Event, Session) ->
     {ok, Session}.
 
 
 %% @doc Called when an event is sent, for each registered process to the session
--spec object_reg_event(type(), nklib:link(), nkdomain_obj:event(), session()) ->
+-spec object_reg_event(module(), nklib:link(), nkdomain_obj:event(), session()) ->
     {ok, session()} | continue().
 
-object_reg_event(_Type, _Link, _Event, Session) ->
+object_reg_event(_Module, _Link, _Event, Session) ->
     {ok, Session}.
 
 
 %% @doc Called when a registered process fails
--spec object_reg_down(type(), nklib:link(), term(), session()) ->
+-spec object_reg_down(module(), nklib:link(), term(), session()) ->
     {ok, session()} | {stop, Reason::term(), session()} | continue().
 
-object_reg_down(_Type, _Link, _Reason, Session) ->
+object_reg_down(_Module, _Link, _Reason, Session) ->
     {stop, registered_down, Session}.
 
 
 %% @doc
--spec object_handle_call(type(), term(), {pid(), term()}, session()) ->
+-spec object_handle_call(module(), term(), {pid(), term()}, session()) ->
     {reply, term(), session()} | {noreply, session()} | continue().
 
-object_handle_call(_Type, Msg, _From, Session) ->
+object_handle_call(_Module, Msg, _From, Session) ->
     lager:error("Module nkdomain_obj received unexpected call: ~p", [Msg]),
     {noreply, Session}.
 
 
 %% @doc
--spec object_handle_cast(type(), term(), session()) ->
+-spec object_handle_cast(module(), term(), session()) ->
     {noreply, session()} | continue().
 
-object_handle_cast(_Type, Msg, Session) ->
+object_handle_cast(_Module, Msg, Session) ->
     lager:error("Module nkdomain_obj received unexpected cast: ~p", [Msg]),
     {noreply, Session}.
 
 
 %% @doc
--spec object_handle_info(type(), term(), session()) ->
+-spec object_handle_info(module(), term(), session()) ->
     {noreply, session()} | continue().
 
-object_handle_info(_Type, Msg, Session) ->
+object_handle_info(_Module, Msg, Session) ->
     lager:warning("Module nkdomain_obj received unexpected info: ~p", [Msg]),
     {noreply, Session}.
 
@@ -287,7 +303,7 @@ object_store_reload_types(_SrvId) ->
 
 %% @doc
 -spec object_store_read_raw(nkservice:id(), nkdomain:obj_id()) ->
-    {ok, nkdomain:type(), map()} | {error, term()}.
+    {ok, module(), map()} | {error, term()}.
 
 object_store_read_raw(_SrvId, _ObjId) ->
     {error, store_not_implemented}.
@@ -302,16 +318,16 @@ object_store_save_raw(_SrvId, _ObjId, _Map) ->
 
 
 %% @doc
--spec object_store__raw(nkservice:id(), nkdomain:obj_id(), map()) ->
+-spec object_store_remove_raw(nkservice:id(), nkdomain:obj_id()) ->
     {ok, Vsn::term()} | {error, term()}.
 
-object_store__raw(_SrvId, _ObjId, _Map) ->
+object_store_remove_raw(_SrvId, _ObjId) ->
     {error, store_not_implemented}.
 
 
 %% @doc
 -spec object_store_find_path(nkservice:id(), nkdomain:path()) ->
-    {ok, nkdomain:type(), nkdomain:obj_id()} | {error, term()}.
+    {ok, module(), nkdomain:obj_id()} | {error, term()}.
 
 object_store_find_path(_SrvId, _Path) ->
     {error, store_not_implemented}.
@@ -319,7 +335,7 @@ object_store_find_path(_SrvId, _Path) ->
 
 %% @doc
 -spec object_store_find_childs(nkservice:id(), nkdomain:path(), Spec::map()) ->
-    {ok, Total::integer(), [{nkdomain:type(), nkdomain:obj_id()}]} |
+    {ok, Total::integer(), [{module(), nkdomain:obj_id()}]} |
     {error, term()}.
 
 object_store_find_childs(_SrvId, _Path, _Spec) ->

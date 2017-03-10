@@ -37,6 +37,7 @@
 
 object_get_desc() ->
     #{
+        type => <<"domain">>,
         name => <<"domain">>
     }.
 

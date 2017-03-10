@@ -5,7 +5,8 @@ root_create() ->
     Obj = #{
         obj_id => <<"root">>,
         path => <<"/">>,
-        type => nkdomain_domain,
+        type => domain,
+        module => nkdomain_domain,
         parent_id => <<>>,
         description => <<"NetComposer">>
     },
@@ -21,7 +22,8 @@ sub1_create() ->
     Obj = #{
         obj_id => <<"sub1">>,
         path => <<"/sub1">>,
-        type => nkdomain_domain,
+        type => domain,
+        module => nkdomain_domain,
         parent_id => <<"root">>,
         description => <<"Sub1">>
     },
@@ -38,7 +40,8 @@ sub2_create() ->
     Obj = #{
         obj_id => <<"sub2">>,
         path => <<"/sub1/sub2">>,
-        type => nkdomain_domain,
+        type => domain,
+        module => nkdomain_domain,
         parent_id => <<"sub1">>,
         description => <<"Sub2">>
     },

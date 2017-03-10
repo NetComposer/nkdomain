@@ -177,7 +177,6 @@ elastic_get_aliases(Index, Acc, #{id:=SrvId}=Service) ->
 reload_types(SrvId) ->
     #es_config{index=Index, type=IdxType} = SrvId:config_nkdomain_store_es(),
     Mappings = get_mappings(SrvId, Index),
-    lager:info("Types: ~p", [maps:keys(Mappings)]),
     nkelastic_api:add_mapping(SrvId, Index, IdxType, Mappings).
 
 
@@ -192,12 +191,12 @@ remove_index(SrvId) ->
 read_obj(SrvId, ObjId) ->
     #es_config{index=Index, type=IdxType} = SrvId:config_nkdomain_store_es(),
     case nkelastic_api:get(SrvId, Index, IdxType, ObjId) of
-        {ok, #{<<"type">>:=BType}=Data, Vsn} ->
-            case catch binary_to_existing_atom(BType, utf8) of
-                Type when is_atom(Type) ->
-                    {ok, Type, Data#{'_store_vsn'=>Vsn}};
+        {ok, #{<<"module">>:=BModule}=Data, Vsn} ->
+            case catch binary_to_existing_atom(BModule, utf8) of
+                Module when is_atom(Module) ->
+                    {ok, Module, Data#{'_store_vsn'=>Vsn}};
                 _ ->
-                    ?LLOG(notice, "invalud type loaded: ~p", [BType]),
+                    ?LLOG(notice, "invalid module loaded: ~p", [BModule]),
                     {error, invalid_type}
             end;
         {error, Error} ->
@@ -225,11 +224,11 @@ find_obj_path(SrvId, Path) ->
     case nkdomain_types:is_path(Path) of
         {true, Path2} ->
             case find_path(SrvId, Path2, #{}) of
-                {ok, 1, [{Type, ObjId}]} ->
-                    {ok, Type, ObjId};
-                {ok, _, [{Type, ObjId}|_]} ->
+                {ok, 1, [{Module, ObjId}]} ->
+                    {ok, Module, ObjId};
+                {ok, _, [{Module, ObjId}|_]} ->
                     ?LLOG(warning, "Multiple objects for path ~s", [Path]),
-                    {ok, Type, ObjId};
+                    {ok, Module, ObjId};
                 not_found ->
                     {error, object_not_found}
             end;
@@ -284,8 +283,8 @@ get_mappings(SrvId, Index) ->
         #{
             domain_elastic_index := Index
         } ->
-            Types = nkdomain_types:get_types(),
-            lager:info("Installed types: ~p", [Types]),
+            Modules = nkdomain_types:get_modules(),
+            lager:info("Installed modules: ~p", [Modules]),
             Base = SrvId:object_base_mapping(),
             lists:foldl(
                 fun(Type, Acc) ->
@@ -297,7 +296,7 @@ get_mappings(SrvId, Index) ->
                     Acc#{Type => Obj}
                 end,
                 Base,
-                Types);
+                Modules);
 
         _ ->
             #{}
@@ -320,7 +319,7 @@ get_aliases(SrvId, Index) ->
 %% @private
 find_path(SrvId, Path, Spec) ->
     Spec2 = Spec#{
-        fields => [<<"type">>],
+        fields => [<<"module">>],
         filter => #{<<"path">> => escape_url(nklib_util:to_list(Path), [])}
     },
     #es_config{index=Index, type=IdxType} = SrvId:config_nkdomain_store_es(),
@@ -329,13 +328,13 @@ find_path(SrvId, Path, Spec) ->
             not_found;
         {ok, N, List} ->
             Data = lists:map(
-                fun(#{<<"_id">>:=ObjId, <<"type">>:=BType}) ->
-                    case catch binary_to_existing_atom(BType, utf8) of
+                fun(#{<<"_id">>:=ObjId, <<"module">>:=BModule}) ->
+                    case catch binary_to_existing_atom(BModule, utf8) of
                         {'EXIT', _} ->
-                            ?LLOG(warning, "Invalid type in store: ~s", [BType]),
-                            {BType, ObjId};
-                        Type ->
-                            {Type, ObjId}
+                            ?LLOG(warning, "Invalid module in store: ~s", [BModule]),
+                            {BModule, ObjId};
+                        Module ->
+                            {Module, ObjId}
                     end
                 end,
                 List),

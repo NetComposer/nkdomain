@@ -23,7 +23,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -behaviour(gen_server).
 
--export([get_types/0, register_type/1, is_path/1]).
+-export([get_modules/0, register_type/1, is_path/1]).
 -export([start_link/0]).
 -export([init/1, terminate/2, code_change/3, handle_call/3,
          handle_cast/2, handle_info/2]).
@@ -45,29 +45,18 @@
 
 
 %% @doc Gets all registered types
--spec get_types() ->
-    [nkdomain:type()].
+-spec get_modules() ->
+    [module()].
 
-get_types() ->
-    case ets:lookup(?MODULE, all_types) of
+get_modules() ->
+    case ets:lookup(?MODULE, all_modules) of
         [] -> [];
         [{_, List}] -> List
     end.
 
 
-%%%% @doc Gets the obj module for a type
-%%-spec get_callback(nkdomain:type()) ->
-%%    module() | undefined.
-%%
-%%get_callback(Type) ->
-%%    case ets:lookup(?MODULE, {type, Type}) of
-%%        [] -> undefined;
-%%        [{_, Mod}] -> Mod
-%%    end.
-
-
 %% @doc Gets the obj module for a type
--spec register_type(nkdomain:type()) ->
+-spec register_type(module()) ->
     ok.
 
 register_type(Module) ->
@@ -128,10 +117,10 @@ init([]) ->
     {noreply, #state{}} | {reply, term(), #state{}} |
     {stop, Reason::term(), #state{}} | {stop, Reason::term(), Reply::term(), #state{}}.
 
-handle_call({register_type, Type}, _From, State) ->
-    AllTypes1 = get_types(),
-    AllTypes2 = lists:usort([Type|AllTypes1]),
-    ets:insert(?MODULE, {all_types, AllTypes2}),
+handle_call({register_type, Module}, _From, State) ->
+    AllModules1 = get_modules(),
+    AllModules2 = lists:usort([Module|AllModules1]),
+    ets:insert(?MODULE, {all_modules, AllModules2}),
     %%    ets:insert(?MODULE, {{type, Type}, Module}),
     {reply, ok, State};
 

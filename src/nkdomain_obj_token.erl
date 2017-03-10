@@ -101,7 +101,7 @@ remove_token(TokenId) ->
 
 -record(state, {
     id :: nkdomain:obj_id(),
-    class :: ndomain:class(),
+    class :: nkdomain:class(),
     obj_id :: nkdomain:obj_id(),
     ip :: inet:ip_address(),
     port :: inet:port_number(),

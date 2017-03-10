@@ -31,13 +31,17 @@
 -define(ADD_TO_OBJ(Map, Obj), maps:merge(Obj, Map)).
 -define(REMOVE_FROM_OBJ(Key, Obj), maps:remove(Key, Obj)).
 
--define(ADD_TO_SESSION(Key, Val, Session), maps:put(Key, Val, Session)).
--define(ADD_TO_SESSION(Map, Session), maps:merge(Session, Map)).
--define(REMOVE_FROM_SESSION(Key, Session), maps:remove(Key, Session)).
-
-
--define(TYPE_USER, user).
--define(TYPE_DOMAIN, domain).
+-record(obj_session, {
+    obj_id :: nkdomain:obj_id(),
+    module :: module(),
+    type :: binary(),
+    obj :: nkdomain:obj(),
+    srv_id :: nkservice:id(),
+    is_dirty :: boolean(),
+    enabled :: boolean(),
+    meta :: map(),
+    data :: term()
+}).
 
 
 -endif.
