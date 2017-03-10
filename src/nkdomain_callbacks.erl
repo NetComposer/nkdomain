@@ -23,11 +23,11 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -export([plugin_deps/0, service_init/2, service_handle_cast/2]).
 -export([object_base_mapping/0, object_base_syntax/0]).
--export([object_load/2, object_save/2, object_remove/2, object_parse/3, object_store/1,
-         object_updated/3, object_enabled/3]).
--export([object_init/2, object_terminate/3, object_event/3, object_reg_event/4,
-         object_reg_down/4, object_start/2, object_stop/3,
-         object_handle_call/4, object_handle_cast/3, object_handle_info/3]).
+-export([object_load/2, object_save/1, object_remove/2, object_parse/3, object_store/1,
+         object_updated/2, object_enabled/1, object_sync_op/3, object_async_op/2]).
+-export([object_init/1, object_terminate/2, object_event/2, object_reg_event/3,
+         object_reg_down/3, object_start/1, object_stop/2,
+         object_handle_call/3, object_handle_cast/2, object_handle_info/2]).
 -export([object_store_reload_types/1, object_store_read_raw/2, object_store_save_raw/3,
          object_store_remove_raw/2, object_store_find_path/2, object_store_find_childs/3]).
 
@@ -70,6 +70,7 @@ object_base_mapping() ->
         enabled => #{type => boolean},
         expires_time => #{type => date},
         destroyed_time => #{type => date},
+        destroyed_code => #{type => keyword},
         destroyed_reason => #{type => keyword},
         aliases => #{type => keyword},
         icon_id => #{type => keyword}
@@ -94,6 +95,7 @@ object_base_syntax() ->
         enabled => boolean,
         expires_time => integer,
         destroyed_time => integer,
+        destroyed_code => binary,
         destroyed_reason => binary,
         aliases => {list, binary},
         icon_id => binary,
@@ -116,14 +118,14 @@ object_load(SrvId, ObjId) ->
 
 
 %% @doc Called to save the object to disk
--spec object_save(module(), session()) ->
+-spec object_save(session()) ->
     {ok, session()} | {error, term(), session()}.
 
-object_save(Module, #obj_session{srv_id=SrvId, obj_id=ObjId, obj=Obj}=Session) ->
+object_save(#obj_session{srv_id=SrvId, obj_id=ObjId, module=Module, obj=Obj}=Session) ->
     BaseKeys = maps:keys(SrvId:object_base_mapping()),
     Store1 = maps:with(BaseKeys, Obj),
-    Store2 = SrvId:object_store(Module, Session),
-    Store3 = maps:merge(Store1, Store2),
+    Store2 = SrvId:object_store(Session),
+    Store3 = Store1#{Module=>Store2},
     case SrvId:object_store_save_raw(SrvId, ObjId, Store3) of
         {ok, _Vsn} ->
             {ok, Session};
@@ -132,11 +134,11 @@ object_save(Module, #obj_session{srv_id=SrvId, obj_id=ObjId, obj=Obj}=Session) -
     end.
 
 
-%% @doc Called to save the object to disk
--spec object_remove(module(), session()) ->
+%% @doc Called to save the remove the object from disk
+-spec object_remove(Reason::term(), session()) ->
     {ok, session()} | {error, term(), session()}.
 
-object_remove(_Module, #obj_session{srv_id=SrvId, obj_id=ObjId}=Session) ->
+object_remove(_Reason, #obj_session{srv_id=SrvId, obj_id=ObjId}=Session) ->
     case SrvId:object_store_remove_raw(SrvId, ObjId) of
         ok ->
             {ok, Session};
@@ -151,8 +153,8 @@ object_remove(_Module, #obj_session{srv_id=SrvId, obj_id=ObjId}=Session) ->
 
 object_parse(SrvId, Module, Map) ->
     Base = SrvId:object_base_syntax(),
-    Syntax = Module:object_get_syntax(),
-    case nklib_syntax:parse(Map, maps:merge(Base, Syntax), #{}) of
+    Syntax = Module:object_add_syntax(Base),
+    case nklib_syntax:parse(Map, Syntax, #{meta=>#{module=>Module}}) of
         {ok, #{module:=Module}=Obj2, _Exp, []} ->
             {ok, Obj2};
         {ok, #{module:=Module, obj_id:=ObjId}=Obj2, _Exp, Missing} ->
@@ -167,125 +169,136 @@ object_parse(SrvId, Module, Map) ->
 -spec object_store(session()) -> map().
 
 object_store(#obj_session{module=Module, obj=Obj}) ->
-    Module:object_store(Obj);
-
-object_store(_Session) ->
-    #{}.
+    Module:object_store(Obj).
 
 
 %% @doc Called when an object is modified
--spec object_updated(map(), module(), session()) ->
+-spec object_updated(map(), session()) ->
     {ok, session()}.
 
-object_updated(_Update, _Module, Session) ->
+object_updated(_Update, Session) ->
     {ok, Session}.
 
 
 %% @doc Called when an object is enabled or disabled
--spec object_enabled(boolean(), module(), session()) ->
+-spec object_enabled(session()) ->
     {ok, session()}.
 
-object_enabled(_Enabled, _Module, Session) ->
+object_enabled(Session) ->
     {ok, Session}.
 
 
+%% @doc
 -spec object_sync_op(term(), {pid(), reference()}, session()) ->
-    {reply, term(), session} |
-    
+    {reply, Reply::term(), session} |
+    {noreply, session()} |
+    {stop, Reason::term(), Reply::term(), session()} |
+    {stop, Reason::term(), session()} |
+    continue().
 
-object_sync_op(Op, From, Session) ->
-    {reply, {error, obj_op_not_implemented}, Session}.
-
-
-object_async_op(Op, Session) ->
-    {noreply, Session}.
-
+object_sync_op(_Op, _From, _Session) ->
+    continue.
 
 
+%% @doc
+-spec object_async_op(term(), session()) ->
+    {noreply, session()} |
+    {stop, Reason::term(), session()} |
+    continue().
 
+object_async_op(_Op, _Session) ->
+    continue.
+
+
+
+
+%% ===================================================================
+%% Low level object
+%% ===================================================================
 
 
 %% @doc Called when a new session starts
--spec object_init(module(), session()) ->
+-spec object_init(session()) ->
     {ok, session()} | {stop, Reason::term()}.
 
-object_init(_Module, Session) ->
+object_init(Session) ->
     {ok, Session}.
 
 
 %% @doc Called when the session stops
--spec object_terminate(module(), Reason::term(), session()) ->
+-spec object_terminate(Reason::term(), session()) ->
     {ok, session()}.
 
-object_terminate(_Module, _Reason, Session) ->
+object_terminate(_Reason, Session) ->
     {ok, Session}.
 
 
 %% @private
--spec object_start(module(), session()) ->
+-spec object_start(session()) ->
     {ok, session()} | continue().
 
-object_start(_Module, Session) ->
+object_start(Session) ->
     {ok, Session}.
 
 
 %% @private
--spec object_stop(module(), nkservice:error(), session()) ->
+-spec object_stop(nkservice:error(), session()) ->
     {ok, session()} | continue().
 
-object_stop(_Module, _Reason, Session) ->
+object_stop(_Reason, Session) ->
     {ok, Session}.
 
 
 %%  @doc Called when an event is sent
--spec object_event(module(), nkdomain_obj:event(), session()) ->
+-spec object_event(nkdomain_obj:event(), session()) ->
     {ok, session()} | continue().
 
-object_event(_Module, _Event, Session) ->
+object_event(_Event, Session) ->
     {ok, Session}.
 
 
 %% @doc Called when an event is sent, for each registered process to the session
--spec object_reg_event(module(), nklib:link(), nkdomain_obj:event(), session()) ->
+-spec object_reg_event(nklib:link(), nkdomain_obj:event(), session()) ->
     {ok, session()} | continue().
 
-object_reg_event(_Module, _Link, _Event, Session) ->
+object_reg_event(_Link, _Event, Session) ->
     {ok, Session}.
 
 
 %% @doc Called when a registered process fails
--spec object_reg_down(module(), nklib:link(), term(), session()) ->
+-spec object_reg_down(nklib:link(), term(), session()) ->
     {ok, session()} | {stop, Reason::term(), session()} | continue().
 
-object_reg_down(_Module, _Link, _Reason, Session) ->
+object_reg_down(_Link, _Reason, Session) ->
     {stop, registered_down, Session}.
 
 
 %% @doc
--spec object_handle_call(module(), term(), {pid(), term()}, session()) ->
+-spec object_handle_call(term(), {pid(), term()}, session()) ->
     {reply, term(), session()} | {noreply, session()} | continue().
 
-object_handle_call(_Module, Msg, _From, Session) ->
+object_handle_call(Msg, _From, Session) ->
     lager:error("Module nkdomain_obj received unexpected call: ~p", [Msg]),
     {noreply, Session}.
 
 
 %% @doc
--spec object_handle_cast(module(), term(), session()) ->
+-spec object_handle_cast(term(), session()) ->
     {noreply, session()} | continue().
 
-object_handle_cast(_Module, Msg, Session) ->
+object_handle_cast(Msg, Session) ->
     lager:error("Module nkdomain_obj received unexpected cast: ~p", [Msg]),
     {noreply, Session}.
 
 
 %% @doc
--spec object_handle_info(module(), term(), session()) ->
+-spec object_handle_info(term(), session()) ->
     {noreply, session()} | continue().
 
-object_handle_info(_Module, Msg, Session) ->
+object_handle_info(Msg, Session) ->
     lager:warning("Module nkdomain_obj received unexpected info: ~p", [Msg]),
     {noreply, Session}.
+
 
 
 %% ===================================================================

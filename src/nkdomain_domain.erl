@@ -24,7 +24,7 @@
 -behavior(nkdomain_obj).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([object_get_desc/0, object_get_mapping/0, object_get_syntax/0,
+-export([object_get_desc/0, object_get_mapping/0, object_add_syntax/1,
          object_store/1]).
 
 -include("nkdomain.hrl").
@@ -46,8 +46,8 @@ object_get_mapping() ->
     #{}.
 
 
-object_get_syntax() ->
-    #{}.
+object_add_syntax(Base) ->
+    Base.
 
 
 object_store(_) ->

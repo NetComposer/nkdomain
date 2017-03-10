@@ -24,6 +24,7 @@
 -behaviour(gen_server).
 
 -export([get_modules/0, register_type/1, is_path/1]).
+-export([make_syntax/3, make_syntax_fun/3]).
 -export([start_link/0]).
 -export([init/1, terminate/2, code_change/3, handle_call/3,
          handle_cast/2, handle_info/2]).
@@ -88,6 +89,48 @@ is_path(Path) ->
                     {true, <<"/", Path3/binary>>}
             end
     end.
+
+
+%% @doc
+make_syntax(Module, Mandatory, Base) ->
+    Fields = [list_to_binary([to_bin(Module), $., to_bin(F)]) || F <- Mandatory],
+    Mandatory2 = maps:get('__mandatory', Base, []),
+    Mandatory3 = Fields ++ Mandatory2,
+    Base#{
+        type => fun ?MODULE:make_syntax_fun/3,
+        path => fun ?MODULE:make_syntax_fun/3,
+        '__mandatory' => Mandatory3
+    }.
+
+
+%% @private
+make_syntax_fun(type, Type, #{meta:=#{module:=Module}}) ->
+    Type2 = to_bin(Type),
+    case Module:object_get_desc() of
+        #{type:=Type2} ->
+            ok;
+        _ ->
+            ?LLOG(notice, "Invalid syntax type for module ~p (~s)", [Module, Type2]),
+            error
+    end;
+
+make_syntax_fun(path, Path, #{meta:=#{module:=Module}}) ->
+    Path2 = to_bin(Path),
+    #{type:=Type} = Module:object_get_desc(),
+    case lists:reverse(binary:split(Path2, <<"/">>, [global])) of
+        [_Name, Types|_] ->
+            case <<Type/binary, $s>> of
+                Types ->
+                    ok;
+                _ ->
+                    ?LLOG(notice, "Invalid syntax path for module ~p (~s)", [Module, Path]),
+                    error
+            end;
+        _ ->
+            ?LLOG(notice, "Invalid syntax path for module ~p (~s)", [Module, Path]),
+            error
+    end.
+
 
 
 % ===================================================================
@@ -167,3 +210,6 @@ terminate(_Reason, _State) ->
 %% ===================================================================
 %% Internal
 %% ===================================================================
+
+%% @private
+to_bin(Term) -> nklib_util:to_binary(Term).
