@@ -35,10 +35,13 @@
     obj_id :: nkdomain:obj_id(),
     module :: module(),
     type :: binary(),
+    path :: nkdomain:path(),
+    parent_id :: nkdomain:obj_id(),
     obj :: nkdomain:obj(),
     srv_id :: nkservice:id(),
     is_dirty :: boolean(),
     enabled :: boolean(),
+    status :: nkdomain_obj:status(),
     meta :: map(),
     data :: term()
 }).

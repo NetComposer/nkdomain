@@ -21,7 +21,7 @@
 -module(nkdomain_util).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([error_code/2, add_mandatory/3]).
+-export([is_path/1, get_parts/2, error_code/2, add_mandatory/3]).
 -export_type([error/0]).
 
 -type error() ::
@@ -33,6 +33,77 @@
 %% ===================================================================
 %% Public
 %% ===================================================================
+
+%% @doc Normalizes a path
+%% Valid paths either start with / or has '@' or '.'
+-spec is_path(list()|binary()) ->
+    {true, nkdomain:path()} | false.
+
+is_path(Path) when is_list(Path) ->
+    is_path(list_to_binary(Path));
+
+is_path(<<"/", _/binary>>=Path) ->
+    {true, Path};
+is_path(Path) ->
+    case binary:split(nklib_util:to_binary(Path), <<"@">>) of
+        [Name, Path1] ->
+            Path2 = binary:split(Path1, <<".">>, [global]),
+            Path3 = nklib_util:bjoin(lists:reverse(Path2), <<"/">>),
+            {true, <<"/", Path3/binary, "/", Name/binary>>};
+        [Path1] ->
+            case binary:split(Path1, <<".">>, [global]) of
+                [_] ->
+                    false;
+                Path2 ->
+                    Path3 = nklib_util:bjoin(lists:reverse(Path2), <<"/">>),
+                    {true, <<"/", Path3/binary>>}
+            end
+    end.
+
+
+%% @doc
+%% /domain/users/user1 -> {ok, <<"/domain">>, <<"users/user1">>
+-spec get_parts(module(), nkdomain:path()) ->
+    {ok, Base::nkdomain:path(), Name::binary()} | {error, term()}.
+
+get_parts(Module, Path) ->
+    case is_path(Path) of
+        {true, Path2} ->
+            case lists:reverse(binary:split(Path2, <<"/">>, [global])) of
+                [<<>>|_] ->
+                    {error, invalid_name};
+                [ObjName|Parts] when Module==nkdomain_domain ->
+                    case nklib_util:bjoin(lists:reverse(Parts), <<"/">>) of
+                        <<>> ->
+                            {ok, <<"/">>, ObjName};
+                        Base ->
+                            {ok, Base, ObjName}
+                    end;
+                [ObjName, Class|Parts] ->
+                    case catch Module:object_get_desc() of
+                        #{type:=Type} ->
+                            case <<Type/binary, "s">> of
+                                 Class ->
+                                    case nklib_util:bjoin(lists:reverse(Parts), <<"/">>) of
+                                        <<>> ->
+                                            {ok, <<"/">>, <<Class/binary, $/, ObjName/binary>>};
+                                        Base ->
+                                            {ok, Base, <<Class/binary, $/, ObjName/binary>>}
+                                    end;
+                                _ ->
+                                    {error, invalid_path}
+                            end;
+                        _ ->
+                            {error, invalid_path}
+                    end;
+                _ ->
+                    {error, invalid_path}
+            end;
+        false ->
+            {error, invalid_path}
+    end.
+
+
 
 %% @doc
 -spec error_code(nkservice:id(), error()) ->

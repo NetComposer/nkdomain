@@ -23,7 +23,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -behaviour(gen_server).
 
--export([get_modules/0, register_type/1, is_path/1]).
+-export([get_modules/0, register_type/1]).
 -export([make_syntax/3, make_syntax_fun/3]).
 -export([start_link/0]).
 -export([init/1, terminate/2, code_change/3, handle_call/3,
@@ -62,33 +62,6 @@ get_modules() ->
 
 register_type(Module) ->
     gen_server:call(?MODULE, {register_type, Module}).
-
-
-%% @doc Normalizes a path
-%% Valid paths either start with / or has '@' or '.'
--spec is_path(list()|binary()) ->
-    {true, nkdomain:path()} | false.
-
-is_path(Path) when is_list(Path) ->
-    is_path(list_to_binary(Path));
-
-is_path(<<"/", _/binary>>=Path) ->
-    {true, Path};
-is_path(Path) ->
-    case binary:split(nklib_util:to_binary(Path), <<"@">>) of
-        [Name, Path1] ->
-            Path2 = binary:split(Path1, <<".">>, [global]),
-            Path3 = nklib_util:bjoin(lists:reverse(Path2), <<"/">>),
-            {true, <<"/", Path3/binary, "/", Name/binary>>};
-        [Path1] ->
-            case binary:split(Path1, <<".">>, [global]) of
-                [_] ->
-                    false;
-                Path2 ->
-                    Path3 = nklib_util:bjoin(lists:reverse(Path2), <<"/">>),
-                    {true, <<"/", Path3/binary>>}
-            end
-    end.
 
 
 %% @doc
