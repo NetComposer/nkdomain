@@ -64,6 +64,7 @@
 -define(MIN_STARTED_TIME, 2000).
 -define(DEF_SYNC_CALL, 5000).
 -define(SAVE_RETRY, 5000).
+-define(MAX_SAVE_RETRIES, 10).
 
 -include("nkdomain.hrl").
 
@@ -384,6 +385,7 @@ stop_all() ->
     started :: nklib_util:m_timestamp(),
     timer :: reference(),
     childs = [] :: [#child{}],
+    save_tries = 0 :: integer(),
     timelog = [] :: [map()]
 }).
 
@@ -594,12 +596,41 @@ handle_cast(Msg, State) ->
 -spec handle_info(term(), #state{}) ->
     {noreply, #state{}} | {stop, term(), #state{}}.
 
+handle_info({nkservice_updated, _SrvId}, State) ->
+    noreply(set_log(State));
+
+handle_info(nkdomain_destroy, #state{session=#obj_session{is_dirty=false}}=State) ->
+    {stop, normal, State};
+
+handle_info(nkdomain_destroy, #state{save_tries=Tries}=State) ->
+    case Tries > ?MAX_SAVE_RETRIES of
+        true ->
+            ?LLOG(warning, "could not save object, giving up", [], State),
+            {stop, normal, State};
+        false ->
+            erlang:send_after(?SAVE_RETRY, self(), nkdomain_destroy),
+            noreply(State)
+    end;
+
+handle_info(nkdomain_check_expire, State) ->
+    case do_check_expire(State) of
+        false ->
+            noreply(State);
+        true ->
+            do_stop(object_expired, State)
+    end;
+
+handle_info(Msg, #state{stop_reason=Reason}=State) when Reason /= false ->
+    ?LLOG(info, "received gen_server info (~p) while stopping", [Msg], State),
+    noreply(State);
+
+handle_info(nkdomain_do_save, State) ->
+    {_Res, State2} = do_save(State),
+    noreply(State2);
+
 handle_info({timeout, Ref, nkdomain_session_timeout}, #state{timer=Ref}=State) ->
     ?DEBUG("session timeout", [], State),
     do_stop(nkdomain_session_timeout, State);
-
-handle_info({nkservice_updated, _SrvId}, State) ->
-    noreply(set_log(State));
 
 handle_info({'DOWN', _Ref, process, Pid, _Reason}, #state{parent_pid=Pid}=State) ->
     ?DEBUG("parent stopped", [], State),
@@ -634,25 +665,6 @@ handle_info({'DOWN', Ref, process, Pid, Reason}=Msg, State) ->
                     handle(object_handle_info, [Msg], State)
             end
     end;
-
-handle_info(nkdomain_destroy, State) ->
-    {stop, normal, State};
-
-handle_info(nkdomain_check_expire, State) ->
-    case do_check_expire(State) of
-        false ->
-            noreply(State);
-        true ->
-            do_stop(object_expired, State)
-    end;
-
-handle_info(Msg, #state{stop_reason=Reason}=State) when Reason /= false ->
-    ?LLOG(info, "received gen_server info (~p) while stopping", [Msg], State),
-    noreply(State);
-
-handle_info(nkdomain_do_save, State) ->
-    {_Res, State2} = do_save(State),
-    noreply(State2);
 
 handle_info(Msg, State) ->
     handle(object_handle_info, [Msg], State).
@@ -801,22 +813,22 @@ do_check_expire(#state{session=#obj_session{obj=Obj}}) ->
 do_save(#state{session=#obj_session{is_dirty=false}}=State) ->
     {ok, State};
 
-do_save(#state{session=Session}=State) ->
+do_save(#state{session=Session, save_tries=Tries}=State) ->
     ?DEBUG("saving object", [], State),
     case handle(object_save, [], State) of
         {ok, State2} ->
             Session2 = Session#obj_session{is_dirty=false},
-            {ok, State2#state{session=Session2}};
+            {ok, State2#state{save_tries=0, session=Session2}};
         {error, Error, State2} ->
             ?LLOG(warning, "could not save object: ~p", [Error], State2),
             erlang:send_after(?SAVE_RETRY, self(), nkdomain_do_save),
-            {error, State2}
+            {error, State2#state{save_tries=Tries+1}}
     end.
 
 
 %% @private
 do_stop(_Reason, #state{session=#obj_session{status={stopped, _Reason}}}=State) ->
-    %% Stop already sent
+    %% Stop already sent, timer is running
     noreply(State);
 
 do_stop(Reason, #state{srv_id=SrvId, session=Session, started=Started}=State) ->
@@ -830,16 +842,18 @@ do_stop(Reason, #state{srv_id=SrvId, session=Session, started=Started}=State) ->
     Now = nklib_util:m_timestamp(),
     case (Started + ?MIN_STARTED_TIME) - Now of
         Time when Time > 0 ->
-            % Save a minimum started time
+            % Save a minimum running time
             erlang:send_after(Time, self(), nkdomain_destroy),
             noreply(State4);
         _ ->
             case Session of
                 #obj_session{is_dirty=true} ->
-                    ?LLOG(warning, "stopping dirty object", [], State4);
-                _ -> ok
-            end,
-            {stop, normal, State4}
+                    ?LLOG(notice, "cannot stopping, object is dirty", [], State4),
+                    self() ! nkdomain_destroy,
+                    noreply(State4);
+                _ ->
+                    {stop, normal, State4}
+            end
     end.
 
 
