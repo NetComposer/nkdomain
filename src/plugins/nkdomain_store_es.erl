@@ -25,12 +25,15 @@
 -export([plugin_deps/0, plugin_syntax/0, plugin_defaults/0, plugin_config/2]).
 -export([object_store_reload_types/1, object_store_read_raw/2, object_store_save_raw/3,
          object_store_remove_raw/2, object_store_find_path/2, object_store_find_childs/3]).
--export([elastic_get_indices/2, elastic_get_mappings/3, elastic_get_aliases/3]).
+-export([object_store_log_save_raw/3]).
+-export([elastic_get_indices/2, elastic_get_mappings/3, elastic_get_aliases/3, elastic_get_templates/2]).
 -export([reload_types/1, remove_index/1]).
 
 -define(ES_INDEX, <<"nkobjects_v2">>).
 -define(ES_ALIAS, <<"nkobjects">>).
 -define(ES_TYPE, <<"objs">>).
+-define(ES_LOG_TEMPLATE, <<"nkdomain_store_template_v1">>).
+-define(ES_LOG_INDEX, <<"nkstore_v1">>).
 
 -define(LLOG(Type, Txt, Args),
     lager:Type("NkDOMAIN Store ES "++Txt, Args)).
@@ -42,7 +45,8 @@
 
 -record(es_config, {
     index,
-    type
+    type,
+    log_index
 }).
 
 
@@ -62,7 +66,8 @@ plugin_syntax() ->
         domain_elastic_index =>  binary,
         domain_elastic_alias => binary,
         domain_elastic_obj_type => binary,
-        domain_elastic_replicas => {integer, 0, 3}
+        domain_elastic_replicas => {integer, 0, 3},
+        domain_elastic_log_index =>  binary
     }.
 
 
@@ -72,7 +77,8 @@ plugin_defaults() ->
         domain_elastic_index => ?ES_INDEX,
         domain_elastic_alias => ?ES_ALIAS,
         domain_elastic_obj_type => ?ES_TYPE,
-        domain_elastic_replicas => 2
+        domain_elastic_replicas => 2,
+        domain_elastic_log_index => ?ES_LOG_INDEX
     }.
 
 
@@ -80,11 +86,13 @@ plugin_config(Config, _Service) ->
     #{
         domain_elastic_url := Url,
         domain_elastic_index := Index,
-        domain_elastic_obj_type := Type
+        domain_elastic_obj_type := Type,
+        domain_elastic_log_index := LogIndex
     } = Config,
     Cache = #es_config{
         index = Index,
-        type = Type
+        type = Type,
+        log_index = LogIndex
     },
     Config2 = case Config of
         #{
@@ -137,6 +145,9 @@ object_store_find_childs(SrvId, Path, Spec) ->
     find_obj_childs(SrvId, Path, Spec).
 
 
+%% @doc
+object_store_log_save_raw(SrvId, ObjId, Map) ->
+    save_log_obj(SrvId, Map#{obj_id:=ObjId}).
 
 
 %% ===================================================================
@@ -161,6 +172,11 @@ elastic_get_aliases(Index, Acc, #{id:=SrvId}=Service) ->
     Aliases = get_aliases(SrvId, Index),
     {continue, [Index, maps:merge(Acc, Aliases), Service]}.
 
+
+%% @private
+elastic_get_templates(Acc, #{id:=SrvId}=Service) ->
+    Templates = get_templates(SrvId),
+    {continue, [maps:merge(Acc, Templates), Service]}.
 
 
 %% ===================================================================
@@ -221,7 +237,7 @@ remove_obj(SrvId, ObjId) ->
     {ok, nkdomain:type(), nkdomain:obj_id()} | {error, object_not_found|term()}.
 
 find_obj_path(SrvId, Path) ->
-    case nkdomain_types:is_path(Path) of
+    case nkdomain_util:is_path(Path) of
         {true, Path2} ->
             case find_path(SrvId, Path2, #{}) of
                 {ok, 1, [{Module, ObjId}]} ->
@@ -243,7 +259,7 @@ find_obj_path(SrvId, Path) ->
     {error, object_not_found}.
 
 find_obj_childs(SrvId, Path, Spec) ->
-    case nkdomain_types:is_path(Path) of
+    case nkdomain_util:is_path(Path) of
         {true, Path2} ->
             case find_path(SrvId, list_to_binary([Path2, "*"]), Spec) of
                 {ok, N, List} ->
@@ -255,6 +271,13 @@ find_obj_childs(SrvId, Path, Spec) ->
             {error, invalid_path}
     end.
 
+
+%% @doc Saves an object
+save_log_obj(SrvId, #{obj_id:=ObjId}=Store) ->
+    #es_config{log_index=Index, type=IdxType} = SrvId:config_nkdomain_store_es(),
+    {{Y,M,D}, {_H,_Mi,_S}} = calendar:universal_time(),
+    Index2 = list_to_binary(io_lib:format("~s-~4..0B~2..0B~2..0B", [Index, Y,M,D])),
+    nkelastic_api:put(SrvId, Index2, IdxType, ObjId, Store).
 
 
 %% ===================================================================
@@ -314,6 +337,26 @@ get_aliases(SrvId, Index) ->
         _ ->
             #{}
     end.
+
+
+%% @doc Get ES indices
+get_templates(SrvId) ->
+    #{
+        domain_elastic_index := Index,
+        domain_elastic_log_index := StoreIndex
+    } =
+        SrvId:config(),
+    Mappings = get_mappings(SrvId, Index),
+    #{
+        ?ES_LOG_TEMPLATE => #{
+            template => <<StoreIndex/binary, $*>>,
+            mappings => #{
+                ?ES_TYPE => #{
+                    properties => Mappings
+                }
+            }
+        }
+    }.
 
 
 %% @private
