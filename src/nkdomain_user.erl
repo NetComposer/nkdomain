@@ -24,27 +24,135 @@
 -behavior(nkdomain_obj).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([login/3]).
--export([object_get_desc/0, object_get_mapping/0, object_add_syntax/1,
+-export([login/4]).
+-export([object_get_desc/0, object_get_mapping/0, object_add_load_syntax/1, object_add_update_syntax/1,
          object_store/1]).
 -export([user_pass/1]).
 
 -include("nkdomain.hrl").
+
+-define(LLOG(Type, Txt, Args),
+    lager:Type("NkDOMAIN User "++Txt, Args)).
+
+
+%% ===================================================================
+%% Types
+%% ===================================================================
+
+-type login_opts() ::
+    #{
+        register => nklib:link()
+    }.
 
 
 %% ===================================================================
 %% API
 %% ===================================================================
 
-login(SrvId, Login, Pass) ->
-    case nkdomain_obj:load(SrvId, Login, #{}) of
-        {ok, nkdomain_user, ObjId, Pid} ->
+%% @doc
+-spec login(nkservice:id(), User::binary(), Pass::binary(), login_opts()) ->
+    {ok, nkdomain:obj_id(), pid()} | {error, user_not_found|term()}.
+
+login(SrvId, Login, Pass, Opts) ->
+    case do_load(SrvId, Login, Opts) of
+        {ok, ObjId, Pid} ->
             do_login(Pid, ObjId, Pass);
-        _ ->
-            {error, user_not_found}
+        {error, Error} ->
+            {error, Error}
     end.
 
 
+
+%% ===================================================================
+%% nkdomain_obj behaviour
+%% ===================================================================
+
+
+%% @private
+object_get_desc() ->
+    #{
+        type => <<"user">>,
+        name => <<"user">>
+    }.
+
+
+%% @private
+object_get_mapping() ->
+    #{
+        name => #{
+            type => text,
+            fields => #{keyword => #{type=>keyword}}
+        },
+        surname => #{
+            type => text,
+            fields => #{keyword => #{type=>keyword}}
+        },
+        password => #{type => keyword}
+    }.
+
+
+%% @private
+object_add_load_syntax(Base) ->
+    Base2 = nkdomain_types:make_syntax(?MODULE, [name, surname], Base),
+    Base2#{
+        ?MODULE => #{
+            name => binary,
+            surname => binary,
+            password => fun ?MODULE:user_pass/1
+        }
+    }.
+
+
+%% @private
+object_add_update_syntax(Base) ->
+    object_add_load_syntax(Base).
+
+
+%% @private
+object_store(#{?MODULE:=User}) ->
+    Keys = maps:keys(object_get_mapping()),
+    maps:with(Keys, User);
+
+object_store(_) ->
+    #{}.
+
+
+
+%% ===================================================================
+%% Internal
+%% ===================================================================
+
+
+
+
+
+%% ===================================================================
+%% Internal
+%% ===================================================================
+
+%% @private
+do_load(SrvId, Login, Opts) ->
+    LoadOpts = maps:with([register], Opts),
+    case nkdomain_obj:load(SrvId, Login, LoadOpts) of
+        {ok, nkdomain_user, ObjId, Pid} ->
+            {ok, ObjId, Pid};
+        _ ->
+            case SrvId:object_store_find_alias(SrvId, Login) of
+                {ok, N, [{nkdomain_user, ObjId}|_]}->
+                    case N > 1 of
+                        true ->
+                            ?LLOG(notice, "duplicated alias for ~s", [Login]);
+                        false ->
+                            ok
+                    end,
+                    case nkdomain_obj:load(SrvId, ObjId, LoadOpts) of
+                        {ok, nkdomain_user, ObjId, Pid} ->
+                            {ok, ObjId, Pid};
+                        _ ->
+                            {error, user_not_found}
+                    end
+            end
+    end.
 
 
 %% @private
@@ -64,65 +172,6 @@ do_login(Pid, ObjId, Pass) ->
         {error, Error} ->
             {error, Error}
     end.
-
-
-
-
-
-
-
-
-
-
-%% ===================================================================
-%% nkdomain_obj behaviour
-%% ===================================================================
-
-
-object_get_desc() ->
-    #{
-        type => <<"user">>,
-        name => <<"user">>
-    }.
-
-
-object_get_mapping() ->
-    #{
-        name => #{
-            type => text,
-            fields => #{keyword => #{type=>keyword}}
-        },
-        surname => #{
-            type => text,
-            fields => #{keyword => #{type=>keyword}}
-        },
-        password => #{type => keyword}
-    }.
-
-
-object_add_syntax(Base) ->
-    Base2 = nkdomain_types:make_syntax(?MODULE, [name, surname], Base),
-    Base2#{
-        ?MODULE => #{
-            name => binary,
-            surname => binary,
-            password => fun ?MODULE:user_pass/1
-        }
-    }.
-
-
-object_store(#{?MODULE:=User}) ->
-    Keys = maps:keys(object_get_mapping()),
-    maps:with(Keys, User);
-
-object_store(_) ->
-    #{}.
-
-
-
-%% ===================================================================
-%% Internal
-%% ===================================================================
 
 
 %% @doc Generates a password from an user password or hash

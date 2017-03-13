@@ -72,7 +72,7 @@ user1_load() ->
 user2_create() ->
     Obj = #{
         obj_id => <<"user2">>,
-        path => <<"/u2">>,
+        path => <<"/users/u2">>,
         type => user,
         module => nkdomain_user,
         parent_id => <<"root">>,
@@ -93,7 +93,7 @@ user2_load() ->
 user3_create() ->
     Obj = #{
         obj_id => <<"user3">>,
-        path => <<"/sub1/u3">>,
+        path => <<"/sub1/users/u3">>,
         type => user,
         module => nkdomain_user,
         parent_id => <<"sub1">>,

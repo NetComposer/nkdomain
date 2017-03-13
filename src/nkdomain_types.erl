@@ -66,7 +66,7 @@ register_type(Module) ->
 
 %% @doc
 make_syntax(Module, Mandatory, Base) ->
-    Fields = [list_to_binary([to_bin(Module), $., to_bin(F)]) || F <- Mandatory],
+    Fields = [binary_to_atom(list_to_binary([to_bin(Module), $., to_bin(F)]), utf8) || F <- Mandatory],
     Mandatory2 = maps:get('__mandatory', Base, []),
     Mandatory3 = Fields ++ Mandatory2,
     Base#{

@@ -145,3 +145,4 @@ add_mandatory(Fields, Module, Base) ->
 
 %% @private
 to_bin(Term) -> nklib_util:to_binary(Term).
+

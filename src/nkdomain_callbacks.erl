@@ -22,9 +22,10 @@
 -module(nkdomain_callbacks).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -export([plugin_deps/0, service_init/2, service_handle_cast/2]).
--export([object_base_mapping/0, object_base_syntax/0]).
--export([object_load/2, object_save/1, object_remove/1, object_parse/3, object_archive/1,
-         object_store/1, object_updated/2, object_enabled/1, object_removed/2,
+-export([object_base_mapping/0, object_update_syntax/0, object_load_syntax/0]).
+-export([object_load/2, object_save/1, object_remove/1, object_load_parse/3, object_update_parse/3,
+         object_archive/1, object_store/1,
+         object_updated/2, object_enabled/1, object_removed/2,
          object_sync_op/3, object_async_op/2,
          object_status/2, object_all_links_down/1]).
 -export([object_init/1, object_terminate/2, object_event/2, object_reg_event/3,
@@ -32,7 +33,8 @@
          object_handle_call/3, object_handle_cast/2, object_handle_info/2]).
 -export([object_store_reload_types/1, object_store_read_raw/2, object_store_save_raw/3,
          object_store_remove_raw/2, object_store_archive_raw/3,
-         object_store_find_path/2, object_store_find_childs/3]).
+         object_store_find_path/2, object_store_find_childs/3, object_store_find_all_childs/3,
+         object_store_find_alias/2]).
 
 -define(LLOG(Type, Txt, Args), lager:Type("NkDOMAIN Callbacks: "++Txt, Args)).
 
@@ -64,10 +66,6 @@ object_base_mapping() ->
         path => #{type => keyword},
         parent_id => #{type => keyword},
         subtype => #{type => keyword},
-        description => #{
-            type => text,
-            fields => #{keyword => #{type=>keyword}}
-        },
         created_by => #{type => keyword},
         created_time => #{type => date},
         enabled => #{type => boolean},
@@ -75,15 +73,30 @@ object_base_mapping() ->
         destroyed_time => #{type => date},
         destroyed_code => #{type => keyword},
         destroyed_reason => #{type => keyword},
+        description => #{
+            type => text,
+            fields => #{keyword => #{type=>keyword}}
+        },
         aliases => #{type => keyword},
         icon_id => #{type => keyword}
     }.
 
 
-%% @doc Base syntax
--spec object_base_syntax() -> nklib_syntax:syntax().
+%% @doc Update syntax
+-spec object_update_syntax() -> nklib_syntax:syntax().
 
-object_base_syntax() ->
+object_update_syntax() ->
+    #{
+        description => binary,
+        aliases => {list, binary},
+        icon_id => binary
+    }.
+
+
+%% @doc Base syntax
+-spec object_load_syntax() -> nklib_syntax:syntax().
+
+object_load_syntax() ->
     #{
         obj_id => binary,
         module => atom,
@@ -91,7 +104,6 @@ object_base_syntax() ->
         path => binary,
         parent_id => binary,
         subtype => binary,
-        description => binary,
         created_by => binary,
         created_time => integer,
         parent_id => binary,
@@ -100,6 +112,7 @@ object_base_syntax() ->
         destroyed_time => integer,
         destroyed_code => binary,
         destroyed_reason => binary,
+        description => binary,
         aliases => {list, binary},
         icon_id => binary,
         '_store_vsn' => any,
@@ -114,7 +127,25 @@ object_base_syntax() ->
 object_load(SrvId, ObjId) ->
     case SrvId:object_store_read_raw(SrvId, ObjId) of
         {ok, Module, Map} ->
-            SrvId:object_parse(SrvId, Module, Map);
+            SrvId:object_load_parse(SrvId, Module, Map);
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
+%% @doc Called to parse an object's syntax for loading
+-spec object_load_parse(nkservice:id(), module(), map()) ->
+    {ok, nkdomain:obj()} | {error, term()}.
+
+object_load_parse(SrvId, Module, Map) ->
+    Base = SrvId:object_load_syntax(),
+    Syntax = Module:object_add_load_syntax(Base),
+    case nklib_syntax:parse(Map, Syntax, #{meta=>#{module=>Module}}) of
+        {ok, #{module:=Module}=Obj2, _Exp, []} ->
+            {ok, Obj2};
+        {ok, #{module:=Module, obj_id:=ObjId}=Obj2, _Exp, Missing} ->
+            ?LLOG(notice, "Object ~s (~s) has unknown fields: ~p", [Module, ObjId, Missing]),
+            {ok, Obj2};
         {error, Error} ->
             {error, Error}
     end.
@@ -150,22 +181,24 @@ object_remove(#obj_session{srv_id=SrvId, obj_id=ObjId}=Session) ->
     end.
 
 
-%% @doc Called to parse an object's syntax
--spec object_parse(nkservice:id(), module(), map()) ->
+%% @doc Called to parse an object's syntax for updates
+-spec object_update_parse(nkservice:id(), module(), map()) ->
     {ok, nkdomain:obj()} | {error, term()}.
 
-object_parse(SrvId, Module, Map) ->
-    Base = SrvId:object_base_syntax(),
-    Syntax = Module:object_add_syntax(Base),
-    case nklib_syntax:parse(Map, Syntax, #{meta=>#{module=>Module}}) of
-        {ok, #{module:=Module}=Obj2, _Exp, []} ->
-            {ok, Obj2};
-        {ok, #{module:=Module, obj_id:=ObjId}=Obj2, _Exp, Missing} ->
-            ?LLOG(notice, "Object ~s (~s) has unknown fields: ~p", [Module, ObjId, Missing]),
-            {ok, Obj2};
+object_update_parse(SrvId, Module, Map) ->
+    Base = SrvId:object_update_syntax(),
+    Syntax1 = Module:object_add_update_syntax(Base),
+    Syntax2 = maps:remove('__mandatory', Syntax1),
+    case nklib_syntax:parse(Map, Syntax2, #{meta=>#{module=>Module}}) of
+        {ok, Obj, _Exp, []} ->
+            {ok, Obj};
+        {ok, Obj, _Exp, Missing} ->
+            ?LLOG(notice, "Object update has unknown fields: ~p", [Missing]),
+            {ok, Obj};
         {error, Error} ->
             {error, Error}
     end.
+
 
 
 %% @doc Called to save the archived version to disk
@@ -251,7 +284,7 @@ object_status(_Status, Session) ->
     {ok, session()} | {stop, nkservice:error()}.
 
 object_all_links_down(Session) ->
-    {ok, Session}.
+    {stop, no_usages, Session}.
 
 
 %% ===================================================================
@@ -312,7 +345,7 @@ object_reg_event(_Link, _Event, Session) ->
     {ok, session()} | {stop, Reason::term(), session()} | continue().
 
 object_reg_down(_Link, _Reason, Session) ->
-    {stop, registered_down, Session}.
+    {ok, Session}.
 
 
 %% @doc
@@ -389,11 +422,29 @@ object_store_find_path(_SrvId, _Path) ->
 
 
 %% @doc
--spec object_store_find_childs(nkservice:id(), nkdomain:path(), Spec::map()) ->
+-spec object_store_find_childs(nkservice:id(), nkdomain:obj_id(), Spec::map()) ->
     {ok, Total::integer(), [{module(), nkdomain:obj_id()}]} |
     {error, term()}.
 
-object_store_find_childs(_SrvId, _Path, _Spec) ->
+object_store_find_childs(_SrvId, _ObjId, _Spec) ->
+    {error, store_not_implemented}.
+
+
+%% @doc
+-spec object_store_find_all_childs(nkservice:id(), nkdomain:path(), Spec::map()) ->
+    {ok, Total::integer(), [{module(), nkdomain:obj_id()}]} |
+    {error, term()}.
+
+object_store_find_all_childs(_SrvId, _Path, _Spec) ->
+    {error, store_not_implemented}.
+
+
+%% @doc
+-spec object_store_find_alias(nkservice:id(), nkdomain:alias()) ->
+    {ok, Total::integer(), [{module(), nkdomain:obj_id()}]} |
+    {error, term()}.
+
+object_store_find_alias(_SrvId, _Alias) ->
     {error, store_not_implemented}.
 
 

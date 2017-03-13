@@ -31,12 +31,13 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -behaviour(gen_server).
 
--export([find/2, load/3, create/3, get_session/1, save/1, stop/2, sync_op/2, async_op/2]).
--export([set_enabled/2, remove/2, register/2, unregister/2]).
+-export([find/2, load/2, load/3, create/3, get_session/1, save/1, unload/2]).
+-export([update/2, set_enabled/2, remove/2, sync_op/2, async_op/2]).
+-export([register/2, unregister/2, get_childs/1]).
 -export([do_find/1, do_call/2, do_call/3, do_cast/2, do_info/2]).
 -export([init/1, terminate/2, code_change/3, handle_call/3,
          handle_cast/2, handle_info/2]).
--export([get_all/0, stop_all/0]).
+-export([get_all/0, unload_all/0]).
 -export_type([event/0, status/0]).
 
 
@@ -61,7 +62,7 @@
             | Args]
         )).
 
--define(MIN_STARTED_TIME, 2000).
+-define(MIN_STARTED_TIME, 60000).
 -define(DEF_SYNC_CALL, 5000).
 -define(SAVE_RETRY, 5000).
 -define(MAX_SAVE_RETRIES, 10).
@@ -81,7 +82,11 @@
     map().
 
 
--callback object_add_syntax(nklib_syntax:syntax()) ->
+-callback object_add_load_syntax(nklib_syntax:syntax()) ->
+    nklib_syntax:syntax().
+
+
+-callback object_add_update_syntax(nklib_syntax:syntax()) ->
     nklib_syntax:syntax().
 
 
@@ -169,9 +174,10 @@ find(Srv, IdOrPath) ->
                     {error, service_not_found}
             end;
         false ->
-            case do_find(IdOrPath) of
+            ObjId = nklib_util:to_binary(IdOrPath),
+            case do_find(ObjId) of
                 {ok, Module, Path, Pid} ->
-                    {ok, Module, IdOrPath, Path, Pid};
+                    {ok, Module, ObjId, Path, Pid};
                 not_found ->
                     {error, object_not_found}
             end
@@ -179,12 +185,21 @@ find(Srv, IdOrPath) ->
 
 
 %% @doc Finds an objects's pid or loads it from storage
+-spec load(nkservice:id(), nkdomain:obj_id()|nkdomain:path()) ->
+    {ok, module(), nkdomain:obj_id(), pid()} |
+    {error, obj_not_found|term()}.
+
+load(Srv, IdOrPath) ->
+    load(Srv, IdOrPath, #{}).
+
+
+%% @doc Finds an objects's pid or loads it from storage
 -spec load(nkservice:id(), nkdomain:obj_id()|nkdomain:path(), load_opts()) ->
     {ok, module(), nkdomain:obj_id(), pid()} |
     {error, obj_not_found|term()}.
 
-load(Srv, Id, Meta) ->
-    case find(Srv, Id) of
+load(Srv, IdOrPath, Meta) ->
+    case find(Srv, IdOrPath) of
         {ok, Module, ObjId, _Path, Pid} when is_pid(Pid) ->
             case Meta of
                 #{register:=Link} ->
@@ -194,14 +209,15 @@ load(Srv, Id, Meta) ->
             end,
             {ok, Module, ObjId, Pid};
         {ok, _Module, ObjId, _Path, undefined} ->
-            do_load1(Srv, ObjId, Meta);
+            do_load2(Srv, ObjId, Meta);
         {error, object_not_found} ->
-            do_load1(Srv, Id, Meta)
+            ObjId = nklib_util:to_binary(IdOrPath),
+            do_load2(Srv, ObjId, Meta)
     end.
 
 
 %% @private
-do_load1(Srv, ObjId, Meta) ->
+do_load2(Srv, ObjId, Meta) ->
     case nkservice_srv:get_srv_id(Srv) of
         {ok, SrvId} ->
             Meta2 = Meta#{
@@ -217,10 +233,10 @@ do_load1(Srv, ObjId, Meta) ->
                                     SrvId:object_store_remove_raw(SrvId, ObjId),
                                     {error, object_not_found};
                                 _ ->
-                                    do_load2(Module, ObjId, Obj, Meta2)
+                                    do_load3(Module, ObjId, Obj, Meta2)
                             end;
                         _ ->
-                            do_load2(Module, ObjId, Obj, Meta2)
+                            do_load3(Module, ObjId, Obj, Meta2)
                     end;
                 {error, Error} ->
                     {error, Error}
@@ -229,7 +245,7 @@ do_load1(Srv, ObjId, Meta) ->
 
 
 %% @private
-do_load2(Module, ObjId, Obj, Meta2) ->
+do_load3(Module, ObjId, Obj, Meta2) ->
     {ok, ObjPid} = gen_server:start(?MODULE, {Obj, Meta2}, []),
     {ok, Module, ObjId, ObjPid}.
 
@@ -263,7 +279,7 @@ do_create(SrvId, #{module:=Module, obj_id:=ObjId}=Obj, Meta) ->
     Obj3 = Obj2#{
         created_time => nklib_util:m_timestamp()
     },
-    case SrvId:object_parse(SrvId, Module, Obj3) of
+    case SrvId:object_load_parse(SrvId, Module, Obj3) of
         {ok, Obj4} ->
             case do_create_check_parent(SrvId, Obj4) of
                 {ok, ParentMeta} ->
@@ -286,9 +302,9 @@ do_create(SrvId, #{module:=Module, obj_id:=ObjId}=Obj, Meta) ->
 do_create_check_parent(_SrvId, #{parent_id:=<<>>, obj_id:=<<"root">>}) ->
     {ok, #{}};
 
-do_create_check_parent(SrvId, #{parent_id:=ParentId, path:=Path}) ->
+do_create_check_parent(SrvId, #{parent_id:=ParentId, module:=Module, path:=Path}) ->
     case load(SrvId, ParentId, #{}) of
-        {ok, Module, _ObjId, Pid} ->
+        {ok, _ParentModule, _ParentObjId, Pid} ->
             case do_call(Pid, {nkdomain_check_child, Module, Path}) of
                 {ok, Data} ->
                     {ok, Data};
@@ -325,11 +341,11 @@ remove(Id, Reason) ->
 
 
 %% @doc
--spec stop(id(), nkservice:error()) ->
+-spec unload(id(), nkservice:error()) ->
     ok | {error, term()}.
 
-stop(Id, Reason) ->
-    do_cast(Id, {nkdomain_stop, Reason}).
+unload(Id, Reason) ->
+    do_cast(Id, {nkdomain_unload, Reason}).
 
 
 %% @doc
@@ -338,6 +354,14 @@ stop(Id, Reason) ->
 
 set_enabled(Id, Enabled) when is_boolean(Enabled)->
     async_op(Id, {set_enabled, Enabled}).
+
+
+%% @doc
+-spec update(id(), map()) ->
+    ok | {error, term()}.
+
+update(Id, Map) ->
+    do_call(Id, {nkdomain_update, Map}).
 
 
 %% @doc
@@ -372,6 +396,13 @@ unregister(Id, Link) ->
     do_cast(Id, {nkdomain_unregister, Link}).
 
 
+% @doc
+-spec get_childs(id()) ->
+    ok | {error, term()}.
+
+get_childs(Id) ->
+    do_call(Id, nkdomain_get_childs).
+
 
 %% @doc
 -spec get_all() ->
@@ -384,8 +415,8 @@ get_all() ->
     ].
 
 %% @private
-stop_all() ->
-    lists:foreach(fun({_Module, _ObjId, _Path, Pid}) -> stop(Pid, normal) end, get_all()).
+unload_all() ->
+    lists:foreach(fun({_Module, _ObjId, _Path, Pid}) -> unload(Pid, normal) end, get_all()).
 
 
 % ===================================================================
@@ -457,9 +488,10 @@ init({Obj, Meta}) ->
     },
     State2 = case Meta of
          #{register:=Link} ->
-             links_add(Link, State1);
+            links_add(Link, State1);
          _ ->
-             State1
+            erlang:send_after(?MIN_STARTED_TIME, self(), nkdomain_check_childs),
+            State1
     end,
     set_log(State2),
     nkservice_util:register_for_changes(SrvId),
@@ -480,8 +512,25 @@ handle_call(nkdomain_get_session, _From, #state{session=Session}=State) ->
 handle_call(nkdomain_get_timelog, _From, #state{timelog=Log}=State) ->
     reply({ok, Log}, State);
 
+handle_call(nkdomain_get_childs, _From, #state{childs=Childs}=State) ->
+    reply({ok, Childs}, State);
+
 handle_call(nkdomain_get_state, _From, State) ->
     reply(State, State);
+
+handle_call({nkdomain_update, Map}, _From, #state{srv_id=SrvId, session=Session}=State) ->
+    #obj_session{module=Module} = Session,
+    case SrvId:object_update_parse(SrvId, Module, Map) of
+        {ok, Update} ->
+            case do_update(Update, State) of
+                {ok, State2} ->
+                    reply(ok, State2);
+                {error, Error, State2} ->
+                    reply({error, Error}, State2)
+            end;
+        {error, Error} ->
+            reply({error, Error}, State)
+    end;
 
 handle_call({nkdomain_sync_op, Op}, From, State) ->
     case handle(object_sync_op, [Op, From], State) of
@@ -614,7 +663,7 @@ handle_cast({nkdomain_unregister, Link}, State) ->
     State2 = links_remove(Link, State),
     do_check_links_down(State2);
 
-handle_cast({nkdomain_stop, Error}, State) ->
+handle_cast({nkdomain_unload, Error}, State) ->
     ?DEBUG("received stop: ~p", [Error], State),
     do_stop(Error, State);
 
@@ -637,6 +686,9 @@ handle_info(nkdomain_check_expire, State) ->
             do_stop(object_expired, State)
     end;
 
+handle_info(nkdomain_check_childs, State) ->
+    do_check_links_down(State);
+
 handle_info(nkdomain_save, State) ->
     handle_cast(nkdomain_save, State);
 
@@ -657,6 +709,7 @@ handle_info({'DOWN', Ref, process, Pid, Reason}=Msg, State) ->
         {ok, Link, State2} when Stop==false ->
             case handle(object_reg_down, [Link, Reason], State2) of
                 {ok, State3} ->
+                    ?DEBUG("reg '~p' down (~p)", [Link, Reason], State3),
                     do_check_links_down(State3);
                 {stop, normal, State3} ->
                     ?DEBUG("reg '~p' down (~p)", [Link, Reason], State3),
@@ -741,7 +794,10 @@ do_async_op({set_enabled, Enabled}, #state{session=#obj_session{obj=Obj}}=State)
             State;
         _ ->
             ?DEBUG("setting enabled to: ~p", [Enabled], State),
-            do_update(#{enabled=>Enabled}, State)
+            case do_update(#{enabled=>Enabled}, State) of
+                {ok, UpdateState} -> UpdateState;
+                {error, _Error, UpdateState} -> UpdateState
+            end
     end,
     noreply(do_enabled(Enabled, State2));
 
@@ -833,7 +889,7 @@ do_save(#state{save_op=Op}=State) ->
 %% @private
 do_save_ok(#state{session=Session}=State) ->
     Session2 = Session#obj_session{is_dirty=false},
-    State#state{save_op=none, save_tries=0, session=Session2}.
+    State#state{save_tries=0, session=Session2}.
 
 
 %% @private
@@ -866,7 +922,6 @@ do_stop(_Reason, #state{session=#obj_session{status={stopped, _Reason}}}=State) 
     noreply(State);
 
 do_stop(Reason, #state{srv_id=SrvId, started=Started}=State) ->
-    ?DEBUG("stopped: ~p", [Reason], State),
     {ok, State2} = handle(object_stop, [Reason], State#state{stop_reason=Reason}),
     {Code, Txt} = nkdomain_util:error_code(SrvId, Reason),
     State3 = do_add_timelog(#{msg=>stopped, code=>Code, reason=>Txt}, State2),
@@ -915,8 +970,9 @@ do_check_child(ObjModule, ObjPath, State) ->
                     Data = #{enabled=>Session#obj_session.enabled},
                     {ok, ObjName, Data}
             end;
-        {ok, _, _} ->
-            ?LLOG(notice, "error trying to check invalid child path (~s)", [ObjPath], State),
+        {ok, Path2, ObjName2} ->
+            ?LLOG(notice, "error trying to check invalid child path (~s): ~s ~s ~s",
+                  [ObjPath, Path2, ObjName2, ObjModule], State),
             {error, invalid_path};
         {error, Error} ->
             {error, Error}
@@ -926,14 +982,22 @@ do_check_child(ObjModule, ObjPath, State) ->
 %% @private
 do_update(_Update, #state{save_op=Op}=State) when Op==remove; Op==archive ->
     ?LLOG(notice, "received update command in ~p save state", [Op], State),
-    State;
+    {error, invalid_state, State};
 
-do_update(Update, #state{session=#obj_session{obj=Obj}=Session}=State) ->
-    Obj2 = ?ADD_TO_OBJ(Update, Obj),
-    Session2 = Session#obj_session{obj=Obj2, is_dirty=true},
-    {ok, State2} = handle(object_updated, [Update], State#state{session=Session2}),
-    State3 = do_save(State2),
-    do_event({updated, Update}, State3).
+do_update(Update, #state{srv_id=SrvId, session=Session}=State) ->
+    #obj_session{obj=Obj, module=Module}=Session,
+    Obj2 = ?ADD_TO_OBJ_DEEP(Update, Obj),
+    case SrvId:object_load_parse(SrvId, Module, Obj2) of
+        {ok, Obj} ->
+            {ok, State};
+        {ok, Obj3} ->
+            Session2 = Session#obj_session{obj=Obj3, is_dirty=true},
+            {ok, State2} = handle(object_updated, [Update], State#state{session=Session2}),
+            State3 = do_save(State2),
+            {ok, do_event({updated, Update}, State3)};
+        {error, Error} ->
+            {error, Error, State}
+    end.
 
 
 %% @private

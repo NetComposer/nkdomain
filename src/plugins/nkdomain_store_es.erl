@@ -24,9 +24,11 @@
 
 -export([plugin_deps/0, plugin_syntax/0, plugin_defaults/0, plugin_config/2]).
 -export([object_store_reload_types/1, object_store_read_raw/2, object_store_save_raw/3,
-         object_store_remove_raw/2, object_store_find_path/2, object_store_find_childs/3]).
+         object_store_remove_raw/2, object_store_find_path/2, object_store_find_childs/3,
+        object_store_find_all_childs/3, object_store_find_alias/2]).
 -export([object_store_archive_raw/3]).
--export([elastic_get_indices/2, elastic_get_mappings/3, elastic_get_aliases/3, elastic_get_templates/2]).
+-export([elastic_get_indices/2, elastic_get_mappings/3, elastic_get_aliases/3,
+         elastic_get_templates/2]).
 -export([reload_types/1, remove_index/1]).
 
 -define(ES_INDEX, <<"nkobjects_v2">>).
@@ -144,11 +146,19 @@ object_store_archive_raw(SrvId, ObjId, Map) ->
 object_store_find_path(SrvId, Path) ->
     find_obj_path(SrvId, Path).
 
+%% @doc
+object_store_find_alias(SrvId, Alias) ->
+    find_obj_alias(SrvId, Alias).
+
 
 %% @doc
 object_store_find_childs(SrvId, Path, Spec) ->
     find_obj_childs(SrvId, Path, Spec).
 
+
+%% @doc
+object_store_find_all_childs(SrvId, Path, Spec) ->
+    find_obj_all_childs(SrvId, Path, Spec).
 
 
 
@@ -241,14 +251,17 @@ remove_obj(SrvId, ObjId) ->
 find_obj_path(SrvId, Path) ->
     case nkdomain_util:is_path(Path) of
         {true, Path2} ->
-            case find_path(SrvId, Path2, #{}) of
+            Spec = #{
+                filter => #{<<"path">> => escape_url(Path2)}
+            },
+            case find_objs(SrvId, Spec) of
+                {ok, 0, []} ->
+                    {error, object_not_found};
                 {ok, 1, [{Module, ObjId}]} ->
                     {ok, Module, ObjId};
                 {ok, _, [{Module, ObjId}|_]} ->
                     ?LLOG(warning, "Multiple objects for path ~s", [Path]),
-                    {ok, Module, ObjId};
-                not_found ->
-                    {error, object_not_found}
+                    {ok, Module, ObjId}
             end;
         false ->
             {error, invalid_path}
@@ -256,22 +269,45 @@ find_obj_path(SrvId, Path) ->
 
 
 %% @doc Finds all objects on a path
--spec find_obj_childs(nkservice:id(), nkdomain:domain(), nkelastic_api:list_opts()) ->
-    {ok, integer(), [{nkdomain:type(), nkdomain:obj_id()}]} |
-    {error, object_not_found}.
+-spec find_obj_childs(nkservice:id(), nkdomain:obj_id(), nkelastic_api:list_opts()) ->
+    {ok, integer(), [{nkdomain:type(), nkdomain:obj_id()}]}.
 
-find_obj_childs(SrvId, Path, Spec) ->
+find_obj_childs(SrvId, ParentId, Spec) ->
+    Filter = maps:get(filter, Spec, #{}),
+    Spec2 = Spec#{
+        filter => Filter#{<<"parent_id">> => nklib_util:to_binary(ParentId)}
+    },
+    find_objs(SrvId, Spec2).
+
+
+%% @doc Finds all objects on a path
+-spec find_obj_all_childs(nkservice:id(), nkdomain:domain(), nkelastic_api:list_opts()) ->
+    {ok, integer(), [{nkdomain:type(), nkdomain:obj_id()}]}.
+
+find_obj_all_childs(SrvId, Path, Spec) ->
     case nkdomain_util:is_path(Path) of
         {true, Path2} ->
-            case find_path(SrvId, list_to_binary([Path2, "*"]), Spec) of
-                {ok, N, List} ->
-                    {ok, N, List};
-                not_found ->
-                    {error, object_not_found}
-            end;
+            Path3 = list_to_binary([Path2, "*"]),
+            Filter = maps:get(filter, Spec, #{}),
+            Spec2 = Spec#{
+                filter => Filter#{<<"path">> => escape_url(Path3)}
+            },
+            find_objs(SrvId, Spec2);
         false ->
             {error, invalid_path}
     end.
+
+
+%% @doc Finds all objects having an alias
+-spec find_obj_alias(nkservice:id(), binary()) ->
+    {ok, integer(), [{nkdomain:type(), nkdomain:obj_id()}]} |
+    {error, object_not_found}.
+
+find_obj_alias(SrvId, Alias) ->
+    Spec = #{
+        filter => #{<<"aliases">> => nklib_util:to_binary(Alias)}
+    },
+    find_objs(SrvId, Spec).
 
 
 %% @doc Archive an object
@@ -367,15 +403,12 @@ get_templates(SrvId) ->
 
 
 %% @private
-find_path(SrvId, Path, Spec) ->
+find_objs(SrvId, Spec) ->
     Spec2 = Spec#{
-        fields => [<<"module">>],
-        filter => #{<<"path">> => escape_url(nklib_util:to_list(Path), [])}
+        fields => [<<"module">>]
     },
     #es_config{index=Index, type=IdxType} = SrvId:config_nkdomain_store_es(),
     case nkelastic_api:list(SrvId, Index, IdxType, Spec2) of
-        {ok, 0, _} ->
-            not_found;
         {ok, N, List} ->
             Data = lists:map(
                 fun(#{<<"_id">>:=ObjId, <<"module">>:=BModule}) ->
@@ -389,9 +422,15 @@ find_path(SrvId, Path, Spec) ->
                 end,
                 List),
             {ok, N, Data};
-        _ ->
-            not_found
+        {error, Error} ->
+            ?LLOG(notice, "Error calling find_objs (~p): ~p", [Spec, Error]),
+            {ok, 0, []}
     end.
+
+
+%% @private
+escape_url(Url) ->
+    escape_url(nklib_util:to_list(Url), []).
 
 
 %% @private
