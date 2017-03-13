@@ -32,7 +32,7 @@
 -behaviour(gen_server).
 
 -export([find/2, load/3, create/3, get_session/1, save/1, stop/2, sync_op/2, async_op/2]).
--export([set_enabled/2, remove/2]).
+-export([set_enabled/2, remove/2, register/2, unregister/2]).
 -export([do_find/1, do_call/2, do_call/3, do_cast/2, do_info/2]).
 -export([init/1, terminate/2, code_change/3, handle_call/3,
          handle_cast/2, handle_info/2]).
@@ -67,6 +67,7 @@
 -define(MAX_SAVE_RETRIES, 10).
 
 -include("nkdomain.hrl").
+-compile({no_auto_import, [register/2]}).
 
 %% ===================================================================
 %% Callbacks definitions
@@ -110,7 +111,7 @@
 
 -type load_opts() ::
     #{
-
+        register => nklib:link()
     }.
 
 -type session() :: #obj_session{}.
@@ -185,6 +186,12 @@ find(Srv, IdOrPath) ->
 load(Srv, Id, Meta) ->
     case find(Srv, Id) of
         {ok, Module, ObjId, _Path, Pid} when is_pid(Pid) ->
+            case Meta of
+                #{register:=Link} ->
+                    register(Pid, Link);
+                _ ->
+                    ok
+            end,
             {ok, Module, ObjId, Pid};
         {ok, _Module, ObjId, _Path, undefined} ->
             do_load1(Srv, ObjId, Meta);
@@ -306,7 +313,15 @@ get_session(Id) ->
     ok | {error, term()}.
 
 save(Id) ->
-    do_cast(Id, nkdomain_do_save).
+    do_cast(Id, nkdomain_save).
+
+
+%% @doc
+-spec remove(id(), nkservice:error()) ->
+    ok | {error, term()}.
+
+remove(Id, Reason) ->
+    do_cast(Id, {nkdomain_remove, Reason}).
 
 
 %% @doc
@@ -315,6 +330,14 @@ save(Id) ->
 
 stop(Id, Reason) ->
     do_cast(Id, {nkdomain_stop, Reason}).
+
+
+%% @doc
+-spec set_enabled(id(), boolean()) ->
+    ok | {error, term()}.
+
+set_enabled(Id, Enabled) when is_boolean(Enabled)->
+    async_op(Id, {set_enabled, Enabled}).
 
 
 %% @doc
@@ -333,20 +356,21 @@ async_op(Id, Op) ->
     do_cast(Id, {nkdomain_async_op, Op}).
 
 
-%% @doc
--spec remove(id(), nkservice:error()) ->
+% @doc
+-spec register(id(), nklib:link()) ->
     ok | {error, term()}.
 
-remove(Id, Reason) ->
-    async_op(Id, {remove, Reason}).
+register(Id, Link) ->
+    do_cast(Id, {nkdomain_register, Link}).
 
 
-%% @doc
--spec set_enabled(id(), boolean()) ->
+% @doc
+-spec unregister(id(), nklib:link()) ->
     ok | {error, term()}.
 
-set_enabled(Id, Enabled) when is_boolean(Enabled)->
-    async_op(Id, {set_enabled, Enabled}).
+unregister(Id, Link) ->
+    do_cast(Id, {nkdomain_unregister, Link}).
+
 
 
 %% @doc
@@ -385,6 +409,7 @@ stop_all() ->
     started :: nklib_util:m_timestamp(),
     timer :: reference(),
     childs = [] :: [#child{}],
+    save_op = save  :: save | remove | archive,
     save_tries = 0 :: integer(),
     timelog = [] :: [map()]
 }).
@@ -458,10 +483,6 @@ handle_call(nkdomain_get_timelog, _From, #state{timelog=Log}=State) ->
 handle_call(nkdomain_get_state, _From, State) ->
     reply(State, State);
 
-handle_call(Msg, _From, #state{stop_reason=Reason}=State) when Reason /= false ->
-    ?LLOG(info, "received gen_server call (~p) while stopping", [Msg], State),
-    reply({error, process_is_stopping}, State);
-
 handle_call({nkdomain_sync_op, Op}, From, State) ->
     case handle(object_sync_op, [Op, From], State) of
         {reply, Reply, State2} ->
@@ -484,6 +505,10 @@ handle_call({nkdomain_check_child, ObjModule, ObjPath}, _From, State) ->
         {error, Error} ->
             reply({error, Error}, State)
     end;
+
+handle_call({nkdomain_set_child, _ObjModule, _ObjId, _ObjPath, _Pid}, _From,
+             #state{session=#obj_session{status={stopped, _}}}=State) ->
+    reply({error, object_is_stopped}, State);
 
 handle_call({nkdomain_set_child, ObjModule, ObjId, ObjPath, Pid}, _From, State) ->
     #state{childs=Childs} = State,
@@ -513,9 +538,9 @@ handle_call(Msg, From, State) ->
 handle_cast(nkdomain_do_start, #state{obj_id = <<"root">>}=State) ->
     #state{session=#obj_session{parent_id = <<>>}} = State,
     ?LLOG(notice, "domain ROOT loaded", [], State),
-    gen_server:cast(self(), do_save),
     {ok, State2} = handle(object_start, [], State),
-    noreply(State2);
+    State3 = do_save(State2),
+    noreply(State3);
 
 handle_cast(nkdomain_do_start, State) ->
     #state{srv_id=SrvId, obj_id=ObjId, session=Session} = State,
@@ -528,13 +553,13 @@ handle_cast(nkdomain_do_start, State) ->
                     State2 = do_enabled(Enabled, State),
                     monitor(process, Pid),
                     State3 = State2#state{parent_pid=Pid},
-                    gen_server:cast(self(), do_save),
                     {ok, State4} = handle(object_start, [], State3),
-                    case do_check_expire(State4) of
+                    State5 = do_save(State4),
+                    case do_check_expire(State5) of
                         false ->
-                            noreply(State4);
+                            noreply(State5);
                         true ->
-                            do_stop(object_expired, State)
+                            do_stop(object_expired, State5)
                     end;
                 {error, Error} ->
                     do_stop(Error, State)
@@ -547,13 +572,17 @@ handle_cast(nkdomain_do_start, State) ->
 handle_cast({nkdomain_add_timelog, Data}, State) ->
     noreply(do_add_timelog(Data, State));
 
-handle_cast(nkdomain_do_save, State) ->
-    {_Res, State2} = do_save(State),
+handle_cast(nkdomain_save, #state{save_op=Op}=State) when Op==archive; Op==remove ->
+    ?LLOG(info, "received save command in ~p save state", [Op], State),
+    noreply(State);
+
+handle_cast(nkdomain_save, State) ->
+    State2 = do_save(State),
     noreply(State2);
 
-handle_cast(Msg, #state{stop_reason=Reason}=State) when Reason /= false ->
-    ?LLOG(info, "received gen_server cast (~p) while stopping", [Msg], State),
-    noreply(State);
+handle_cast({nkdomain_remove, Reason}, State) ->
+    State2 = do_remove(Reason, State),
+    do_stop(object_removed, State2);
 
 handle_cast({nkdomain_async_op, Op}, State) ->
     case handle(object_async_op, [Op], State) of
@@ -582,7 +611,8 @@ handle_cast({nkdomain_register, Link}, State) ->
 
 handle_cast({nkdomain_unregister, Link}, State) ->
     ?DEBUG("proc unregistered (~p)", [Link], State),
-    noreply(links_remove(Link, State));
+    State2 = links_remove(Link, State),
+    do_check_links_down(State2);
 
 handle_cast({nkdomain_stop, Error}, State) ->
     ?DEBUG("received stop: ~p", [Error], State),
@@ -599,19 +629,6 @@ handle_cast(Msg, State) ->
 handle_info({nkservice_updated, _SrvId}, State) ->
     noreply(set_log(State));
 
-handle_info(nkdomain_destroy, #state{session=#obj_session{is_dirty=false}}=State) ->
-    {stop, normal, State};
-
-handle_info(nkdomain_destroy, #state{save_tries=Tries}=State) ->
-    case Tries > ?MAX_SAVE_RETRIES of
-        true ->
-            ?LLOG(warning, "could not save object, giving up", [], State),
-            {stop, normal, State};
-        false ->
-            erlang:send_after(?SAVE_RETRY, self(), nkdomain_destroy),
-            noreply(State)
-    end;
-
 handle_info(nkdomain_check_expire, State) ->
     case do_check_expire(State) of
         false ->
@@ -620,13 +637,11 @@ handle_info(nkdomain_check_expire, State) ->
             do_stop(object_expired, State)
     end;
 
-handle_info(Msg, #state{stop_reason=Reason}=State) when Reason /= false ->
-    ?LLOG(info, "received gen_server info (~p) while stopping", [Msg], State),
-    noreply(State);
+handle_info(nkdomain_save, State) ->
+    handle_cast(nkdomain_save, State);
 
-handle_info(nkdomain_do_save, State) ->
-    {_Res, State2} = do_save(State),
-    noreply(State2);
+handle_info(nkdomain_destroy, State) ->
+    do_destroy(State);
 
 handle_info({timeout, Ref, nkdomain_session_timeout}, #state{timer=Ref}=State) ->
     ?DEBUG("session timeout", [], State),
@@ -642,16 +657,12 @@ handle_info({'DOWN', Ref, process, Pid, Reason}=Msg, State) ->
         {ok, Link, State2} when Stop==false ->
             case handle(object_reg_down, [Link, Reason], State2) of
                 {ok, State3} ->
-                    noreply(State3);
+                    do_check_links_down(State3);
                 {stop, normal, State3} ->
+                    ?DEBUG("reg '~p' down (~p)", [Link, Reason], State3),
                     do_stop(normal, State3);
                 {stop, Error, State3} ->
-                    case Reason of
-                        normal ->
-                            ?DEBUG("reg '~p' down (~p)", [Link, Reason], State3);
-                        _ ->
-                            ?LLOG(info, "reg '~p' down (~p)", [Link, Reason], State3)
-                    end,
+                    ?LLOG(info, "reg '~p' down (~p)", [Link, Reason], State3),
                     do_stop(Error, State3)
             end;
         {ok, _, State2} ->
@@ -679,6 +690,7 @@ code_change(OldVsn, State, Extra) ->
         OldVsn, State, Extra,
         #state.srv_id, #state.session).
 
+
 %% @private
 -spec terminate(term(), #state{}) ->
     ok.
@@ -686,10 +698,8 @@ code_change(OldVsn, State, Extra) ->
 terminate(Reason, #state{stop_reason=Stop, timelog=Log}=State) ->
     State2 = case Stop of
         false ->
-            case do_stop({terminate, Reason}, State) of
-                {noreply, StopState}  -> StopState;
-                {stop, normal, StopState} -> StopState
-            end;
+            {noreply, StopState} = do_stop({terminate, Reason}, State),
+            StopState;
         _ ->
             State
     end,
@@ -734,26 +744,6 @@ do_async_op({set_enabled, Enabled}, #state{session=#obj_session{obj=Obj}}=State)
             do_update(#{enabled=>Enabled}, State)
     end,
     noreply(do_enabled(Enabled, State2));
-
-do_async_op({remove, Reason}, #state{srv_id=SrvId, session=#obj_session{obj=Obj}=Session}=State) ->
-    ?DEBUG("received REMOVE: ~p", [Reason], State),
-    {Code, Txt} = nkdomain_util:error_code(SrvId, Reason),
-    Obj2 = ?ADD_TO_OBJ(
-        #{
-            destroyed_time => nklib_util:m_timestamp(),
-            destroyed_code => Code,
-            destroyed_reason => Txt
-        }, Obj),
-    Session2 = Session#obj_session{obj=Obj2, is_dirty=false},
-    {_Res, State2} = do_save(State#state{session=Session2}),
-    State3 = case handle(object_remove, [Reason], State2) of
-        {ok, RemState} ->
-            RemState;
-        {error, Error, RemState} ->
-            ?LLOG(warning, "could not remote object: ~p", [Error], RemState),
-            RemState
-    end,
-    do_stop(object_removed, State3);
 
 do_async_op({apply, Fun}, #state{session=Session}=State) ->
     State2 = try Fun(Session) of
@@ -811,19 +801,63 @@ do_check_expire(#state{session=#obj_session{obj=Obj}}) ->
 
 %% @private
 do_save(#state{session=#obj_session{is_dirty=false}}=State) ->
-    {ok, State};
+    State;
 
-do_save(#state{session=Session, save_tries=Tries}=State) ->
-    ?DEBUG("saving object", [], State),
-    case handle(object_save, [], State) of
-        {ok, State2} ->
-            Session2 = Session#obj_session{is_dirty=false},
-            {ok, State2#state{save_tries=0, session=Session2}};
-        {error, Error, State2} ->
-            ?LLOG(warning, "could not save object: ~p", [Error], State2),
-            erlang:send_after(?SAVE_RETRY, self(), nkdomain_do_save),
-            {error, State2#state{save_tries=Tries+1}}
+do_save(#state{save_op=Op}=State) ->
+    ?DEBUG("~p object", [Op], State),
+    case Op of
+        save ->
+            case handle(object_save, [], State) of
+                {ok, State2} ->
+                    do_save_ok(State2);
+                {error, Error, State2} ->
+                    do_save_error(Error, State2)
+            end;
+        archive ->
+            case handle(object_archive, [], State) of
+                {ok, State2} ->
+                    do_save(State2#state{save_op=remove});
+                {error, Error, State2} ->
+                    do_save_error(Error, State2)
+            end;
+        remove ->
+            case handle(object_remove, [], State) of
+                {ok, State2} ->
+                    do_save_ok(State2);
+                {error, Error, State2} ->
+                    do_save_error(Error, State2)
+            end
     end.
+
+
+%% @private
+do_save_ok(#state{session=Session}=State) ->
+    Session2 = Session#obj_session{is_dirty=false},
+    State#state{save_op=none, save_tries=0, session=Session2}.
+
+
+%% @private
+do_save_error(Error, #state{save_op=Op, save_tries=Tries}=State) ->
+    ?LLOG(warning, "could not ~p object: ~p", [Op, Error], State),
+    erlang:send_after(?SAVE_RETRY, self(), nkdomain_save),
+    State#state{save_tries=Tries+1}.
+
+
+%% @private
+do_remove(Reason, #state{srv_id=SrvId, session=#obj_session{obj=Obj}=Session}=State) ->
+    {Code, Txt} = nkdomain_util:error_code(SrvId, Reason),
+    Obj2 = ?ADD_TO_OBJ(
+        #{
+            destroyed_time => nklib_util:m_timestamp(),
+            destroyed_code => Code,
+            destroyed_reason => Txt
+        }, Obj),
+    State2 = State#state{session=Session#obj_session{obj=Obj2, is_dirty=true}},
+    State3 = case handle(object_removed, [Reason], State2) of
+        {ok, RemState} -> RemState#state{save_op=remove};
+        {archive, RemState} -> RemState#state{save_op=archive}
+    end,
+    do_save(State3).
 
 
 %% @private
@@ -831,29 +865,40 @@ do_stop(_Reason, #state{session=#obj_session{status={stopped, _Reason}}}=State) 
     %% Stop already sent, timer is running
     noreply(State);
 
-do_stop(Reason, #state{srv_id=SrvId, session=Session, started=Started}=State) ->
+do_stop(Reason, #state{srv_id=SrvId, started=Started}=State) ->
     ?DEBUG("stopped: ~p", [Reason], State),
     {ok, State2} = handle(object_stop, [Reason], State#state{stop_reason=Reason}),
     {Code, Txt} = nkdomain_util:error_code(SrvId, Reason),
     State3 = do_add_timelog(#{msg=>stopped, code=>Code, reason=>Txt}, State2),
     % Give time for possible registrations to success and capture stop event
+    State4 = do_status({stopped, Reason}, State3),
     timer:sleep(100),
-    State4 = do_event({stopped, Reason}, State3),
+    State5 = do_event({stopped, Reason}, State4),
     Now = nklib_util:m_timestamp(),
     case (Started + ?MIN_STARTED_TIME) - Now of
         Time when Time > 0 ->
             % Save a minimum running time
-            erlang:send_after(Time, self(), nkdomain_destroy),
-            noreply(State4);
+            erlang:send_after(Time, self(), nkdomain_destroy);
         _ ->
-            case Session of
-                #obj_session{is_dirty=true} ->
-                    ?LLOG(notice, "cannot stopping, object is dirty", [], State4),
-                    self() ! nkdomain_destroy,
-                    noreply(State4);
-                _ ->
-                    {stop, normal, State4}
-            end
+            % Process any remaining message
+            self() ! nkdomain_destroy
+    end,
+    noreply(State5).
+
+
+%% @private
+do_destroy(#state{session=#obj_session{is_dirty=false}}=State) ->
+    {stop, normal, State};
+
+do_destroy(#state{save_tries=Tries}=State) ->
+    case Tries > ?MAX_SAVE_RETRIES of
+        true ->
+            ?LLOG(warning, "could not save object, giving up", [], State),
+            {stop, normal, State};
+        false ->
+            ?LLOG(notice, "cannot save object, retrying", [], State),
+            erlang:send_after(?SAVE_RETRY, self(), nkdomain_destroy),
+            noreply(State)
     end.
 
 
@@ -879,11 +924,15 @@ do_check_child(ObjModule, ObjPath, State) ->
 
 
 %% @private
+do_update(_Update, #state{save_op=Op}=State) when Op==remove; Op==archive ->
+    ?LLOG(notice, "received update command in ~p save state", [Op], State),
+    State;
+
 do_update(Update, #state{session=#obj_session{obj=Obj}=Session}=State) ->
     Obj2 = ?ADD_TO_OBJ(Update, Obj),
     Session2 = Session#obj_session{obj=Obj2, is_dirty=true},
     {ok, State2} = handle(object_updated, [Update], State#state{session=Session2}),
-    {_Res, State3} = do_save(State2),
+    State3 = do_save(State2),
     do_event({updated, Update}, State3).
 
 
@@ -927,6 +976,37 @@ do_event(Event, State) ->
     {ok, State3} = handle(object_event, [Event], State2),
     State3.
 
+
+%% @private
+do_status(Status, #state{session=#obj_session{status=Status}}=State) ->
+    noreply(State);
+
+do_status(Status, #state{session=#obj_session{status=OldStatus}=Session}=State) ->
+    ?DEBUG("status ~p -> ~p", [OldStatus, Status], State),
+    State2 = State#state{session=Session#obj_session{status=Status}},
+    {ok, State3} = handle(object_status, [Status], State2),
+    do_event({status, Status}, State3).
+
+
+%% @private
+do_check_links_down(#state{session=#obj_session{module=nkdomain_domain}}=State) ->
+    noreply(State);
+
+do_check_links_down(#state{childs=Childs}=State) when Childs /= [] ->
+    noreply(State);
+
+do_check_links_down(State) ->
+    case links_is_empty(State) of
+        true ->
+            case handle(object_all_links_down, [], State) of
+                {ok, State2} ->
+                    noreply(State2);
+                {stop, Reason, State2} ->
+                    do_stop(Reason, State2)
+                end;
+        false ->
+            noreply(State)
+    end.
 
 
 %% ===================================================================
@@ -1040,6 +1120,11 @@ links_add(Link, #state{links=Links}=State) ->
 %% @private
 links_remove(Link, #state{links=Links}=State) ->
     State#state{links=nklib_links:remove(Link, Links)}.
+
+
+%% @private
+links_is_empty(#state{links=Links}) ->
+    nklib_links:is_empty(Links).
 
 
 %% @private

@@ -23,13 +23,16 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -export([plugin_deps/0, service_init/2, service_handle_cast/2]).
 -export([object_base_mapping/0, object_base_syntax/0]).
--export([object_load/2, object_save/1, object_remove/2, object_parse/3, object_store/1,
-         object_updated/2, object_enabled/1, object_sync_op/3, object_async_op/2]).
+-export([object_load/2, object_save/1, object_remove/1, object_parse/3, object_archive/1,
+         object_store/1, object_updated/2, object_enabled/1, object_removed/2,
+         object_sync_op/3, object_async_op/2,
+         object_status/2, object_all_links_down/1]).
 -export([object_init/1, object_terminate/2, object_event/2, object_reg_event/3,
          object_reg_down/3, object_start/1, object_stop/2,
          object_handle_call/3, object_handle_cast/2, object_handle_info/2]).
 -export([object_store_reload_types/1, object_store_read_raw/2, object_store_save_raw/3,
-         object_store_remove_raw/2, object_store_find_path/2, object_store_find_childs/3]).
+         object_store_remove_raw/2, object_store_archive_raw/3,
+         object_store_find_path/2, object_store_find_childs/3]).
 
 -define(LLOG(Type, Txt, Args), lager:Type("NkDOMAIN Callbacks: "++Txt, Args)).
 
@@ -135,10 +138,10 @@ object_save(#obj_session{srv_id=SrvId, obj_id=ObjId, module=Module, obj=Obj}=Ses
 
 
 %% @doc Called to save the remove the object from disk
--spec object_remove(Reason::term(), session()) ->
+-spec object_remove(session()) ->
     {ok, session()} | {error, term(), session()}.
 
-object_remove(_Reason, #obj_session{srv_id=SrvId, obj_id=ObjId}=Session) ->
+object_remove(#obj_session{srv_id=SrvId, obj_id=ObjId}=Session) ->
     case SrvId:object_store_remove_raw(SrvId, ObjId) of
         ok ->
             {ok, Session};
@@ -165,6 +168,23 @@ object_parse(SrvId, Module, Map) ->
     end.
 
 
+%% @doc Called to save the archived version to disk
+-spec object_archive(session()) ->
+    {ok, session()} | {error, term(), session()}.
+
+object_archive(#obj_session{srv_id=SrvId, obj_id=ObjId, module=Module, obj=Obj}=Session) ->
+    BaseKeys = maps:keys(SrvId:object_base_mapping()),
+    Store1 = maps:with(BaseKeys, Obj),
+    Store2 = SrvId:object_store(Session),
+    Store3 = Store1#{Module=>Store2},
+    case SrvId:object_store_archive_raw(SrvId, ObjId, Store3) of
+        ok ->
+            {ok, Session};
+        {error, Error} ->
+            {error, Error, Session}
+    end.
+
+
 %% @doc Called to get a "storable" version of the object
 -spec object_store(session()) -> map().
 
@@ -186,6 +206,14 @@ object_updated(_Update, Session) ->
 
 object_enabled(Session) ->
     {ok, Session}.
+
+
+%% @doc Called when an object is removed
+-spec object_removed(term(), session()) ->
+    {ok|archive, session()}.
+
+object_removed(_Reason, Session) ->
+    {archive, Session}.
 
 
 %% @doc
@@ -210,6 +238,20 @@ object_async_op(_Op, _Session) ->
     continue.
 
 
+%% @doc
+-spec object_status(term(), session()) ->
+    {ok, session()}.
+
+object_status(_Status, Session) ->
+    {ok, Session}.
+
+
+%% @doc
+-spec object_all_links_down(session()) ->
+    {ok, session()} | {stop, nkservice:error()}.
+
+object_all_links_down(Session) ->
+    {ok, Session}.
 
 
 %% ===================================================================
@@ -355,6 +397,12 @@ object_store_find_childs(_SrvId, _Path, _Spec) ->
     {error, store_not_implemented}.
 
 
+%% @doc
+-spec object_store_archive_raw(nkservice:id(), nkdomain:obj_id(), map()) ->
+    ok | {error, term()}.
+
+object_store_archive_raw(_SrvId, _ObjId, _Map) ->
+    {error, store_not_implemented}.
 
 
 %% ===================================================================

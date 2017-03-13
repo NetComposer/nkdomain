@@ -95,8 +95,6 @@ start(_Type, _Args) ->
             %% ok = riak_core_ring_events:add_guarded_handler(nkdomain_ring_handler, []),
             {ok, Vsn} = application:get_key(nkdomain, vsn),
             lager:info("NkDOMAIN v~s has started.", [Vsn]),
-            Classes = [alias, domain, group, user, service, nodeset, token],
-            nkdomain_util:register_classes(Classes),
             register_types(),
             case get(start_root) of
                 true ->
@@ -149,7 +147,13 @@ start_root() ->
     end,
     case nkservice:start(root, Spec2) of
         {ok, _} ->
-            lager:info("Root service started");
+            lager:info("Root service started"),
+            case nkdomain_obj:load(root, <<"root">>, #{}) of
+                {ok, nkdomain_domain, <<"root">>, _Pid} ->
+                    ok;
+                {error, Error} ->
+                    lager:error("Could not load ROOT domain: ~p", [Error])
+            end;
         {error, Error} ->
             lager:error("Could not start root service: ~p", [Error]),
             error(start_root_error)
