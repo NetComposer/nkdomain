@@ -152,8 +152,8 @@ object_store_find_alias(SrvId, Alias) ->
 
 
 %% @doc
-object_store_find_childs(SrvId, Path, Spec) ->
-    find_obj_childs(SrvId, Path, Spec).
+object_store_find_childs(SrvId, ObjId, Opts) ->
+    find_obj_childs(SrvId, ObjId, Opts).
 
 
 %% @doc
@@ -251,10 +251,13 @@ remove_obj(SrvId, ObjId) ->
 find_obj_path(SrvId, Path) ->
     case nkdomain_util:is_path(Path) of
         {true, Path2} ->
-            Spec = #{
-                filter => #{<<"path">> => escape_url(Path2)}
+            Query = #{
+                constant_score => #{
+                    filter => #{term => #{path => Path2}}
+                }
             },
-            case find_objs(SrvId, Spec) of
+            lager:info("Query: ~s", [nklib_json:encode_pretty(Query)]),
+            case find_objs(SrvId, Query, #{}) of
                 {ok, 0, []} ->
                     {error, object_not_found};
                 {ok, 1, [{Module, ObjId}]} ->
@@ -269,30 +272,33 @@ find_obj_path(SrvId, Path) ->
 
 
 %% @doc Finds all objects on a path
--spec find_obj_childs(nkservice:id(), nkdomain:obj_id(), nkelastic_api:list_opts()) ->
+-spec find_obj_childs(nkservice:id(), nkdomain:obj_id(),
+                      nkelastic_api:search_opts() | #{type:=nkdomain:type()}) ->
     {ok, integer(), [{nkdomain:type(), nkdomain:obj_id()}]}.
 
-find_obj_childs(SrvId, ParentId, Spec) ->
-    Filter = maps:get(filter, Spec, #{}),
-    Spec2 = Spec#{
-        filter => Filter#{<<"parent_id">> => nklib_util:to_binary(ParentId)}
-    },
-    find_objs(SrvId, Spec2).
+find_obj_childs(SrvId, ParentId, Opts) ->
+    Must = [
+        #{term => #{parent_id => ParentId}} |
+        find_objs_filter(Opts)
+    ],
+    Query = query_filter(Must),
+    find_objs(SrvId, Query, Opts).
 
 
 %% @doc Finds all objects on a path
 -spec find_obj_all_childs(nkservice:id(), nkdomain:domain(), nkelastic_api:list_opts()) ->
     {ok, integer(), [{nkdomain:type(), nkdomain:obj_id()}]}.
 
-find_obj_all_childs(SrvId, Path, Spec) ->
+find_obj_all_childs(SrvId, Path, Opts) ->
     case nkdomain_util:is_path(Path) of
         {true, Path2} ->
-            Path3 = list_to_binary([Path2, "*"]),
-            Filter = maps:get(filter, Spec, #{}),
-            Spec2 = Spec#{
-                filter => Filter#{<<"path">> => escape_url(Path3)}
-            },
-            find_objs(SrvId, Spec2);
+            Must = [
+                #{prefix => #{path => Path2}} |
+                find_objs_filter(Opts)
+            ],
+            Query = query_filter(Must),
+            lager:info("Query: ~s", [nklib_json:encode_pretty(Query)]),
+            find_objs(SrvId, Query, Opts);
         false ->
             {error, invalid_path}
     end.
@@ -304,10 +310,10 @@ find_obj_all_childs(SrvId, Path, Spec) ->
     {error, object_not_found}.
 
 find_obj_alias(SrvId, Alias) ->
-    Spec = #{
-        filter => #{<<"aliases">> => nklib_util:to_binary(Alias)}
-    },
-    find_objs(SrvId, Spec).
+    Must = [
+        #{term => #{aliases => nklib_util:to_binary(Alias)}}
+    ],
+    find_objs(SrvId, query_filter(Must), #{}).
 
 
 %% @doc Archive an object
@@ -403,15 +409,50 @@ get_templates(SrvId) ->
 
 
 %% @private
-find_objs(SrvId, Spec) ->
-    Spec2 = Spec#{
+find_objs_filter(Opts) ->
+    lists:flatten([
+        case Opts of
+            #{module:=Module} -> #{term => #{module => Module}};
+            _ -> []
+        end,
+        case Opts of
+            #{type:=Type} -> #{term => #{type => Type}};
+            _ -> []
+        end
+    ]).
+
+
+%% @private
+query_filter([Single]) ->
+    #{
+        constant_score => #{
+            filter => Single
+        }
+    };
+
+query_filter(Must) ->
+    #{
+        constant_score => #{                        % Compound query and remove scores
+            filter => #{                            % constant_score only supports filter?
+                bool => #{                          % we want several filters
+                    filter => Must
+                }
+            }
+        }
+    }.
+
+
+
+%% @private
+find_objs(SrvId, Query, Opts) ->
+    Opts2 = Opts#{
         fields => [<<"module">>]
     },
     #es_config{index=Index, type=IdxType} = SrvId:config_nkdomain_store_es(),
-    case nkelastic_api:list(SrvId, Index, IdxType, Spec2) of
+    case nkelastic_api:search(SrvId, Index, IdxType, Query, Opts2) of
         {ok, N, List} ->
             Data = lists:map(
-                fun(#{<<"_id">>:=ObjId, <<"module">>:=BModule}) ->
+                fun(#{<<"_id">>:=ObjId, <<"_source">>:=#{<<"module">>:=BModule}}) ->
                     case catch binary_to_existing_atom(BModule, utf8) of
                         {'EXIT', _} ->
                             ?LLOG(warning, "Invalid module in store: ~s", [BModule]),
@@ -423,20 +464,6 @@ find_objs(SrvId, Spec) ->
                 List),
             {ok, N, Data};
         {error, Error} ->
-            ?LLOG(notice, "Error calling find_objs (~p): ~p", [Spec, Error]),
+            ?LLOG(notice, "Error calling find_objs (~p, ~p): ~p", [Query, Opts, Error]),
             {ok, 0, []}
     end.
-
-
-%% @private
-escape_url(Url) ->
-    escape_url(nklib_util:to_list(Url), []).
-
-
-%% @private
-escape_url([], Acc) ->
-    list_to_binary(lists:reverse(Acc));
-escape_url([$/|Rest], Acc) ->
-    escape_url(Rest, [$/, 92 | Acc]);
-escape_url([Char|Rest], Acc) ->
-    escape_url(Rest, [Char|Acc]).
