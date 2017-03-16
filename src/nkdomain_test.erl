@@ -96,7 +96,7 @@ user3_create() ->
         path => <<"/sub1/users/u3">>,
         type => user,
         module => nkdomain_user,
-        parent_id => <<"sub1">>,
+        parent_id => <<"sub1">> ,
         description => <<"User 3">>,
         aliases => <<"user3@domain.com">>,
         nkdomain_user => #{

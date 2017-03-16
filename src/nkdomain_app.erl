@@ -24,7 +24,6 @@
 -behaviour(application).
 
 -export([start/0, start/1, start/2, stop/1]).
--export([start_root/0]).
 -export([get/1, put/2, del/1]).
 
 -include("nkdomain.hrl").
@@ -66,6 +65,8 @@ start(_Type, _Args) ->
         elastic_url => binary,
         elastic_user => binary,
         elastic_pass => binary,
+        api_server => binary,
+
         user_timeout => {integer, 1, none},
         alias_timeout => {integer, 1, none},
         token_timeout => {integer, 1, none},
@@ -76,6 +77,8 @@ start(_Type, _Args) ->
         '__defaults' => #{
             start_root => false,
             elastic_url => <<"http://127.0.0.1:9200/">>,
+            api_server => <<"ws:all:9202/apiws, http:all:9202/api">>,
+
             user_timeout => 5000,
             alias_timeout => 5000,
             token_timeout => 60 * 60 * 1000,
@@ -101,7 +104,7 @@ start(_Type, _Args) ->
                     spawn_link(
                         fun() ->
                             timer:sleep(5000),
-                            start_root()
+                            nkdomain_root:start()
                         end);
                 false ->
                     lager:warning("Root domain not started")
@@ -121,43 +124,9 @@ stop(_) ->
 
 %% @doc Register our types
 register_types() ->
-    ok = nkdomain_types:register_type(nkdomain_domain),
-    ok = nkdomain_types:register_type(nkdomain_user).
+    ok = nkdomain_types:register_type(nkdomain_domain, domain),
+    ok = nkdomain_types:register_type(nkdomain_user, user).
 
-
-%% @doc Starts the root service
-start_root() ->
-    Spec1 = #{
-        plugins => [nkelastic, nkdomain, nkchat, nkdomain_store_es],
-        domain_elastic_url => get(elastic_url),
-        debug => [
-            {nkdomain_obj, all}
-        ]
-    },
-    User = get(elastic_user),
-    Pass = get(elastic_pass),
-    Spec2 = case is_binary(User) and is_binary(Pass) of
-        true ->
-            Spec1#{
-                domain_elastic_user => User,
-                domain_elastic_pass => Pass
-            };
-        false ->
-            Spec1
-    end,
-    case nkservice:start(root, Spec2) of
-        {ok, _} ->
-            lager:info("Root service started"),
-            case nkdomain_obj:load(root, <<"root">>, #{}) of
-                {ok, nkdomain_domain, <<"root">>, _Pid} ->
-                    ok;
-                {error, Error} ->
-                    lager:error("Could not load ROOT domain: ~p", [Error])
-            end;
-        {error, Error} ->
-            lager:error("Could not start root service: ~p", [Error]),
-            error(start_root_error)
-    end.
 
 %% @doc gets a configuration value
 get(Key) ->

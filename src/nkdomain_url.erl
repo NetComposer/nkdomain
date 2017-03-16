@@ -20,10 +20,23 @@
 
 -module(nkdomain_url).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
-
+-compile(export_all).
 
 %% ===================================================================
 %% Public
 %% ===================================================================
 
+
+t1() ->
+    Spec = #{
+        aggs => #{
+            types => #{
+                terms => #{
+                    field => type
+                }
+            }
+        },
+        size => 0
+    },
+    nkelastic_api:search(axft4mi, "nkobject*", <<>>, <<>>, Spec).
 

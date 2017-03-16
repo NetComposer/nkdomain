@@ -39,6 +39,7 @@
 -define(LLOG(Type, Txt, Args), lager:Type("NkDOMAIN Callbacks: "++Txt, Args)).
 
 -include("nkdomain.hrl").
+-include_lib("nkapi/include/nkapi.hrl").
 
 
 %% ===================================================================
@@ -454,6 +455,26 @@ object_store_find_alias(_SrvId, _Alias) ->
 
 object_store_archive_raw(_SrvId, _ObjId, _Map) ->
     {error, store_not_implemented}.
+
+
+
+%% ===================================================================
+%% API Server
+%% ===================================================================
+
+%%%% @doc
+%%api_server_allow(_Req, State) ->
+%%    {true, State}.
+
+
+%%%% @doc Called on login
+%%api_server_login(#{user:=User, password:=<<"1234">>, meta:=Meta}, State) ->
+%%    {true, User, Meta, State};
+%%
+%%api_server_login(_Data, _State) ->
+%%    continue.
+
+
 
 
 %% ===================================================================

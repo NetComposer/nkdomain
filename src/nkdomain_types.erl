@@ -23,7 +23,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -behaviour(gen_server).
 
--export([get_modules/0, register_type/1]).
+-export([get_module/1, get_modules/0, get_type/1, get_types/0, register_type/2]).
 -export([make_syntax/3, make_syntax_fun/3]).
 -export([start_link/0]).
 -export([init/1, terminate/2, code_change/3, handle_call/3,
@@ -45,23 +45,44 @@
 %% ===================================================================
 
 
-%% @doc Gets all registered types
+%% @doc Finds a type's module
+-spec get_module(nkdomain:type()) ->
+    module() | undefined.
+
+get_module(Type) ->
+    lookup({type, Type}, undefined).
+
+
+%% @doc Gets all registered modules
 -spec get_modules() ->
     [module()].
 
 get_modules() ->
-    case ets:lookup(?MODULE, all_modules) of
-        [] -> [];
-        [{_, List}] -> List
-    end.
+    lookup(all_modules, []).
+
+
+%% @doc Finds a module's type
+-spec get_type(module()) ->
+    nkdomain:type() | undefined.
+
+get_type(Module) ->
+    lookup({module, Module}, undefined).
+
+
+%% @doc Gets all registered types
+-spec get_types() ->
+    [nkdomain:type()].
+
+get_types() ->
+    lookup(all_types, []).
 
 
 %% @doc Gets the obj module for a type
--spec register_type(module()) ->
+-spec register_type(module(), nkdomain:type()) ->
     ok.
 
-register_type(Module) ->
-    gen_server:call(?MODULE, {register_type, Module}).
+register_type(Module, Type) ->
+    gen_server:call(?MODULE, {register_type, Module, Type}).
 
 
 %% @doc
@@ -133,11 +154,16 @@ init([]) ->
     {noreply, #state{}} | {reply, term(), #state{}} |
     {stop, Reason::term(), #state{}} | {stop, Reason::term(), Reply::term(), #state{}}.
 
-handle_call({register_type, Module}, _From, State) ->
+handle_call({register_type, Module, Type}, _From, State) ->
     AllModules1 = get_modules(),
     AllModules2 = lists:usort([Module|AllModules1]),
-    ets:insert(?MODULE, {all_modules, AllModules2}),
-    %%    ets:insert(?MODULE, {{type, Type}, Module}),
+    AllTypes1 = get_types(),
+    AllTypes2 = lists:usort([Type|AllTypes1]),
+    ets:insert(?MODULE, [
+        {all_modules, AllModules2},
+        {all_types, AllTypes2},
+        {{type, Type}, Module},
+        {{module, Module}, Type}]),
     {reply, ok, State};
 
 handle_call(Msg, _From, State) ->
@@ -183,6 +209,14 @@ terminate(_Reason, _State) ->
 %% ===================================================================
 %% Internal
 %% ===================================================================
+
+%% @private
+lookup(Term, Empty) ->
+    case ets:lookup(?MODULE, Term) of
+        [] -> Empty;
+        [{_, Val}] -> Val
+    end.
+
 
 %% @private
 to_bin(Term) -> nklib_util:to_binary(Term).

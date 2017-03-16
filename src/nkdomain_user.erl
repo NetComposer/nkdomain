@@ -25,8 +25,8 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([login/4]).
--export([object_get_desc/0, object_get_mapping/0, object_add_load_syntax/1, object_add_update_syntax/1,
-         object_store/1]).
+-export([object_get_desc/0, object_get_mapping/0, object_add_load_syntax/1,
+         object_add_update_syntax/1, object_store/1]).
 -export([user_pass/1]).
 
 -include("nkdomain.hrl").

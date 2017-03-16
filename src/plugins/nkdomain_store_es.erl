@@ -450,7 +450,7 @@ find_objs(SrvId, Query, Opts) ->
     },
     #es_config{index=Index, type=IdxType} = SrvId:config_nkdomain_store_es(),
     case nkelastic_api:search(SrvId, Index, IdxType, Query, Opts2) of
-        {ok, N, List} ->
+        {ok, N, List, _Aggs, _Meta} ->
             Data = lists:map(
                 fun(#{<<"_id">>:=ObjId, <<"_source">>:=#{<<"module">>:=BModule}}) ->
                     case catch binary_to_existing_atom(BModule, utf8) of
