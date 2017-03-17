@@ -762,7 +762,7 @@ do_save_error(Error, #state{save_op=Op, save_tries=Tries}=State) ->
 
 %% @private
 do_remove(Reason, #state{srv_id=SrvId, session=#obj_session{obj=Obj}=Session}=State) ->
-    {Code, Txt} = nkdomain_util:error_code(SrvId, Reason),
+    {Code, Txt} = nkapi_util:api_error(SrvId, Reason),
     Obj2 = ?ADD_TO_OBJ(
         #{
             destroyed_time => nklib_util:m_timestamp(),
@@ -784,7 +784,7 @@ do_stop(_Reason, #state{session=#obj_session{status={stopped, _Reason}}}=State) 
 
 do_stop(Reason, #state{srv_id=SrvId, started=Started}=State) ->
     {ok, State2} = handle(object_stop, [Reason], State#state{stop_reason=Reason}),
-    {Code, Txt} = nkdomain_util:error_code(SrvId, Reason),
+    {Code, Txt} = nkapi_util:api_error(SrvId, Reason),
     State3 = do_add_timelog(#{msg=>stopped, code=>Code, reason=>Txt}, State2),
     % Give time for possible registrations to success and capture stop event
     State4 = do_status({stopped, Reason}, State3),

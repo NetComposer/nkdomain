@@ -59,9 +59,10 @@ api_error({could_not_load_parent, ObjId})   -> {"Object could not load parent ~s
 api_error(invalid_object_id)                -> "Invalid object id";
 api_error(invalid_object_type)              -> "Invalid object type";
 api_error(invalid_object_path)              -> "Invalid object path";
-api_error(object_not_found) 		        -> "Object not found";
-api_error(object_is_stopped) 		        -> "Object is stopped";
 api_error(object_already_exists)            -> "Object already exists";
+api_error(object_is_stopped) 		        -> "Object is stopped";
+api_error(object_not_found) 		        -> "Object not found";
+api_error(object_removed) 		            -> "Object removed";
 api_error(_)   		                        -> continue.
 
 
