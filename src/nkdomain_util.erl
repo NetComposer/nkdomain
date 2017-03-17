@@ -63,16 +63,16 @@ is_path(Path) ->
 
 %% @doc
 %% /domain/users/user1 -> {ok, <<"/domain">>, <<"users/user1">>
--spec get_parts(module(), nkdomain:path()) ->
+-spec get_parts(nkdomain:type(), nkdomain:path()) ->
     {ok, Base::nkdomain:path(), Name::binary()} | {error, term()}.
 
-get_parts(Module, Path) ->
+get_parts(Type, Path) ->
     case is_path(Path) of
         {true, Path2} ->
             case lists:reverse(binary:split(Path2, <<"/">>, [global])) of
                 [<<>>|_] ->
                     {error, invalid_name};
-                [ObjName|Parts] when Module==nkdomain_domain ->
+                [ObjName|Parts] when Type==<<"domain">> ->
                     case nklib_util:bjoin(lists:reverse(Parts), <<"/">>) of
                         <<>> ->
                             {ok, <<"/">>, ObjName};
@@ -80,27 +80,22 @@ get_parts(Module, Path) ->
                             {ok, Base, ObjName}
                     end;
                 [ObjName, Class|Parts] ->
-                    case catch Module:object_get_desc() of
-                        #{type:=Type} ->
-                            case <<Type/binary, "s">> of
-                                 Class ->
-                                    case nklib_util:bjoin(lists:reverse(Parts), <<"/">>) of
-                                        <<>> ->
-                                            {ok, <<"/">>, <<Class/binary, $/, ObjName/binary>>};
-                                        Base ->
-                                            {ok, Base, <<Class/binary, $/, ObjName/binary>>}
-                                    end;
-                                _ ->
-                                    {error, invalid_path}
+                    case <<Type/binary, "s">> of
+                         Class ->
+                            case nklib_util:bjoin(lists:reverse(Parts), <<"/">>) of
+                                <<>> ->
+                                    {ok, <<"/">>, <<Class/binary, $/, ObjName/binary>>};
+                                Base ->
+                                    {ok, Base, <<Class/binary, $/, ObjName/binary>>}
                             end;
                         _ ->
-                            {error, invalid_path}
+                            {error, invalid_object_path}
                     end;
                 _ ->
-                    {error, invalid_path}
+                    {error, invalid_object_path}
             end;
         false ->
-            {error, invalid_path}
+            {error, invalid_object_path}
     end.
 
 

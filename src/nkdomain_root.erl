@@ -63,7 +63,7 @@ start() ->
         {ok, _} ->
             lager:info("Root service started"),
             case nkdomain_obj:load(root, <<"root">>, #{}) of
-                {ok, nkdomain_domain, <<"root">>, _Pid} ->
+                {ok, <<"domain">>, <<"root">>, _Pid} ->
                     ok;
                 {error, Error} ->
                     lager:error("Could not load ROOT domain: ~p", [Error])

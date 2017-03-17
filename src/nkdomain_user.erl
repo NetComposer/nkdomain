@@ -25,8 +25,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([login/4]).
--export([object_get_desc/0, object_get_mapping/0, object_add_load_syntax/1,
-         object_add_update_syntax/1, object_store/1]).
+-export([object_get_info/0, object_mapping/0, object_syntax/1]).
 -export([user_pass/1]).
 
 -include("nkdomain.hrl").
@@ -69,15 +68,14 @@ login(SrvId, Login, Pass, Opts) ->
 
 
 %% @private
-object_get_desc() ->
+object_get_info() ->
     #{
-        type => <<"user">>,
-        name => <<"user">>
+        type => <<"user">>
     }.
 
 
 %% @private
-object_get_mapping() ->
+object_mapping() ->
     #{
         name => #{
             type => text,
@@ -92,29 +90,17 @@ object_get_mapping() ->
 
 
 %% @private
-object_add_load_syntax(Base) ->
-    Base2 = nkdomain_types:make_syntax(?MODULE, [name, surname], Base),
-    Base2#{
-        ?MODULE => #{
-            name => binary,
-            surname => binary,
-            password => fun ?MODULE:user_pass/1
-        }
+object_syntax(update) ->
+    #{
+        name => binary,
+        surname => binary,
+        password => fun ?MODULE:user_pass/1
+    };
+
+object_syntax(load) ->
+    (object_syntax(update))#{
+        '__mandatory' => [name, surname]
     }.
-
-
-%% @private
-object_add_update_syntax(Base) ->
-    object_add_load_syntax(Base).
-
-
-%% @private
-object_store(#{?MODULE:=User}) ->
-    Keys = maps:keys(object_get_mapping()),
-    maps:with(Keys, User);
-
-object_store(_) ->
-    #{}.
 
 
 

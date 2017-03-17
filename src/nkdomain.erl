@@ -41,7 +41,7 @@
 
 -type path() :: [binary()].
 
--type type() :: module().
+-type type() :: binary().
 
 -type class() :: atom().
 

@@ -81,8 +81,8 @@ get_types() ->
 -spec register_type(module(), nkdomain:type()) ->
     ok.
 
-register_type(Module, Type) ->
-    gen_server:call(?MODULE, {register_type, Module, Type}).
+register_type(Module, Type) when is_atom(Module)->
+    gen_server:call(?MODULE, {register_type, Module, to_bin(Type)}).
 
 
 %% @doc
@@ -100,7 +100,7 @@ make_syntax(Module, Mandatory, Base) ->
 %% @private
 make_syntax_fun(type, Type, #{meta:=#{module:=Module}}) ->
     Type2 = to_bin(Type),
-    case Module:object_get_desc() of
+    case Module:object_get_info() of
         #{type:=Type2} ->
             ok;
         _ ->
@@ -110,7 +110,7 @@ make_syntax_fun(type, Type, #{meta:=#{module:=Module}}) ->
 
 make_syntax_fun(path, Path, #{meta:=#{module:=Module}}) ->
     Path2 = to_bin(Path),
-    #{type:=Type} = Module:object_get_desc(),
+    #{type:=Type} = Module:object_get_info(),
     case lists:reverse(binary:split(Path2, <<"/">>, [global])) of
         [_Name, Types|_] ->
             case <<Type/binary, $s>> of

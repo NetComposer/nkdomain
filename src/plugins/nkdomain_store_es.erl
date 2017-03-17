@@ -24,7 +24,8 @@
 
 -export([plugin_deps/0, plugin_syntax/0, plugin_defaults/0, plugin_config/2]).
 -export([object_store_reload_types/1, object_store_read_raw/2, object_store_save_raw/3,
-         object_store_remove_raw/2, object_store_find_path/2, object_store_find_childs/3,
+         object_store_remove_raw/2]).
+-export([object_store_find_obj_id/2, object_store_find_path/2, object_store_find_childs/3,
         object_store_find_all_childs/3, object_store_find_alias/2]).
 -export([object_store_archive_raw/3]).
 -export([elastic_get_indices/2, elastic_get_mappings/3, elastic_get_aliases/3,
@@ -143,8 +144,14 @@ object_store_archive_raw(SrvId, ObjId, Map) ->
 
 
 %% @doc
+object_store_find_obj_id(SrvId, ObjId) ->
+    find_obj_id(SrvId, ObjId).
+
+
+%% @doc
 object_store_find_path(SrvId, Path) ->
-    find_obj_path(SrvId, Path).
+    find_path(SrvId, Path).
+
 
 %% @doc
 object_store_find_alias(SrvId, Alias) ->
@@ -214,19 +221,12 @@ remove_index(SrvId) ->
     nkelastic_api:delete_index(SrvId, Index).
 
 
-
 %% @doc Reads an object
 read_obj(SrvId, ObjId) ->
     #es_config{index=Index, type=IdxType} = SrvId:config_nkdomain_store_es(),
     case nkelastic_api:get(SrvId, Index, IdxType, ObjId) of
-        {ok, #{<<"module">>:=BModule}=Data, Vsn} ->
-            case catch binary_to_existing_atom(BModule, utf8) of
-                Module when is_atom(Module) ->
-                    {ok, Module, Data#{'_store_vsn'=>Vsn}};
-                _ ->
-                    ?LLOG(notice, "invalid module loaded: ~p", [BModule]),
-                    {error, invalid_type}
-            end;
+        {ok, Data, Vsn} ->
+            {ok, Data#{'_store_vsn'=>Vsn}};
         {error, Error} ->
             {error, Error}
     end.
@@ -245,26 +245,38 @@ remove_obj(SrvId, ObjId) ->
 
 
 %% @doc Finds an object from its path
--spec find_obj_path(nkservice:id(), nkdomain:domain()) ->
+-spec find_obj_id(nkservice:id(), nkdomain:obj_id()) ->
+    {ok, nkdomain:type(), nkdomain:path()} | {error, object_not_found|term()}.
+
+find_obj_id(SrvId, ObjId) ->
+    Query = query_filter(#{term => #{obj_id => ObjId}}),
+    case find_objs(SrvId, Query, #{}) of
+        {ok, 0, []} ->
+            {error, object_not_found};
+        {ok, 1, [{Type, _ObjId, Path}]} ->
+            {ok, Type, Path};
+        {ok, _, [{Type, _ObjId, Path}|_]} ->
+            ?LLOG(warning, "Multiple objects for path ~s", [Path]),
+            {ok, Type, Path}
+    end.
+
+
+%% @doc Finds an object from its path
+-spec find_path(nkservice:id(), nkdomain:path()) ->
     {ok, nkdomain:type(), nkdomain:obj_id()} | {error, object_not_found|term()}.
 
-find_obj_path(SrvId, Path) ->
+find_path(SrvId, Path) ->
     case nkdomain_util:is_path(Path) of
         {true, Path2} ->
-            Query = #{
-                constant_score => #{
-                    filter => #{term => #{path => Path2}}
-                }
-            },
-            lager:info("Query: ~s", [nklib_json:encode_pretty(Query)]),
+            Query = query_filter(#{term => #{path => Path2}}),
             case find_objs(SrvId, Query, #{}) of
                 {ok, 0, []} ->
                     {error, object_not_found};
-                {ok, 1, [{Module, ObjId}]} ->
-                    {ok, Module, ObjId};
-                {ok, _, [{Module, ObjId}|_]} ->
+                {ok, 1, [{Type, ObjId, _Path}]} ->
+                    {ok, Type, ObjId};
+                {ok, _, [{Type, ObjId, _Path}|_]} ->
                     ?LLOG(warning, "Multiple objects for path ~s", [Path]),
-                    {ok, Module, ObjId}
+                    {ok, Type, ObjId}
             end;
         false ->
             {error, invalid_path}
@@ -274,14 +286,14 @@ find_obj_path(SrvId, Path) ->
 %% @doc Finds all objects on a path
 -spec find_obj_childs(nkservice:id(), nkdomain:obj_id(),
                       nkelastic_api:search_opts() | #{type:=nkdomain:type()}) ->
-    {ok, integer(), [{nkdomain:type(), nkdomain:obj_id()}]}.
+    {ok, integer(), [{nkdomain:type(), nkdomain:obj_id(), nkdomain:path()}]}.
 
 find_obj_childs(SrvId, ParentId, Opts) ->
-    Must = [
+    Filter = [
         #{term => #{parent_id => ParentId}} |
         find_objs_filter(Opts)
     ],
-    Query = query_filter(Must),
+    Query = query_filter(Filter),
     find_objs(SrvId, Query, Opts).
 
 
@@ -292,11 +304,11 @@ find_obj_childs(SrvId, ParentId, Opts) ->
 find_obj_all_childs(SrvId, Path, Opts) ->
     case nkdomain_util:is_path(Path) of
         {true, Path2} ->
-            Must = [
+            Filter = [
                 #{prefix => #{path => Path2}} |
                 find_objs_filter(Opts)
             ],
-            Query = query_filter(Must),
+            Query = query_filter(Filter),
             lager:info("Query: ~s", [nklib_json:encode_pretty(Query)]),
             find_objs(SrvId, Query, Opts);
         false ->
@@ -310,10 +322,10 @@ find_obj_all_childs(SrvId, Path, Opts) ->
     {error, object_not_found}.
 
 find_obj_alias(SrvId, Alias) ->
-    Must = [
+    Filter = [
         #{term => #{aliases => nklib_util:to_binary(Alias)}}
     ],
-    find_objs(SrvId, query_filter(Must), #{}).
+    find_objs(SrvId, query_filter(Filter), #{}).
 
 
 %% @doc Archive an object
@@ -355,15 +367,16 @@ get_mappings(SrvId, Index) ->
         #{
             domain_elastic_index := Index
         } ->
+            lager:info("Installed types: ~p", [nkdomain_types:get_types()]),
             Modules = nkdomain_types:get_modules(),
-            lager:info("Installed modules: ~p", [Modules]),
-            Base = SrvId:object_base_mapping(),
+            Base = SrvId:object_mapping(),
             lists:foldl(
-                fun(Type, Acc) ->
+                fun(Module, Acc) ->
+                    #{type:=Type} = Module:object_get_info(),
                     Obj = #{
                         type => object,
                         dynamic => false,
-                        properties => Type:object_get_mapping()
+                        properties => Module:object_mapping()
                     },
                     Acc#{Type => Obj}
                 end,
@@ -412,10 +425,6 @@ get_templates(SrvId) ->
 find_objs_filter(Opts) ->
     lists:flatten([
         case Opts of
-            #{module:=Module} -> #{term => #{module => Module}};
-            _ -> []
-        end,
-        case Opts of
             #{type:=Type} -> #{term => #{type => Type}};
             _ -> []
         end
@@ -430,14 +439,22 @@ query_filter([Single]) ->
         }
     };
 
-query_filter(Must) ->
+%%query_filter(Filter) ->
+%%    #{
+%%        constant_score => #{                        % Compound query and remove scores
+%%            filter => #{                            % constant_score only supports filter?
+%%                bool => #{                          % we want several filters
+%%                    filter => Filter
+%%                }
+%%            }
+%%        }
+%%    }.
+
+
+query_filter(Filter) ->
     #{
-        constant_score => #{                        % Compound query and remove scores
-            filter => #{                            % constant_score only supports filter?
-                bool => #{                          % we want several filters
-                    filter => Must
-                }
-            }
+        bool => #{                          % we want several filters
+            filter => Filter
         }
     }.
 
@@ -446,20 +463,15 @@ query_filter(Must) ->
 %% @private
 find_objs(SrvId, Query, Opts) ->
     Opts2 = Opts#{
-        fields => [<<"module">>]
+        fields => [<<"type">>, <<"path">>]
     },
     #es_config{index=Index, type=IdxType} = SrvId:config_nkdomain_store_es(),
     case nkelastic_api:search(SrvId, Index, IdxType, Query, Opts2) of
         {ok, N, List, _Aggs, _Meta} ->
             Data = lists:map(
-                fun(#{<<"_id">>:=ObjId, <<"_source">>:=#{<<"module">>:=BModule}}) ->
-                    case catch binary_to_existing_atom(BModule, utf8) of
-                        {'EXIT', _} ->
-                            ?LLOG(warning, "Invalid module in store: ~s", [BModule]),
-                            {BModule, ObjId};
-                        Module ->
-                            {Module, ObjId}
-                    end
+                fun(#{<<"_id">>:=ObjId, <<"_source">>:=Source}) ->
+                    #{<<"type">>:=Type, <<"path">>:=Path} = Source,
+                    {Type, ObjId, Path}
                 end,
                 List),
             {ok, N, Data};
