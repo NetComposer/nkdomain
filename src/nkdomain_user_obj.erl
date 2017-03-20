@@ -20,12 +20,13 @@
 
 %% @doc User Object
 
--module(nkdomain_user).
+-module(nkdomain_user_obj).
 -behavior(nkdomain_obj).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([login/4]).
--export([object_get_info/0, object_mapping/0, object_syntax/1]).
+-export([object_get_info/0, object_mapping/0, object_syntax/1,
+         object_api_syntax/3, object_api_allow/4, object_api_cmd/4]).
 -export([user_pass/1]).
 
 -include("nkdomain.hrl").
@@ -62,6 +63,9 @@ login(SrvId, Login, Pass, Opts) ->
 
 
 
+
+
+
 %% ===================================================================
 %% nkdomain_obj behaviour
 %% ===================================================================
@@ -70,7 +74,7 @@ login(SrvId, Login, Pass, Opts) ->
 %% @private
 object_get_info() ->
     #{
-        type => <<"user">>
+        type => ?DOMAIN_USER
     }.
 
 
@@ -103,6 +107,22 @@ object_syntax(load) ->
     }.
 
 
+%% @private
+object_api_syntax(Sub, Cmd, Syntax) ->
+    nkdomain_user_obj_syntax:api(Sub, Cmd, Syntax).
+
+
+%% @private
+object_api_allow(_Sub, _Cmd, _Data, State) ->
+    {true, State}.
+
+
+%% @private
+object_api_cmd(Sub, Cmd, Data, State) ->
+    nkdomain_user_obj_api:cmd(Sub, Cmd, Data, State).
+
+
+
 
 %% ===================================================================
 %% Internal
@@ -120,11 +140,11 @@ object_syntax(load) ->
 do_load(SrvId, Login, Opts) ->
     LoadOpts = maps:with([register], Opts),
     case nkdomain_obj:load(SrvId, Login, LoadOpts) of
-        {ok, nkdomain_user, ObjId, Pid} ->
+        {ok, ?DOMAIN_USER, ObjId, Pid} ->
             {ok, ObjId, Pid};
         _ ->
             case SrvId:object_store_find_alias(SrvId, Login) of
-                {ok, N, [{nkdomain_user, ObjId}|_]}->
+                {ok, N, [{?DOMAIN_USER, ObjId, _Path}|_]}->
                     case N > 1 of
                         true ->
                             ?LLOG(notice, "duplicated alias for ~s", [Login]);
@@ -132,11 +152,13 @@ do_load(SrvId, Login, Opts) ->
                             ok
                     end,
                     case nkdomain_obj:load(SrvId, ObjId, LoadOpts) of
-                        {ok, nkdomain_user, ObjId, Pid} ->
+                        {ok, ?DOMAIN_USER, ObjId, Pid} ->
                             {ok, ObjId, Pid};
                         _ ->
                             {error, user_not_found}
-                    end
+                    end;
+                _ ->
+                    {error, user_not_found}
             end
     end.
 
@@ -146,8 +168,10 @@ do_login(Pid, ObjId, Pass) ->
     {ok, Pass2} = user_pass(Pass),
     Fun = fun(#obj_session{obj=Obj}) ->
         case Obj of
-            #{?MODULE:=#{password:=Pass2}} -> {ok, true};
-            _ -> {ok, false}
+            #{?DOMAIN_USER:=#{password:=Pass2}} ->
+                {ok, true};
+            _ ->
+                {ok, false}
         end
     end,
     case nkdomain_obj:sync_op(Pid, {apply, Fun}) of

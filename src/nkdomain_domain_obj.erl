@@ -20,7 +20,7 @@
 
 %% @doc Domain Object
 
--module(nkdomain_domain).
+-module(nkdomain_domain_obj).
 -behavior(nkdomain_obj).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 

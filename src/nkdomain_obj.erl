@@ -84,6 +84,22 @@
     nklib_syntax:syntax().
 
 
+-callback object_api_syntax(nkapi:subclass(), nkapi:cmd(), nklib_syntax:stntax()) ->
+    nklib_syntax:syntax() | continue.
+
+
+-callback object_api_allow(nkapi:subclass(), nkapi:cmd(), nkapi:data(), nkapi:state()) ->
+    {boolean, nkapi:state()}.
+
+
+-callback object_api_cmd(nkapi:subclass(), nkapi:cmd(), nkapi:data(), nkapi:state()) ->
+    {ok, map(), nkapi:state()} | {ack, nkapi:state()} |
+    {login, Reply::term(), User::binary(), Meta::map(), nkapi:state()} |
+    {error, nkapi:error(), nkapi:state()}.
+
+
+
+
 %% ===================================================================
 %% Types
 %% ===================================================================

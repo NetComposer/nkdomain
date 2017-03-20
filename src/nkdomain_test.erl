@@ -1,14 +1,68 @@
 -module(nkdomain_test).
 -compile(export_all).
 
+-include_lib("nkapi/include/nkapi.hrl").
+
+-define(WS, "ws://127.0.0.1:9202/api/ws").
+
+
+
+login(User, Pass) ->
+    Fun = fun ?MODULE:api_client_fun/2,
+    Login = #{
+        id => nklib_util:to_binary(User),
+        password=> nklib_util:to_binary(Pass),
+        meta => #{a=>nklib_util:to_binary(User)}
+    },
+    {ok, _SessId, _Pid, _Reply} = nkapi_client:start(root, ?WS, Login, Fun, #{}).
+
+
+create(Path, Name, Surname) ->
+    Data = #{
+        user => #{
+            name => to_bin(Name),
+            surname => to_bin(Surname)
+        },
+        path => to_bin(Path)
+    },
+    cmd(user, create, Data).
 
 
 
 
 
+%% ===================================================================
+%% Client fun
+%% ===================================================================
+
+
+api_client_fun(#nkapi_req{class=event, data=Event}, UserData) ->
+    lager:notice("CLIENT event ~p", [lager:pr(Event, nkservice_events)]),
+    {ok, UserData};
+
+api_client_fun(_Req, UserData) ->
+    % lager:error("API REQ: ~p", [lager:pr(_Req, ?MODULE)]),
+    {error, not_implemented, UserData}.
+
+get_client() ->
+    [{_, Pid}|_] = nkapi_client:get_all(),
+    Pid.
+
+
+%% Test calling with class=test, cmd=op1, op2, data=#{nim=>1}
+cmd(Class, Cmd, Data) ->
+    Pid = get_client(),
+    cmd(Pid, Class, Cmd, Data).
+
+cmd(Pid, Class, Cmd, Data) ->
+    nkapi_client:cmd(Pid, Class, <<>>, Cmd, Data).
 
 
 
+
+%% ===================================================================
+%% OBJECTS
+%% ===================================================================
 
 
 root_create() ->
@@ -88,3 +142,6 @@ user3_create() ->
     },
     nkdomain_obj:create(root, Obj, #{obj_id=><<"user3">>}).
 
+
+%% @private
+to_bin(Term) -> nklib_util:to_binary(Term).

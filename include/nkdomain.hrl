@@ -48,5 +48,11 @@
 }).
 
 
+-define(DOMAIN_USER, <<"user">>).
+-define(DOMAIN_DOMAIN, <<"domain">>).
+-define(DOMAIN_SESSION, <<"session">>).
+-define(DOMAIN_TOKEN, <<"token">>).
+
+
 -endif.
 

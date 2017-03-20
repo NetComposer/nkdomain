@@ -22,6 +22,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([is_path/1, get_parts/2, error_code/2, add_mandatory/3]).
+-export([api_create/3, api_remove/2, api_update/2]).
 -export_type([error/0]).
 
 -type error() ::
@@ -136,6 +137,47 @@ add_mandatory(Fields, Module, Base) ->
     Mandatory1 = maps:get('__mandatory', Base, []),
     Mandatory2 = Fields2 ++ Mandatory1,
     Base#{'__mandatory' => Mandatory2}.
+
+
+%% @doc
+api_create(Type, Data, #{srv_id:=SrvId}=State) ->
+    case nkdomain_obj:create(SrvId, Data#{type=>Type}, #{}) of
+        {ok, ObjId, _Pid} ->
+            {ok, #{obj_id=>ObjId}, State};
+        {error, Error} ->
+            {error, Error, State}
+    end.
+
+
+%% @doc
+api_remove(#{obj_id:=ObjId}=Data, #{srv_id:=SrvId}=State) ->
+    Reason = maps:get(reason, Data, api_remove),
+    case nkdomain_obj:load(SrvId, ObjId) of
+        {ok, _Type, _ObjId, _Path, _Pid} ->
+            case nkdomain_obj:remove(ObjId, Reason) of
+                ok ->
+                    {ok, #{}, State};
+                {error, Error} ->
+                    {error, Error, State}
+            end;
+        {error, Error} ->
+            {error, Error, State}
+    end.
+
+
+%% @doc
+api_update(#{obj_id:=ObjId}=Data, #{srv_id:=SrvId}=State) ->
+    case nkdomain_obj:load(SrvId, ObjId) of
+        {ok, _Type, _ObjId, _Path, _Pid} ->
+            case nkdomain_obj:update(ObjId, Data) of
+                ok ->
+                    {ok, #{}, State};
+                {error, Error} ->
+                    {error, Error, State}
+            end;
+        {error, Error} ->
+            {error, Error, State}
+    end.
 
 
 %% @private

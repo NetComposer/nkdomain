@@ -49,8 +49,11 @@
 -spec get_module(nkdomain:type()) ->
     module() | undefined.
 
+get_module(Type) when is_binary(Type) ->
+    lookup({type, Type}, undefined);
+
 get_module(Type) ->
-    lookup({type, Type}, undefined).
+    get_module(to_bin(Type)).
 
 
 %% @doc Gets all registered modules

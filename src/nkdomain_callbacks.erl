@@ -22,7 +22,7 @@
 -module(nkdomain_callbacks).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -export([plugin_deps/0, service_init/2, service_handle_cast/2]).
--export([api_error/1]).
+-export([api_error/1, api_server_syntax/3, api_server_allow/2, api_server_cmd/2]).
 -export([object_mapping/0, object_syntax/1, object_parse/4, object_unparse/1]).
 -export([object_load/2, object_save/1, object_remove/1, object_archive/1,
          object_updated/2, object_enabled/1, object_removed/2,
@@ -55,7 +55,7 @@
 %% ===================================================================
 
 %% @doc
-api_error({could_not_load_parent, ObjId})   -> {"Object could not load parent ~s", [ObjId]};
+api_error(could_not_load_parent)            -> "Object could not load parent";
 api_error(invalid_object_id)                -> "Invalid object id";
 api_error(invalid_object_type)              -> "Invalid object type";
 api_error(invalid_object_path)              -> "Invalid object path";
@@ -122,7 +122,7 @@ object_syntax(load) ->
         aliases => {list, binary},
         icon_id => binary,
         '_store_vsn' => any,
-        '__mandatory' => [type, obj_id, path, parent_id]
+        '__mandatory' => [type, obj_id, path]
     };
 
 object_syntax(update) ->
@@ -210,7 +210,11 @@ object_parse(SrvId, Mode, Type, Map) ->
             Mandatory = BaseMand ++ ModMand,
             TypeAtom = binary_to_atom(Type, utf8),
             Syntax = BaseSyn#{TypeAtom => ModSyn, '__mandatory'=>Mandatory},
-            case nklib_syntax:parse(Map, Syntax, #{meta=>#{module=>Module}}) of
+            Opts = #{
+                meta => #{module=>Module},
+                {binary_key, Type} => true
+            },
+            case nklib_syntax:parse(Map, Syntax, Opts) of
                 {ok, Obj2, _Exp, []} ->
                     {ok, Module, Obj2};
                 {ok, Obj2, _Exp, Missing} ->
@@ -229,11 +233,10 @@ object_parse(SrvId, Mode, Type, Map) ->
 object_unparse(#obj_session{srv_id=SrvId, type=Type, module=Module, obj=Obj}) ->
     BaseKeys = maps:keys(SrvId:object_mapping()),
     BaseMap = maps:with(BaseKeys, Obj),
-    TypeAtom = binary_to_existing_atom(Type, utf8),
-    ModData = maps:get(TypeAtom, Obj, #{}),
+    ModData = maps:get(Type, Obj, #{}),
     ModKeys = maps:keys(Module:object_mapping()),
     ModMap = maps:with(ModKeys, ModData),
-    BaseMap#{TypeAtom => ModMap}.
+    BaseMap#{Type => ModMap}.
 
 
 %% @doc Called when an object is modified
@@ -480,19 +483,41 @@ object_store_archive_raw(_SrvId, _ObjId, _Map) ->
 %% API Server
 %% ===================================================================
 
-%%%% @doc
-%%api_server_allow(_Req, State) ->
-%%    {true, State}.
+%% @doc
+api_server_syntax(#nkapi_req{class=Type, subclass=Sub, cmd=Cmd}, Syntax, State) ->
+    case nkdomain_types:get_module(Type) of
+        undefined ->
+            continue;
+        Module ->
+            case nklib_util:apply(Module, object_api_syntax, [Sub, Cmd, Syntax]) of
+                Syntax2 when is_map(Syntax2) ->
+                    State2 = ?ADD_TO_API_SESSION(nkdomain_module, Module, State),
+                    {Syntax2, State2};
+                not_exported ->
+                    continue;
+                continue ->
+                    continue
+            end
+    end.
 
 
-%%%% @doc Called on login
-%%api_server_login(#{user:=User, password:=<<"1234">>, meta:=Meta}, State) ->
-%%    {true, User, Meta, State};
-%%
-%%api_server_login(_Data, _State) ->
-%%    continue.
+
+%% @doc
+api_server_allow(Req, #{nkdomain_module:=Module}=State) ->
+    #nkapi_req{subclass=Sub, cmd=Cmd, data=Data} = Req,
+    nklib_util:apply(Module, object_api_allow, [Sub, Cmd, Data, State]);
+
+api_server_allow(_Req, _State) ->
+    continue.
 
 
+%% @doc
+api_server_cmd(Req, #{nkdomain_module:=Module}=State) ->
+    #nkapi_req{subclass=Sub, cmd=Cmd, data=Data} = Req,
+    nklib_util:apply(Module, object_api_cmd, [Sub, Cmd, Data, State]);
+
+api_server_cmd(_Req, _State) ->
+    continue.
 
 
 %% ===================================================================
@@ -516,4 +541,5 @@ service_handle_cast(nkdomain_load_domain, State) ->
 
 service_handle_cast(_Msg, _State) ->
     continue.
+
 

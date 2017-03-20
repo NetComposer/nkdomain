@@ -77,7 +77,7 @@ start(_Type, _Args) ->
         '__defaults' => #{
             start_root => false,
             elastic_url => <<"http://127.0.0.1:9200/">>,
-            api_server => <<"ws:all:9202/apiws, http:all:9202/api">>,
+            api_server => <<"ws:all:9202/api/ws, http:all:9202/api">>,
 
             user_timeout => 5000,
             alias_timeout => 5000,
@@ -124,8 +124,8 @@ stop(_) ->
 
 %% @doc Register our types
 register_types() ->
-    ok = nkdomain_types:register_type(nkdomain_domain, domain),
-    ok = nkdomain_types:register_type(nkdomain_user, user).
+    ok = nkdomain_types:register_type(nkdomain_domain_obj, ?DOMAIN_DOMAIN),
+    ok = nkdomain_types:register_type(nkdomain_user_obj, ?DOMAIN_USER).
 
 
 %% @doc gets a configuration value

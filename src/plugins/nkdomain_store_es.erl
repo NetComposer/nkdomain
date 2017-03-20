@@ -439,18 +439,6 @@ query_filter([Single]) ->
         }
     };
 
-%%query_filter(Filter) ->
-%%    #{
-%%        constant_score => #{                        % Compound query and remove scores
-%%            filter => #{                            % constant_score only supports filter?
-%%                bool => #{                          % we want several filters
-%%                    filter => Filter
-%%                }
-%%            }
-%%        }
-%%    }.
-
-
 query_filter(Filter) ->
     #{
         bool => #{                          % we want several filters

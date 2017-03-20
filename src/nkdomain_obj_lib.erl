@@ -196,13 +196,13 @@ do_create(SrvId, Obj, Meta) ->
                 created_time => nklib_util:m_timestamp()
             },
             case do_create_check_parent(SrvId, Obj3) of
-                {ok, ParentMeta} ->
+                {ok, Obj4, ParentMeta} ->
                     Meta2 = Meta#{
                         srv_id => SrvId,
                         is_dirty => true
                     },
                     Meta3 = maps:merge(Meta2, ParentMeta),
-                    {ok, ObjPid} = nkdomain_obj:start(Obj3, Meta3),
+                    {ok, ObjPid} = nkdomain_obj:start(Obj4, Meta3),
                     {ok, ObjId, ObjPid};
                 {error, Error} ->
                     {error, Error}
@@ -213,21 +213,37 @@ do_create(SrvId, Obj, Meta) ->
 
 
 %% @private
-do_create_check_parent(_SrvId, #{parent_id:=<<>>, type:=<<"domain">>, obj_id:=<<"root">>}) ->
-    {ok, #{}};
+do_create_check_parent(_SrvId, #{parent_id:=<<>>, type:=<<"domain">>, obj_id:=<<"root">>}=Obj) ->
+    {ok, Obj, #{}};
 
-do_create_check_parent(SrvId, #{parent_id:=ParentId, type:=Type, path:=Path}) ->
+do_create_check_parent(SrvId, #{parent_id:=ParentId, type:=Type, path:=Path}=Obj) ->
     case load(SrvId, ParentId, #{}) of                                      % TODO: Use some usage?
         {ok, _ParentType, ParentId, Pid} ->
             case do_call(Pid, {nkdomain_check_child, Type, Path}) of
                 {ok, Data} ->
-                    {ok, Data};
+                    {ok, Obj, Data};
                 {error, Error} ->
                     {error, Error}
             end;
         {error, Error} ->
             lager:notice("Error loading parent object ~s (~p)", [ParentId, Error]),
-            {error, {could_not_load_parent, ParentId}}
+            {error, could_not_load_parent}
+    end;
+
+do_create_check_parent(SrvId, #{type:=Type, path:=Path}=Obj) ->
+    lager:error("BB ~p ~p", [Type, Path]),
+    case nkdomain_util:get_parts(Type, Path) of
+        {ok, Base, _Name} ->
+            lager:error("BASE IS ~p", [Base]),
+            case find(SrvId, Base) of
+                {ok, _ParentType, ParentId, _ParentPath, _Pid} ->
+                    lager:error("PARENT IS ~p", [ParentId]),
+                    do_create_check_parent(SrvId, Obj#{parent_id=>ParentId});
+                {error, _} ->
+                    {error, could_not_load_parent}
+            end;
+        {error, Error} ->
+            {error, Error}
     end.
 
 
