@@ -20,7 +20,7 @@
 
 %% @doc User Object Syntax
 
--module(nkdomain_user_obj_syntax).
+-module(nkdomain_domain_obj_syntax).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([api/3]).
@@ -33,34 +33,13 @@
 
 
 %% @doc
-api('', login, Syntax) ->
-    Syntax2 = Syntax#{
-        id => binary,
-        password => binary,
-        domain => binary,
-        meta => map
-    },
-    nklib_syntax:add_mandatory([id], Syntax2);
-
-api('', get_token, Syntax) ->
-    Syntax2 = Syntax#{
-        id => binary,
-        password => binary,
-        domain => binary
-    },
-    nklib_syntax:add_mandatory([id], Syntax2);
-
 api('', create, Syntax) ->
     Syntax2 = Syntax#{
-        user => #{
-            name => binary,
-            surname => binary,
-            password => binary
-        },
         path => binary,
+        description => binary,
         aliases => {list, binary}
     },
-    nklib_syntax:add_mandatory([path, 'user.name', 'user.surname'], Syntax2);
+    nklib_syntax:add_mandatory([path], Syntax2);
 
 api('', delete, Syntax) ->
     Syntax2 = Syntax#{
@@ -72,17 +51,32 @@ api('', delete, Syntax) ->
 api('', update, Syntax) ->
     Syntax2 = Syntax#{
         id => binary,
-        user => #{
-            name => binary,
-            surname => binary,
-            password => binary
-        },
+        description => binary,
         aliases => {list, binary}
     },
     nklib_syntax:add_mandatory([id], Syntax2);
 
+api('', get_types, Syntax) ->
+    Syntax2 = Syntax#{
+        id => binary
+    },
+    nklib_syntax:add_mandatory([id], Syntax2);
+
+api('', get_all_types, Syntax) ->
+    api('', get_types, Syntax);
+
+api('', get_childs, Syntax) ->
+    Search = nkelastic_search:syntax(),
+    Syntax2 = Syntax#{
+        id => binary,
+        type => binary
+    },
+    Syntax3 = maps:merge(Syntax2, Search),
+    nklib_syntax:add_mandatory([id], Syntax3);
+
+api('', get_all_childs, Syntax) ->
+    api('', get_childs, Syntax);
 
 api(_Sub, _Cmd, Syntax) ->
     lager:error("unknown syntax: ~p, ~p", [_Sub, _Cmd]),
-
     Syntax.

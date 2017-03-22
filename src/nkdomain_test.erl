@@ -6,6 +6,8 @@
 -define(WS, "ws://127.0.0.1:9202/api/ws").
 
 
+login() ->
+    login(admin, "1234").
 
 login(User, Pass) ->
     Fun = fun ?MODULE:api_client_fun/2,
@@ -17,16 +19,68 @@ login(User, Pass) ->
     {ok, _SessId, _Pid, _Reply} = nkapi_client:start(root, ?WS, Login, Fun, #{}).
 
 
-create(Path, Name, Surname) ->
+user_create(Path, Name, Surname) ->
     Data = #{
         user => #{
             name => to_bin(Name),
             surname => to_bin(Surname)
         },
-        path => to_bin(Path)
+        path => to_bin(Path),
+        aliases => [alias1, alias2]
     },
-    cmd(user, create, Data).
+    case cmd(user, create, Data) of
+        {ok, #{<<"obj_id">>:=ObjId}} -> {ok, ObjId};
+        {error, Error} -> {error, Error}
+    end.
 
+
+user_delete(Id) ->
+    cmd(user, delete, #{id=>to_bin(Id)}).
+
+
+user_update(Id, Name, Password, Aliases) ->
+    Data = #{
+        id => to_bin(Id),
+        user => #{
+            name => to_bin(Name),
+            password => Password
+        },
+        aliases => Aliases
+    },
+    cmd(user, update, Data).
+
+
+domain_create(Path, Desc) ->
+    Data = #{
+        path => to_bin(Path),
+        description => Desc,
+        aliases => [dom1, dom2]
+    },
+    case cmd(domain, create, Data) of
+        {ok, #{<<"obj_id">>:=ObjId}} -> {ok, ObjId};
+        {error, Error} -> {error, Error}
+    end.
+
+
+domain_delete(Id) ->
+    cmd(domain, delete, #{id=>to_bin(Id)}).
+
+
+domain_update(Id, Desc, Aliases) ->
+    Data = #{
+        id => to_bin(Id),
+        description => Desc,
+        aliases => Aliases
+    },
+    cmd(domain, update, Data).
+
+
+domain_get_types(Id) ->
+    cmd(domain, get_types, #{id=>Id}).
+
+
+domain_get_all_types(Id) ->
+    cmd(domain, get_all_types, #{id=>Id}).
 
 
 
@@ -69,7 +123,6 @@ root_create() ->
     Obj = #{
         path => <<"/">>,
         type => <<"domain">>,
-        parent_id => <<>>,
         description => <<"NetComposer">>
     },
     nkdomain_obj:create(root, Obj, #{obj_id=><<"root">>}).
@@ -79,7 +132,6 @@ sub1_create() ->
     Obj = #{
         path => <<"/sub1">>,
         type => <<"domain">>,
-        parent_id => <<"root">>,
         description => <<"Sub1">>
     },
     nkdomain_obj:create(root, Obj, #{obj_id=><<"sub1">>}).
@@ -89,33 +141,29 @@ sub2_create() ->
     Obj = #{
         path => <<"/sub1/sub2">>,
         type => <<"domain">>,
-        parent_id => <<"sub1">>,
         description => <<"Sub2">>
     },
     nkdomain_obj:create(root, Obj, #{obj_id=><<"sub2">>}).
 
 
-user1_create() ->
+admin_create() ->
     Obj = #{
-        path => <<"/users/u1">>,
+        path => <<"/users/admin">>,
         type => <<"user">>,
-        parent_id => <<"root">>,
-        description => <<"User 1">>,
-        aliases => <<"user1@domain.com">>,
+        description => <<"Admin User">>,
         user => #{
-            name => <<"Name 1">>,
-            surname => <<"Surname 1">>,
+            name => <<"Admin">>,
+            surname => <<"User">>,
             password => "1234"
         }
     },
-    nkdomain_obj:create(root, Obj, #{obj_id=><<"user1">>}).
+    nkdomain_obj:create(root, Obj, #{obj_id=><<"admin">>}).
 
 
 user2_create() ->
     Obj = #{
         path => <<"/users/u2">>,
         type => <<"user">>,
-        parent_id => <<"root">>,
         description => <<"User 2">>,
         aliases => <<"user2@domain.com">>,
         user => #{
@@ -131,7 +179,6 @@ user3_create() ->
     Obj = #{
         path => <<"/sub1/users/u3">>,
         type => <<"user">>,
-        parent_id => <<"sub1">> ,
         description => <<"User 3">>,
         aliases => <<"user3@domain.com">>,
         user => #{

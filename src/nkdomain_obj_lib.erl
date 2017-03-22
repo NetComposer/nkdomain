@@ -54,6 +54,8 @@ find(Srv, IdOrPath) ->
                                 not_found ->
                                     {ok, Type, ObjId, Path, undefined}
                             end;
+                        {error, object_not_found} ->
+                            {error, path_not_found};
                         {error, Error} ->
                             {error, Error}
                     end;
@@ -107,6 +109,8 @@ load(Srv, IdOrPath, Meta) ->
             {ok, Type, ObjId, Pid};
         {ok, _Type, ObjId, _Path, undefined} ->
             do_load2(Srv, ObjId, Meta);
+        {error, path_not_found} ->
+            {error, object_not_found};
         {error, object_not_found} ->
             ObjId = nklib_util:to_binary(IdOrPath),
             do_load2(Srv, ObjId, Meta)
@@ -127,7 +131,7 @@ do_load2(Srv, ObjId, Meta) ->
                         #{expires_time:=Expires} ->
                             case nklib_util:m_timestamp() of
                                 Now when Now >= Expires ->
-                                    SrvId:object_store_remove_raw(SrvId, ObjId),
+                                    nkdomain_store:delete(SrvId, ObjId),
                                     {error, object_not_found};
                                 _ ->
                                     do_load3(ObjId, Obj, Meta2)
@@ -161,12 +165,12 @@ create(Srv, Obj, Meta) ->
     case nkservice_srv:get_srv_id(Srv) of
         {ok, SrvId} ->
             case Meta of
-                #{obj_id:=ObjId} ->
-                    case load(Srv, ObjId, #{}) of                       % TODO: Use some usage?
-                        {ok, _Type, _ObjId, _Pid} ->
-                            {error, object_already_exists};
+                #{obj_id:=ObjId} when is_binary(ObjId)->
+                    case SrvId:object_store_read_raw(SrvId, ObjId) of
                         {error, object_not_found} ->
                             do_create(SrvId, Obj#{obj_id=>ObjId}, Meta);
+                        {ok, _} ->
+                            {error, object_already_exists};
                         {error, Error} ->
                             {error, Error}
                     end;
@@ -196,13 +200,12 @@ do_create(SrvId, Obj, Meta) ->
                 created_time => nklib_util:m_timestamp()
             },
             case do_create_check_parent(SrvId, Obj3) of
-                {ok, Obj4, ParentMeta} ->
+                {ok, Obj4} ->
                     Meta2 = Meta#{
                         srv_id => SrvId,
                         is_dirty => true
                     },
-                    Meta3 = maps:merge(Meta2, ParentMeta),
-                    {ok, ObjPid} = nkdomain_obj:start(Obj4, Meta3),
+                    {ok, ObjPid} = nkdomain_obj:start(Obj4, Meta2),
                     {ok, ObjId, ObjPid};
                 {error, Error} ->
                     {error, Error}
@@ -213,15 +216,15 @@ do_create(SrvId, Obj, Meta) ->
 
 
 %% @private
-do_create_check_parent(_SrvId, #{parent_id:=<<>>, type:=<<"domain">>, obj_id:=<<"root">>}=Obj) ->
-    {ok, Obj, #{}};
+do_create_check_parent(_SrvId, #{type:=<<"domain">>, obj_id:=<<"root">>, path:=<<"/">>}=Obj) ->
+    {ok, Obj#{parent_id=><<>>}};
 
 do_create_check_parent(SrvId, #{parent_id:=ParentId, type:=Type, path:=Path}=Obj) ->
     case load(SrvId, ParentId, #{}) of                                      % TODO: Use some usage?
         {ok, _ParentType, ParentId, Pid} ->
-            case do_call(Pid, {nkdomain_check_child, Type, Path}) of
-                {ok, Data} ->
-                    {ok, Obj, Data};
+            case do_call(Pid, {nkdomain_check_create_child, Type, Path}) of
+                ok ->
+                    {ok, Obj};
                 {error, Error} ->
                     {error, Error}
             end;
@@ -231,13 +234,10 @@ do_create_check_parent(SrvId, #{parent_id:=ParentId, type:=Type, path:=Path}=Obj
     end;
 
 do_create_check_parent(SrvId, #{type:=Type, path:=Path}=Obj) ->
-    lager:error("BB ~p ~p", [Type, Path]),
     case nkdomain_util:get_parts(Type, Path) of
         {ok, Base, _Name} ->
-            lager:error("BASE IS ~p", [Base]),
             case find(SrvId, Base) of
                 {ok, _ParentType, ParentId, _ParentPath, _Pid} ->
-                    lager:error("PARENT IS ~p", [ParentId]),
                     do_create_check_parent(SrvId, Obj#{parent_id=>ParentId});
                 {error, _} ->
                     {error, could_not_load_parent}

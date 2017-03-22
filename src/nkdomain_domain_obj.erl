@@ -24,9 +24,61 @@
 -behavior(nkdomain_obj).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([object_get_info/0, object_mapping/0, object_syntax/1]).
+-export([get_types/2, get_all_types/2, get_childs/3, get_all_childs/3]).
+-export([object_get_info/0, object_mapping/0, object_syntax/1,
+         object_api_syntax/3, object_api_allow/4, object_api_cmd/4]).
 
 -include("nkdomain.hrl").
+
+
+%% ===================================================================
+%% Public
+%% ===================================================================
+
+%% @doc
+get_types(SrvId, Id) ->
+    case nkdomain_obj:find(SrvId, Id) of
+        {ok, _Type, ObjId, _Path, _Pid} ->
+            SrvId:object_store_find_types(SrvId, ObjId);
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
+%% @doc
+get_all_types(SrvId, Id) ->
+    case nkdomain_obj:find(SrvId, Id) of
+        {ok, _Type, _ObjId, Path, _Pid} ->
+            SrvId:object_store_find_all_types(SrvId, Path);
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
+%% @doc
+get_childs(SrvId, Id, Spec) ->
+    case nkdomain_obj:find(SrvId, Id) of
+        {ok, _Type, ObjId, _Path, _Pid} ->
+            SrvId:object_store_find_childs(SrvId, ObjId, Spec);
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
+%% @doc
+get_all_childs(SrvId, Id, Spec) ->
+    case nkdomain_obj:find(SrvId, Id) of
+        {ok, _Type, _ObjId, Path, _Pid} ->
+            SrvId:object_store_find_all_childs(SrvId, Path, Spec);
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
+
+
+
+
 
 
 
@@ -37,7 +89,7 @@
 %% @private
 object_get_info() ->
     #{
-        type => <<"domain">>
+        type => ?DOMAIN_DOMAIN
     }.
 
 
@@ -49,4 +101,20 @@ object_mapping() ->
 %% @private
 object_syntax(_Mode) ->
     #{}.
+
+
+%% @private
+object_api_syntax(Sub, Cmd, Syntax) ->
+    nkdomain_domain_obj_syntax:api(Sub, Cmd, Syntax).
+
+
+%% @private
+object_api_allow(_Sub, _Cmd, _Data, State) ->
+    {true, State}.
+
+
+%% @private
+object_api_cmd(Sub, Cmd, Data, State) ->
+    nkdomain_domain_obj_api:cmd(Sub, Cmd, Data, State).
+
 

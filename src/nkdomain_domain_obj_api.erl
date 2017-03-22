@@ -19,7 +19,7 @@
 %% -------------------------------------------------------------------
 
 %% @doc User Object API
--module(nkdomain_user_obj_api).
+-module(nkdomain_domain_obj_api).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([cmd/4]).
@@ -31,27 +31,37 @@
 %% ===================================================================
 
 %% @doc
-cmd('', login, #{id:=User}=Data, #{srv_id:=SrvId}=State) ->
-    Password = maps:get(password, Data, <<>>),
-    case nkdomain_user_obj:login(SrvId, User, Password, #{}) of
-        {ok, UserId} ->
-            Meta = maps:get(meta, Data, #{}),
-            {login, #{obj_id=>UserId}, UserId, Meta, State};
+cmd('', get_types, #{id:=Id}, #{srv_id:=SrvId}=State) ->
+    case nkdomain_domain_obj:get_types(SrvId, Id) of
+        {ok, N, List} ->
+           {ok, #{total=>N, data=>maps:from_list(List)}, State};
         {error, Error} ->
             {error, Error, State}
     end;
 
-cmd('', get_token, #{id:=User}=Data, #{srv_id:=SrvId}=State) ->
-    Password = maps:get(password, Data, <<>>),
-    case nkdomain_user_obj:login(SrvId, User, Password, #{}) of
-        {ok, UserId} ->
-            {ok, #{obj_id=>UserId}, State};
+cmd('', get_all_types, #{id:=Id}=Data, #{srv_id:=SrvId}=State) ->
+    case nkdomain_domain_obj:get_all_types(SrvId, Id) of
+        {ok, N, List} ->
+            {ok, #{total=>N, data=>maps:from_list(List)}, State};
         {error, Error} ->
             {error, Error, State}
     end;
 
-cmd('', create, Data, State) ->
-    nkdomain_util:api_create(?DOMAIN_USER, Data, State);
+cmd('', get_childs, #{id:=Id}=Data, #{srv_id:=SrvId}=State) ->
+    case nkdomain_domain_obj:get_childs(SrvId, Id, Data) of
+        {ok, Reply} ->
+            {ok, Reply, State};
+        {error, Error} ->
+            {error, Error, State}
+    end;
+
+cmd('', get_all_childs, #{id:=Id}=Data, #{srv_id:=SrvId}=State) ->
+    case nkdomain_domain_obj:get_all_childs(SrvId, Id, Data) of
+        {ok, Reply} ->
+            {ok, Reply, State};
+        {error, Error} ->
+            {error, Error, State}
+    end;
 
 cmd('', delete, Data, State) ->
     nkdomain_util:api_delete(Data, State);
@@ -59,5 +69,8 @@ cmd('', delete, Data, State) ->
 cmd('', update, Data, State) ->
     nkdomain_util:api_update(Data, State);
 
-cmd(_Sub, _Cmd, _Data, State) ->
+cmd('', Cmd, Data, State) ->
+    nkdomain_util:api_common(?DOMAIN_DOMAIN, Cmd, Data, State);
+
+cmd(_Sub, _Cmd, Data, State) ->
     {error, not_implemented, State}.

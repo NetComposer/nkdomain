@@ -32,7 +32,7 @@
 -behaviour(gen_server).
 
 -export([find/2, load/2, load/3, create/3, get_session/1, save/1, unload/2]).
--export([update/2, set_enabled/2, remove/2, sync_op/2, async_op/2]).
+-export([update/2, set_enabled/2, delete/2, sync_op/2, async_op/2]).
 -export([register/2, unregister/2, get_childs/1]).
 -export([start/2, init/1, terminate/2, code_change/3, handle_call/3,
          handle_cast/2, handle_info/2]).
@@ -53,17 +53,14 @@
             {type, (State#state.session)#obj_session.type},
             {path, (State#state.session)#obj_session.path}
         ],
-        "NkDOMAIN Obj (~s:~s, ~s) "++Txt,
+        "NkDOMAIN Obj ~s (~s) "++Txt,
         [
-            (State#state.session)#obj_session.type,
-            State#state.obj_id,
-            (State#state.session)#obj_session.path
+            (State#state.session)#obj_session.path,
+            State#state.obj_id
             | Args]
         )).
 
--define(MIN_STARTED_TIME, 60000).
--define(SAVE_RETRY, 5000).
--define(MAX_SAVE_RETRIES, 10).
+-define(MIN_STARTED_TIME, 10000).
 
 -include("nkdomain.hrl").
 -compile({no_auto_import, [register/2]}).
@@ -210,11 +207,11 @@ save(Id) ->
 
 
 %% @doc
--spec remove(id(), nkservice:error()) ->
+-spec delete(id(), nkservice:error()) ->
     ok | {error, term()}.
 
-remove(Id, Reason) ->
-    do_cast(Id, {nkdomain_remove, Reason}).
+delete(Id, Reason) ->
+    do_call(Id, {nkdomain_delete, Reason}).
 
 
 %% @doc
@@ -321,9 +318,8 @@ start(Obj, Meta) ->
     session :: session(),
     started :: nklib_util:m_timestamp(),
     timer :: reference(),
+    is_deleted = false :: boolean(),
     childs = [] :: [#child{}],
-    save_op = save  :: save | remove | archive,
-    save_tries = 0 :: integer(),
     timelog = [] :: [map()]
 }).
 
@@ -403,27 +399,49 @@ handle_call(nkdomain_get_state, _From, State) ->
     reply(State, State);
 
 handle_call({nkdomain_update, Map}, _From, State) ->
-    case do_update(Map, State) of
-        {ok, State2} ->
-            reply(ok, State2);
-        {error, Error, State2} ->
-            reply({error, Error}, State2)
+    case is_stopped(State) of
+        true ->
+            reply({error, object_is_stopped}, State);
+        false ->
+            case do_update(Map, State) of
+                {ok, State2} ->
+                    reply(ok, State2);
+                {error, Error, State2} ->
+                    reply({error, Error}, State2)
+            end
     end;
 
+handle_call({nkdomain_delete, Reason}, From, State) ->
+    do_delete(Reason, From, State);
+
 handle_call({nkdomain_sync_op, Op}, From, State) ->
-    case handle(object_sync_op, [Op, From], State) of
-        {reply, Reply, State2} ->
-            reply(Reply, State2);
-        {noreply, State2} ->
-            noreply(State2);
-        {stop, Reason, Reply, State2} ->
-            gen_server:reply(From, Reply),
-            do_stop(Reason, State2);
-        {stop, Reason, State2} ->
-            do_stop(Reason, State2);
-        {continue, State2} ->
-            do_sync_op(Op, From, State2)
+    case is_stopped(State) of
+        true ->
+            reply({error, object_is_stopped}, State);
+        false ->
+            case handle(object_sync_op, [Op, From], State) of
+                {reply, Reply, State2} ->
+                    reply(Reply, State2);
+                {noreply, State2} ->
+                    noreply(State2);
+                {stop, Reason, Reply, State2} ->
+                    gen_server:reply(From, Reply),
+                    do_stop(Reason, State2);
+                {stop, Reason, State2} ->
+                    do_stop(Reason, State2);
+                {continue, State2} ->
+                    do_sync_op(Op, From, State2)
+            end
     end;
+
+handle_call({nkdomain_check_create_child, ObjType, ObjPath}, _From, State) ->
+    Reply = case do_check_child(ObjType, ObjPath, State) of
+        {ok, _Name, _Data} ->
+            do_check_create_child(ObjType, ObjPath, State);
+        {error, Error} ->
+            {error, Error}
+    end,
+    reply(Reply, State);
 
 handle_call({nkdomain_check_child, ObjType, ObjPath}, _From, State) ->
     case do_check_child(ObjType, ObjPath, State) of
@@ -433,24 +451,26 @@ handle_call({nkdomain_check_child, ObjType, ObjPath}, _From, State) ->
             reply({error, Error}, State)
     end;
 
-handle_call({nkdomain_set_child, _ObjType, _ObjId, _ObjPath, _Pid}, _From,
-             #state{session=#obj_session{status={stopped, _}}}=State) ->
-    reply({error, object_is_stopped}, State);
 
 handle_call({nkdomain_set_child, ObjType, ObjId, ObjPath, Pid}, _From, State) ->
-    #state{childs=Childs} = State,
-    case do_check_child(ObjType, ObjPath, State) of
-        {ok, ObjName, Data} ->
-            Child = #child{
-                obj_id = ObjId,
-                type_name = {ObjType, ObjName},
-                pid = Pid
-            },
-            monitor(process, Pid),
-            Childs2 = [Child|Childs],
-            reply({ok, Data}, State#state{childs=Childs2});
-        {error, Error} ->
-            reply({error, Error}, State)
+    case is_stopped(State) of
+        true ->
+            reply({error, object_is_stopped}, State);
+        false ->
+            #state{childs=Childs} = State,
+            case do_check_child(ObjType, ObjPath, State) of
+                {ok, ObjName, Data} ->
+                    Child = #child{
+                        obj_id = ObjId,
+                        type_name = {ObjType, ObjName},
+                        pid = Pid
+                    },
+                    monitor(process, Pid),
+                    Childs2 = [Child|Childs],
+                    reply({ok, Data}, State#state{childs=Childs2});
+                {error, Error} ->
+                    reply({error, Error}, State)
+            end
     end;
 
 handle_call(Msg, From, State) ->
@@ -498,26 +518,22 @@ handle_cast(nkdomain_do_start, State) ->
 handle_cast({nkdomain_add_timelog, Data}, State) ->
     noreply(do_add_timelog(Data, State));
 
-handle_cast(nkdomain_save, #state{save_op=Op}=State) when Op==archive; Op==remove ->
-    ?LLOG(info, "received save command in ~p save state", [Op], State),
-    noreply(State);
-
 handle_cast(nkdomain_save, State) ->
-    State2 = do_save(State),
-    noreply(State2);
-
-handle_cast({nkdomain_remove, Reason}, State) ->
-    State2 = do_remove(Reason, State),
-    do_stop(object_removed, State2);
+    noreply(do_save(State));
 
 handle_cast({nkdomain_async_op, Op}, State) ->
-    case handle(object_async_op, [Op], State) of
-        {noreply, State2} ->
-            noreply(State2);
-        {stop, Reason, State2} ->
-            do_stop(Reason, State2);
-        {continue, State2} ->
-            do_async_op(Op, State2)
+    case is_stopped(State) of
+        true ->
+            noreply(State);
+        false ->
+            case handle(object_async_op, [Op], State) of
+                {noreply, State2} ->
+                    noreply(State2);
+                {stop, Reason, State2} ->
+                    do_stop(Reason, State2);
+                {continue, State2} ->
+                    do_async_op(Op, State2)
+            end
     end;
 
 handle_cast({nkdomain_father_enabled, Enabled}, State) ->
@@ -566,11 +582,8 @@ handle_info(nkdomain_check_expire, State) ->
 handle_info(nkdomain_check_childs, State) ->
     do_check_links_down(State);
 
-handle_info(nkdomain_save, State) ->
-    handle_cast(nkdomain_save, State);
-
 handle_info(nkdomain_destroy, State) ->
-    do_destroy(State);
+    {stop, normal, State};
 
 handle_info({timeout, Ref, nkdomain_session_timeout}, #state{timer=Ref}=State) ->
     ?DEBUG("session timeout", [], State),
@@ -736,101 +749,107 @@ do_check_expire(#state{session=#obj_session{obj=Obj}}) ->
 do_save(#state{session=#obj_session{is_dirty=false}}=State) ->
     State;
 
-do_save(#state{save_op=Op}=State) ->
-    ?DEBUG("~p object", [Op], State),
-    case Op of
-        save ->
-            case handle(object_save, [], State) of
-                {ok, State2} ->
-                    do_save_ok(State2);
-                {error, Error, State2} ->
-                    do_save_error(Error, State2)
-            end;
-        archive ->
-            case handle(object_archive, [], State) of
-                {ok, State2} ->
-                    do_save(State2#state{save_op=remove});
-                {error, Error, State2} ->
-                    do_save_error(Error, State2)
-            end;
-        remove ->
-            case handle(object_remove, [], State) of
-                {ok, State2} ->
-                    do_save_ok(State2);
-                {error, Error, State2} ->
-                    do_save_error(Error, State2)
-            end
+do_save(State) ->
+    ?DEBUG("save object", [], State),
+    State2 = case handle(object_save, [], State) of
+        {ok, SaveState} ->
+            SaveState;
+        {error, _Error, SaveState} ->
+            % Error will be managed by nkdomain_store
+            SaveState
+    end,
+    #state{session=Session} = State2,
+    Session2 = Session#obj_session{is_dirty=false},
+    State#state{session=Session2}.
+
+
+%% @private
+do_delete(_Reason, _From, #state{is_deleted=true}=State) ->
+    reply(ok, State);
+
+do_delete(Reason, From, #state{srv_id=SrvId, obj_id=ObjId}=State) ->
+    case SrvId:object_store_find_childs(SrvId, ObjId, #{size=>0}) of
+        {ok, 0, []} ->
+            {ok, State2} = handle(object_deleted, [Reason], State),
+            {Code, Txt} = nkapi_util:api_error(SrvId, Reason),
+            #state{session=#obj_session{obj=Obj}=Session} = State2,
+            Obj2 = ?ADD_TO_OBJ(
+                #{
+                    destroyed_time => nklib_util:m_timestamp(),
+                    destroyed_code => Code,
+                    destroyed_reason => Txt
+                }, Obj),
+            State3 = State2#state{session=Session#obj_session{obj=Obj2, is_dirty=true}},
+            State4 = case handle(object_archive, [Obj2], State3) of
+                {ok, ArchState} ->
+                    ArchState;
+                {error, _Error1, ArchState} ->
+                    ArchState
+            end,
+            ?DEBUG("delete object", [], State4),
+            State5 = case handle(object_delete, [], State4) of
+                {ok, RemState} ->
+                    RemState;
+                {error, _Error2, RemState} ->
+                    %% Errors will be managed by nkdomain_store
+                    RemState
+            end,
+            gen_server:reply(From, ok),
+            do_stop(object_deleted, State5#state{is_deleted=true});
+        {ok, _N, []} ->
+            reply({error, object_has_childs}, State);
+        {error, Error} ->
+            reply({error, Error}, State)
     end.
 
 
 %% @private
-do_save_ok(#state{session=Session}=State) ->
-    Session2 = Session#obj_session{is_dirty=false},
-    State#state{save_tries=0, session=Session2}.
-
-
-%% @private
-do_save_error(Error, #state{save_op=Op, save_tries=Tries}=State) ->
-    ?LLOG(warning, "could not ~p object: ~p", [Op, Error], State),
-    erlang:send_after(?SAVE_RETRY, self(), nkdomain_save),
-    State#state{save_tries=Tries+1}.
-
-
-%% @private
-do_remove(Reason, #state{srv_id=SrvId, session=#obj_session{obj=Obj}=Session}=State) ->
-    {Code, Txt} = nkapi_util:api_error(SrvId, Reason),
-    Obj2 = ?ADD_TO_OBJ(
-        #{
-            destroyed_time => nklib_util:m_timestamp(),
-            destroyed_code => Code,
-            destroyed_reason => Txt
-        }, Obj),
-    State2 = State#state{session=Session#obj_session{obj=Obj2, is_dirty=true}},
-    State3 = case handle(object_removed, [Reason], State2) of
-        {ok, RemState} -> RemState#state{save_op=remove};
-        {archive, RemState} -> RemState#state{save_op=archive}
-    end,
-    do_save(State3).
-
-
-%% @private
-do_stop(_Reason, #state{session=#obj_session{status={stopped, _Reason}}}=State) ->
-    %% Stop already sent, timer is running
-    noreply(State);
-
 do_stop(Reason, #state{srv_id=SrvId, started=Started}=State) ->
-    {ok, State2} = handle(object_stop, [Reason], State#state{stop_reason=Reason}),
-    {Code, Txt} = nkapi_util:api_error(SrvId, Reason),
-    State3 = do_add_timelog(#{msg=>stopped, code=>Code, reason=>Txt}, State2),
-    % Give time for possible registrations to success and capture stop event
-    State4 = do_status({stopped, Reason}, State3),
-    timer:sleep(100),
-    State5 = do_event({stopped, Reason}, State4),
-    Now = nklib_util:m_timestamp(),
-    case (Started + ?MIN_STARTED_TIME) - Now of
-        Time when Time > 0 ->
-            % Save a minimum running time
-            erlang:send_after(Time, self(), nkdomain_destroy);
-        _ ->
-            % Process any remaining message
-            self() ! nkdomain_destroy
-    end,
-    noreply(State5).
+    case is_stopped(State) of
+        true ->
+            noreply(State);
+        false ->
+            {ok, State2} = handle(object_stop, [Reason], State#state{stop_reason=Reason}),
+            {Code, Txt} = nkapi_util:api_error(SrvId, Reason),
+            State3 = do_add_timelog(#{msg=>stopped, code=>Code, reason=>Txt}, State2),
+            % Give time for possible registrations to success and capture stop event
+            State4 = do_status({stopped, Reason}, State3),
+            timer:sleep(100),
+            State5 = do_event({stopped, Reason}, State4),
+            Now = nklib_util:m_timestamp(),
+            case (Started + ?MIN_STARTED_TIME) - Now of
+                Time when Time > 0 ->
+                    % Save a minimum running time
+                    erlang:send_after(Time, self(), nkdomain_destroy);
+                _ ->
+                    % Process any remaining message
+                    self() ! nkdomain_destroy
+            end,
+            noreply(State5)
+    end.
 
 
 %% @private
-do_destroy(#state{session=#obj_session{is_dirty=false}}=State) ->
-    {stop, normal, State};
+is_stopped(#state{session=#obj_session{status={stopped, _Reason}}}) ->
+    true;
+is_stopped(_) ->
+    false.
 
-do_destroy(#state{save_tries=Tries}=State) ->
-    case Tries > ?MAX_SAVE_RETRIES of
-        true ->
-            ?LLOG(warning, "could not save object, giving up", [], State),
-            {stop, normal, State};
-        false ->
-            ?LLOG(notice, "cannot save object, retrying", [], State),
-            erlang:send_after(?SAVE_RETRY, self(), nkdomain_destroy),
-            noreply(State)
+
+%% @private
+do_check_create_child(ObjType, ObjPath, #state{srv_id=SrvId}) ->
+    case nkdomain_util:get_parts(ObjType, ObjPath) of
+        {ok, _Path, ObjName} ->
+            case SrvId:object_store_find_path(SrvId, ObjPath) of
+                {error, object_not_found} ->
+                    ok;
+                {ok, _, _} ->
+                    {error, {name_is_already_used, ObjName}};
+                {error, Error} ->
+                    {error, Error}
+            end;
+        {error, Error} ->
+            {error, Error}
     end.
 
 
@@ -857,10 +876,6 @@ do_check_child(ObjType, ObjPath, State) ->
 
 
 %% @private
-do_update(_Update, #state{save_op=Op}=State) when Op==remove; Op==archive ->
-    ?LLOG(notice, "received update command in ~p save state", [Op], State),
-    {error, invalid_state, State};
-
 do_update(Update, #state{srv_id=SrvId, session=Session}=State) ->
     #obj_session{type=Type, module=Module, obj=Obj}=Session,
     case SrvId:object_parse(SrvId, update, Type, Update) of

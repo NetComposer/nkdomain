@@ -24,16 +24,17 @@
 -export([plugin_deps/0, service_init/2, service_handle_cast/2]).
 -export([api_error/1, api_server_syntax/3, api_server_allow/2, api_server_cmd/2]).
 -export([object_mapping/0, object_syntax/1, object_parse/4, object_unparse/1]).
--export([object_load/2, object_save/1, object_remove/1, object_archive/1,
-         object_updated/2, object_enabled/1, object_removed/2,
+-export([object_load/2, object_save/1, object_delete/1, object_archive/2,
+         object_updated/2, object_enabled/1, object_deleted/2,
          object_sync_op/3, object_async_op/2,
          object_status/2, object_all_links_down/1]).
 -export([object_init/1, object_terminate/2, object_event/2, object_reg_event/3,
          object_reg_down/3, object_start/1, object_stop/2,
          object_handle_call/3, object_handle_cast/2, object_handle_info/2]).
 -export([object_store_reload_types/1, object_store_read_raw/2, object_store_save_raw/3,
-         object_store_remove_raw/2, object_store_archive_raw/3]).
+         object_store_delete_raw/2, object_store_archive_raw/3]).
 -export([object_store_find_obj_id/2, object_store_find_path/2,
+         object_store_find_types/2, object_store_find_all_types/2,
          object_store_find_childs/3, object_store_find_all_childs/3, object_store_find_alias/2]).
 
 -define(LLOG(Type, Txt, Args), lager:Type("NkDOMAIN Callbacks: "++Txt, Args)).
@@ -59,10 +60,13 @@ api_error(could_not_load_parent)            -> "Object could not load parent";
 api_error(invalid_object_id)                -> "Invalid object id";
 api_error(invalid_object_type)              -> "Invalid object type";
 api_error(invalid_object_path)              -> "Invalid object path";
+api_error({invalid_object_path, P})         -> {"Invalid object path '~s'", [P]};
 api_error(object_already_exists)            -> "Object already exists";
+api_error(object_has_childs) 		        -> "Object has childs";
 api_error(object_is_stopped) 		        -> "Object is stopped";
 api_error(object_not_found) 		        -> "Object not found";
-api_error(object_removed) 		            -> "Object removed";
+api_error(object_deleted) 		            -> "Object removed";
+api_error(path_not_found) 		            -> "Path not found";
 api_error(_)   		                        -> continue.
 
 
@@ -122,7 +126,8 @@ object_syntax(load) ->
         aliases => {list, binary},
         icon_id => binary,
         '_store_vsn' => any,
-        '__mandatory' => [type, obj_id, path]
+        '__mandatory' => [type, obj_id, path],
+        id => ignore                                % Used in APIs
     };
 
 object_syntax(update) ->
@@ -156,7 +161,7 @@ object_load(SrvId, ObjId) ->
 
 object_save(#obj_session{srv_id=SrvId, obj_id=ObjId}=Session) ->
     Map = SrvId:object_unparse(Session),
-    case SrvId:object_store_save_raw(SrvId, ObjId, Map) of
+    case nkdomain_store:save(SrvId, ObjId, Map) of
         {ok, _Vsn} ->
             {ok, Session};
         {error, Error} ->
@@ -165,11 +170,11 @@ object_save(#obj_session{srv_id=SrvId, obj_id=ObjId}=Session) ->
 
 
 %% @doc Called to save the remove the object from disk
--spec object_remove(session()) ->
+-spec object_delete(session()) ->
     {ok, session()} | {error, term(), session()}.
 
-object_remove(#obj_session{srv_id=SrvId, obj_id=ObjId}=Session) ->
-    case SrvId:object_store_remove_raw(SrvId, ObjId) of
+object_delete(#obj_session{srv_id=SrvId, obj_id=ObjId}=Session) ->
+    case nkdomain_store:delete(SrvId, ObjId) of
         ok ->
             {ok, Session};
         {error, Error} ->
@@ -178,12 +183,12 @@ object_remove(#obj_session{srv_id=SrvId, obj_id=ObjId}=Session) ->
 
 
 %% @doc Called to save the archived version to disk
--spec object_archive(session()) ->
+-spec object_archive(nkdomain:obj(), session()) ->
     {ok, session()} | {error, term(), session()}.
 
-object_archive(#obj_session{srv_id=SrvId, obj_id=ObjId}=Session) ->
-    Map = SrvId:object_unparse(Session),
-    case SrvId:object_store_archive_raw(SrvId, ObjId, Map) of
+object_archive(Obj, #obj_session{srv_id=SrvId, obj_id=ObjId}=Session) ->
+    Map = SrvId:object_unparse(Session#obj_session{obj=Obj}),
+    case nkdomain_store:archive(SrvId, ObjId, Map) of
         ok ->
             {ok, Session};
         {error, Error} ->
@@ -256,11 +261,11 @@ object_enabled(Session) ->
 
 
 %% @doc Called when an object is removed
--spec object_removed(term(), session()) ->
-    {ok|archive, session()}.
+-spec object_deleted(term(), session()) ->
+    {ok, session()}.
 
-object_removed(_Reason, Session) ->
-    {archive, Session}.
+object_deleted(_Reason, Session) ->
+    {ok, Session}.
 
 
 %% @doc
@@ -296,6 +301,9 @@ object_status(_Status, Session) ->
 %% @doc
 -spec object_all_links_down(session()) ->
     {ok, session()} | {stop, nkservice:error()}.
+
+object_all_links_down(#obj_session{type = ?DOMAIN_DOMAIN}=Session) ->
+    {ok, Session};
 
 object_all_links_down(Session) ->
     {stop, no_usages, Session}.
@@ -420,10 +428,10 @@ object_store_save_raw(_SrvId, _ObjId, _Map) ->
 
 
 %% @doc
--spec object_store_remove_raw(nkservice:id(), nkdomain:obj_id()) ->
-    {ok, Vsn::term()} | {error, term()}.
+-spec object_store_delete_raw(nkservice:id(), nkdomain:obj_id()) ->
+    ok | {error, term()}.
 
-object_store_remove_raw(_SrvId, _ObjId) ->
+object_store_delete_raw(_SrvId, _ObjId) ->
     {error, store_not_implemented}.
 
 
@@ -440,6 +448,22 @@ object_store_find_obj_id(_SrvId, _ObjId) ->
     {ok, nkdomain:type(), nkdomain:obj_id()} | {error, term()}.
 
 object_store_find_path(_SrvId, _Path) ->
+    {error, store_not_implemented}.
+
+
+%% @doc
+-spec object_store_find_types(nkservice:id(), nkdomain:obj_id()) ->
+    {ok, Total::integer(), [{nkdomain:type(), integer()}]} | {error, term()}.
+
+object_store_find_types(_SrvId, _ObjId) ->
+    {error, store_not_implemented}.
+
+
+%% @doc
+-spec object_store_find_all_types(nkservice:id(), nkdomain:path()) ->
+    {ok, Total::integer(), [{nkdomain:type(), integer()}]} | {error, term()}.
+
+object_store_find_all_types(_SrvId, _ObjId) ->
     {error, store_not_implemented}.
 
 

@@ -22,7 +22,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([is_path/1, get_parts/2, error_code/2, add_mandatory/3]).
--export([api_create/3, api_remove/2, api_update/2]).
+-export([api_common/4, api_create/3, api_delete/2, api_update/2]).
 -export_type([error/0]).
 
 -type error() ::
@@ -67,12 +67,15 @@ is_path(Path) ->
 -spec get_parts(nkdomain:type(), nkdomain:path()) ->
     {ok, Base::nkdomain:path(), Name::binary()} | {error, term()}.
 
+get_parts(<<"domain">>, <<"/">>) ->
+    {ok, <<"/">>, <<>>};
+
 get_parts(Type, Path) ->
     case is_path(Path) of
         {true, Path2} ->
             case lists:reverse(binary:split(Path2, <<"/">>, [global])) of
                 [<<>>|_] ->
-                    {error, invalid_name};
+                    {error, {invalid_object_path, Path2}};
                 [ObjName|Parts] when Type==<<"domain">> ->
                     case nklib_util:bjoin(lists:reverse(Parts), <<"/">>) of
                         <<>> ->
@@ -90,13 +93,13 @@ get_parts(Type, Path) ->
                                     {ok, Base, <<Class/binary, $/, ObjName/binary>>}
                             end;
                         _ ->
-                            {error, invalid_object_path}
+                            {error, {invalid_object_path, Path2}}
                     end;
                 _ ->
-                    {error, invalid_object_path}
+                    {error, {invalid_object_path, Path2}}
             end;
         false ->
-            {error, invalid_object_path}
+            {error, {invalid_object_path, to_bin(Path)}}
     end.
 
 
@@ -140,6 +143,21 @@ add_mandatory(Fields, Module, Base) ->
 
 
 %% @doc
+api_common(Type, Cmd, Data, State) ->
+    case Cmd of
+        create ->
+            api_create(Type, Data, State);
+        delete ->
+            api_delete(Data, State);
+        update ->
+            api_update(Data, State);
+        _ ->
+            {error, not_implemented, State}
+    end.
+
+
+
+%% @doc
 api_create(Type, Data, #{srv_id:=SrvId}=State) ->
     case nkdomain_obj:create(SrvId, Data#{type=>Type}, #{}) of
         {ok, ObjId, _Pid} ->
@@ -150,11 +168,11 @@ api_create(Type, Data, #{srv_id:=SrvId}=State) ->
 
 
 %% @doc
-api_remove(#{obj_id:=ObjId}=Data, #{srv_id:=SrvId}=State) ->
-    Reason = maps:get(reason, Data, api_remove),
-    case nkdomain_obj:load(SrvId, ObjId) of
-        {ok, _Type, _ObjId, _Path, _Pid} ->
-            case nkdomain_obj:remove(ObjId, Reason) of
+api_delete(#{id:=Id}=Data, #{srv_id:=SrvId}=State) ->
+    Reason = maps:get(reason, Data, api_delete),
+    case nkdomain_obj:load(SrvId, Id) of
+        {ok, _Type, ObjId, _Pid} ->
+            case nkdomain_obj:delete(ObjId, Reason) of
                 ok ->
                     {ok, #{}, State};
                 {error, Error} ->
@@ -166,9 +184,9 @@ api_remove(#{obj_id:=ObjId}=Data, #{srv_id:=SrvId}=State) ->
 
 
 %% @doc
-api_update(#{obj_id:=ObjId}=Data, #{srv_id:=SrvId}=State) ->
-    case nkdomain_obj:load(SrvId, ObjId) of
-        {ok, _Type, _ObjId, _Path, _Pid} ->
+api_update(#{id:=Id}=Data, #{srv_id:=SrvId}=State) ->
+    case nkdomain_obj:load(SrvId, Id) of
+        {ok, _Type, ObjId, _Pid} ->
             case nkdomain_obj:update(ObjId, Data) of
                 ok ->
                     {ok, #{}, State};

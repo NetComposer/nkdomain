@@ -24,9 +24,10 @@
 
 -export([plugin_deps/0, plugin_syntax/0, plugin_defaults/0, plugin_config/2]).
 -export([object_store_reload_types/1, object_store_read_raw/2, object_store_save_raw/3,
-         object_store_remove_raw/2]).
--export([object_store_find_obj_id/2, object_store_find_path/2, object_store_find_childs/3,
-        object_store_find_all_childs/3, object_store_find_alias/2]).
+         object_store_delete_raw/2]).
+-export([object_store_find_obj_id/2, object_store_find_path/2,
+         object_store_find_types/2, object_store_find_all_types/2,
+         object_store_find_childs/3, object_store_find_all_childs/3, object_store_find_alias/2]).
 -export([object_store_archive_raw/3]).
 -export([elastic_get_indices/2, elastic_get_mappings/3, elastic_get_aliases/3,
          elastic_get_templates/2]).
@@ -134,8 +135,8 @@ object_store_save_raw(SrvId, ObjId, Map) ->
 
 
 %% @doc
-object_store_remove_raw(SrvId, ObjId) ->
-    remove_obj(SrvId, ObjId).
+object_store_delete_raw(SrvId, ObjId) ->
+    delete_obj(SrvId, ObjId).
 
 
 %% @doc
@@ -156,6 +157,16 @@ object_store_find_path(SrvId, Path) ->
 %% @doc
 object_store_find_alias(SrvId, Alias) ->
     find_obj_alias(SrvId, Alias).
+
+
+%% @doc
+object_store_find_types(SrvId, ObjId) ->
+    find_types(SrvId, ObjId, #{}).
+
+
+%% @doc
+object_store_find_all_types(SrvId, ObjId) ->
+    find_all_types(SrvId, ObjId, #{}).
 
 
 %% @doc
@@ -239,7 +250,7 @@ save_obj(SrvId, #{obj_id:=ObjId}=Store) ->
 
 
 %% @doc Removes an object
-remove_obj(SrvId, ObjId) ->
+delete_obj(SrvId, ObjId) ->
     #es_config{index=Index, type=IdxType} = SrvId:config_nkdomain_store_es(),
     nkelastic_api:delete(SrvId, Index, IdxType, ObjId).
 
@@ -250,7 +261,7 @@ remove_obj(SrvId, ObjId) ->
 
 find_obj_id(SrvId, ObjId) ->
     Query = query_filter(#{term => #{obj_id => ObjId}}),
-    case find_objs(SrvId, Query, #{}) of
+    case search_objs(SrvId, Query, #{}) of
         {ok, 0, []} ->
             {error, object_not_found};
         {ok, 1, [{Type, _ObjId, Path}]} ->
@@ -269,7 +280,7 @@ find_path(SrvId, Path) ->
     case nkdomain_util:is_path(Path) of
         {true, Path2} ->
             Query = query_filter(#{term => #{path => Path2}}),
-            case find_objs(SrvId, Query, #{}) of
+            case search_objs(SrvId, Query, #{}) of
                 {ok, 0, []} ->
                     {error, object_not_found};
                 {ok, 1, [{Type, ObjId, _Path}]} ->
@@ -283,6 +294,29 @@ find_path(SrvId, Path) ->
     end.
 
 
+%% @doc Finds all types
+-spec find_all_types(nkservice:id(), nkdomain:path(), nkelastic_api:search_opts()) ->
+    {ok, integer(), [{nkdomain:type(), nkdomain:obj_id(), nkdomain:path()}]}.
+
+find_all_types(SrvId, Path, Opts) ->
+    case nkdomain_util:is_path(Path) of
+        {true, Path2} ->
+            Query = query_filter(#{prefix => #{path => Path2}}),
+            search_types(SrvId, Query, Opts);
+        false ->
+            {error, invalid_path}
+    end.
+
+
+%% @doc Finds all types
+-spec find_types(nkservice:id(), nkdomain:obj_id(), nkelastic_api:search_opts()) ->
+    {ok, integer(), [{nkdomain:type(), nkdomain:obj_id(), nkdomain:path()}]}.
+
+find_types(SrvId, ObjId, Opts) ->
+    Query = query_filter(#{term => #{parent_id => ObjId}}),
+    search_types(SrvId, Query, Opts).
+
+
 %% @doc Finds all objects on a path
 -spec find_obj_childs(nkservice:id(), nkdomain:obj_id(),
                       nkelastic_api:search_opts() | #{type:=nkdomain:type()}) ->
@@ -294,7 +328,7 @@ find_obj_childs(SrvId, ParentId, Opts) ->
         find_objs_filter(Opts)
     ],
     Query = query_filter(Filter),
-    find_objs(SrvId, Query, Opts).
+    search_objs(SrvId, Query, Opts).
 
 
 %% @doc Finds all objects on a path
@@ -310,7 +344,7 @@ find_obj_all_childs(SrvId, Path, Opts) ->
             ],
             Query = query_filter(Filter),
             lager:info("Query: ~s", [nklib_json:encode_pretty(Query)]),
-            find_objs(SrvId, Query, Opts);
+            search_objs(SrvId, Query, Opts);
         false ->
             {error, invalid_path}
     end.
@@ -325,7 +359,7 @@ find_obj_alias(SrvId, Alias) ->
     Filter = [
         #{term => #{aliases => nklib_util:to_binary(Alias)}}
     ],
-    find_objs(SrvId, query_filter(Filter), #{}).
+    search_objs(SrvId, query_filter(Filter), #{}).
 
 
 %% @doc Archive an object
@@ -449,21 +483,55 @@ query_filter(Filter) ->
 
 
 %% @private
-find_objs(SrvId, Query, Opts) ->
+search_objs(SrvId, Query, Opts) ->
+    case search(SrvId, Query, Opts) of
+        {ok, N, Data, _Aggs, _Meta} ->
+            {ok, N, Data};
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
+%% @private
+search_types(SrvId, Query, Opts) ->
+    Opts2 = Opts#{
+        aggs => #{
+            types => #{
+                terms => #{
+                    field => type
+                }
+            }
+        },
+        size => 0
+    },
+    case search(SrvId, Query, Opts2) of
+        {ok, N, [], #{<<"types">>:=Types}, _Meta} ->
+            Data = lists:map(
+                fun(#{<<"key">>:=Key, <<"doc_count">>:=Count}) -> {Key, Count} end,
+                maps:get(<<"buckets">>, Types)),
+            {ok, N, Data};
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
+%% @private
+search(SrvId, Query, Opts) ->
     Opts2 = Opts#{
         fields => [<<"type">>, <<"path">>]
     },
     #es_config{index=Index, type=IdxType} = SrvId:config_nkdomain_store_es(),
     case nkelastic_api:search(SrvId, Index, IdxType, Query, Opts2) of
-        {ok, N, List, _Aggs, _Meta} ->
+        {ok, N, List, Aggs, Meta} ->
             Data = lists:map(
                 fun(#{<<"_id">>:=ObjId, <<"_source">>:=Source}) ->
                     #{<<"type">>:=Type, <<"path">>:=Path} = Source,
                     {Type, ObjId, Path}
                 end,
                 List),
-            {ok, N, Data};
+            {ok, N, Data, Aggs, Meta};
         {error, Error} ->
-            ?LLOG(notice, "Error calling find_objs (~p, ~p): ~p", [Query, Opts, Error]),
+            ?LLOG(notice, "Error calling search (~p, ~p): ~p", [Query, Opts, Error]),
             {ok, 0, []}
     end.
+
