@@ -50,6 +50,11 @@ user_update(Id, Name, Password, Aliases) ->
     cmd(user, update, Data).
 
 
+user_find_referred(Id, Type) ->
+    cmd(user, find_referred, #{id=>Id, type=>Type}).
+
+
+
 domain_create(Path, Desc) ->
     Data = #{
         path => to_bin(Path),

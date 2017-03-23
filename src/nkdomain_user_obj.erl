@@ -24,7 +24,7 @@
 -behavior(nkdomain_obj).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([login/3]).
+-export([login/3, find_referred/3]).
 -export([object_get_info/0, object_mapping/0, object_syntax/1,
          object_api_syntax/3, object_api_allow/4, object_api_cmd/4]).
 -export([user_pass/1]).
@@ -41,10 +41,10 @@
 
 -type login_opts() ::
     #{
-        register => nklib:link(),
         password => binary(),
         session_id => binary(),
         session_type => module(),
+        session_pid => pid(),
         local => binary(),
         remote => binary(),
         login_meta => map()
@@ -62,11 +62,11 @@
 
 login(SrvId, Login, Opts) ->
     case do_load(SrvId, Login, Opts) of
-        {ok, ObjId, Pid} ->
-            case do_login(Pid, ObjId, Opts) of
+        {ok, ObjId, UserPid} ->
+            case do_login(UserPid, ObjId, Opts) of
                 {ok, UserObjId} ->
-                    case do_start_session(SrvId, UserObjId, Pid, Opts) of
-                        {ok, SessId} ->
+                    case do_start_session(SrvId, UserObjId, Opts) of
+                        {ok, SessId, _SessPid} ->
                             {ok, UserObjId, SessId, #{}};
                         {error, Error} ->
                             {error, Error}
@@ -79,6 +79,14 @@ login(SrvId, Login, Opts) ->
     end.
 
 
+%% @doc
+find_referred(SrvId, Id, Spec) ->
+    case nkdomain_obj:find(SrvId, Id) of
+        {ok, _Type, ObjId, _Path, _Pid} ->
+            SrvId:object_store_find_referred(SrvId, ObjId, Spec);
+        {error, Error} ->
+            {error, Error}
+    end.
 
 
 
@@ -206,22 +214,10 @@ do_login(_Pid, _ObjId, _Opts) ->
 
 
 %% @private
-do_start_session(SrvId, UserId, Pid, Opts) ->
-    SessId = case maps:find(session_id, Opts) of
-        {ok, SessId0} -> SessId0;
-        error -> nklib_util:luid()
-    end,
-    case nkservice:get(SrvId, nkdomain_data) of
-        #{domain_obj_id:=ParentId} ->
-            case nkdomain_session_obj:create(SrvId, SessId, UserId, ParentId, Pid) of
-                ok ->
-                    {ok, SessId};
-                {error, Error} ->
-                    {error, Error}
-            end;
-        _ ->
-            {error, missing_domain}
-    end.
+do_start_session(SrvId, UserId, Opts) ->
+    Pid = maps:get(session_pid, Opts),
+    Opts2 = Opts#{referred_id=>UserId, pid=>Pid},
+    nkdomain_session_obj:create(SrvId, Opts2).
 
 
 

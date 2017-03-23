@@ -797,7 +797,7 @@ do_delete(Reason, #state{srv_id=SrvId}=State) ->
             destroyed_code => Code,
             destroyed_reason => Txt
         }, Obj),
-    State3 = State2#state{session=Session#obj_session{obj=Obj2, is_dirty=true}},
+    State3 = State2#state{session=Session#obj_session{obj=Obj, is_dirty=true}},
     State4 = case handle(object_archive, [Obj2], State3) of
         {ok, ArchState} ->
             ArchState;
@@ -816,7 +816,7 @@ do_delete(Reason, #state{srv_id=SrvId}=State) ->
 
 
 %% @private
-do_stop(Reason, #state{srv_id=SrvId, started=Started}=State) ->
+do_stop(Reason, #state{srv_id=SrvId}=State) ->
     case is_stopped(State) of
         true ->
             noreply(State);
@@ -826,26 +826,40 @@ do_stop(Reason, #state{srv_id=SrvId, started=Started}=State) ->
             State3 = do_add_timelog(#{msg=>stopped, code=>Code, reason=>Txt}, State2),
             % Give time for possible registrations to success and capture stop event
             State4 = do_status({stopped, Reason}, State3),
-            timer:sleep(100),
-            State5 = do_event({stopped, Reason}, State4),
-            #state{session=#obj_session{meta=Meta}} = State5,
-            State6 = case Meta of
-                #{remove_after_stop:=true} ->
-                    do_delete(object_stopped, State5);
-                _ ->
-                    State5
-            end,
-            Now = nklib_util:m_timestamp(),
-            case (Started + ?MIN_STARTED_TIME) - Now of
-                Time when Time > 0 ->
-                    % Save a minimum running time
-                    erlang:send_after(Time, self(), nkdomain_destroy);
-                _ ->
-                    % Process any remaining message
-                    self() ! nkdomain_destroy
-            end,
-            noreply(State6)
+            #state{session=#obj_session{obj=Obj}=Session} = State4,
+%%            State5 = case Obj of
+%%                #{pid:=Pid} when Pid==self() ->
+%%                    Session2 = Session#obj_session{obj=maps:remove(pid, Obj), is_dirty=true},
+%%                    do_save(State4#state{session=Session2});
+%%                _ ->
+%%                    State4
+%%            end,
+            do_stop2(Reason, State4)
     end.
+
+
+%% @private
+do_stop2(Reason, #state{started=Started}=State) ->
+    State2 = do_event({stopped, Reason}, State),
+    #state{session = #obj_session{meta = Meta}} = State2,
+    State3 = case Meta of
+        #{remove_after_stop:=true} ->
+            do_delete(object_stopped, State2);
+        _ ->
+            State2
+    end,
+    Now = nklib_util:m_timestamp(),
+    case (Started + ?MIN_STARTED_TIME) - Now of
+        Time when Time > 0 ->
+            % Save a minimum running time
+            erlang:send_after(Time, self(), nkdomain_destroy);
+        _ ->
+            % Process any remaining message
+            self() ! nkdomain_destroy
+    end,
+    noreply(State3).
+
+
 
 
 %% @private

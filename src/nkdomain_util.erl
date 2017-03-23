@@ -23,6 +23,7 @@
 
 -export([is_path/1, get_parts/2, error_code/2, add_mandatory/3]).
 -export([api_common/4, api_create/3, api_delete/2, api_update/2]).
+-export([search_api/2]).
 -export_type([error/0]).
 
 -type error() ::
@@ -196,6 +197,22 @@ api_update(#{id:=Id}=Data, #{srv_id:=SrvId}=State) ->
         {error, Error} ->
             {error, Error, State}
     end.
+
+
+%% @doc
+search_api({ok, Total, List}, State) ->
+    Data = #{
+        total => Total,
+        data =>
+            lists:map(
+                fun({Type, ObjId, Path}) -> #{type=>Type, obj_id=>ObjId, path=>Path} end,
+                List)
+    },
+    {ok, Data, State};
+
+search_api({error, Error}, State) ->
+    {error, Error, State}.
+
 
 
 %% @private

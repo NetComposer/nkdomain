@@ -81,6 +81,12 @@ api('', update, Syntax) ->
     },
     nklib_syntax:add_mandatory([id], Syntax2);
 
+api('', find_referred, Syntax) ->
+    Syntax2 = Syntax#{
+        id => binary,
+        type => binary
+    },
+    nklib_syntax:add_mandatory([id], Syntax2);
 
 api(_Sub, _Cmd, Syntax) ->
     lager:error("unknown syntax: ~p, ~p", [_Sub, _Cmd]),

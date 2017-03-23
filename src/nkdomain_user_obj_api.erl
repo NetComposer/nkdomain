@@ -32,14 +32,15 @@
 
 %% @doc
 cmd('', login, #{id:=User}=Data, #{srv_id:=SrvId}=State) ->
-    LoginMeta1 = maps:with([session_type, session_id, remote], State),
+    LoginMeta1 = maps:with([session_type, session_id, local, remote], State),
     LoginMeta2 = LoginMeta1#{
         password => maps:get(password, Data, <<>>),
-        login_meta => maps:get(meta, Data, #{})
+        login_meta => maps:get(meta, Data, #{}),
+        session_pid => self()
     },
     case nkdomain_user_obj:login(SrvId, User, LoginMeta2) of
-        {ok, UserId, LoginMeta3} ->
-            {login, #{obj_id=>UserId}, UserId, LoginMeta3, State};
+        {ok, UserId, SessId, LoginMeta3} ->
+            {login, #{obj_id=>UserId, session_id=>SessId}, UserId, LoginMeta3, State};
         {error, Error} ->
             {error, Error, State}
     end;
@@ -52,6 +53,10 @@ cmd('', get_token, #{id:=User}=Data, #{srv_id:=SrvId}=State) ->
         {error, Error} ->
             {error, Error, State}
     end;
+
+cmd('', find_referred, #{id:=Id}=Data, #{srv_id:=SrvId}=State) ->
+    Search = nkdomain_user_obj:find_referred(SrvId, Id, Data),
+    nkdomain_util:search_api(Search, State);
 
 cmd('', Cmd, Data, State) ->
     nkdomain_util:api_common(?DOMAIN_USER, Cmd, Data, State);

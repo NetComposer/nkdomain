@@ -40,7 +40,7 @@
         session_id => binary(),
         referred_id => binary(),
         parent_id => binary(),
-        register => pid(),
+        pid => pid(),
         local => binary(),
         remote => binary()
     }.
@@ -50,34 +50,51 @@
 %% Public
 %% ===================================================================
 
+-spec create(nkservice:id(), create_opts()) ->
+    {ok, SessId::nkdomain:obj_id(), pid()} | {error, term()}.
+
 create(SrvId, Opts) ->
-    ParentId = maps:get(parent_id, Opts, <<"root">>),
-    {SessId, Opts2} = nklib_util:add_id(Opts, session),
-    case nkdomain_obj:load(SrvId, ParentId) of
-        {ok, _ParentType, ParentId, ParentPath, _ParentPid} ->
-            Session1 = #{
-                type => ?DOMAIN_SESSION,
-                path => list_to_binary([ParentPath, $/, ?DOMAIN_SESSION, "s/", SessId]),
-                parent_id => ParentId
-            },
-            Session2 = case Opts of
-                #{referred_id:=ReferredId} ->
-                    Session1#{referred_id => ReferredId};
-                _ ->
-                    Session1
+    case nkservice:get(SrvId, nkdomain_data) of
+        #{domain_obj_id:=ParentId} ->
+            Make = case Opts of
+                #{session_id:=SessId} -> #{obj_id => SessId};
+                _ -> #{}
             end,
-            Meta = #{
-                obj_id => SessId,
-                register => {?MODULE, self()},
-                update_pid => true,
-                remove_after_stop => true
-            },
-            case nkdomain_obj:create(SrvId, Session2, Meta) of
-                {ok, SessId, _SessPid} ->
-                    ok;
+            BaseList = [
+                case Opts of
+                    #{referred_id:=ReferredId} -> {referred_id, ReferredId};
+                    _ -> []
+                end,
+                {?DOMAIN_SESSION,
+                    maps:from_list(lists:flatten([
+                        case Opts of
+                            #{local:=Local} -> {local, Local};
+                            _ -> []
+                        end,
+                        case Opts of
+                            #{remote:=Remote} -> {remote, Remote};
+                            _ -> []
+                        end
+                    ]))}
+            ],
+            Base = maps:from_list(lists:flatten(BaseList)),
+            CreateList = [
+                {update_pid, true},
+                {remove_after_stop, true},
+                case Opts of
+                    #{pid:=Pid} -> {register, {?MODULE, Pid}};
+                    _ -> []
+                end
+            ],
+            Create = maps:from_list(lists:flatten(CreateList)),
+            case nkdomain_obj_lib:make_obj(SrvId, ?DOMAIN_SESSION, ParentId, Base, Make) of
+                {ok, Obj} ->
+                    nkdomain_obj_lib:create(SrvId, Obj, Create);
                 {error, Error} ->
                     {error, Error}
-            end
+            end;
+        _ ->
+            {error, missing_domain}
     end.
 
 
@@ -95,12 +112,18 @@ object_get_info() ->
 
 %% @private
 object_mapping() ->
-    #{}.
+    #{
+        local => #{type => keyword},
+        remote => #{type => keyword}
+    }.
 
 
 %% @private
 object_syntax(_Mode) ->
-    #{}.
+    #{
+        local => binary,
+        remote => binary
+    }.
 
 
 %% @private

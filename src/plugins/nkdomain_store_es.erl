@@ -27,7 +27,8 @@
          object_store_delete_raw/2]).
 -export([object_store_find_obj_id/2, object_store_find_path/2,
          object_store_find_types/2, object_store_find_all_types/2,
-         object_store_find_childs/3, object_store_find_all_childs/3, object_store_find_alias/2,
+         object_store_find_childs/3, object_store_find_all_childs/3,
+         object_store_find_alias/2, object_store_find_referred/3,
          object_store_delete_childs/3, object_store_delete_all_childs/3]).
 -export([object_store_archive_raw/3]).
 -export([elastic_get_indices/2, elastic_get_mappings/3, elastic_get_aliases/3,
@@ -161,6 +162,11 @@ object_store_find_alias(SrvId, Alias) ->
 
 
 %% @doc
+object_store_find_referred(SrvId, ObjId, Spec) ->
+    find_referred(SrvId, ObjId, Spec).
+
+
+%% @doc
 object_store_find_types(SrvId, ObjId) ->
     find_types(SrvId, ObjId, #{}).
 
@@ -233,7 +239,24 @@ elastic_get_templates(Acc, #{id:=SrvId}=Service) ->
 reload_types(SrvId) ->
     #es_config{index=Index, type=IdxType} = SrvId:config_nkdomain_store_es(),
     Mappings = get_mappings(SrvId, Index),
-    nkelastic_api:add_mapping(SrvId, Index, IdxType, Mappings).
+    case nkelastic_api:add_mapping(SrvId, Index, IdxType, Mappings) of
+        ok ->
+            do_reload_templates(SrvId, maps:to_list(get_templates(SrvId)));
+        {error, Error} ->
+            {error, Error}
+    end.
+
+%% @private
+do_reload_templates(_SrvId, []) ->
+    ok;
+
+do_reload_templates(SrvId, [{Name, Data}|Rest]) ->
+    case nkelastic_api:create_template(SrvId, Name, Data) of
+        ok ->
+            do_reload_templates(SrvId, Rest);
+        {error, Error} ->
+            {error, Error}
+    end.
 
 
 %% @private
@@ -365,6 +388,20 @@ find_obj_alias(SrvId, Alias) ->
         #{term => #{aliases => nklib_util:to_binary(Alias)}}
     ],
     search_objs(SrvId, query_filter(Filter), #{}).
+
+
+%% @doc Finds all referred objects
+-spec find_referred(nkservice:id(), nkdomain:obj_id(),
+    nkelastic_api:search_opts() | #{type:=nkdomain:type()}) ->
+    {ok, integer(), [{nkdomain:type(), nkdomain:obj_id(), nkdomain:path()}]}.
+
+find_referred(SrvId, ObjId, Opts) ->
+    Filter = [
+        #{term => #{referred_id => ObjId}} |
+        find_objs_filter(Opts)
+    ],
+    Query = query_filter(Filter),
+    search_objs(SrvId, Query, Opts).
 
 
 %% @doc Archive an object

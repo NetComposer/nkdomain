@@ -35,7 +35,8 @@
          object_store_delete_raw/2, object_store_archive_raw/3]).
 -export([object_store_find_obj_id/2, object_store_find_path/2,
          object_store_find_types/2, object_store_find_all_types/2,
-         object_store_find_childs/3, object_store_find_all_childs/3, object_store_find_alias/2,
+         object_store_find_childs/3, object_store_find_all_childs/3,
+         object_store_find_alias/2, object_store_find_referred/3,
          object_store_delete_childs/3, object_store_delete_all_childs/3]).
 
 -define(LLOG(Type, Txt, Args), lager:Type("NkDOMAIN Callbacks: "++Txt, Args)).
@@ -69,6 +70,7 @@ api_error(object_has_childs) 		        -> "Object has childs";
 api_error(object_is_stopped) 		        -> "Object is stopped";
 api_error(object_not_found) 		        -> "Object not found";
 api_error(object_deleted) 		            -> "Object removed";
+api_error(object_stopped) 		            -> "Object stopped";
 api_error(path_not_found) 		            -> "Path not found";
 api_error(_)   		                        -> continue.
 
@@ -508,11 +510,21 @@ object_store_find_alias(_SrvId, _Alias) ->
 
 
 %% @doc
+-spec object_store_find_referred(nkservice:id(), nkdomain:obj_id(), Spec::map()) ->
+    {ok, Total::integer(), [{nkdomain:type(), nkdomain:obj_id(), nkdomain:path()}]} |
+    {error, term()}.
+
+object_store_find_referred(_SrvId, _ObjId, _Spec) ->
+    {error, store_not_implemented}.
+
+
+%% @doc
 -spec object_store_archive_raw(nkservice:id(), nkdomain:obj_id(), map()) ->
     ok | {error, term()}.
 
 object_store_archive_raw(_SrvId, _ObjId, _Map) ->
     {error, store_not_implemented}.
+
 
 
 %% @doc
