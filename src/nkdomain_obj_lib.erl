@@ -26,11 +26,25 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([find/2, load/2, load/3, create/3]).
+-export([make_obj/5]).
 -export([do_find/1, do_call/2, do_call/3, do_cast/2, do_info/2]).
 
-%%-include("nkdomain.hrl").
+-include("nkdomain.hrl").
 
 -define(DEF_SYNC_CALL, 5000).
+
+
+%% ===================================================================
+%% Types
+%% ===================================================================
+
+
+-type base_opts() ::
+    #{
+        obj_id => binary(),
+        name => binary()
+    }.
+
 
 %% ===================================================================
 %% Public
@@ -85,7 +99,7 @@ find(Srv, IdOrPath) ->
 
 %% @doc Finds an objects's pid or loads it from storage
 -spec load(nkservice:id(), nkdomain:obj_id()|nkdomain:path()) ->
-    {ok, nkdomain:type(), nkdomain:obj_id(), pid()} |
+    {ok, nkdomain:type(), nkdomain:obj_id(), nkdomain:path(), pid()} |
     {error, obj_not_found|term()}.
 
 load(Srv, IdOrPath) ->
@@ -99,14 +113,14 @@ load(Srv, IdOrPath) ->
 
 load(Srv, IdOrPath, Meta) ->
     case find(Srv, IdOrPath) of
-        {ok, Type, ObjId, _Path, Pid} when is_pid(Pid) ->
+        {ok, Type, ObjId, Path, Pid} when is_pid(Pid) ->
             case Meta of
                 #{register:=Link} ->
                     register(Pid, Link);
                 _ ->
                     ok
             end,
-            {ok, Type, ObjId, Pid};
+            {ok, Type, ObjId, Path, Pid};
         {ok, _Type, ObjId, _Path, undefined} ->
             do_load2(Srv, ObjId, Meta);
         {error, path_not_found} ->
@@ -146,41 +160,69 @@ do_load2(Srv, ObjId, Meta) ->
 
 
 %% @private
-do_load3(ObjId, #{type:=Type}=Obj, Meta2) ->
+do_load3(ObjId, #{type:=Type, path:=Path}=Obj, Meta2) ->
     {ok, ObjPid} = nkdomain_obj:start(Obj, Meta2),
-    {ok, Type, ObjId, ObjPid}.
+    {ok, Type, ObjId, Path, ObjPid}.
+
+
+%% @doc Adds type, obj_id, parent_id, path, created_time
+-spec make_obj(nkservice:id(), nkdomain:type(), nkdomain:id(), map(), base_opts()) ->
+    {ok, nkdomain:obj()} | {error, term()}.
+
+make_obj(Srv, Type, Parent, Base, Opts) ->
+    Type2 = to_bin(Type),
+    ObjId = case Opts of
+        #{obj_id:=ObjId0} ->
+            to_bin(ObjId0);
+        _ ->
+             <<Type2/binary, $-, (nklib_util:luid())/binary>>
+    end,
+    Name1 = case Opts of
+        #{name:=Name0} -> to_bin(Name0);
+        _ -> ObjId
+    end,
+    Name2 = case Type2 of
+        ?DOMAIN_DOMAIN ->
+            Name1;
+        _ ->
+            <<Type2/binary, "s/", Name1/binary>>
+    end,
+    case find(Srv, Parent) of
+        {ok, _ParentType, ParentId, ParentPath, _ParentPid} ->
+            BasePath = case ParentPath of
+                <<"/">> -> <<>>;
+                _ -> ParentPath
+            end,
+            Path = <<BasePath/binary, $/, Name2/binary>>,
+            Obj = Base#{
+                obj_id => ObjId,
+                parent_id => ParentId,
+                type => Type2,
+                path => Path,
+                created_time => nklib_util:m_timestamp()
+            },
+            {ok, Obj};
+        {error, object_not_found} ->
+            {error, father_not_found};
+        {error, Error} ->
+            {error, Error}
+    end.
 
 
 %% @doc Creates a new object
 -spec create(nkservice:id(), map(), nkdomain_obj:create_opts()) ->
     {ok, nkdomain:obj_id(), pid()}.
 
-create(_Srv, #{obj_id:=_}, _Meta) ->
-    {error, invalid_object_id};
-
-create(_Srv, #{<<"obj_id">>:=_}, _Meta) ->
-    {error, invalid_object_id};
-
-create(Srv, Obj, Meta) ->
+create(Srv, #{obj_id:=ObjId, type:=Type}=Obj, Meta) ->
     case nkservice_srv:get_srv_id(Srv) of
         {ok, SrvId} ->
-            case Meta of
-                #{obj_id:=ObjId} when is_binary(ObjId)->
-                    case SrvId:object_store_read_raw(SrvId, ObjId) of
-                        {error, object_not_found} ->
-                            do_create(SrvId, Obj#{obj_id=>ObjId}, Meta);
-                        {ok, _} ->
-                            {error, object_already_exists};
-                        {error, Error} ->
-                            {error, Error}
-                    end;
-                _ ->
-                    Type = case Obj of
-                        #{type:=ObjType} -> ObjType;
-                        #{<<"type">>:=ObjType} -> ObjType
-                    end,
-                    {ObjId, _Meta2} = nkmedia_util:add_id(obj_id, Meta, Type),
-                    do_create(SrvId, Obj#{obj_id=>ObjId}, Meta)
+            case SrvId:object_store_read_raw(SrvId, ObjId) of
+                {error, object_not_found} ->
+                    do_create(SrvId, Type, Obj, Meta);
+                {ok, _} ->
+                    {error, object_already_exists};
+                {error, Error} ->
+                    {error, Error}
             end;
         not_found ->
             {error, service_not_found}
@@ -188,24 +230,17 @@ create(Srv, Obj, Meta) ->
 
 
 %% @private
-do_create(SrvId, Obj, Meta) ->
-    Type = case Obj of
-        #{type:=ObjType} -> ObjType;
-        #{<<"type">>:=ObjType} -> ObjType
-    end,
+do_create(SrvId, Type, Obj, Meta) ->
     case SrvId:object_parse(SrvId, load, Type, Obj) of
         {ok, _Module, #{obj_id:=ObjId}=Obj2} ->
             % We know type is valid here
-            Obj3 = Obj2#{
-                created_time => nklib_util:m_timestamp()
-            },
-            case do_create_check_parent(SrvId, Obj3) of
-                {ok, Obj4} ->
+            case do_create_check_parent(SrvId, Obj2) of
+                {ok, Obj3} ->
                     Meta2 = Meta#{
                         srv_id => SrvId,
                         is_dirty => true
                     },
-                    {ok, ObjPid} = nkdomain_obj:start(Obj4, Meta2),
+                    {ok, ObjPid} = nkdomain_obj:start(Obj3, Meta2),
                     {ok, ObjId, ObjPid};
                 {error, Error} ->
                     {error, Error}
@@ -216,12 +251,12 @@ do_create(SrvId, Obj, Meta) ->
 
 
 %% @private
-do_create_check_parent(_SrvId, #{type:=<<"domain">>, obj_id:=<<"root">>, path:=<<"/">>}=Obj) ->
-    {ok, Obj#{parent_id=><<>>}};
+do_create_check_parent(_SrvId, #{type:=<<"domain">>, obj_id:=<<"root">>, path:=<<"/">>, parent_id:=<<>>}=Obj) ->
+    {ok, Obj};
 
 do_create_check_parent(SrvId, #{parent_id:=ParentId, type:=Type, path:=Path}=Obj) ->
     case load(SrvId, ParentId, #{}) of                                      % TODO: Use some usage?
-        {ok, _ParentType, ParentId, Pid} ->
+        {ok, _ParentType, ParentId, _ParentPath, Pid} ->
             case do_call(Pid, {nkdomain_check_create_child, Type, Path}) of
                 ok ->
                     {ok, Obj};
@@ -231,19 +266,6 @@ do_create_check_parent(SrvId, #{parent_id:=ParentId, type:=Type, path:=Path}=Obj
         {error, Error} ->
             lager:notice("Error loading parent object ~s (~p)", [ParentId, Error]),
             {error, could_not_load_parent}
-    end;
-
-do_create_check_parent(SrvId, #{type:=Type, path:=Path}=Obj) ->
-    case nkdomain_util:get_parts(Type, Path) of
-        {ok, Base, _Name} ->
-            case find(SrvId, Base) of
-                {ok, _ParentType, ParentId, _ParentPath, _Pid} ->
-                    do_create_check_parent(SrvId, Obj#{parent_id=>ParentId});
-                {error, _} ->
-                    {error, could_not_load_parent}
-            end;
-        {error, Error} ->
-            {error, Error}
     end.
 
 
@@ -317,3 +339,7 @@ do_info(Id, Msg) ->
         not_found ->
             {error, obj_not_found}
     end.
+
+
+%% @private
+to_bin(T) -> nklib_util:to_binary(T).

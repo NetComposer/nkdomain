@@ -39,7 +39,7 @@ cmd('', get_types, #{id:=Id}, #{srv_id:=SrvId}=State) ->
             {error, Error, State}
     end;
 
-cmd('', get_all_types, #{id:=Id}=Data, #{srv_id:=SrvId}=State) ->
+cmd('', get_all_types, #{id:=Id}, #{srv_id:=SrvId}=State) ->
     case nkdomain_domain_obj:get_all_types(SrvId, Id) of
         {ok, N, List} ->
             {ok, #{total=>N, data=>maps:from_list(List)}, State};
@@ -63,14 +63,8 @@ cmd('', get_all_childs, #{id:=Id}=Data, #{srv_id:=SrvId}=State) ->
             {error, Error, State}
     end;
 
-cmd('', delete, Data, State) ->
-    nkdomain_util:api_delete(Data, State);
-
-cmd('', update, Data, State) ->
-    nkdomain_util:api_update(Data, State);
-
 cmd('', Cmd, Data, State) ->
     nkdomain_util:api_common(?DOMAIN_DOMAIN, Cmd, Data, State);
 
-cmd(_Sub, _Cmd, Data, State) ->
+cmd(_Sub, _Cmd, _Data, State) ->
     {error, not_implemented, State}.

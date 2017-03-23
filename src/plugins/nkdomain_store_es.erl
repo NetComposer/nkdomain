@@ -27,7 +27,8 @@
          object_store_delete_raw/2]).
 -export([object_store_find_obj_id/2, object_store_find_path/2,
          object_store_find_types/2, object_store_find_all_types/2,
-         object_store_find_childs/3, object_store_find_all_childs/3, object_store_find_alias/2]).
+         object_store_find_childs/3, object_store_find_all_childs/3, object_store_find_alias/2,
+         object_store_delete_childs/3, object_store_delete_all_childs/3]).
 -export([object_store_archive_raw/3]).
 -export([elastic_get_indices/2, elastic_get_mappings/3, elastic_get_aliases/3,
          elastic_get_templates/2]).
@@ -179,6 +180,15 @@ object_store_find_all_childs(SrvId, Path, Spec) ->
     find_obj_all_childs(SrvId, Path, Spec).
 
 
+%% @doc
+object_store_delete_childs(SrvId, ObjId, Opts) ->
+    delete_obj_childs(SrvId, ObjId, Opts).
+
+
+%% @doc
+object_store_delete_all_childs(SrvId, Path, Spec) ->
+    delete_obj_all_childs(SrvId, Path, Spec).
+
 
 %% ===================================================================
 %% NkElastic callbacks
@@ -299,12 +309,12 @@ find_path(SrvId, Path) ->
     {ok, integer(), [{nkdomain:type(), nkdomain:obj_id(), nkdomain:path()}]}.
 
 find_all_types(SrvId, Path, Opts) ->
-    case nkdomain_util:is_path(Path) of
-        {true, Path2} ->
-            Query = query_filter(#{prefix => #{path => Path2}}),
+    case path_filter(Path) of
+        {ok, Filter} ->
+            Query = query_filter(Filter),
             search_types(SrvId, Query, Opts);
-        false ->
-            {error, invalid_path}
+        {error, Error} ->
+            {error, Error}
     end.
 
 
@@ -336,17 +346,12 @@ find_obj_childs(SrvId, ParentId, Opts) ->
     {ok, integer(), [{nkdomain:type(), nkdomain:obj_id()}]}.
 
 find_obj_all_childs(SrvId, Path, Opts) ->
-    case nkdomain_util:is_path(Path) of
-        {true, Path2} ->
-            Filter = [
-                #{prefix => #{path => Path2}} |
-                find_objs_filter(Opts)
-            ],
-            Query = query_filter(Filter),
-            lager:info("Query: ~s", [nklib_json:encode_pretty(Query)]),
+    case path_filter(Path) of
+        {ok, Filter} ->
+            Query = query_filter([Filter | find_objs_filter(Opts)]),
             search_objs(SrvId, Query, Opts);
-        false ->
-            {error, invalid_path}
+        {error, Error} ->
+            {error, Error}
     end.
 
 
@@ -370,6 +375,34 @@ archive_obj(SrvId, #{obj_id:=ObjId}=Store) ->
     case nkelastic_api:put(SrvId, Index2, IdxType, ObjId, Store) of
         {ok, _Vsn} ->
             ok;
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
+%% @doc Finds all objects on a path
+-spec delete_obj_childs(nkservice:id(), nkdomain:obj_id(),
+    nkelastic_api:search_opts() | #{type:=nkdomain:type()}) ->
+    {ok, integer(), [{nkdomain:type(), nkdomain:obj_id(), nkdomain:path()}]}.
+
+delete_obj_childs(SrvId, ParentId, Opts) ->
+    Filter = [
+        #{term => #{parent_id => ParentId}} |
+        find_objs_filter(Opts)
+    ],
+    Query = query_filter(Filter),
+    delete(SrvId, Query).
+
+
+%% @doc Finds all objects on a path
+-spec delete_obj_all_childs(nkservice:id(), nkdomain:domain(), nkelastic_api:list_opts()) ->
+    {ok, integer(), [{nkdomain:type(), nkdomain:obj_id()}]}.
+
+delete_obj_all_childs(SrvId, Path, Opts) ->
+    case path_filter(Path) of
+        {ok, Filter} ->
+            Query = query_filter([Filter | find_objs_filter(Opts)]),
+            delete(SrvId, Query);
         {error, Error} ->
             {error, Error}
     end.
@@ -466,6 +499,18 @@ find_objs_filter(Opts) ->
 
 
 %% @private
+path_filter(Path) ->
+    case nkdomain_util:is_path(Path) of
+        {true, <<"/">>} ->
+            {ok, #{wildcard => #{path => <<"/?*">>}}};
+        {true, Path2} ->
+            {ok, #{prefix => #{path => Path2}}};
+        false ->
+            {error, invalid_path}
+    end.
+
+
+%% @private
 query_filter([Single]) ->
     #{
         constant_score => #{
@@ -510,6 +555,8 @@ search_types(SrvId, Query, Opts) ->
                 fun(#{<<"key">>:=Key, <<"doc_count">>:=Count}) -> {Key, Count} end,
                 maps:get(<<"buckets">>, Types)),
             {ok, N, Data};
+        {ok, 0, [], _Agg, _Meta} ->
+            {ok, 0, []};
         {error, Error} ->
             {error, Error}
     end.
@@ -530,8 +577,22 @@ search(SrvId, Query, Opts) ->
                 end,
                 List),
             {ok, N, Data, Aggs, Meta};
+        {error, search_error} ->
+            {ok, 0, [], #{}, #{error=>search_error}};
         {error, Error} ->
             ?LLOG(notice, "Error calling search (~p, ~p): ~p", [Query, Opts, Error]),
-            {ok, 0, []}
+            {ok, 0, [], #{}, #{}}
+    end.
+
+
+%% @private
+delete(SrvId, Query) ->
+    #es_config{index=Index, type=IdxType} = SrvId:config_nkdomain_store_es(),
+    ?LLOG(info, "delete query: ~p", [Query]),
+    case nkelastic_api:delete_by_query(SrvId, Index, IdxType, Query) of
+        {ok, #{<<"total">> := Total}} ->
+            {ok, Total};
+        {error, Error} ->
+            {error, Error}
     end.
 

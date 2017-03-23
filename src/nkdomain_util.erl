@@ -171,7 +171,7 @@ api_create(Type, Data, #{srv_id:=SrvId}=State) ->
 api_delete(#{id:=Id}=Data, #{srv_id:=SrvId}=State) ->
     Reason = maps:get(reason, Data, api_delete),
     case nkdomain_obj:load(SrvId, Id) of
-        {ok, _Type, ObjId, _Pid} ->
+        {ok, _Type, ObjId, _Path, _Pid} ->
             case nkdomain_obj:delete(ObjId, Reason) of
                 ok ->
                     {ok, #{}, State};
@@ -186,7 +186,7 @@ api_delete(#{id:=Id}=Data, #{srv_id:=SrvId}=State) ->
 %% @doc
 api_update(#{id:=Id}=Data, #{srv_id:=SrvId}=State) ->
     case nkdomain_obj:load(SrvId, Id) of
-        {ok, _Type, ObjId, _Pid} ->
+        {ok, _Type, ObjId, _Path, _Pid} ->
             case nkdomain_obj:update(ObjId, Data) of
                 ok ->
                     {ok, #{}, State};

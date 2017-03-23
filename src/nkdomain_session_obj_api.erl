@@ -18,8 +18,8 @@
 %%
 %% -------------------------------------------------------------------
 
-%% @doc User Object API
--module(nkdomain_user_obj_api).
+%% @doc Session User Object API
+-module(nkdomain_session_obj_api).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([cmd/4]).
@@ -31,30 +31,8 @@
 %% ===================================================================
 
 %% @doc
-cmd('', login, #{id:=User}=Data, #{srv_id:=SrvId}=State) ->
-    LoginMeta1 = maps:with([session_type, session_id, remote], State),
-    LoginMeta2 = LoginMeta1#{
-        password => maps:get(password, Data, <<>>),
-        login_meta => maps:get(meta, Data, #{})
-    },
-    case nkdomain_user_obj:login(SrvId, User, LoginMeta2) of
-        {ok, UserId, LoginMeta3} ->
-            {login, #{obj_id=>UserId}, UserId, LoginMeta3, State};
-        {error, Error} ->
-            {error, Error, State}
-    end;
-
-cmd('', get_token, #{id:=User}=Data, #{srv_id:=SrvId}=State) ->
-    Password = maps:get(password, Data, <<>>),
-    case nkdomain_user_obj:login(SrvId, User, Password, #{}) of
-        {ok, UserId} ->
-            {ok, #{obj_id=>UserId}, State};
-        {error, Error} ->
-            {error, Error, State}
-    end;
-
 cmd('', Cmd, Data, State) ->
-    nkdomain_util:api_common(?DOMAIN_USER, Cmd, Data, State);
+    nkdomain_util:api_common(?DOMAIN_SESSION, Cmd, Data, State);
 
 cmd(_Sub, _Cmd, _Data, State) ->
     {error, not_implemented, State}.

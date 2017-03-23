@@ -24,7 +24,7 @@
 -behavior(nkdomain_obj).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([login/4]).
+-export([login/3]).
 -export([object_get_info/0, object_mapping/0, object_syntax/1,
          object_api_syntax/3, object_api_allow/4, object_api_cmd/4]).
 -export([user_pass/1]).
@@ -41,7 +41,13 @@
 
 -type login_opts() ::
     #{
-        register => nklib:link()
+        register => nklib:link(),
+        password => binary(),
+        session_id => binary(),
+        session_type => module(),
+        local => binary(),
+        remote => binary(),
+        login_meta => map()
     }.
 
 
@@ -50,16 +56,28 @@
 %% ===================================================================
 
 %% @doc
--spec login(nkservice:id(), User::binary(), Pass::binary(), login_opts()) ->
-    {ok, nkdomain:obj_id(), pid()} | {error, user_not_found|term()}.
+-spec login(nkservice:id(), User::binary(), login_opts()) ->
+    {ok, UserId::nkdomain:obj_id(), SessId::nkdomain:obj_id(), map()} |
+    {error, user_not_found|term()}.
 
-login(SrvId, Login, Pass, Opts) ->
+login(SrvId, Login, Opts) ->
     case do_load(SrvId, Login, Opts) of
         {ok, ObjId, Pid} ->
-            do_login(Pid, ObjId, Pass);
+            case do_login(Pid, ObjId, Opts) of
+                {ok, UserObjId} ->
+                    case do_start_session(SrvId, UserObjId, Pid, Opts) of
+                        {ok, SessId} ->
+                            {ok, UserObjId, SessId, #{}};
+                        {error, Error} ->
+                            {error, Error}
+                    end;
+                {error, Error} ->
+                    {error, Error}
+            end;
         {error, Error} ->
             {error, Error}
     end.
+
 
 
 
@@ -140,7 +158,7 @@ object_api_cmd(Sub, Cmd, Data, State) ->
 do_load(SrvId, Login, Opts) ->
     LoadOpts = maps:with([register], Opts),
     case nkdomain_obj:load(SrvId, Login, LoadOpts) of
-        {ok, ?DOMAIN_USER, ObjId, Pid} ->
+        {ok, ?DOMAIN_USER, ObjId, _Path, Pid} ->
             {ok, ObjId, Pid};
         _ ->
             case SrvId:object_store_find_alias(SrvId, Login) of
@@ -152,7 +170,7 @@ do_load(SrvId, Login, Opts) ->
                             ok
                     end,
                     case nkdomain_obj:load(SrvId, ObjId, LoadOpts) of
-                        {ok, ?DOMAIN_USER, ObjId, Pid} ->
+                        {ok, ?DOMAIN_USER, ObjId, _Path, Pid} ->
                             {ok, ObjId, Pid};
                         _ ->
                             {error, user_not_found}
@@ -164,7 +182,7 @@ do_load(SrvId, Login, Opts) ->
 
 
 %% @private
-do_login(Pid, ObjId, Pass) ->
+do_login(Pid, ObjId, #{password:=Pass}) ->
     {ok, Pass2} = user_pass(Pass),
     Fun = fun(#obj_session{obj=Obj}) ->
         case Obj of
@@ -181,7 +199,30 @@ do_login(Pid, ObjId, Pass) ->
             {error, invalid_password};
         {error, Error} ->
             {error, Error}
+    end;
+
+do_login(_Pid, _ObjId, _Opts) ->
+    {error, invalid_password}.
+
+
+%% @private
+do_start_session(SrvId, UserId, Pid, Opts) ->
+    SessId = case maps:find(session_id, Opts) of
+        {ok, SessId0} -> SessId0;
+        error -> nklib_util:luid()
+    end,
+    case nkservice:get(SrvId, nkdomain_data) of
+        #{domain_obj_id:=ParentId} ->
+            case nkdomain_session_obj:create(SrvId, SessId, UserId, ParentId, Pid) of
+                ok ->
+                    {ok, SessId};
+                {error, Error} ->
+                    {error, Error}
+            end;
+        _ ->
+            {error, missing_domain}
     end.
+
 
 
 %% @doc Generates a password from an user password or hash

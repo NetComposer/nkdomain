@@ -21,7 +21,7 @@
 %% @doc NkDomain service callback module
 -module(nkdomain_callbacks).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
--export([plugin_deps/0, service_init/2, service_handle_cast/2]).
+-export([plugin_deps/0, service_init/2, service_handle_cast/2, plugin_syntax/0, plugin_config/2]).
 -export([api_error/1, api_server_syntax/3, api_server_allow/2, api_server_cmd/2]).
 -export([object_mapping/0, object_syntax/1, object_parse/4, object_unparse/1]).
 -export([object_load/2, object_save/1, object_delete/1, object_archive/2,
@@ -35,7 +35,8 @@
          object_store_delete_raw/2, object_store_archive_raw/3]).
 -export([object_store_find_obj_id/2, object_store_find_path/2,
          object_store_find_types/2, object_store_find_all_types/2,
-         object_store_find_childs/3, object_store_find_all_childs/3, object_store_find_alias/2]).
+         object_store_find_childs/3, object_store_find_all_childs/3, object_store_find_alias/2,
+         object_store_delete_childs/3, object_store_delete_all_childs/3]).
 
 -define(LLOG(Type, Txt, Args), lager:Type("NkDOMAIN Callbacks: "++Txt, Args)).
 
@@ -57,10 +58,12 @@
 
 %% @doc
 api_error(could_not_load_parent)            -> "Object could not load parent";
+api_error(father_not_found)                 -> "Father not found";
 api_error(invalid_object_id)                -> "Invalid object id";
 api_error(invalid_object_type)              -> "Invalid object type";
 api_error(invalid_object_path)              -> "Invalid object path";
 api_error({invalid_object_path, P})         -> {"Invalid object path '~s'", [P]};
+api_error(missing_domain)                   -> "Domain is missing";
 api_error(object_already_exists)            -> "Object already exists";
 api_error(object_has_childs) 		        -> "Object has childs";
 api_error(object_is_stopped) 		        -> "Object is stopped";
@@ -87,6 +90,7 @@ object_mapping() ->
         type => #{type => keyword},
         path => #{type => keyword},
         parent_id => #{type => keyword},
+        referred_id => #{type => keyword},
         subtype => #{type => keyword},
         created_by => #{type => keyword},
         created_time => #{type => date},
@@ -100,6 +104,7 @@ object_mapping() ->
             fields => #{keyword => #{type=>keyword}}
         },
         aliases => #{type => keyword},
+        pid => #{type => keyword},
         icon_id => #{type => keyword}
     }.
 
@@ -113,6 +118,7 @@ object_syntax(load) ->
         type => binary,
         path => binary,
         parent_id => binary,
+        referred_id => binary,
         subtype => binary,
         created_by => binary,
         created_time => integer,
@@ -124,9 +130,10 @@ object_syntax(load) ->
         destroyed_reason => binary,
         description => binary,
         aliases => {list, binary},
+        pid => pid,
         icon_id => binary,
         '_store_vsn' => any,
-        '__mandatory' => [type, obj_id, path],
+        '__mandatory' => [type, obj_id, parent_id, path, created_time],
         id => ignore                                % Used in APIs
     };
 
@@ -237,11 +244,17 @@ object_parse(SrvId, Mode, Type, Map) ->
 
 object_unparse(#obj_session{srv_id=SrvId, type=Type, module=Module, obj=Obj}) ->
     BaseKeys = maps:keys(SrvId:object_mapping()),
-    BaseMap = maps:with(BaseKeys, Obj),
+    BaseMap1 = maps:with(BaseKeys, Obj),
+    BaseMap2 = case BaseMap1 of
+        #{pid:=Pid} ->
+            BaseMap1#{pid:=base64:encode(term_to_binary(Pid))};
+        _ ->
+            BaseMap1
+    end,
     ModData = maps:get(Type, Obj, #{}),
     ModKeys = maps:keys(Module:object_mapping()),
     ModMap = maps:with(ModKeys, ModData),
-    BaseMap#{Type => ModMap}.
+    BaseMap2#{Type => ModMap}.
 
 
 %% @doc Called when an object is modified
@@ -502,6 +515,26 @@ object_store_archive_raw(_SrvId, _ObjId, _Map) ->
     {error, store_not_implemented}.
 
 
+%% @doc
+%% TODO: It does not remove loaded objects!!
+-spec object_store_delete_childs(nkservice:id(), nkdomain:obj_id(), Spec::map()) ->
+    {ok, Total::integer()} | {error, term()}.
+
+object_store_delete_childs(_SrvId, _ObjId, _Spec) ->
+    {error, store_not_implemented}.
+
+
+%% @doc
+%% TODO: It does not remove loaded objects!!
+-spec object_store_delete_all_childs(nkservice:id(), nkdomain:path(), Spec::map()) ->
+    {ok, Total::integer()} | {error, term()}.
+
+object_store_delete_all_childs(_SrvId, _Path, _Spec) ->
+    {error, store_not_implemented}.
+
+
+
+
 
 %% ===================================================================
 %% API Server
@@ -554,6 +587,21 @@ plugin_deps() ->
 
 
 %% @private
+plugin_syntax() ->
+    #{
+        domain => binary
+    }.
+
+
+%% @private
+plugin_config(#{domain:=_}=Config, _Service) ->
+    {ok, Config};
+
+plugin_config(_Config, _Service) ->
+    {error, missing_domain}.
+
+
+%% @private
 service_init(_Service, State) ->
     gen_server:cast(self(), nkdomain_load_domain),
     {ok, State}.
@@ -561,7 +609,24 @@ service_init(_Service, State) ->
 
 %% @private
 service_handle_cast(nkdomain_load_domain, State) ->
-    {noreply, State};
+    #{id:=SrvId} = State,
+    #{domain:=Domain} = SrvId:config(),
+    case nkdomain_obj:load(SrvId, Domain) of
+        {ok, ?DOMAIN_DOMAIN, ObjId, Path, Pid} ->
+            lager:info("Service loaded domain ~s (~s)", [Path, ObjId]),
+            monitor(process, Pid),
+            DomainData = #{
+                domain_obj_id => ObjId,
+                domain_path => Path,
+                domain_pid => Pid
+            },
+            nkservice_srv:put(SrvId, nkdomain_data, DomainData),
+            State2 = State#{nkdomain => DomainData},
+            {noreply, State2};
+        {error, Error} ->
+            ?LLOG(warning, "could not load domain ~s: ~p", [Domain, Error]),
+            {noreply, State}
+    end;
 
 service_handle_cast(_Msg, _State) ->
     continue.

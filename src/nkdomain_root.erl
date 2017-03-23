@@ -22,7 +22,7 @@
 -module(nkdomain_root).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([start/0, stop/0]).
+-export([create/0, start/0, stop/0, admin_create/0]).
 
 -include("nkdomain.hrl").
 
@@ -31,10 +31,25 @@
 %% Private
 %% ===================================================================
 
+%% @doc
+create() ->
+    Obj = #{
+        type => ?DOMAIN_DOMAIN,
+        obj_id => <<"root">>,
+        path => <<"/">>,
+        parent_id => <<>>,
+        description => <<"NetComposer">>,
+        created_time => nklib_util:m_timestamp()
+    },
+    nkdomain_obj:create(root, Obj, #{}).
+
+
+
 %% @doc Starts the root service
 start() ->
     Spec1 = #{
         plugins => [nkelastic, nkdomain, nkapi, nkchat, nkdomain_store_es],
+        domain => <<"root">>,
         domain_elastic_url => nkdomain_app:get(elastic_url),
         debug => [
             %% {nkapi_client, #{nkpacket=>true}},
@@ -63,13 +78,13 @@ start() ->
         {ok, _} ->
             lager:info("Root service started"),
             case nkdomain_obj:load(root, <<"root">>, #{}) of
-                {ok, <<"domain">>, <<"root">>, _Pid} ->
+                {ok, <<"domain">>, <<"root">>, _Path, _Pid} ->
                     ok;
                 {error, Error} ->
                     lager:error("Could not load ROOT domain: ~p", [Error])
             end;
         {error, Error} ->
-            lager:error("Could not start root service: ~p\n~p", [Error, Spec3]),
+            lager:error("Could not start root service: ~p (~p)", [Error, Spec3]),
             error(start_root_error)
     end.
 
@@ -78,3 +93,20 @@ start() ->
 stop() ->
     nkservice:stop(root).
 
+
+%% @doc
+admin_create() ->
+    Obj = #{
+        type => <<"user">>,
+        obj_id => <<"admin">>,
+        path => <<"/users/admin">>,
+        parent_id => <<"root">>,
+        created_time => nklib_util:m_timestamp(),
+        description => <<"Admin User">>,
+        user => #{
+            name => <<"Admin">>,
+            surname => <<"User">>,
+            password => "1234"
+        }
+    },
+    nkdomain_obj:create(root, Obj, #{}).

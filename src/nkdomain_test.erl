@@ -118,77 +118,47 @@ cmd(Pid, Class, Cmd, Data) ->
 %% OBJECTS
 %% ===================================================================
 
-
-root_create() ->
-    Obj = #{
-        path => <<"/">>,
-        type => <<"domain">>,
-        description => <<"NetComposer">>
-    },
-    nkdomain_obj:create(root, Obj, #{obj_id=><<"root">>}).
-
-
 sub1_create() ->
-    Obj = #{
-        path => <<"/sub1">>,
-        type => <<"domain">>,
-        description => <<"Sub1">>
-    },
-    nkdomain_obj:create(root, Obj, #{obj_id=><<"sub1">>}).
+    {ok, Obj} = nkdomain_obj_lib:make_obj(
+        root,
+        domain,
+        "/",
+        #{description => <<"Sub1">>},
+        #{obj_id=><<"sub1">>}),
+    nkdomain_obj:create(root, Obj, #{}).
 
 
 sub2_create() ->
-    Obj = #{
-        path => <<"/sub1/sub2">>,
-        type => <<"domain">>,
-        description => <<"Sub2">>
-    },
-    nkdomain_obj:create(root, Obj, #{obj_id=><<"sub2">>}).
+    {ok, Obj} = nkdomain_obj_lib:make_obj(
+        root,
+        domain,
+        "/sub1",
+        #{description => <<"Sub2">>},
+        #{obj_id=><<"sub2">>}),
+    nkdomain_obj:create(root, Obj, #{}).
 
 
-admin_create() ->
-    Obj = #{
-        path => <<"/users/admin">>,
-        type => <<"user">>,
-        description => <<"Admin User">>,
-        user => #{
-            name => <<"Admin">>,
-            surname => <<"User">>,
-            password => "1234"
-        }
-    },
-    nkdomain_obj:create(root, Obj, #{obj_id=><<"admin">>}).
 
 
-user2_create() ->
-    Obj = #{
-        path => <<"/users/u2">>,
-        type => <<"user">>,
-        description => <<"User 2">>,
-        aliases => <<"user2@domain.com">>,
-        user => #{
-            name => <<"Name 2">>,
-            surname => <<"Surname 2">>,
-            password => "1234"
-        }
-    },
-    nkdomain_obj:create(root, Obj, #{obj_id=><<"user2">>}).
+
+root_user_create(Name, SurName) ->
+    {ok, Obj} = nkdomain_obj_lib:make_obj(
+        root,
+        user,
+        <<"root">>,
+        #{user => #{name=>Name, surname=>SurName}},
+        #{name=>Name}),
+    nkdomain_obj:create(root, Obj, #{}).
 
 
-user3_create() ->
-    Obj = #{
-        path => <<"/sub1/users/u3">>,
-        type => <<"user">>,
-        description => <<"User 3">>,
-        aliases => <<"user3@domain.com">>,
-        user => #{
-            name => <<"Name 3">>,
-            surname => <<"Surname 3">>,
-            password => "4321"
-        }
-    },
-    nkdomain_obj:create(root, Obj, #{obj_id=><<"user3">>}).
+sub2_user_create(Name, SurName) ->
+    {ok, Obj} = nkdomain_obj_lib:make_obj(
+        root,
+        user,
+        <<"/sub1/sub2">>,
+        #{user => #{name=>Name, surname=>SurName}},
+        #{name=>Name}),
+    nkdomain_obj:create(root, Obj, #{}).
 
 
-%% @private
-to_bin(Term) -> nklib_util:to_binary(Term).
+to_bin(R) -> nklib_util:to_binary(R).

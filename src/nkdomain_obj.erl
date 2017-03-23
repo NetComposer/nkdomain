@@ -112,12 +112,14 @@
 
 -type create_opts() ::
     #{
+        obj_id => nkdomain:obj_id(),
         register => nklib:link(),
-        user_id => nkdomain:obj_id(),
-        user_session => nkservice:user_session(),
+%%        user_id => nkdomain:obj_id(),
+%%        user_session => nkservice:user_session(),
         events => [nkservice_events:type()],
         enabled => boolean(),                        % Start disabled
-        obj_id => nkdomain:obj_id()
+        update_pid => boolean(),
+        remove_after_stop => boolean()
     }.
 
 -type load_opts() ::
@@ -166,7 +168,7 @@ find(Srv, IdOrPath) ->
 
 %% @doc Finds an objects's pid or loads it from storage
 -spec load(nkservice:id(), nkdomain:obj_id()|nkdomain:path()) ->
-    {ok, nkdomain:type(), nkdomain:obj_id(), pid()} |
+    {ok, nkdomain:type(), nkdomain:obj_id(), nkdomain:path(), pid()} |
     {error, obj_not_found|term()}.
 
 load(Srv, IdOrPath) ->
@@ -355,15 +357,24 @@ init({Obj, Meta}) ->
         obj = Obj,
         srv_id = SrvId,
         status = init,
-        meta = maps:without([srv_id, is_dirty, obj_id], Meta),
+        meta = maps:without([srv_id, is_dirty, obj_id, update_pid], Meta),
         is_dirty = IsDirty,
         enabled = Enabled
     },
+    Session2 = case Meta of
+        #{update_pid:=true} ->
+            Session#obj_session{
+                obj = Obj#{pid=>self()},
+                is_dirty = true
+            };
+        _ ->
+            Session
+    end,
     State1 = #state{
         obj_id = ObjId,
         srv_id = SrvId,
         links = nklib_links:new(),
-        session = Session,
+        session = Session2,
         started = nklib_util:m_timestamp()
     },
     State2 = case Meta of
@@ -411,8 +422,17 @@ handle_call({nkdomain_update, Map}, _From, State) ->
             end
     end;
 
-handle_call({nkdomain_delete, Reason}, From, State) ->
-    do_delete(Reason, From, State);
+handle_call({nkdomain_delete, Reason}, From, #state{srv_id=SrvId, obj_id=ObjId}=State) ->
+    case SrvId:object_store_find_childs(SrvId, ObjId, #{size=>0}) of
+        {ok, 0, []} ->
+            State2 = do_delete(Reason, State),
+            gen_server:reply(From, ok),
+            do_stop(object_deleted, State2);
+        {ok, _N, []} ->
+            reply({error, object_has_childs}, State);
+        {error, Error} ->
+            reply({error, Error}, State)
+    end;
 
 handle_call({nkdomain_sync_op, Op}, From, State) ->
     case is_stopped(State) of
@@ -493,7 +513,7 @@ handle_cast(nkdomain_do_start, State) ->
     #obj_session{parent_id=ParentId, type=Type, path=Path} = Session,
     ?DEBUG("loading parent ~s", [ParentId], State),
     case load(SrvId, ParentId, #{}) of
-        {ok, _ParentModule, ParentId, Pid} ->
+        {ok, _ParentModule, ParentId, _Path, Pid} ->
             case do_call(Pid, {nkdomain_set_child, Type, ObjId, Path, self()}) of
                 {ok, #{enabled:=Enabled}} ->
                     State2 = do_enabled(Enabled, State),
@@ -764,43 +784,35 @@ do_save(State) ->
 
 
 %% @private
-do_delete(_Reason, _From, #state{is_deleted=true}=State) ->
-    reply(ok, State);
+do_delete(_Reason, #state{is_deleted=true}=State) ->
+    State;
 
-do_delete(Reason, From, #state{srv_id=SrvId, obj_id=ObjId}=State) ->
-    case SrvId:object_store_find_childs(SrvId, ObjId, #{size=>0}) of
-        {ok, 0, []} ->
-            {ok, State2} = handle(object_deleted, [Reason], State),
-            {Code, Txt} = nkapi_util:api_error(SrvId, Reason),
-            #state{session=#obj_session{obj=Obj}=Session} = State2,
-            Obj2 = ?ADD_TO_OBJ(
-                #{
-                    destroyed_time => nklib_util:m_timestamp(),
-                    destroyed_code => Code,
-                    destroyed_reason => Txt
-                }, Obj),
-            State3 = State2#state{session=Session#obj_session{obj=Obj2, is_dirty=true}},
-            State4 = case handle(object_archive, [Obj2], State3) of
-                {ok, ArchState} ->
-                    ArchState;
-                {error, _Error1, ArchState} ->
-                    ArchState
-            end,
-            ?DEBUG("delete object", [], State4),
-            State5 = case handle(object_delete, [], State4) of
-                {ok, RemState} ->
-                    RemState;
-                {error, _Error2, RemState} ->
-                    %% Errors will be managed by nkdomain_store
-                    RemState
-            end,
-            gen_server:reply(From, ok),
-            do_stop(object_deleted, State5#state{is_deleted=true});
-        {ok, _N, []} ->
-            reply({error, object_has_childs}, State);
-        {error, Error} ->
-            reply({error, Error}, State)
-    end.
+do_delete(Reason, #state{srv_id=SrvId}=State) ->
+    {ok, State2} = handle(object_deleted, [Reason], State),
+    {Code, Txt} = nkapi_util:api_error(SrvId, Reason),
+    #state{session=#obj_session{obj=Obj}=Session} = State2,
+    Obj2 = ?ADD_TO_OBJ(
+        #{
+            destroyed_time => nklib_util:m_timestamp(),
+            destroyed_code => Code,
+            destroyed_reason => Txt
+        }, Obj),
+    State3 = State2#state{session=Session#obj_session{obj=Obj2, is_dirty=true}},
+    State4 = case handle(object_archive, [Obj2], State3) of
+        {ok, ArchState} ->
+            ArchState;
+        {error, _Error1, ArchState} ->
+            ArchState
+    end,
+    ?DEBUG("delete object", [], State4),
+    State5 = case handle(object_delete, [], State4) of
+        {ok, RemState} ->
+            RemState;
+        {error, _Error2, RemState} ->
+            %% Errors will be managed by nkdomain_store
+            RemState
+    end,
+    State5#state{is_deleted=true}.
 
 
 %% @private
@@ -816,6 +828,13 @@ do_stop(Reason, #state{srv_id=SrvId, started=Started}=State) ->
             State4 = do_status({stopped, Reason}, State3),
             timer:sleep(100),
             State5 = do_event({stopped, Reason}, State4),
+            #state{session=#obj_session{meta=Meta}} = State5,
+            State6 = case Meta of
+                #{remove_after_stop:=true} ->
+                    do_delete(object_stopped, State5);
+                _ ->
+                    State5
+            end,
             Now = nklib_util:m_timestamp(),
             case (Started + ?MIN_STARTED_TIME) - Now of
                 Time when Time > 0 ->
@@ -825,7 +844,7 @@ do_stop(Reason, #state{srv_id=SrvId, started=Started}=State) ->
                     % Process any remaining message
                     self() ! nkdomain_destroy
             end,
-            noreply(State5)
+            noreply(State6)
     end.
 
 
