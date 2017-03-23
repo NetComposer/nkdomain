@@ -24,7 +24,7 @@
 -behavior(nkdomain_obj).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([login/3, find_referred/3]).
+-export([create/3, login/3, find_referred/3]).
 -export([object_get_info/0, object_mapping/0, object_syntax/1,
          object_api_syntax/3, object_api_allow/4, object_api_cmd/4]).
 -export([user_pass/1]).
@@ -38,6 +38,7 @@
 %% ===================================================================
 %% Types
 %% ===================================================================
+
 
 -type login_opts() ::
     #{
@@ -54,6 +55,30 @@
 %% ===================================================================
 %% API
 %% ===================================================================
+
+
+%% @doc
+%% Data must follow object's syntax
+-spec create(nkservice:id(), nkdomain:name(), map()) ->
+    {ok, nkdomain:obh_id(), pid()} | {error, term()}.
+
+create(SrvId, Name, Data) ->
+    Opts = #{name=>Name},
+    Aliases = case Data of
+        #{email:=Email} -> Email;
+        _ -> []
+    end,
+    Base = #{
+        ?DOMAIN_USER => Data,
+        aliases => Aliases
+    },
+    case nkdomain_obj_lib:make_obj(SrvId, ?DOMAIN_USER, Base, Opts) of
+        {ok, Obj} ->
+            nkdomain_obj_lib:create(SrvId, Obj, #{})
+    end.
+
+
+
 
 %% @doc
 -spec login(nkservice:id(), User::binary(), login_opts()) ->
@@ -77,6 +102,10 @@ login(SrvId, Login, Opts) ->
         {error, Error} ->
             {error, Error}
     end.
+
+
+
+
 
 
 %% @doc
@@ -115,6 +144,7 @@ object_mapping() ->
             type => text,
             fields => #{keyword => #{type=>keyword}}
         },
+        email => #{type => keyword},
         password => #{type => keyword}
     }.
 
@@ -124,7 +154,8 @@ object_syntax(update) ->
     #{
         name => binary,
         surname => binary,
-        password => fun ?MODULE:user_pass/1
+        password => fun ?MODULE:user_pass/1,
+        email => binary
     };
 
 object_syntax(load) ->

@@ -35,32 +35,26 @@
 %% @doc
 api('', create, Syntax) ->
     Syntax2 = Syntax#{
-        path => binary,
-        description => binary,
-        aliases => {list, binary}
+        domain => binary,
+        description => binary
     },
-    nklib_syntax:add_mandatory([path], Syntax2);
+    nklib_syntax:add_mandatory([domain, description], Syntax2);
 
 api('', delete, Syntax) ->
-    Syntax2 = Syntax#{
-        id => binary,
+    Syntax#{
         reason => binary
-    },
-    nklib_syntax:add_mandatory([id], Syntax2);
+    };
 
 api('', update, Syntax) ->
-    Syntax2 = Syntax#{
+    Syntax#{
         id => binary,
-        description => binary,
-        aliases => {list, binary}
-    },
-    nklib_syntax:add_mandatory([id], Syntax2);
+        description => binary
+    };
 
 api('', get_types, Syntax) ->
-    Syntax2 = Syntax#{
+    Syntax#{
         id => binary
-    },
-    nklib_syntax:add_mandatory([id], Syntax2);
+    };
 
 api('', get_all_types, Syntax) ->
     api('', get_types, Syntax);
@@ -68,11 +62,9 @@ api('', get_all_types, Syntax) ->
 api('', get_childs, Syntax) ->
     Search = nkelastic_search:syntax(),
     Syntax2 = Syntax#{
-        id => binary,
         type => binary
     },
-    Syntax3 = maps:merge(Syntax2, Search),
-    nklib_syntax:add_mandatory([id], Syntax3);
+    maps:merge(Syntax2, Search);
 
 api('', get_all_childs, Syntax) ->
     api('', get_childs, Syntax);

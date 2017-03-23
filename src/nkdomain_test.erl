@@ -7,7 +7,7 @@
 
 
 login() ->
-    login(admin, "1234").
+    login(admin, "4321").
 
 login(User, Pass) ->
     Fun = fun ?MODULE:api_client_fun/2,
@@ -19,14 +19,14 @@ login(User, Pass) ->
     {ok, _SessId, _Pid, _Reply} = nkapi_client:start(root, ?WS, Login, Fun, #{}).
 
 
-user_create(Path, Name, Surname) ->
+user_create(Name, Surname, Email) ->
     Data = #{
+        obj_name => Name,
         user => #{
             name => to_bin(Name),
-            surname => to_bin(Surname)
-        },
-        path => to_bin(Path),
-        aliases => [alias1, alias2]
+            surname => to_bin(Surname),
+            email => to_bin(Email)
+        }
     },
     case cmd(user, create, Data) of
         {ok, #{<<"obj_id">>:=ObjId}} -> {ok, ObjId};
@@ -38,14 +38,14 @@ user_delete(Id) ->
     cmd(user, delete, #{id=>to_bin(Id)}).
 
 
-user_update(Id, Name, Password, Aliases) ->
+user_update(Id, Name, Password, Email) ->
     Data = #{
         id => to_bin(Id),
         user => #{
             name => to_bin(Name),
-            password => Password
-        },
-        aliases => Aliases
+            password => Password,
+            email => Email
+        }
     },
     cmd(user, update, Data).
 
@@ -84,9 +84,16 @@ domain_get_types(Id) ->
     cmd(domain, get_types, #{id=>Id}).
 
 
-domain_get_all_types(Id) ->
-    cmd(domain, get_all_types, #{id=>Id}).
+domain_get_all_types() ->
+    cmd(domain, get_all_types, #{}).
 
+
+domain_get_childs(Id) ->
+    cmd(domain, get_childs, #{id=>Id}).
+
+
+domain_get_all_childs(Id) ->
+    cmd(domain, get_all_childs, #{id=>Id, type=>user}).
 
 
 

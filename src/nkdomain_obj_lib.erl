@@ -26,7 +26,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([find/2, load/2, load/3, create/3]).
--export([make_obj/5]).
+-export([make_obj/4]).
 -export([do_find/1, do_call/2, do_call/3, do_cast/2, do_info/2]).
 
 -include("nkdomain.hrl").
@@ -42,7 +42,9 @@
 -type base_opts() ::
     #{
         obj_id => binary(),
-        name => binary()
+        name => binary(),
+        father => binary(),
+        referred_id => nkdomain:obj_id()
     }.
 
 
@@ -166,19 +168,19 @@ do_load3(ObjId, #{type:=Type, path:=Path}=Obj, Meta2) ->
 
 
 %% @doc Adds type, obj_id, parent_id, path, created_time
--spec make_obj(nkservice:id(), nkdomain:type(), nkdomain:id(), map(), base_opts()) ->
+-spec make_obj(nkservice:id(), nkdomain:type(), map(), base_opts()) ->
     {ok, nkdomain:obj()} | {error, term()}.
 
-make_obj(Srv, Type, Parent, Base, Opts) ->
+make_obj(Srv, Type, Base, Opts) ->
     Type2 = to_bin(Type),
     ObjId = case Opts of
         #{obj_id:=ObjId0} ->
-            to_bin(ObjId0);
+            nkdomain_util:name(ObjId0);
         _ ->
              <<Type2/binary, $-, (nklib_util:luid())/binary>>
     end,
     Name1 = case Opts of
-        #{name:=Name0} -> to_bin(Name0);
+        #{name:=Name0} -> nkdomain_util:name(Name0);
         _ -> ObjId
     end,
     Name2 = case Type2 of
@@ -187,21 +189,45 @@ make_obj(Srv, Type, Parent, Base, Opts) ->
         _ ->
             <<Type2/binary, "s/", Name1/binary>>
     end,
-    case find(Srv, Parent) of
-        {ok, _ParentType, ParentId, ParentPath, _ParentPid} ->
-            BasePath = case ParentPath of
+    Obj1 = Base#{
+        obj_id => ObjId,
+        type => Type,
+        created_time => nklib_util:m_timestamp()
+    },
+    Obj2 = case Opts of
+        #{referred_id:=ReferredId} ->
+            Obj1#{referred_id => nkdomain_util:name(ReferredId)};
+        _ ->
+            Obj1
+    end,
+    case Opts of
+        #{father:=Father1} ->
+            Father2 = nkdomain_util:name(Father1),
+            do_make_obj(Srv, Name2, Father2, Obj2);
+        _ ->
+            case nkdomain_util:get_service_domain(Srv) of
+                undefined ->
+                    {error, missing_father};
+                FatherId ->
+                    do_make_obj(Srv, Name2, FatherId, Obj2)
+            end
+
+    end.
+
+
+%% @private
+do_make_obj(Srv, Name, Father, Obj) ->
+    case find(Srv, Father) of
+        {ok, _FatherType, FatherId, FatherPath, _FatherPid} ->
+            BasePath = case FatherPath of
                 <<"/">> -> <<>>;
-                _ -> ParentPath
+                _ -> FatherPath
             end,
-            Path = <<BasePath/binary, $/, Name2/binary>>,
-            Obj = Base#{
-                obj_id => ObjId,
-                parent_id => ParentId,
-                type => Type2,
-                path => Path,
-                created_time => nklib_util:m_timestamp()
+            Obj2 = Obj#{
+                parent_id => FatherId,
+                path => <<BasePath/binary, $/, Name/binary>>
             },
-            {ok, Obj};
+            {ok, Obj2};
         {error, object_not_found} ->
             {error, father_not_found};
         {error, Error} ->

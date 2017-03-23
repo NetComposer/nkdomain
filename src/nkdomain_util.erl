@@ -21,7 +21,9 @@
 -module(nkdomain_util).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([is_path/1, get_parts/2, error_code/2, add_mandatory/3]).
+-export([is_path/1, get_parts/2, name/1]).
+-export([get_service_domain/1]).
+-export([error_code/2, add_mandatory/3]).
 -export([api_common/4, api_create/3, api_delete/2, api_update/2]).
 -export([search_api/2]).
 -export_type([error/0]).
@@ -35,6 +37,7 @@
 %% ===================================================================
 %% Public
 %% ===================================================================
+
 
 %% @doc Normalizes a path
 %% Valid paths either start with / or has '@' or '.'
@@ -78,20 +81,22 @@ get_parts(Type, Path) ->
                 [<<>>|_] ->
                     {error, {invalid_object_path, Path2}};
                 [ObjName|Parts] when Type==<<"domain">> ->
+                    ObjName2 = name(ObjName),
                     case nklib_util:bjoin(lists:reverse(Parts), <<"/">>) of
                         <<>> ->
-                            {ok, <<"/">>, ObjName};
+                            {ok, <<"/">>, ObjName2};
                         Base ->
-                            {ok, Base, ObjName}
+                            {ok, Base, ObjName2}
                     end;
                 [ObjName, Class|Parts] ->
+                    ObjName2 = name(ObjName),
                     case <<Type/binary, "s">> of
                          Class ->
                             case nklib_util:bjoin(lists:reverse(Parts), <<"/">>) of
                                 <<>> ->
-                                    {ok, <<"/">>, <<Class/binary, $/, ObjName/binary>>};
+                                    {ok, <<"/">>, <<Class/binary, $/, ObjName2/binary>>};
                                 Base ->
-                                    {ok, Base, <<Class/binary, $/, ObjName/binary>>}
+                                    {ok, Base, <<Class/binary, $/, ObjName2/binary>>}
                             end;
                         _ ->
                             {error, {invalid_object_path, Path2}}
@@ -102,6 +107,20 @@ get_parts(Type, Path) ->
         false ->
             {error, {invalid_object_path, to_bin(Path)}}
     end.
+
+
+%% @private
+name(Name) ->
+    nklib_parse:normalize(Name, #{space=>$-, allowed=>[$-]}).
+
+
+%% @doc
+get_service_domain(Srv) ->
+    case nkservice:get(Srv, nkdomain_data) of
+        #{domain_obj_id:=Domain} -> Domain;
+        _ -> undefined
+    end.
+
 
 
 
@@ -157,7 +176,6 @@ api_common(Type, Cmd, Data, State) ->
     end.
 
 
-
 %% @doc
 api_create(Type, Data, #{srv_id:=SrvId}=State) ->
     case nkdomain_obj:create(SrvId, Data#{type=>Type}, #{}) of
@@ -169,7 +187,8 @@ api_create(Type, Data, #{srv_id:=SrvId}=State) ->
 
 
 %% @doc
-api_delete(#{id:=Id}=Data, #{srv_id:=SrvId}=State) ->
+api_delete(Data, #{srv_id:=SrvId, user_id:=UserId}=State) ->
+    Id = maps:get(id, Data, UserId),
     Reason = maps:get(reason, Data, api_delete),
     case nkdomain_obj:load(SrvId, Id) of
         {ok, _Type, ObjId, _Path, _Pid} ->
@@ -185,7 +204,8 @@ api_delete(#{id:=Id}=Data, #{srv_id:=SrvId}=State) ->
 
 
 %% @doc
-api_update(#{id:=Id}=Data, #{srv_id:=SrvId}=State) ->
+api_update(Data, #{srv_id:=SrvId, user_id:=UserId}=State) ->
+    Id = maps:get(id, Data, UserId),
     case nkdomain_obj:load(SrvId, Id) of
         {ok, _Type, ObjId, _Path, _Pid} ->
             case nkdomain_obj:update(ObjId, Data) of

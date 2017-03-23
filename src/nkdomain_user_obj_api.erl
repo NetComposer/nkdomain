@@ -58,6 +58,14 @@ cmd('', find_referred, #{id:=Id}=Data, #{srv_id:=SrvId}=State) ->
     Search = nkdomain_user_obj:find_referred(SrvId, Id, Data),
     nkdomain_util:search_api(Search, State);
 
+cmd('', create, #{obj_name:=Name, user:=User}, #{srv_id:=SrvId}=State) ->
+    case nkdomain_user_obj:create(SrvId, Name, User) of
+        {ok, ObjId, _Pid} ->
+            {ok, #{obj_id=>ObjId}, State};
+        {error, Error} ->
+            {error, Error, State}
+    end;
+
 cmd('', Cmd, Data, State) ->
     nkdomain_util:api_common(?DOMAIN_USER, Cmd, Data, State);
 

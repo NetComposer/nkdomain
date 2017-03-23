@@ -52,43 +52,40 @@ api('', get_token, Syntax) ->
 
 api('', create, Syntax) ->
     Syntax2 = Syntax#{
+        obj_name => binary,
         user => #{
             name => binary,
             surname => binary,
-            password => binary
+            password => binary,
+            email => email
         },
-        path => binary,
-        aliases => {list, binary}
+        domain => binary
     },
-    nklib_syntax:add_mandatory([path, 'user.name', 'user.surname'], Syntax2);
+    nklib_syntax:add_mandatory([obj_name, 'user.name', 'user.surname'], Syntax2);
 
 api('', delete, Syntax) ->
-    Syntax2 = Syntax#{
+    Syntax#{
         id => binary,
         reason => binary
-    },
-    nklib_syntax:add_mandatory([id], Syntax2);
+    };
 
 api('', update, Syntax) ->
-    Syntax2 = Syntax#{
+    Syntax#{
         id => binary,
         user => #{
             name => binary,
             surname => binary,
-            password => binary
-        },
-        aliases => {list, binary}
-    },
-    nklib_syntax:add_mandatory([id], Syntax2);
+            password => binary,
+            email => email
+        }
+    };
 
 api('', find_referred, Syntax) ->
-    Syntax2 = Syntax#{
+    Syntax#{
         id => binary,
         type => binary
-    },
-    nklib_syntax:add_mandatory([id], Syntax2);
+    };
 
 api(_Sub, _Cmd, Syntax) ->
     lager:error("unknown syntax: ~p, ~p", [_Sub, _Cmd]),
-
     Syntax.
