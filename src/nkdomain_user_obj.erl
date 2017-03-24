@@ -56,14 +56,14 @@
 %% API
 %% ===================================================================
 
-
 %% @doc
 %% Data must follow object's syntax
 -spec create(nkservice:id(), nkdomain:name(), map()) ->
-    {ok, nkdomain:obh_id(), pid()} | {error, term()}.
+    {ok, nkdomain:obj_id(), nkdomain:path(), pid()} | {error, term()}.
 
-create(SrvId, Name, Data) ->
-    Opts = #{name=>Name},
+create(Srv, Name, Data) ->
+    Opts1 = maps:with([father], Data),
+    Opts2 = Opts1#{name=>Name},
     Aliases = case Data of
         #{email:=Email} -> Email;
         _ -> []
@@ -72,12 +72,17 @@ create(SrvId, Name, Data) ->
         ?DOMAIN_USER => Data,
         aliases => Aliases
     },
-    case nkdomain_obj_lib:make_obj(SrvId, ?DOMAIN_USER, Base, Opts) of
+    case nkdomain_obj_lib:make_obj(Srv, ?DOMAIN_USER, Base, Opts2) of
         {ok, Obj} ->
-            nkdomain_obj_lib:create(SrvId, Obj, #{})
+            case nkdomain:create(Srv, Obj, #{}) of
+                {ok, ?DOMAIN_USER, ObjId, Path, Pid} ->
+                    {ok, ObjId, Path, Pid};
+                {error, Error} ->
+                    {error, Error}
+            end;
+        {error, Error} ->
+            {error, Error}
     end.
-
-
 
 
 %% @doc
@@ -91,7 +96,7 @@ login(SrvId, Login, Opts) ->
             case do_login(UserPid, ObjId, Opts) of
                 {ok, UserObjId} ->
                     case do_start_session(SrvId, UserObjId, Opts) of
-                        {ok, SessId, _SessPid} ->
+                        {ok, SessId} ->
                             {ok, UserObjId, SessId, #{}};
                         {error, Error} ->
                             {error, Error}
@@ -110,7 +115,7 @@ login(SrvId, Login, Opts) ->
 
 %% @doc
 find_referred(SrvId, Id, Spec) ->
-    case nkdomain_obj:find(SrvId, Id) of
+    case nkdomain:find(SrvId, Id) of
         {ok, _Type, ObjId, _Path, _Pid} ->
             SrvId:object_store_find_referred(SrvId, ObjId, Spec);
         {error, Error} ->
@@ -196,7 +201,7 @@ object_api_cmd(Sub, Cmd, Data, State) ->
 %% @private
 do_load(SrvId, Login, Opts) ->
     LoadOpts = maps:with([register], Opts),
-    case nkdomain_obj:load(SrvId, Login, LoadOpts) of
+    case nkdomain:load(SrvId, Login, LoadOpts) of
         {ok, ?DOMAIN_USER, ObjId, _Path, Pid} ->
             {ok, ObjId, Pid};
         _ ->
@@ -208,7 +213,7 @@ do_load(SrvId, Login, Opts) ->
                         false ->
                             ok
                     end,
-                    case nkdomain_obj:load(SrvId, ObjId, LoadOpts) of
+                    case nkdomain:load(SrvId, ObjId, LoadOpts) of
                         {ok, ?DOMAIN_USER, ObjId, _Path, Pid} ->
                             {ok, ObjId, Pid};
                         _ ->
@@ -248,7 +253,12 @@ do_login(_Pid, _ObjId, _Opts) ->
 do_start_session(SrvId, UserId, Opts) ->
     Pid = maps:get(session_pid, Opts),
     Opts2 = Opts#{referred_id=>UserId, pid=>Pid},
-    nkdomain_session_obj:create(SrvId, Opts2).
+    case nkdomain_session_obj:create(SrvId, Opts2) of
+        {ok, _Type, ObjId, Path, _Pid} ->
+            {ok, ObjId};
+        {error, Error} ->
+            {error, Error}
+    end.
 
 
 

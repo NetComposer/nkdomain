@@ -40,7 +40,6 @@ cmd('', get_types, Data, #{srv_id:=SrvId}=State) ->
             {error, Error, State}
     end;
 
-
 cmd('', get_all_types, Data, #{srv_id:=SrvId}=State) ->
     Id = get_domain(Data, SrvId),
     case nkdomain_domain_obj:get_all_types(SrvId, Id) of
@@ -53,15 +52,15 @@ cmd('', get_all_types, Data, #{srv_id:=SrvId}=State) ->
 cmd('', get_childs, Data, #{srv_id:=SrvId}=State) ->
     Id = get_domain(Data, SrvId),
     Search = nkdomain_domain_obj:get_childs(SrvId, Id, Data),
-    nkdomain_util:search_api(Search, State);
+    nkdomain_util:api_search(Search, State);
 
 cmd('', get_all_childs, Data, #{srv_id:=SrvId}=State) ->
     Id = get_domain(Data, SrvId),
     Search = nkdomain_domain_obj:get_all_childs(SrvId, Id, Data),
-    nkdomain_util:search_api(Search, State);
+    nkdomain_util:api_search(Search, State);
 
 cmd('', Cmd, Data, State) ->
-    nkdomain_util:api_common(?DOMAIN_DOMAIN, Cmd, Data, State);
+    nkdomain_util:api_cmd_common(?DOMAIN_DOMAIN, Cmd, Data, State);
 
 cmd(_Sub, _Cmd, _Data, State) ->
     {error, not_implemented, State}.

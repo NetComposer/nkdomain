@@ -41,7 +41,7 @@ create() ->
         description => <<"NetComposer">>,
         created_time => nklib_util:m_timestamp()
     },
-    nkdomain_obj:create(root, Obj, #{}).
+    nkdomain:create(root, Obj, #{}).
 
 
 
@@ -77,7 +77,7 @@ start() ->
     case nkservice:start(root, Spec3) of
         {ok, _} ->
             lager:info("Root service started"),
-            case nkdomain_obj:load(root, <<"root">>, #{}) of
+            case nkdomain:load(root, <<"root">>, #{}) of
                 {ok, <<"domain">>, <<"root">>, _Path, _Pid} ->
                     ok;
                 {error, Error} ->
@@ -109,4 +109,4 @@ admin_create() ->
             password => "1234"
         }
     },
-    nkdomain_obj:create(root, Obj, #{}).
+    nkdomain:create(root, Obj, #{}).

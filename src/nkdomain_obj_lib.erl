@@ -26,7 +26,8 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([find/2, load/2, load/3, create/3]).
--export([make_obj/4]).
+-export([make_obj/4, remove/2]).
+
 -export([do_find/1, do_call/2, do_call/3, do_cast/2, do_info/2]).
 
 -include("nkdomain.hrl").
@@ -39,7 +40,7 @@
 %% ===================================================================
 
 
--type base_opts() ::
+-type make_opts() ::
     #{
         obj_id => binary(),
         name => binary(),
@@ -71,7 +72,7 @@ find(Srv, IdOrPath) ->
                                     {ok, Type, ObjId, Path, undefined}
                             end;
                         {error, object_not_found} ->
-                            {error, path_not_found};
+                            {error, {path_not_found, Path}};
                         {error, Error} ->
                             {error, Error}
                     end;
@@ -109,7 +110,7 @@ load(Srv, IdOrPath) ->
 
 
 %% @doc Finds an objects's pid or loads it from storage
--spec load(nkservice:id(), nkdomain:obj_id()|nkdomain:path(), nkdomain_obj:load_opts()) ->
+-spec load(nkservice:id(), nkdomain:obj_id()|nkdomain:path(), nkdomain:load_opts()) ->
     {ok, nkdomain:type(), nkdomain:obj_id(), pid()} |
     {error, obj_not_found|term()}.
 
@@ -125,7 +126,7 @@ load(Srv, IdOrPath, Meta) ->
             {ok, Type, ObjId, Path, Pid};
         {ok, _Type, ObjId, _Path, undefined} ->
             do_load2(Srv, ObjId, Meta);
-        {error, path_not_found} ->
+        {error, {path_not_found, _}} ->
             {error, object_not_found};
         {error, object_not_found} ->
             ObjId = nklib_util:to_binary(IdOrPath),
@@ -168,7 +169,7 @@ do_load3(ObjId, #{type:=Type, path:=Path}=Obj, Meta2) ->
 
 
 %% @doc Adds type, obj_id, parent_id, path, created_time
--spec make_obj(nkservice:id(), nkdomain:type(), map(), base_opts()) ->
+-spec make_obj(nkservice:id(), nkdomain:type(), map(), make_opts()) ->
     {ok, nkdomain:obj()} | {error, term()}.
 
 make_obj(Srv, Type, Base, Opts) ->
@@ -201,9 +202,8 @@ make_obj(Srv, Type, Base, Opts) ->
             Obj1
     end,
     case Opts of
-        #{father:=Father1} ->
-            Father2 = nkdomain_util:name(Father1),
-            do_make_obj(Srv, Name2, Father2, Obj2);
+        #{father:=Father} ->
+            do_make_obj(Srv, Name2, Father, Obj2);
         _ ->
             case nkdomain_util:get_service_domain(Srv) of
                 undefined ->
@@ -227,6 +227,7 @@ do_make_obj(Srv, Name, Father, Obj) ->
                 parent_id => FatherId,
                 path => <<BasePath/binary, $/, Name/binary>>
             },
+            lager:info("OBJ: ~p", [Obj2]),
             {ok, Obj2};
         {error, object_not_found} ->
             {error, father_not_found};
@@ -236,8 +237,8 @@ do_make_obj(Srv, Name, Father, Obj) ->
 
 
 %% @doc Creates a new object
--spec create(nkservice:id(), map(), nkdomain_obj:create_opts()) ->
-    {ok, nkdomain:obj_id(), pid()}.
+-spec create(nkservice:id(), map(), nkdomain:create_opts()) ->
+    {ok, nkdomain:type(), nkdomain:obj_id(), nkdomain:path(), pid()}.
 
 create(Srv, #{obj_id:=ObjId, type:=Type}=Obj, Meta) ->
     case nkservice_srv:get_srv_id(Srv) of
@@ -258,7 +259,7 @@ create(Srv, #{obj_id:=ObjId, type:=Type}=Obj, Meta) ->
 %% @private
 do_create(SrvId, Type, Obj, Meta) ->
     case SrvId:object_parse(SrvId, load, Type, Obj) of
-        {ok, _Module, #{obj_id:=ObjId}=Obj2} ->
+        {ok, _Module, #{obj_id:=ObjId, path:=Path}=Obj2} ->
             % We know type is valid here
             case do_create_check_parent(SrvId, Obj2) of
                 {ok, Obj3} ->
@@ -267,7 +268,7 @@ do_create(SrvId, Type, Obj, Meta) ->
                         is_dirty => true
                     },
                     {ok, ObjPid} = nkdomain_obj:start(Obj3, Meta2),
-                    {ok, ObjId, ObjPid};
+                    {ok, Type, ObjId, Path, ObjPid};
                 {error, Error} ->
                     {error, Error}
             end;
@@ -276,12 +277,32 @@ do_create(SrvId, Type, Obj, Meta) ->
     end.
 
 
+%% @doc
+remove(Srv, Id) ->
+    case load(Srv, Id) of
+        {ok, _Type, _ObjId, _Path, Pid} when is_pid(Pid) ->
+            nkdomain_obj:delete(Pid, normal);
+        {ok, _Type, ObjId, _Path, _Pid} ->
+            {ok, SrvId} = nkservice_srv:get_srv_id(Srv),
+            SrvId:object_store_delete_raw(SrvId, ObjId);
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
+
+
+%% ===================================================================
+%% Private
+%% ===================================================================
+
+
 %% @private
 do_create_check_parent(_SrvId, #{type:=<<"domain">>, obj_id:=<<"root">>, path:=<<"/">>, parent_id:=<<>>}=Obj) ->
     {ok, Obj};
 
 do_create_check_parent(SrvId, #{parent_id:=ParentId, type:=Type, path:=Path}=Obj) ->
-    case load(SrvId, ParentId, #{}) of                                      % TODO: Use some usage?
+    case load(SrvId, ParentId, #{}) of                          % TODO: Use some usage?
         {ok, _ParentType, ParentId, _ParentPath, Pid} ->
             case do_call(Pid, {nkdomain_check_create_child, Type, Path}) of
                 ok ->
@@ -308,8 +329,6 @@ do_find({Srv, Path}) ->
         not_found ->
             not_found
     end;
-
-
 
 do_find(ObjId) when is_binary(ObjId) ->
     case nklib_proc:values({nkdomain_obj, ObjId}) of

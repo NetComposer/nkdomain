@@ -30,7 +30,7 @@
          object_store_find_childs/3, object_store_find_all_childs/3,
          object_store_find_alias/2, object_store_find_referred/3,
          object_store_delete_childs/3, object_store_delete_all_childs/3]).
--export([object_store_archive_raw/3]).
+-export([object_store_archive_raw/3, object_store_clean/1]).
 -export([elastic_get_indices/2, elastic_get_mappings/3, elastic_get_aliases/3,
          elastic_get_templates/2]).
 -export([reload_types/1, remove_index/1]).
@@ -43,6 +43,8 @@
 
 -define(LLOG(Type, Txt, Args),
     lager:Type("NkDOMAIN Store ES "++Txt, Args)).
+
+-include("nkdomain.hrl").
 
 
 %% ===================================================================
@@ -133,7 +135,7 @@ object_store_read_raw(SrvId, ObjId) ->
 
 %% @doc
 object_store_save_raw(SrvId, ObjId, Map) ->
-    save_obj(SrvId, Map#{obj_id:=ObjId}).
+    save_obj(SrvId, Map#{obj_id=>ObjId}).
 
 
 %% @doc
@@ -143,7 +145,7 @@ object_store_delete_raw(SrvId, ObjId) ->
 
 %% @doc
 object_store_archive_raw(SrvId, ObjId, Map) ->
-    archive_obj(SrvId, Map#{obj_id:=ObjId}).
+    archive_obj(SrvId, Map#{obj_id=>ObjId}).
 
 
 %% @doc
@@ -194,6 +196,11 @@ object_store_delete_childs(SrvId, ObjId, Opts) ->
 %% @doc
 object_store_delete_all_childs(SrvId, Path, Spec) ->
     delete_obj_all_childs(SrvId, Path, Spec).
+
+
+%% @doc
+object_store_clean(SrvId) ->
+    clean(SrvId).
 
 
 %% ===================================================================
@@ -442,6 +449,68 @@ delete_obj_all_childs(SrvId, Path, Opts) ->
             delete(SrvId, Query);
         {error, Error} ->
             {error, Error}
+    end.
+
+
+%% @private
+clean(SrvId) ->
+    #es_config{index = Index, type = IdxType} = SrvId:config_nkdomain_store_es(),
+    clean_pids(SrvId, Index, IdxType, 0, 1).
+
+
+%% @private
+clean_pids(SrvId, Index, IdxType, From, Size) ->
+    Query = #{
+        constant_score => #{                          % we want several filters
+            filter => #{exists => #{field => pid}}
+        }
+    },
+    Opts = #{
+        from => From,
+        size => Size,
+        fields => [<<"pid">>]
+    },
+    case nkelastic_api:search(SrvId, Index, IdxType, Query, Opts) of
+        {ok, _N, [], _Aggs, _Meta} ->
+            ok;
+        {ok, _N, List, _Aggs, _Meta} ->
+            lists:foreach(
+                fun(#{<<"_id">>:=ObjId, <<"_source">>:=#{<<"pid">>:=BinPid}}) ->
+                    try
+                        Pid = binary_to_term(base64:decode(BinPid)),
+                        case is_process_alive(Pid) of
+                            true ->
+                                lager:info("~p is alive", [Pid]);
+                            false ->
+                                ?LLOG(notice, "object ~s is NOT alive", [ObjId]),
+                                force_archive(SrvId, ObjId, object_clean_pid)
+                        end
+                    catch
+                        _:_ -> ?LLOG(warning, "error processing pid at object ~s", [ObjId])
+                    end
+                end,
+                List),
+            clean_pids(SrvId, Index, IdxType, From+Size, Size);
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
+%% @private
+force_archive(SrvId, ObjId, Reason) ->
+    case read_obj(SrvId, ObjId) of
+        {ok, Obj} ->
+            {Code, Txt} = nkapi_util:api_error(SrvId, Reason),
+            Obj2 = ?ADD_TO_OBJ(
+                #{
+                    destroyed_time => nklib_util:m_timestamp(),
+                    destroyed_code => Code,
+                    destroyed_reason => Txt
+                }, Obj),
+            nkdomain_store:archive(SrvId, ObjId, Obj2),
+            nkdomain_store:delete(SrvId, ObjId);
+        _ ->
+            ok
     end.
 
 

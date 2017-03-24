@@ -32,7 +32,7 @@
 
 %% @doc
 cmd('', Cmd, Data, State) ->
-    nkdomain_util:api_common(?DOMAIN_SESSION, Cmd, Data, State);
+    nkdomain_util:api_cmd_common(?DOMAIN_SESSION, Cmd, Data, State);
 
 cmd(_Sub, _Cmd, _Data, State) ->
     {error, not_implemented, State}.

@@ -31,6 +31,14 @@
 %% ===================================================================
 
 %% @doc
+cmd('', create, #{obj_name:=Name, user:=User}, #{srv_id:=SrvId}=State) ->
+    case nkdomain_user_obj:create(SrvId, Name, User) of
+        {ok, ObjId, Path, _Pid} ->
+            {ok, #{obj_id=>ObjId, path=>Path}, State};
+        {error, Error} ->
+            {error, Error, State}
+    end;
+
 cmd('', login, #{id:=User}=Data, #{srv_id:=SrvId}=State) ->
     LoginMeta1 = maps:with([session_type, session_id, local, remote], State),
     LoginMeta2 = LoginMeta1#{
@@ -40,34 +48,37 @@ cmd('', login, #{id:=User}=Data, #{srv_id:=SrvId}=State) ->
     },
     case nkdomain_user_obj:login(SrvId, User, LoginMeta2) of
         {ok, UserId, SessId, LoginMeta3} ->
-            {login, #{obj_id=>UserId, session_id=>SessId}, UserId, LoginMeta3, State};
+            Reply = #{obj_id=>UserId, session_id=>SessId},
+            State2 = case nkdomain_util:get_service_domain(SrvId) of
+                undefined -> State;
+                Domain -> nkdomain_util:api_add_id(?DOMAIN_DOMAIN, Domain, State)
+            end,
+            State3 = nkdomain_util:api_add_id(?DOMAIN_USER, UserId, State2),
+            {login, Reply, UserId, LoginMeta3, State3};
         {error, Error} ->
             {error, Error, State}
     end;
 
-cmd('', get_token, #{id:=User}=Data, #{srv_id:=SrvId}=State) ->
-    Password = maps:get(password, Data, <<>>),
-    case nkdomain_user_obj:login(SrvId, User, Password, #{}) of
-        {ok, UserId} ->
-            {ok, #{obj_id=>UserId}, State};
-        {error, Error} ->
-            {error, Error, State}
-    end;
+%%cmd('', get_token, #{id:=User}=Data, #{srv_id:=SrvId}=State) ->
+%%    Password = maps:get(password, Data, <<>>),
+%%    case nkdomain_user_obj:login(SrvId, User, Password, #{}) of
+%%        {ok, UserId} ->
+%%            {ok, #{obj_id=>UserId}, State};
+%%        {error, Error} ->
+%%            {error, Error, State}
+%%    end;
 
 cmd('', find_referred, #{id:=Id}=Data, #{srv_id:=SrvId}=State) ->
-    Search = nkdomain_user_obj:find_referred(SrvId, Id, Data),
-    nkdomain_util:search_api(Search, State);
-
-cmd('', create, #{obj_name:=Name, user:=User}, #{srv_id:=SrvId}=State) ->
-    case nkdomain_user_obj:create(SrvId, Name, User) of
-        {ok, ObjId, _Pid} ->
-            {ok, #{obj_id=>ObjId}, State};
-        {error, Error} ->
-            {error, Error, State}
+    case nkdomain_util:api_getid(?DOMAIN_USER, Data, State) of
+        {ok, Id} ->
+            Search = nkdomain_user_obj:find_referred(SrvId, Id, Data),
+            nkdomain_util:api_search(Search, State);
+        Error ->
+            Error
     end;
 
 cmd('', Cmd, Data, State) ->
-    nkdomain_util:api_common(?DOMAIN_USER, Cmd, Data, State);
+    nkdomain_util:api_cmd_common(?DOMAIN_USER, Cmd, Data, State);
 
 cmd(_Sub, _Cmd, _Data, State) ->
     {error, not_implemented, State}.

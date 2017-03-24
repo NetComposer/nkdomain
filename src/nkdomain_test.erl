@@ -7,7 +7,7 @@
 
 
 login() ->
-    login(admin, "4321").
+    login(admin, "1234").
 
 login(User, Pass) ->
     Fun = fun ?MODULE:api_client_fun/2,
@@ -18,6 +18,12 @@ login(User, Pass) ->
     },
     {ok, _SessId, _Pid, _Reply} = nkapi_client:start(root, ?WS, Login, Fun, #{}).
 
+
+user_get() ->
+    cmd(user, get, #{}).
+
+user_get(Id) ->
+    cmd(user, get, #{id=>Id}).
 
 user_create(Name, Surname, Email) ->
     Data = #{
@@ -54,6 +60,12 @@ user_find_referred(Id, Type) ->
     cmd(user, find_referred, #{id=>Id, type=>Type}).
 
 
+
+domain_get() ->
+    cmd(domain, get, #{}).
+
+domain_get(Id) ->
+    cmd(domain, get, #{id=>Id}).
 
 domain_create(Path, Desc) ->
     Data = #{
@@ -92,9 +104,11 @@ domain_get_childs(Id) ->
     cmd(domain, get_childs, #{id=>Id}).
 
 
-domain_get_all_childs(Id) ->
-    cmd(domain, get_all_childs, #{id=>Id, type=>user}).
+domain_get_all_childs() ->
+    cmd(domain, get_all_childs, #{}).
 
+domain_get_all_users() ->
+    cmd(domain, get_all_childs, #{type=>user}).
 
 
 %% ===================================================================
@@ -131,46 +145,21 @@ cmd(Pid, Class, Cmd, Data) ->
 %% ===================================================================
 
 sub1_create() ->
-    {ok, Obj} = nkdomain_obj_lib:make_obj(
-        root,
-        domain,
-        "/",
-        #{description => <<"Sub1">>},
-        #{obj_id=><<"sub1">>}),
-    nkdomain_obj:create(root, Obj, #{}).
+     nkdomain_domain_obj:create(root, "sub1b", "root", "Sub 1").
 
 
 sub2_create() ->
-    {ok, Obj} = nkdomain_obj_lib:make_obj(
-        root,
-        domain,
-        "/sub1",
-        #{description => <<"Sub2">>},
-        #{obj_id=><<"sub2">>}),
-    nkdomain_obj:create(root, Obj, #{}).
+    nkdomain_domain_obj:create(root, "sub2", "/sub1b", "Sub 2").
 
 
+user_create_root(Name, Email) ->
+    Data = #{name=>Name, surname=>"surname", email=>Email},
+    nkdomain_user_obj:create(root, Name, Data).
 
+user_create_sub1(Name, Email) ->
+    Data = #{name=>Name, surname=>"surname", email=>Email, father=>"/sub1"},
+    nkdomain_user_obj:create(root, Name, Data).
 
-
-root_user_create(Name, SurName) ->
-    {ok, Obj} = nkdomain_obj_lib:make_obj(
-        root,
-        user,
-        <<"root">>,
-        #{user => #{name=>Name, surname=>SurName}},
-        #{name=>Name}),
-    nkdomain_obj:create(root, Obj, #{}).
-
-
-sub2_user_create(Name, SurName) ->
-    {ok, Obj} = nkdomain_obj_lib:make_obj(
-        root,
-        user,
-        <<"/sub1/sub2">>,
-        #{user => #{name=>Name, surname=>SurName}},
-        #{name=>Name}),
-    nkdomain_obj:create(root, Obj, #{}).
 
 
 to_bin(R) -> nklib_util:to_binary(R).

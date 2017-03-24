@@ -21,17 +21,21 @@
 -module(nkdomain_util).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([is_path/1, get_parts/2, name/1]).
+-export([is_path/1, get_parts/2, name/1, update/4]).
 -export([get_service_domain/1]).
 -export([error_code/2, add_mandatory/3]).
--export([api_common/4, api_create/3, api_delete/2, api_update/2]).
--export([search_api/2]).
+-export([api_cmd_common/4, api_cmd_get/3, api_cmd_create/3, api_cmd_delete/3, api_cmd_update/3]).
+-export([api_search/2, api_getid/3, api_add_id/3]).
 -export_type([error/0]).
 
 -type error() ::
     atom() |
     {atom(), term()} |
     {atom(), list(), list()}.
+
+-include("nkdomain.hrl").
+-include_lib("nkapi/include/nkapi.hrl").
+
 
 
 %% ===================================================================
@@ -114,14 +118,12 @@ name(Name) ->
     nklib_parse:normalize(Name, #{space=>$-, allowed=>[$-]}).
 
 
-%% @doc
+%% @doc Finds the domain for a service
 get_service_domain(Srv) ->
     case nkservice:get(Srv, nkdomain_data) of
         #{domain_obj_id:=Domain} -> Domain;
         _ -> undefined
     end.
-
-
 
 
 %% @doc
@@ -163,64 +165,114 @@ add_mandatory(Fields, Module, Base) ->
 
 
 %% @doc
-api_common(Type, Cmd, Data, State) ->
+-spec update(nkservice:id(), nkdomain:type(), nkdomain:id(), nkdomain_obj:apply_fun()) ->
+    {ok, term()} | {error, term()}.
+
+update(Srv, Type, Id, Fun) ->
+    case nkdomain:load(Srv, Id, #{}) of
+        {ok, Type, _ObjId, _Path, Pid} ->
+            case nkdomain_obj:sync_op(Pid, {apply, Fun}) of
+                {ok, Reply} ->
+                    {ok, Reply};
+                {error, Error} ->
+                    {error, Error}
+            end;
+        {ok, _, _, _, _} ->
+            {error, invalid_object};
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
+%% @doc
+api_cmd_common(Type, Cmd, Data, State) ->
     case Cmd of
+        get ->
+            api_cmd_get(Type, Data, State);
         create ->
-            api_create(Type, Data, State);
+            api_cmd_create(Type, Data, State);
         delete ->
-            api_delete(Data, State);
+            api_cmd_delete(Type, Data, State);
         update ->
-            api_update(Data, State);
+            api_cmd_update(Type, Data, State);
         _ ->
             {error, not_implemented, State}
     end.
 
 
 %% @doc
-api_create(Type, Data, #{srv_id:=SrvId}=State) ->
-    case nkdomain_obj:create(SrvId, Data#{type=>Type}, #{}) of
-        {ok, ObjId, _Pid} ->
-            {ok, #{obj_id=>ObjId}, State};
-        {error, Error} ->
-            {error, Error, State}
-    end.
-
-
-%% @doc
-api_delete(Data, #{srv_id:=SrvId, user_id:=UserId}=State) ->
-    Id = maps:get(id, Data, UserId),
-    Reason = maps:get(reason, Data, api_delete),
-    case nkdomain_obj:load(SrvId, Id) of
-        {ok, _Type, ObjId, _Path, _Pid} ->
-            case nkdomain_obj:delete(ObjId, Reason) of
-                ok ->
-                    {ok, #{}, State};
+api_cmd_get(Type, Data, #{srv_id:=SrvId}=State) ->
+    case api_getid(Type, Data, State) of
+        {ok, Id} ->
+            case nkdomain:load(SrvId, Id, #{}) of
+                {ok, _Type, _ObjId, _Path, Pid} ->
+                    case nkdomain_obj:get_session(Pid) of
+                        {ok, #obj_session{obj=Obj}} ->
+                            {ok, Obj, State};
+                        {error, Error} ->
+                            {error, Error, State}
+                    end;
                 {error, Error} ->
                     {error, Error, State}
             end;
+        Error ->
+            Error
+    end.
+
+
+%% @doc
+api_cmd_create(Type, Data, #{srv_id:=SrvId}=State) ->
+    case nkdomain:create(SrvId, Data#{type=>Type}, #{}) of
+        {ok, _Type, ObjId, Path, _Pid} ->
+            {ok, #{obj_id=>ObjId, path=>Path}, State};
         {error, Error} ->
             {error, Error, State}
     end.
 
 
 %% @doc
-api_update(Data, #{srv_id:=SrvId, user_id:=UserId}=State) ->
-    Id = maps:get(id, Data, UserId),
-    case nkdomain_obj:load(SrvId, Id) of
-        {ok, _Type, ObjId, _Path, _Pid} ->
-            case nkdomain_obj:update(ObjId, Data) of
-                ok ->
-                    {ok, #{}, State};
+api_cmd_delete(Type, Data, #{srv_id:=SrvId}=State) ->
+    case api_getid(Type, Data, State) of
+        {ok, Id} ->
+            Reason = maps:get(reason, Data, api_delete),
+            case nkdomain:load(SrvId, Id) of
+                {ok, _Type, ObjId, _Path, _Pid} ->
+                    case nkdomain_obj:delete(ObjId, Reason) of
+                        ok ->
+                            {ok, #{}, State};
+                        {error, Error} ->
+                            {error, Error, State}
+                    end;
                 {error, Error} ->
                     {error, Error, State}
             end;
-        {error, Error} ->
-            {error, Error, State}
+        Error ->
+            Error
     end.
 
 
 %% @doc
-search_api({ok, Total, List}, State) ->
+api_cmd_update(Type, Data, #{srv_id:=SrvId}=State) ->
+    case api_getid(Type, Data, State) of
+        {ok, Id} ->
+            case nkdomain:load(SrvId, Id) of
+                {ok, _Type, ObjId, _Path, _Pid} ->
+                    case nkdomain_obj:update(ObjId, Data) of
+                        ok ->
+                            {ok, #{}, State};
+                        {error, Error} ->
+                            {error, Error, State}
+                    end;
+                {error, Error} ->
+                    {error, Error, State}
+            end;
+        Error ->
+            Error
+    end.
+
+
+%% @doc
+api_search({ok, Total, List}, State) ->
     Data = #{
         total => Total,
         data =>
@@ -230,8 +282,32 @@ search_api({ok, Total, List}, State) ->
     },
     {ok, Data, State};
 
-search_api({error, Error}, State) ->
+api_search({error, Error}, State) ->
     {error, Error, State}.
+
+
+%% @doc
+api_getid(_Type, #{id:=Id}, _State) ->
+    {ok, Id};
+
+api_getid(Type, _Data, #{nkdomain_obj_ids:=ObjIds}=State) ->
+    case maps:find(Type, ObjIds) of
+        {ok, Id} ->
+            {ok, Id};
+        error ->
+            {error, missing_id, State}
+    end;
+
+api_getid(_Type, _Data, State) ->
+    {error, missing_id, State}.
+
+
+%% @doc Adds 'logged in' information to the state
+api_add_id(Type, Id, State) ->
+    ObjIds1 = maps:get(nkdomain_obj_ids, State, #{}),
+    ObjIds2 = ObjIds1#{Type => Id},
+    ?ADD_TO_API_SESSION(nkdomain_obj_ids, ObjIds2, State).
+
 
 
 

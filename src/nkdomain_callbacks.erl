@@ -37,7 +37,8 @@
          object_store_find_types/2, object_store_find_all_types/2,
          object_store_find_childs/3, object_store_find_all_childs/3,
          object_store_find_alias/2, object_store_find_referred/3,
-         object_store_delete_childs/3, object_store_delete_all_childs/3]).
+         object_store_delete_childs/3, object_store_delete_all_childs/3,
+         object_store_clean/1]).
 
 -define(LLOG(Type, Txt, Args), lager:Type("NkDOMAIN Callbacks: "++Txt, Args)).
 
@@ -66,14 +67,15 @@ api_error(invalid_object_path)              -> "Invalid object path";
 api_error({invalid_object_path, P})         -> {"Invalid object path '~s'", [P]};
 api_error(missing_domain)                   -> "Domain is missing";
 api_error(object_already_exists)            -> "Object already exists";
+api_error(object_clean_pid)                 -> "Object cleaned (pid)";
+api_error(object_clean_expire)              -> "Object cleaned (expired)";
 api_error(object_has_childs) 		        -> "Object has childs";
 api_error(object_is_stopped) 		        -> "Object is stopped";
 api_error(object_not_found) 		        -> "Object not found";
 api_error(object_deleted) 		            -> "Object removed";
 api_error(object_stopped) 		            -> "Object stopped";
-api_error(path_not_found) 		            -> "Path not found";
+api_error({path_not_found, Path}) 	        -> {"Path not found: '~s'", [Path]};
 api_error(_)   		                        -> continue.
-
 
 
 %% ===================================================================
@@ -545,7 +547,12 @@ object_store_delete_all_childs(_SrvId, _Path, _Spec) ->
     {error, store_not_implemented}.
 
 
+%% @doc
+-spec object_store_clean(nkservice:id()) ->
+    ok.
 
+object_store_clean(_SrvId) ->
+    {error, store_not_implemented}.
 
 
 %% ===================================================================
@@ -553,15 +560,14 @@ object_store_delete_all_childs(_SrvId, _Path, _Spec) ->
 %% ===================================================================
 
 %% @doc
-api_server_syntax(#nkapi_req{class=Type, subclass=Sub, cmd=Cmd}, Syntax, State) ->
+api_server_syntax(Syntax, #nkapi_req{class=Type, subclass=Sub, cmd=Cmd}=Req, State) ->
     case nkdomain_types:get_module(Type) of
         undefined ->
             continue;
         Module ->
             case nklib_util:apply(Module, object_api_syntax, [Sub, Cmd, Syntax]) of
                 Syntax2 when is_map(Syntax2) ->
-                    State2 = ?ADD_TO_API_SESSION(nkdomain_module, Module, State),
-                    {Syntax2, State2};
+                    {Syntax2, Req#nkapi_req{module=Module}, State};
                 not_exported ->
                     continue;
                 continue ->
@@ -570,9 +576,8 @@ api_server_syntax(#nkapi_req{class=Type, subclass=Sub, cmd=Cmd}, Syntax, State) 
     end.
 
 
-
 %% @doc
-api_server_allow(Req, #{nkdomain_module:=Module}=State) ->
+api_server_allow(#nkapi_req{module=Module}=Req, State) when Module/=undefined ->
     #nkapi_req{subclass=Sub, cmd=Cmd, data=Data} = Req,
     nklib_util:apply(Module, object_api_allow, [Sub, Cmd, Data, State]);
 
@@ -581,7 +586,7 @@ api_server_allow(_Req, _State) ->
 
 
 %% @doc
-api_server_cmd(Req, #{nkdomain_module:=Module}=State) ->
+api_server_cmd(#nkapi_req{module=Module}=Req, State) when Module/=undefined ->
     #nkapi_req{subclass=Sub, cmd=Cmd, data=Data} = Req,
     nklib_util:apply(Module, object_api_cmd, [Sub, Cmd, Data, State]);
 
@@ -623,7 +628,7 @@ service_init(_Service, State) ->
 service_handle_cast(nkdomain_load_domain, State) ->
     #{id:=SrvId} = State,
     #{domain:=Domain} = SrvId:config(),
-    case nkdomain_obj:load(SrvId, Domain) of
+    case nkdomain:load(SrvId, Domain) of
         {ok, ?DOMAIN_DOMAIN, ObjId, Path, Pid} ->
             lager:info("Service loaded domain ~s (~s)", [Path, ObjId]),
             monitor(process, Pid),

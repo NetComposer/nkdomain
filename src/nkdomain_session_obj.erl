@@ -78,7 +78,7 @@ create(SrvId, Opts) ->
     Create = maps:from_list(lists:flatten(CreateList)),
     case nkdomain_obj_lib:make_obj(SrvId, ?DOMAIN_SESSION, Base, Make) of
         {ok, Obj} ->
-            nkdomain_obj_lib:create(SrvId, Obj, Create);
+            nkdomain:create(SrvId, Obj, Create);
         {error, Error} ->
             {error, Error}
     end.

@@ -26,12 +26,11 @@
 %% - parent stops
 %% - all of my childs and usages stop
 
-
 -module(nkdomain_obj).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -behaviour(gen_server).
 
--export([find/2, load/2, load/3, create/3, get_session/1, save/1, unload/2]).
+-export([get_session/1, save/1, unload/2]).
 -export([update/2, set_enabled/2, delete/2, sync_op/2, async_op/2]).
 -export([register/2, unregister/2, get_childs/1]).
 -export([start/2, init/1, terminate/2, code_change/3, handle_call/3,
@@ -110,23 +109,6 @@
         type => nkdomain:type()
     }.
 
--type create_opts() ::
-    #{
-        obj_id => nkdomain:obj_id(),
-        register => nklib:link(),
-%%        user_id => nkdomain:obj_id(),
-%%        user_session => nkservice:user_session(),
-        events => [nkservice_events:type()],
-        enabled => boolean(),                        % Start disabled
-        update_pid => boolean(),
-        remove_after_stop => boolean()
-    }.
-
--type load_opts() ::
-    #{
-        register => nklib:link()
-    }.
-
 -type session() :: #obj_session{}.
 
 -type info() :: atom().
@@ -140,7 +122,7 @@
     destroyed.
 
 -type apply_fun() ::
-    fun((session()) -> Reply::term() | {Reply::term(), session()}).
+    fun((session()) -> {ok, Reply::term()} | {ok, Reply::term(), session()} | {error, term()}).
 
 -type op() ::
     {set_enabled, boolean()} |
@@ -156,41 +138,6 @@
 %% ===================================================================
 %% Public
 %% ===================================================================
-
-%% @doc Finds and object from UUID or Path, in memory and disk
--spec find(nkservice:id(), nkdomain:obj_id()|nkdomain:path()) ->
-    {ok, nkdomain:type(), domain:obj_id(), nkdomain:path(), pid()|undefined} |
-    {error, object_not_found|term()}.
-
-find(Srv, IdOrPath) ->
-    nkdomain_obj_lib:find(Srv, IdOrPath).
-
-
-%% @doc Finds an objects's pid or loads it from storage
--spec load(nkservice:id(), nkdomain:obj_id()|nkdomain:path()) ->
-    {ok, nkdomain:type(), nkdomain:obj_id(), nkdomain:path(), pid()} |
-    {error, obj_not_found|term()}.
-
-load(Srv, IdOrPath) ->
-    load(Srv, IdOrPath, #{}).
-
-
-%% @doc Finds an objects's pid or loads it from storage
--spec load(nkservice:id(), nkdomain:obj_id()|nkdomain:path(), load_opts()) ->
-    {ok, nkdomain:type(), nkdomain:obj_id(), pid()} |
-    {error, obj_not_found|term()}.
-
-load(Srv, IdOrPath, Meta) ->
-    nkdomain_obj_lib:load(Srv, IdOrPath, Meta).
-
-
-%% @doc Creates a new object
--spec create(nkservice:id(), map(), create_opts()) ->
-    {ok, nkdomain:obj_id(), pid()}.
-
-create(Srv, Obj, Meta) ->
-    nkdomain_obj_lib:create(Srv, Obj, Meta).
-
 
 %% @doc
 -spec get_session(id()) ->
@@ -512,7 +459,7 @@ handle_cast(nkdomain_do_start, State) ->
     #state{srv_id=SrvId, obj_id=ObjId, session=Session} = State,
     #obj_session{parent_id=ParentId, type=Type, path=Path} = Session,
     ?DEBUG("loading parent ~s", [ParentId], State),
-    case load(SrvId, ParentId, #{}) of
+    case nkdomain:load(SrvId, ParentId, #{}) of
         {ok, _ParentModule, ParentId, _Path, Pid} ->
             case do_call(Pid, {nkdomain_set_child, Type, ObjId, Path, self()}) of
                 {ok, #{enabled:=Enabled}} ->
@@ -681,16 +628,19 @@ terminate(Reason, #state{stop_reason=Stop, timelog=Log}=State) ->
 %% @private
 do_sync_op({apply, Fun}, _From, #state{session=Session}=State) ->
     {Reply2, State2} = try Fun(Session) of
-        {Reply, #obj_session{}=Session2} ->
-            {Reply, State#state{session=Session2}};
-        Reply ->
-            {Reply, State}
+        {ok, Reply} ->
+            {{ok, Reply}, State};
+        {ok, Reply, #obj_session{}=Session2} ->
+            ?LLOG(notice, "fun updated state", [], State),
+            {{ok, Reply}, State#state{session=Session2}};
+        {error, Error} ->
+            {{error, Error}, State}
     catch
         error:Error ->
             ?LLOG(warning, "error calling apply fun: ~p", [Error], State),
             {{error, internal_error}, State}
     end,
-    reply(Reply2, State2);
+    reply(Reply2, do_save(State2));
 
 do_sync_op(Op, _From, State) ->
     ?LLOG(notice, "unknown sync op: ~p", [Op], State),
@@ -713,16 +663,19 @@ do_async_op({set_enabled, Enabled}, #state{session=#obj_session{obj=Obj}}=State)
 
 do_async_op({apply, Fun}, #state{session=Session}=State) ->
     State2 = try Fun(Session) of
-        {_Reply, #obj_session{}=Session2} ->
+        {ok, _Reply} ->
+            State;
+        {ok, _Reply, #obj_session{}=Session2} ->
+            ?LLOG(notice, "fun updated state", [], State),
             State#state{session=Session2};
-        _Reply ->
+        {error, _Error} ->
             State
     catch
         error:Error ->
             ?LLOG(warning, "error calling apply fun: ~p", [Error], State),
             State
     end,
-    noreply(State2);
+    noreply(do_save(State2));
 
 do_async_op(Op, State) ->
     ?LLOG(notice, "unknown async op: ~p", [Op], State),
@@ -826,7 +779,7 @@ do_stop(Reason, #state{srv_id=SrvId}=State) ->
             State3 = do_add_timelog(#{msg=>stopped, code=>Code, reason=>Txt}, State2),
             % Give time for possible registrations to success and capture stop event
             State4 = do_status({stopped, Reason}, State3),
-            #state{session=#obj_session{obj=Obj}=Session} = State4,
+            #state{session=#obj_session{obj=_Obj}=_Session} = State4,
 %%            State5 = case Obj of
 %%                #{pid:=Pid} when Pid==self() ->
 %%                    Session2 = Session#obj_session{obj=maps:remove(pid, Obj), is_dirty=true},

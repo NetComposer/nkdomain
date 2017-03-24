@@ -50,6 +50,11 @@ api('', get_token, Syntax) ->
     },
     nklib_syntax:add_mandatory([id], Syntax2);
 
+api('', get, Syntax) ->
+    Syntax#{
+        id => binary
+    };
+
 api('', create, Syntax) ->
     Syntax2 = Syntax#{
         obj_name => binary,

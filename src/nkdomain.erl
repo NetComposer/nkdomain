@@ -22,7 +22,10 @@
 -module(nkdomain).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([load_file/1, load/2, export/1, get_aliases/1, get_pid/1, get_obj/1, remove/1]).
+
+-export([find/2, load/2, load/3, create/3]).
+
+-export([load_file/1, export/1, get_aliases/1, get_pid/1, get_obj/1, remove/1]).
 -export([get_roles/1, get_role_objs/2, find_role_objs/2, has_role/3]).
 -export([resolve/1, multi_resolve/1]).
 -export([register_update_callback/3]).
@@ -71,6 +74,24 @@
 }.
 
 
+-type create_opts() ::
+    #{
+        obj_id => obj_id(),
+        register => nklib:link(),
+        %%        user_id => obj_id(),
+        %%        user_session => nkservice:user_session(),
+        events => [nkservice_events:type()],
+        enabled => boolean(),                        % Start disabled
+        update_pid => boolean(),
+        remove_after_stop => boolean()
+    }.
+
+-type load_opts() ::
+    #{
+        register => nklib:link()
+    }.
+
+
 %% ===================================================================
 %% Public
 %% ===================================================================
@@ -81,6 +102,66 @@
 %% ===================================================================
 %% Public
 %% ===================================================================
+
+%% @doc Finds and object from UUID or Path, in memory and disk
+-spec find(nkservice:id(), obj_id()|path()) ->
+    {ok, type(), domain:obj_id(), path(), pid()|undefined} |
+    {error, object_not_found|term()}.
+
+find(Srv, IdOrPath) ->
+    nkdomain_obj_lib:find(Srv, IdOrPath).
+
+
+%% @doc Finds an objects's pid or loads it from storage
+-spec load(nkservice:id(), obj_id()|path()) ->
+    {ok, type(), obj_id(), path(), pid()} |
+    {error, obj_not_found|term()}.
+
+load(Srv, IdOrPath) ->
+    load(Srv, IdOrPath, #{}).
+
+
+%% @doc Finds an objects's pid or loads it from storage
+-spec load(nkservice:id(), obj_id()|path(), load_opts()) ->
+    {ok, type(), obj_id(), pid()} |
+    {error, obj_not_found|term()}.
+
+load(Srv, IdOrPath, Meta) ->
+    nkdomain_obj_lib:load(Srv, IdOrPath, Meta).
+
+
+%% @doc Creates a new object
+-spec create(nkservice:id(), map(), create_opts()) ->
+    {ok, type(), obj_id(), path(), pid()}.
+
+create(Srv, Obj, Meta) ->
+    nkdomain_obj_lib:create(Srv, Obj, Meta).
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 %% @doc Loads a domain configuration from a YAML or JSON file
@@ -91,12 +172,12 @@ load_file(File) ->
     nkdomain_load:load_file(File, #{token=>admin}).
 
 
-%% @doc Loads a domain configuration from an erlang map string or binary
--spec load(map(), nkdomain_load:load_opts()) ->
-    {ok, #{nkdomain:obj_id() => nkdomain_load:load_result()}} | {error, term()}.
-
-load(Data, Opts) ->
-    nkdomain_load:load(map, Data, Opts).
+%%%% @doc Loads a domain configuration from an erlang map string or binary
+%%-spec load(map(), nkdomain_load:load_opts()) ->
+%%    {ok, #{obj_id() => nkdomain_load:load_result()}} | {error, term()}.
+%%
+%%load(Data, Opts) ->
+%%    nkdomain_load:load(map, Data, Opts).
 
 
 %% @doc Exports a full domain specification as a map
@@ -133,7 +214,7 @@ get_pid(UserObjId) ->
 
 %% @doc Gets a full object
 -spec get_obj(string()|binary()) ->
-    {ok, nkdomain:obj()} | {error, term()}.
+    {ok, obj()} | {error, term()}.
  
 get_obj(UserObjId) ->
     case resolve(UserObjId) of
@@ -181,7 +262,7 @@ get_role_objs(Role, UserObjId) ->
 
 %% @doc Gets an object's roles iterating at all levels
 -spec find_role_objs(nkrole:role(), string()|binary()) ->
-    {ok, [nkdomain:obj_id()]} | {error, term()}.
+    {ok, [obj_id()]} | {error, term()}.
 
 find_role_objs(Role, UserObjId) ->
     nkdomain_role:find_role_objs(Role, UserObjId).
@@ -203,9 +284,9 @@ resolve(UserObjId) ->
     UserObjId1 = nklib_util:to_binary(UserObjId),
     case get_aliases(UserObjId1) of
         [] ->
-            nkdomain_util:resolve(UserObjId1);
+            nkdomain_util2:resolve(UserObjId1);
         [UserObjId2] -> 
-            nkdomain_util:resolve(UserObjId2);
+            nkdomain_util2:resolve(UserObjId2);
         _ ->
             {error, multiple_aliases}
     end.
@@ -219,14 +300,14 @@ multi_resolve(UserObjId) ->
     UserObjId1 = nklib_util:to_binary(UserObjId),
     case get_aliases(UserObjId1) of
         [] ->
-            case nkdomain_util:resolve(UserObjId1) of
+            case nkdomain_util2:resolve(UserObjId1) of
                 {ok, Data} -> [Data];
                 {error, _} -> []
             end;
         UserObjIdList ->
             lists:foldl(
                 fun(Id, Acc) ->
-                    case nkdomain_util:resolve(Id) of
+                    case nkdomain_util2:resolve(Id) of
                         {ok, {Class, ObjId, Pid}} -> 
                             [{Class, ObjId, Pid}|Acc];
                         {error, _} -> 
@@ -241,7 +322,7 @@ multi_resolve(UserObjId) ->
 
 %% @doc Registers a callback that will be called any time and object is updated
 %% as Mod:Fun(ObjId, Spec|removed)
--spec register_update_callback(nkdomain:class(), atom(), atom()) ->
+-spec register_update_callback(class(), atom(), atom()) ->
     ok.
 
 register_update_callback(Class, Mod, Fun) when is_atom(Class) ->

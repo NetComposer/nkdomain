@@ -33,6 +33,11 @@
 
 
 %% @doc
+api('', get, Syntax) ->
+    Syntax#{
+        id => binary
+    };
+
 api('', create, Syntax) ->
     Syntax2 = Syntax#{
         domain => binary,
@@ -62,6 +67,7 @@ api('', get_all_types, Syntax) ->
 api('', get_childs, Syntax) ->
     Search = nkelastic_search:syntax(),
     Syntax2 = Syntax#{
+        id => binary,
         type => binary
     },
     maps:merge(Syntax2, Search);
