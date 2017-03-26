@@ -157,7 +157,7 @@ user_create_root(Name, Email) ->
     nkdomain_user_obj:create(root, Name, Data).
 
 user_create_sub1(Name, Email) ->
-    Data = #{name=>Name, surname=>"surname", email=>Email, father=>"/sub1"},
+    Data = #{name=>Name, surname=>"surname", email=>Email, parent=>"/sub1"},
     nkdomain_user_obj:create(root, Name, Data).
 
 

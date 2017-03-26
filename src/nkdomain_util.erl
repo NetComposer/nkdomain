@@ -22,6 +22,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([is_path/1, get_parts/2, name/1, update/4]).
+-export([add_destroyed/3]).
 -export([get_service_domain/1]).
 -export([error_code/2, add_mandatory/3]).
 -export([api_cmd_common/4, api_cmd_get/3, api_cmd_create/3, api_cmd_delete/3, api_cmd_update/3]).
@@ -59,14 +60,16 @@ is_path(Path) ->
             Path2 = binary:split(Path1, <<".">>, [global]),
             Path3 = nklib_util:bjoin(lists:reverse(Path2), <<"/">>),
             {true, <<"/", Path3/binary, "/", Name/binary>>};
-        [Path1] ->
-            case binary:split(Path1, <<".">>, [global]) of
-                [_] ->
-                    false;
-                Path2 ->
-                    Path3 = nklib_util:bjoin(lists:reverse(Path2), <<"/">>),
-                    {true, <<"/", Path3/binary>>}
-            end
+        _ ->
+            false
+%%        [Path1] ->
+%%            case binary:split(Path1, <<".">>, [global]) of
+%%                [_] ->
+%%                    false;
+%%                Path2 ->
+%%                    Path3 = nklib_util:bjoin(lists:reverse(Path2), <<"/">>),
+%%                    {true, <<"/", Path3/binary>>}
+%%            end
     end.
 
 
@@ -182,6 +185,17 @@ update(Srv, Type, Id, Fun) ->
         {error, Error} ->
             {error, Error}
     end.
+
+
+%% @doc
+add_destroyed(SrvId, Reason, Obj) ->
+    {Code, Txt} = nkapi_util:api_error(SrvId, Reason),
+    ?ADD_TO_OBJ(
+        #{
+            destroyed_time => nklib_util:m_timestamp(),
+            destroyed_code => Code,
+            destroyed_reason => Txt
+        }, Obj).
 
 
 %% @doc

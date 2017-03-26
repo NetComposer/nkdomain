@@ -33,6 +33,7 @@
 -export([get_session/1, save/1, unload/2]).
 -export([update/2, set_enabled/2, delete/2, sync_op/2, async_op/2]).
 -export([register/2, unregister/2, get_childs/1]).
+-export([create_child/3, load_child/3]).
 -export([start/2, init/1, terminate/2, code_change/3, handle_call/3,
          handle_cast/2, handle_info/2]).
 -export([get_all/0, unload_all/0]).
@@ -114,12 +115,12 @@
 -type info() :: atom().
 
 -type event() ::
-    created |
+    loaded |
     {updated, map()} |
     {enabled, boolean()} |
-    {stopped, nkservice:error()} |
+    {unloaded, nkservice:error()} |
     {info, info(), map()} |
-    destroyed.
+    stopped.
 
 -type apply_fun() ::
     fun((session()) -> {ok, Reply::term()} | {ok, Reply::term(), session()} | {error, term()}).
@@ -227,6 +228,16 @@ get_childs(Id) ->
     do_call(Id, nkdomain_get_childs).
 
 
+%% @private
+create_child(Id, Obj, Meta) ->
+    do_call(Id, {nkdomain_create_child, Obj, Meta}).
+
+
+%% @private
+load_child(Id, Obj, Meta) ->
+    do_call(Id, {nkdomain_load_child, Obj, Meta}).
+
+
 %% @doc
 -spec get_all() ->
     [{nkdomain:type(), nkdomain:obj_id(), nkdomain:path(), pid()}].
@@ -278,12 +289,19 @@ start(Obj, Meta) ->
     {ok, #state{}} | {error, term()}.
 
 init({Obj, Meta}) ->
-    #{obj_id:=ObjId, type:=Type, path:=Path, parent_id:=Parent} = Obj,
+    #{obj_id:=ObjId, type:=Type, path:=Path, parent_id:=ParentId} = Obj,
     Module = nkdomain_types:get_module(Type),
     false = Module==undefined,
     true = nklib_proc:reg({?MODULE, ObjId}, {Type, Path}),
     nklib_proc:put(?MODULE, {Type, ObjId, Path}),
     #{srv_id:=SrvId, is_dirty:=IsDirty} = Meta,
+    {ParentId, ParentPid} = case Meta of
+        #{parent_id:=ParentId0, parent_pid:=ParentPid0} ->
+            monitor(process, ParentPid0),
+            {ParentId0, ParentPid0};
+        _ when Type == ?DOMAIN_DOMAIN andalso ObjId == <<"root">> ->
+            {<<>>, undefined}
+    end,
     Enabled = case maps:find(enabled, Meta) of
         {ok, true} ->
             case maps:get(enabled, Obj, true) of
@@ -300,28 +318,20 @@ init({Obj, Meta}) ->
         module = Module,
         path = Path,
         type = Type,
-        parent_id = Parent,
+        parent_id = ParentId,
         obj = Obj,
         srv_id = SrvId,
         status = init,
-        meta = maps:without([srv_id, is_dirty, obj_id, update_pid], Meta),
+        meta = maps:without([srv_id, is_dirty, obj_id, parent_id, parent_pid], Meta),
         is_dirty = IsDirty,
         enabled = Enabled
     },
-    Session2 = case Meta of
-        #{update_pid:=true} ->
-            Session#obj_session{
-                obj = Obj#{pid=>self()},
-                is_dirty = true
-            };
-        _ ->
-            Session
-    end,
     State1 = #state{
         obj_id = ObjId,
         srv_id = SrvId,
+        parent_pid = ParentPid,
         links = nklib_links:new(),
-        session = Session2,
+        session = Session,
         started = nklib_util:m_timestamp()
     },
     State2 = case Meta of
@@ -336,7 +346,7 @@ init({Obj, Meta}) ->
     ?LLOG(info, "loaded (~p)", [self()], State2),
     gen_server:cast(self(), nkdomain_do_start),
     {ok, State3} = handle(object_init, [], State2),
-    {ok, do_event(created, State3)}.
+    {ok, State3}.
 
 
 %% @private
@@ -401,43 +411,67 @@ handle_call({nkdomain_sync_op, Op}, From, State) ->
             end
     end;
 
-handle_call({nkdomain_check_create_child, ObjType, ObjPath}, _From, State) ->
-    Reply = case do_check_child(ObjType, ObjPath, State) of
-        {ok, _Name, _Data} ->
-            do_check_create_child(ObjType, ObjPath, State);
-        {error, Error} ->
-            {error, Error}
-    end,
-    reply(Reply, State);
+%%handle_call({nkdomain_check_create_child, ObjType, ObjPath}, _From, State) ->
+%%    Reply = case do_check_child(ObjType, ObjPath, State) of
+%%        {ok, _Name, _Data} ->
+%%            do_check_create_child(ObjType, ObjPath, State);
+%%        {error, Error} ->
+%%            {error, Error}
+%%    end,
+%%    reply(Reply, State);
+%%
+%%handle_call({nkdomain_check_child, ObjType, ObjPath}, _From, State) ->
+%%    case do_check_child(ObjType, ObjPath, State) of
+%%        {ok, _Name, Data} ->
+%%            reply({ok, Data}, State);
+%%        {error, Error} ->
+%%            reply({error, Error}, State)
+%%    end;
+%%
+%%handle_call({nkdomain_set_child, ObjType, ObjId, ObjPath, Pid}, _From, State) ->
+%%    case is_stopped(State) of
+%%        true ->
+%%            reply({error, object_is_stopped}, State);
+%%        false ->
+%%            #state{childs=Childs} = State,
+%%            case do_check_child(ObjType, ObjPath, State) of
+%%                {ok, ObjName, Data} ->
+%%                    Child = #child{
+%%                        obj_id = ObjId,
+%%                        type_name = {ObjType, ObjName},
+%%                        pid = Pid
+%%                    },
+%%                    monitor(process, Pid),
+%%                    Childs2 = [Child|Childs],
+%%                    reply({ok, Data}, State#state{childs=Childs2});
+%%                {error, Error} ->
+%%                    reply({error, Error}, State)
+%%            end
+%%    end;
 
-handle_call({nkdomain_check_child, ObjType, ObjPath}, _From, State) ->
-    case do_check_child(ObjType, ObjPath, State) of
-        {ok, _Name, Data} ->
-            reply({ok, Data}, State);
+handle_call({nkdomain_create_child, Obj, Meta}, From, State) ->
+    #{type:=ChildType, path:=ChildPath} = Obj,
+    case do_check_create_child(ChildType, ChildPath, State) of
+        ok ->
+            handle_call({nkdomain_load_child, Obj, Meta#{is_dirty=>true}}, From, State);
         {error, Error} ->
             reply({error, Error}, State)
     end;
 
-
-handle_call({nkdomain_set_child, ObjType, ObjId, ObjPath, Pid}, _From, State) ->
-    case is_stopped(State) of
-        true ->
-            reply({error, object_is_stopped}, State);
-        false ->
-            #state{childs=Childs} = State,
-            case do_check_child(ObjType, ObjPath, State) of
-                {ok, ObjName, Data} ->
-                    Child = #child{
-                        obj_id = ObjId,
-                        type_name = {ObjType, ObjName},
-                        pid = Pid
-                    },
-                    monitor(process, Pid),
-                    Childs2 = [Child|Childs],
-                    reply({ok, Data}, State#state{childs=Childs2});
+handle_call({nkdomain_load_child, Obj, Meta}, _From, State) ->
+    #{obj_id:=ChildId, type:=ChildType, path:=ChildPath} = Obj,
+    case do_check_child(ChildType, ChildPath, Meta, State) of
+        {ok, ChildName, Meta2} ->
+            case start(Obj, Meta2) of
+                {ok, ChildPid} ->
+                    State2 = do_add_child(ChildType, ChildId, ChildName, ChildPid, State),
+                    reply({ok, ChildPid}, State2);
                 {error, Error} ->
-                    reply({error, Error}, State)
-            end
+                    ?LLOG(notice, "could not start child ~s:~s: ~p", [ChildType, ChildId, Error], State),
+                    reply({error, could_not_start_child}, State)
+            end;
+        {error, Error} ->
+            reply({error, Error}, State)
     end;
 
 handle_call(Msg, From, State) ->
@@ -448,38 +482,14 @@ handle_call(Msg, From, State) ->
 -spec handle_cast(term(), #state{}) ->
     {noreply, #state{}} | {stop, term(), #state{}}.
 
-handle_cast(nkdomain_do_start, #state{obj_id = <<"root">>}=State) ->
-    #state{session=#obj_session{parent_id = <<>>}} = State,
-    ?LLOG(notice, "domain ROOT loaded", [], State),
+handle_cast(nkdomain_do_start, State) ->
     {ok, State2} = handle(object_start, [], State),
     State3 = do_save(State2),
-    noreply(State3);
-
-handle_cast(nkdomain_do_start, State) ->
-    #state{srv_id=SrvId, obj_id=ObjId, session=Session} = State,
-    #obj_session{parent_id=ParentId, type=Type, path=Path} = Session,
-    ?DEBUG("loading parent ~s", [ParentId], State),
-    case nkdomain:load(SrvId, ParentId, #{}) of
-        {ok, _ParentModule, ParentId, _Path, Pid} ->
-            case do_call(Pid, {nkdomain_set_child, Type, ObjId, Path, self()}) of
-                {ok, #{enabled:=Enabled}} ->
-                    State2 = do_enabled(Enabled, State),
-                    monitor(process, Pid),
-                    State3 = State2#state{parent_pid=Pid},
-                    {ok, State4} = handle(object_start, [], State3),
-                    State5 = do_save(State4),
-                    case do_check_expire(State5) of
-                        false ->
-                            noreply(State5);
-                        true ->
-                            do_stop(object_expired, State5)
-                    end;
-                {error, Error} ->
-                    do_stop(Error, State)
-            end;
-        {error, Error} ->
-            ?LLOG(warning, "could not load parent: ~p", [Error], State),
-            do_stop(parent_load_error, State)
+    case do_check_expire(State3) of
+        false ->
+            noreply(do_event(loaded, State3));
+        true ->
+            do_stop(object_expired, State3)
     end;
 
 handle_cast({nkdomain_add_timelog, Data}, State) ->
@@ -503,7 +513,7 @@ handle_cast({nkdomain_async_op, Op}, State) ->
             end
     end;
 
-handle_cast({nkdomain_father_enabled, Enabled}, State) ->
+handle_cast({nkdomain_parent_enabled, Enabled}, State) ->
     noreply(do_enabled(Enabled, State));
 
 handle_cast({nkdomain_restart_timer, Time}, #state{timer=Timer}=State) ->
@@ -614,7 +624,7 @@ terminate(Reason, #state{stop_reason=Stop, timelog=Log}=State) ->
             State
     end,
     State3 = do_event({record, lists:reverse(Log)}, State2),
-    State4 = do_event(destroyed, State3),
+    State4 = do_event(stopped, State3),
     {ok, _State5} = handle(object_terminate, [Reason], State4),
     ok.
 
@@ -742,14 +752,8 @@ do_delete(_Reason, #state{is_deleted=true}=State) ->
 
 do_delete(Reason, #state{srv_id=SrvId}=State) ->
     {ok, State2} = handle(object_deleted, [Reason], State),
-    {Code, Txt} = nkapi_util:api_error(SrvId, Reason),
     #state{session=#obj_session{obj=Obj}=Session} = State2,
-    Obj2 = ?ADD_TO_OBJ(
-        #{
-            destroyed_time => nklib_util:m_timestamp(),
-            destroyed_code => Code,
-            destroyed_reason => Txt
-        }, Obj),
+    Obj2 = nkdomain_util:add_destroyed(SrvId, Reason, Obj),
     State3 = State2#state{session=Session#obj_session{obj=Obj, is_dirty=true}},
     State4 = case handle(object_archive, [Obj2], State3) of
         {ok, ArchState} ->
@@ -793,7 +797,7 @@ do_stop(Reason, #state{srv_id=SrvId}=State) ->
 
 %% @private
 do_stop2(Reason, #state{started=Started}=State) ->
-    State2 = do_event({stopped, Reason}, State),
+    State2 = do_event({unloaded, Reason}, State),
     #state{session = #obj_session{meta = Meta}} = State2,
     State3 = case Meta of
         #{remove_after_stop:=true} ->
@@ -840,32 +844,49 @@ do_check_create_child(ObjType, ObjPath, #state{srv_id=SrvId}) ->
 
 
 %% @private
-do_check_child(ObjType, ObjPath, State) ->
-    #state{session=Session, childs=Childs} = State,
+do_check_child(ChildType, ChildPath, Meta, State) ->
+    #state{obj_id=ParentId, srv_id=SrvId, session=Session, childs=Childs} = State,
     #obj_session{path=Path} = Session,
-    case nkdomain_util:get_parts(ObjType, ObjPath) of
-        {ok, Path, ObjName} ->
-            case lists:keymember({ObjType, ObjName}, #child.type_name, Childs) of
+    case nkdomain_util:get_parts(ChildType, ChildPath) of
+        {ok, Path, ChildName} ->
+            case lists:keymember({ChildType, ChildName}, #child.type_name, Childs) of
                 true ->
-                    {error, {name_is_already_used, ObjName}};
+                    {error, {name_is_already_used, ChildName}};
                 false ->
-                    Data = #{enabled=>Session#obj_session.enabled},
-                    {ok, ObjName, Data}
+                    Meta2 = Meta#{
+                        srv_id => SrvId,
+                        parent_id => ParentId,
+                        parent_pid => self(),
+                        enabled => Session#obj_session.enabled
+                    },
+                    {ok, ChildName, Meta2}
             end;
-        {ok, Path2, ObjName2} ->
+        {ok, Path2, ChildName2} ->
             ?LLOG(notice, "error trying to check invalid child path (~s): ~s ~s:~s",
-                  [ObjPath, Path2, ObjType, ObjName2], State),
-            {error, invalid_object_path};
+                  [ChildPath, Path2, ChildType, ChildName2], State),
+            {error, {invalid_object_path, Path}};
         {error, Error} ->
             {error, Error}
     end.
 
 
 %% @private
+do_add_child(ChildType, ChildId, ChildName, ChildPid, #state{childs=Childs}=State) ->
+    Child = #child{
+        obj_id = ChildId,
+        type_name = {ChildType, ChildName},
+        pid = ChildPid
+    },
+    monitor(process, ChildPid),
+    Childs2 = [Child|Childs],
+    State#state{childs=Childs2}.
+
+
+%% @private
 do_update(Update, #state{srv_id=SrvId, session=Session}=State) ->
-    #obj_session{type=Type, module=Module, obj=Obj}=Session,
+    #obj_session{type=Type, obj=Obj}=Session,
     case SrvId:object_parse(SrvId, update, Type, Update) of
-        {ok, Module, Update2} ->
+        {ok, Update2} ->
             case ?ADD_TO_OBJ_DEEP(Update2, Obj) of
                 Obj ->
                     {ok, State};
@@ -901,7 +922,7 @@ do_set_enabled(Enabled, #state{session=Session, childs=Childs}=State) ->
     Session2 = Session#obj_session{enabled=Enabled},
     {ok, State2} = handle(object_enabled, [], State#state{session=Session2}),
     lists:foreach(
-        fun(#child{pid=Pid}) -> gen_server:cast(Pid, {nkdomain_father_enabled, Enabled}) end,
+        fun(#child{pid=Pid}) -> gen_server:cast(Pid, {nkdomain_parent_enabled, Enabled}) end,
         Childs),
     do_event({enabled, Enabled}, State2).
 

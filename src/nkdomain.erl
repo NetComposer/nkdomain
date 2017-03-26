@@ -82,7 +82,6 @@
         %%        user_session => nkservice:user_session(),
         events => [nkservice_events:type()],
         enabled => boolean(),                        % Start disabled
-        update_pid => boolean(),
         remove_after_stop => boolean()
     }.
 

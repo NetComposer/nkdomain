@@ -26,6 +26,7 @@
 -export([object_mapping/0, object_syntax/1, object_parse/4, object_unparse/1]).
 -export([object_load/2, object_save/1, object_delete/1, object_archive/2,
          object_updated/2, object_enabled/1, object_deleted/2,
+         object_check_active/3,
          object_sync_op/3, object_async_op/2,
          object_status/2, object_all_links_down/1]).
 -export([object_init/1, object_terminate/2, object_event/2, object_reg_event/3,
@@ -59,8 +60,7 @@
 %% ===================================================================
 
 %% @doc
-api_error(could_not_load_parent)            -> "Object could not load parent";
-api_error(father_not_found)                 -> "Father not found";
+api_error({could_not_load_parent, Id})      -> {"Object could not load parent '~s'", [Id]};
 api_error(invalid_object_id)                -> "Invalid object id";
 api_error(invalid_object_type)              -> "Invalid object type";
 api_error(invalid_object_path)              -> "Invalid object path";
@@ -69,12 +69,12 @@ api_error(missing_domain)                   -> "Domain is missing";
 api_error(object_already_exists)            -> "Object already exists";
 api_error(object_clean_pid)                 -> "Object cleaned (pid)";
 api_error(object_clean_expire)              -> "Object cleaned (expired)";
+api_error(object_deleted) 		            -> "Object removed";
 api_error(object_has_childs) 		        -> "Object has childs";
+api_error(object_parent_conflict) 	        -> "Object has conflicting parent";
 api_error(object_is_stopped) 		        -> "Object is stopped";
 api_error(object_not_found) 		        -> "Object not found";
-api_error(object_deleted) 		            -> "Object removed";
 api_error(object_stopped) 		            -> "Object stopped";
-api_error({path_not_found, Path}) 	        -> {"Path not found: '~s'", [Path]};
 api_error(_)   		                        -> continue.
 
 
@@ -99,6 +99,7 @@ object_mapping() ->
         created_by => #{type => keyword},
         created_time => #{type => date},
         enabled => #{type => boolean},
+        active => #{type => boolean},
         expires_time => #{type => date},
         destroyed_time => #{type => date},
         destroyed_code => #{type => keyword},
@@ -108,7 +109,7 @@ object_mapping() ->
             fields => #{keyword => #{type=>keyword}}
         },
         aliases => #{type => keyword},
-        pid => #{type => keyword},
+%%        pid => #{type => keyword},
         icon_id => #{type => keyword}
     }.
 
@@ -128,13 +129,14 @@ object_syntax(load) ->
         created_time => integer,
         parent_id => binary,
         enabled => boolean,
+        active => boolean,                    % Must be loaded
         expires_time => integer,
         destroyed_time => integer,
         destroyed_code => binary,
         destroyed_reason => binary,
         description => binary,
         aliases => {list, binary},
-        pid => pid,
+%%        pid => pid,
         icon_id => binary,
         '_store_vsn' => any,
         '__mandatory' => [type, obj_id, parent_id, path, created_time],
@@ -151,13 +153,15 @@ object_syntax(update) ->
 
 
 
-%% @doc Called to parse an object's syntax
+%% @doc Called to get and parse an object
 -spec object_load(nkservice:id(), nkdomain:obj_id()) ->
-    {ok, module(), nkdomain:obj()} | {error, term()}.
+    {ok, nkdomain:obj()} | {error, term()}.
 
 object_load(SrvId, ObjId) ->
     case SrvId:object_store_read_raw(SrvId, ObjId) of
         {ok, #{<<"type">>:=Type}=Map} ->
+            SrvId:object_parse(SrvId, load, Type, Map);
+        {ok, #{type:=Type}=Map} ->
             SrvId:object_parse(SrvId, load, Type, Map);
         {ok, _Map} ->
             {error, invalid_object_type};
@@ -209,7 +213,7 @@ object_archive(Obj, #obj_session{srv_id=SrvId, obj_id=ObjId}=Session) ->
 
 %% @doc Called to parse an object's syntax
 -spec object_parse(nkservice:id(), nkdomain:type(), load|update, map()) ->
-    {ok, module(), nkdomain:obj()} | {error, term()}.
+    {ok, nkdomain:obj()} | {error, term()}.
 
 object_parse(SrvId, Mode, Type, Map) ->
     case nkdomain_types:get_module(Type) of
@@ -232,10 +236,10 @@ object_parse(SrvId, Mode, Type, Map) ->
             },
             case nklib_syntax:parse(Map, Syntax, Opts) of
                 {ok, Obj2, _Exp, []} ->
-                    {ok, Module, Obj2};
+                    {ok, Obj2};
                 {ok, Obj2, _Exp, Missing} ->
                     ?LLOG(notice, "Object of type ~s has unknown fields: ~p", [Type, Missing]),
-                    {ok, Module, Obj2};
+                    {ok, Obj2};
                 {error, Error} ->
                     {error, Error}
             end
@@ -259,6 +263,19 @@ object_unparse(#obj_session{srv_id=SrvId, type=Type, module=Module, obj=Obj}) ->
     ModKeys = maps:keys(Module:object_mapping()),
     ModMap = maps:with(ModKeys, ModData),
     BaseMap2#{Type => ModMap}.
+
+
+%% @doc Called if an active object is detected on storage
+-spec object_check_active(nkservice:id(), nkdomain:type(), nkdomain:obj_id()) ->
+    load | delete | {archive, Reason::nkservce:error()} |
+    find_or_delete | {find_or_achive, Reason::nkservce:error()} |
+    ignore.
+
+object_check_active(_SrvId, ?DOMAIN_SESSION, _ObjId) ->
+    {archive, object_clean_process};
+
+object_check_active(_SrvId, _Type, _ObjId) ->
+    ignore.
 
 
 %% @doc Called when an object is modified
@@ -547,7 +564,8 @@ object_store_delete_all_childs(_SrvId, _Path, _Spec) ->
     {error, store_not_implemented}.
 
 
-%% @doc
+%% @doc Called to perform a cleanup of the store (expired objects, etc.)
+%% Should call nkdomain_obj_lib:check_active/3
 -spec object_store_clean(nkservice:id()) ->
     ok.
 

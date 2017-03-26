@@ -455,63 +455,41 @@ delete_obj_all_childs(SrvId, Path, Opts) ->
 %% @private
 clean(SrvId) ->
     #es_config{index = Index, type = IdxType} = SrvId:config_nkdomain_store_es(),
-    clean_pids(SrvId, Index, IdxType, 0, 1).
+    do_clean_active(SrvId, Index, IdxType, 0, 10).
 
 
 %% @private
-clean_pids(SrvId, Index, IdxType, From, Size) ->
+do_clean_active(SrvId, Index, IdxType, From, Size) ->
     Query = #{
-        constant_score => #{                          % we want several filters
-            filter => #{exists => #{field => pid}}
+        constant_score => #{
+            filter => #{term => #{active => true}}
         }
     },
     Opts = #{
         from => From,
         size => Size,
-        fields => [<<"pid">>]
+        fields => [<<"type">>]
     },
     case nkelastic_api:search(SrvId, Index, IdxType, Query, Opts) of
         {ok, _N, [], _Aggs, _Meta} ->
             ok;
         {ok, _N, List, _Aggs, _Meta} ->
             lists:foreach(
-                fun(#{<<"_id">>:=ObjId, <<"_source">>:=#{<<"pid">>:=BinPid}}) ->
-                    try
-                        Pid = binary_to_term(base64:decode(BinPid)),
-                        case is_process_alive(Pid) of
-                            true ->
-                                lager:info("~p is alive", [Pid]);
-                            false ->
-                                ?LLOG(notice, "object ~s is NOT alive", [ObjId]),
-                                force_archive(SrvId, ObjId, object_clean_pid)
-                        end
-                    catch
-                        _:_ -> ?LLOG(warning, "error processing pid at object ~s", [ObjId])
+                fun(#{<<"_id">>:=ObjId, <<"_source">>:=#{<<"type">>:=Type}}) ->
+                    case nkdomain_obj_lib:check_active(SrvId, Type, ObjId) of
+                        ok ->
+                            ok;
+                        {error, Error} ->
+                            ?LLOG(notice, "error in check_active for ~s:~s: ~p",
+                                  [Type, ObjId, Error])
                     end
                 end,
                 List),
-            clean_pids(SrvId, Index, IdxType, From+Size, Size);
+            do_clean_active(SrvId, Index, IdxType, From+Size, Size);
         {error, Error} ->
             {error, Error}
     end.
 
-
-%% @private
-force_archive(SrvId, ObjId, Reason) ->
-    case read_obj(SrvId, ObjId) of
-        {ok, Obj} ->
-            {Code, Txt} = nkapi_util:api_error(SrvId, Reason),
-            Obj2 = ?ADD_TO_OBJ(
-                #{
-                    destroyed_time => nklib_util:m_timestamp(),
-                    destroyed_code => Code,
-                    destroyed_reason => Txt
-                }, Obj),
-            nkdomain_store:archive(SrvId, ObjId, Obj2),
-            nkdomain_store:delete(SrvId, ObjId);
-        _ ->
-            ok
-    end.
 
 
 %% ===================================================================

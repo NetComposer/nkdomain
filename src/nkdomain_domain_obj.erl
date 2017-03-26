@@ -41,8 +41,8 @@
 -spec create(nkservice:id(), nkdomain:name(), nkdomain:id(), binary()) ->
     {ok, nkdomain:obj_id(), nkdomain:path(), pid()} | {error, term()}.
 
-create(Srv, Name, Father, Desc) ->
-    Opts = #{father=>Father, name=>Name},
+create(Srv, Name, Parent, Desc) ->
+    Opts = #{parent=>Parent, name=>Name},
     Base = #{description=>Desc},
     case nkdomain_obj_lib:make_obj(Srv, ?DOMAIN_DOMAIN, Base, Opts) of
         {ok, Obj} ->

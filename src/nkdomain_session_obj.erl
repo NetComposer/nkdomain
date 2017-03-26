@@ -56,6 +56,7 @@
 
 create(SrvId, Opts) ->
     MakeList = [
+        {active, true},
         case Opts of
             #{session_id:=SessId} -> {obj_id, SessId};
             _ -> []
@@ -68,7 +69,6 @@ create(SrvId, Opts) ->
     Make = maps:from_list(lists:flatten(MakeList)),
     Base = maps:get(session, Opts, #{}),
     CreateList = [
-        {update_pid, true},
         {remove_after_stop, true},
         case Opts of
             #{pid:=Pid} -> {register, {?MODULE, Pid}};

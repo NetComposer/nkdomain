@@ -62,7 +62,7 @@
     {ok, nkdomain:obj_id(), nkdomain:path(), pid()} | {error, term()}.
 
 create(Srv, Name, Data) ->
-    Opts1 = maps:with([father], Data),
+    Opts1 = maps:with([parent], Data),
     Opts2 = Opts1#{name=>Name},
     Aliases = case Data of
         #{email:=Email} -> Email;
@@ -107,11 +107,6 @@ login(SrvId, Login, Opts) ->
         {error, Error} ->
             {error, Error}
     end.
-
-
-
-
-
 
 %% @doc
 find_referred(SrvId, Id, Spec) ->
@@ -254,7 +249,7 @@ do_start_session(SrvId, UserId, Opts) ->
     Pid = maps:get(session_pid, Opts),
     Opts2 = Opts#{referred_id=>UserId, pid=>Pid},
     case nkdomain_session_obj:create(SrvId, Opts2) of
-        {ok, _Type, ObjId, Path, _Pid} ->
+        {ok, _Type, ObjId, _Path, _Pid} ->
             {ok, ObjId};
         {error, Error} ->
             {error, Error}
