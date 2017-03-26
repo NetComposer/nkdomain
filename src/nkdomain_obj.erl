@@ -34,7 +34,7 @@
 -export([update/2, set_enabled/2, delete/2, sync_op/2, async_op/2]).
 -export([register/2, unregister/2, get_childs/1]).
 -export([create_child/3, load_child/3]).
--export([start/2, init/1, terminate/2, code_change/3, handle_call/3,
+-export([start/3, init/1, terminate/2, code_change/3, handle_call/3,
          handle_cast/2, handle_info/2]).
 -export([get_all/0, unload_all/0]).
 -export_type([event/0, status/0]).
@@ -60,7 +60,9 @@
             | Args]
         )).
 
--define(MIN_STARTED_TIME, 10000).
+-define(MIN_STARTED_TIME, 2000).
+-define(MIN_FIRST_TIME, 60000).
+
 
 -include("nkdomain.hrl").
 -compile({no_auto_import, [register/2]}).
@@ -258,9 +260,8 @@ unload_all() ->
 %% ===================================================================
 
 %% @private
-start(Obj, Meta) ->
-    gen_server:start(?MODULE, {Obj, Meta}, []).
-
+start(SrvId, Obj, Meta) ->
+    gen_server:start(?MODULE, {SrvId, Obj, Meta}, []).
 
 
 -record(child, {
@@ -288,13 +289,12 @@ start(Obj, Meta) ->
 -spec init(term()) ->
     {ok, #state{}} | {error, term()}.
 
-init({Obj, Meta}) ->
+init({SrvId, Obj, Meta}) ->
     #{obj_id:=ObjId, type:=Type, path:=Path, parent_id:=ParentId} = Obj,
     Module = nkdomain_types:get_module(Type),
     false = Module==undefined,
     true = nklib_proc:reg({?MODULE, ObjId}, {Type, Path}),
     nklib_proc:put(?MODULE, {Type, ObjId, Path}),
-    #{srv_id:=SrvId, is_dirty:=IsDirty} = Meta,
     {ParentId, ParentPid} = case Meta of
         #{parent_id:=ParentId0, parent_pid:=ParentPid0} ->
             monitor(process, ParentPid0),
@@ -323,7 +323,7 @@ init({Obj, Meta}) ->
         srv_id = SrvId,
         status = init,
         meta = maps:without([srv_id, is_dirty, obj_id, parent_id, parent_pid], Meta),
-        is_dirty = IsDirty,
+        is_dirty = maps:get(is_dirty, Meta, false),
         enabled = Enabled
     },
     State1 = #state{
@@ -338,7 +338,7 @@ init({Obj, Meta}) ->
          #{register:=Link} ->
             links_add(Link, State1);
          _ ->
-            erlang:send_after(?MIN_STARTED_TIME, self(), nkdomain_check_childs),
+            erlang:send_after(?MIN_FIRST_TIME, self(), nkdomain_check_childs),
             State1
     end,
     set_log(State2),
@@ -451,6 +451,7 @@ handle_call({nkdomain_sync_op, Op}, From, State) ->
 
 handle_call({nkdomain_create_child, Obj, Meta}, From, State) ->
     #{type:=ChildType, path:=ChildPath} = Obj,
+    ?DEBUG("creating child ~s (~s)", [ChildType, ChildPath], State),
     case do_check_create_child(ChildType, ChildPath, State) of
         ok ->
             handle_call({nkdomain_load_child, Obj, Meta#{is_dirty=>true}}, From, State);
@@ -458,11 +459,12 @@ handle_call({nkdomain_create_child, Obj, Meta}, From, State) ->
             reply({error, Error}, State)
     end;
 
-handle_call({nkdomain_load_child, Obj, Meta}, _From, State) ->
+handle_call({nkdomain_load_child, Obj, Meta}, _From, #state{srv_id=SrvId}=State) ->
     #{obj_id:=ChildId, type:=ChildType, path:=ChildPath} = Obj,
+    ?DEBUG("loading child ~s (~s)", [ChildType, ChildPath], State),
     case do_check_child(ChildType, ChildPath, Meta, State) of
         {ok, ChildName, Meta2} ->
-            case start(Obj, Meta2) of
+            case start(SrvId, Obj, Meta2) of
                 {ok, ChildPid} ->
                     State2 = do_add_child(ChildType, ChildId, ChildName, ChildPid, State),
                     reply({ok, ChildPid}, State2);
@@ -845,7 +847,7 @@ do_check_create_child(ObjType, ObjPath, #state{srv_id=SrvId}) ->
 
 %% @private
 do_check_child(ChildType, ChildPath, Meta, State) ->
-    #state{obj_id=ParentId, srv_id=SrvId, session=Session, childs=Childs} = State,
+    #state{obj_id=ParentId, session=Session, childs=Childs} = State,
     #obj_session{path=Path} = Session,
     case nkdomain_util:get_parts(ChildType, ChildPath) of
         {ok, Path, ChildName} ->
@@ -854,7 +856,6 @@ do_check_child(ChildType, ChildPath, Meta, State) ->
                     {error, {name_is_already_used, ChildName}};
                 false ->
                     Meta2 = Meta#{
-                        srv_id => SrvId,
                         parent_id => ParentId,
                         parent_pid => self(),
                         enabled => Session#obj_session.enabled

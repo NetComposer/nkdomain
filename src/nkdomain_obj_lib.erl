@@ -26,7 +26,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([find/2, load/2, load/3, create/3]).
--export([make_obj/5, delete/2, check_active/3]).
+-export([make_obj/4, delete/2, check_active/3]).
 
 -export([do_find/1, do_call/2, do_call/3, do_cast/2, do_info/2]).
 
@@ -46,7 +46,10 @@
         name => binary(),
         parent => binary(),
         referred_id => nkdomain:obj_id(),
-        active => boolean()
+        active => boolean(),
+        description => binary(),
+        aliases => [binary()],
+        type_obj => map()
     }.
 
 
@@ -57,7 +60,7 @@
 %% @doc Finds and object from UUID or Path, in memory and disk
 -spec find(nkservice:id(), nkdomain:obj_id()|nkdomain:path()) ->
     {ok, nkdomain:type(), domain:obj_id(), nkdomain:path(), pid()|undefined} |
-    {error, object_not_found|term()}.
+    {error, object_not_found|path_not_found|term()}.
 
 find(Srv, IdOrPath) ->
     case nkdomain_util:is_path(IdOrPath) of
@@ -72,6 +75,8 @@ find(Srv, IdOrPath) ->
                                 not_found ->
                                     {ok, Type, ObjId, Path, undefined}
                             end;
+                        {error, object_not_found} ->
+                            {error, path_not_found};
                         {error, Error} ->
                             {error, Error}
                     end;
@@ -125,6 +130,8 @@ load(Srv, IdOrPath, Meta) ->
             {ok, Type, ObjId, Path, Pid};
         {ok, _Type, ObjId, _Path, undefined} ->
             do_load2(Srv, ObjId, Meta);
+        {error, path_not_found} ->
+            {error, object_not_found};
         {error, object_not_found} ->
             ObjId = nklib_util:to_binary(IdOrPath),
             do_load2(Srv, ObjId, Meta);
@@ -139,19 +146,7 @@ do_load2(Srv, ObjId, Meta) ->
         {ok, SrvId} ->
             case SrvId:object_load(SrvId, ObjId) of
                 {ok, Obj} ->
-                    case Obj of
-                        %% TODO: Better check
-                        #{expires_time:=Expires} ->
-                            case nklib_util:m_timestamp() of
-                                Now when Now >= Expires ->
-                                    nkdomain_store:delete(SrvId, ObjId),
-                                    {error, object_not_found};
-                                _ ->
-                                    do_load3(ObjId, Obj, Meta)
-                            end;
-                        _ ->
-                            do_load3(ObjId, Obj, Meta)
-                    end;
+                    do_load3(SrvId, Obj, Meta);
                 {error, Error} ->
                     {error, Error}
             end
@@ -160,7 +155,7 @@ do_load2(Srv, ObjId, Meta) ->
 
 %% @private
 do_load3(SrvId, #{type:=?DOMAIN_DOMAIN, path:=<<"/">>, obj_id:=<<"root">>}=Obj, Meta) ->
-    {ok, Pid} = nkdomain_obj:start(Obj, Meta#{srv_id=>SrvId}),
+    {ok, Pid} = nkdomain_obj:start(SrvId, Obj, Meta),
     {ok, ?DOMAIN_DOMAIN, <<"root">>, <<"/">>, Pid};
 
 do_load3(SrvId, #{type:=Type, path:=Path, obj_id:=ObjId, parent_id:=ParentId}=Obj, Meta) ->
@@ -186,10 +181,10 @@ do_load3(SrvId, #{type:=Type, path:=Path, obj_id:=ObjId, parent_id:=ParentId}=Ob
 
 
 %% @doc Adds type, obj_id, parent_id, path, created_time
--spec make_obj(nkservice:id(), nkdomain:type(), map(), nkdomain:obj_id(), make_opts()) ->
+-spec make_obj(nkservice:id(), nkdomain:obj_id(), nkdomain:type(), make_opts()) ->
     {ok, nkdomain:obj()} | {error, term()}.
 
-make_obj(Srv, Type, Base, Parent, Opts) ->
+make_obj(Srv, Parent, Type, Opts) ->
     case find(Srv, Parent) of
         {ok, _ParentType, ParentId, ParentPath, _ParentPid} ->
             Type2 = to_bin(Type),
@@ -215,26 +210,44 @@ make_obj(Srv, Type, Base, Parent, Opts) ->
                 <<"/">> -> <<>>;
                 _ -> ParentPath
             end,
-            Obj1 = Base#{
-                obj_id => ObjId,
-                type => Type2,
-                parent_id => ParentId,
-                path => <<BasePath/binary, $/, Name2/binary>>,
-                created_time => nklib_util:m_timestamp()
-            },
-            Obj2 = case Opts of
-                #{referred_id:=ReferredId} ->
-                    Obj1#{referred_id => nkdomain_util:name(ReferredId)};
-                _ ->
-                    Obj1
-            end,
-            Obj3 = case Opts of
-                #{active:=true} ->
-                    Obj2#{active=>true};
-                _ ->
-                    Obj2
-            end,
-            {ok, Obj3};
+            Obj = [
+                {obj_id, ObjId},
+                {type, Type2},
+                {parent_id, ParentId},
+                {path, <<BasePath/binary, $/, Name2/binary>>},
+                {created_time, nklib_util:m_timestamp()},
+                case Opts of
+                    #{referred_id:=ReferredId} ->
+                        {referred_id, ReferredId};
+                    _ ->
+                        []
+                end,
+                case Opts of
+                    #{description:=Description} ->
+                        {description, Description};
+                    _ ->
+                        []
+                end,
+                case Opts of
+                    #{aliases:=Aliases} ->
+                        {aliases, Aliases};
+                    _ ->
+                        []
+                end,
+                case Opts of
+                    #{active:=true} ->
+                        {active, true};
+                    _ ->
+                        []
+                end,
+                case Opts of
+                    #{type_obj:=TypeObj} ->
+                        {Type, TypeObj};
+                    _ ->
+                        []
+                end
+            ],
+            {ok, maps:from_list(lists:flatten(Obj))};
         {error, object_not_found} ->
             {error, {could_not_load_parent, Parent}};
         {error, Error} ->

@@ -38,13 +38,15 @@
 
 %% @doc
 %% Data must follow object's syntax
--spec create(nkservice:id(), nkdomain:name(), nkdomain:id(), binary()) ->
+-spec create(nkservice:id(), nkdomain:id(), nkdomain:name(), binary()) ->
     {ok, nkdomain:obj_id(), nkdomain:path(), pid()} | {error, term()}.
 
-create(Srv, Name, Parent, Desc) ->
-    Opts = #{parent=>Parent, name=>Name},
-    Base = #{description=>Desc},
-    case nkdomain_obj_lib:make_obj(Srv, ?DOMAIN_DOMAIN, Base, Opts) of
+create(Srv, Parent, Name, Desc) ->
+    Opts = #{
+        name => Name,
+        description => Desc
+    },
+    case nkdomain_obj_lib:make_obj(Srv, Parent, ?DOMAIN_DOMAIN, Opts) of
         {ok, Obj} ->
             case nkdomain:create(Srv, Obj, #{}) of
                 {ok, ?DOMAIN_DOMAIN, ObjId, Path, Pid} ->

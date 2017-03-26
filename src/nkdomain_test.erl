@@ -145,20 +145,20 @@ cmd(Pid, Class, Cmd, Data) ->
 %% ===================================================================
 
 sub1_create() ->
-     nkdomain_domain_obj:create(root, "sub1b", "root", "Sub 1").
+     nkdomain_domain_obj:create(root, "root", "sub1", "Sub 1").
 
 
 sub2_create() ->
-    nkdomain_domain_obj:create(root, "sub2", "/sub1b", "Sub 2").
+    nkdomain_domain_obj:create(root, "/sub1", "sub2", "Sub 2").
 
 
 user_create_root(Name, Email) ->
     Data = #{name=>Name, surname=>"surname", email=>Email},
-    nkdomain_user_obj:create(root, Name, Data).
+    nkdomain_user_obj:create(root, <<"root">>, Name, Data).
 
 user_create_sub1(Name, Email) ->
-    Data = #{name=>Name, surname=>"surname", email=>Email, parent=>"/sub1"},
-    nkdomain_user_obj:create(root, Name, Data).
+    Data = #{name=>Name, surname=>"surname", email=>Email},
+    nkdomain_user_obj:create(root, <<"/sub1">>, Name, Data).
 
 
 

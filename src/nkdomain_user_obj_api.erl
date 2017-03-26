@@ -32,11 +32,16 @@
 
 %% @doc
 cmd('', create, #{obj_name:=Name, user:=User}, #{srv_id:=SrvId}=State) ->
-    case nkdomain_user_obj:create(SrvId, Name, User) of
-        {ok, ObjId, Path, _Pid} ->
-            {ok, #{obj_id=>ObjId, path=>Path}, State};
-        {error, Error} ->
-            {error, Error, State}
+    case nkdomain_util:get_service_domain(SrvId) of
+        undefined ->
+            {error, unknown_domain};
+        Domain ->
+            case nkdomain_user_obj:create(SrvId, Domain, Name, User) of
+                {ok, ObjId, Path, _Pid} ->
+                    {ok, #{obj_id=>ObjId, path=>Path}, State};
+                {error, Error} ->
+                    {error, Error, State}
+            end
     end;
 
 cmd('', login, #{id:=User}=Data, #{srv_id:=SrvId}=State) ->

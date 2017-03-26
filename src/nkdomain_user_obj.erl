@@ -24,7 +24,7 @@
 -behavior(nkdomain_obj).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([create/3, login/3, find_referred/3]).
+-export([create/4, login/3, find_referred/3]).
 -export([object_get_info/0, object_mapping/0, object_syntax/1,
          object_api_syntax/3, object_api_allow/4, object_api_cmd/4]).
 -export([user_pass/1]).
@@ -58,21 +58,20 @@
 
 %% @doc
 %% Data must follow object's syntax
--spec create(nkservice:id(), nkdomain:name(), map()) ->
+-spec create(nkservice:id(), nkdomain:id(), nkdomain:name(), map()) ->
     {ok, nkdomain:obj_id(), nkdomain:path(), pid()} | {error, term()}.
 
-create(Srv, Name, Data) ->
-    Opts1 = maps:with([parent], Data),
-    Opts2 = Opts1#{name=>Name},
-    Aliases = case Data of
-        #{email:=Email} -> Email;
-        _ -> []
-    end,
-    Base = #{
-        ?DOMAIN_USER => Data,
-        aliases => Aliases
+create(Srv, Domain, Name, Data) ->
+    Opts = #{
+        name => Name,
+        type_obj => Data,
+        aliases =>
+            case Data of
+                #{email:=Email} -> Email;
+                _ -> []
+            end
     },
-    case nkdomain_obj_lib:make_obj(Srv, ?DOMAIN_USER, Base, Opts2) of
+    case nkdomain_obj_lib:make_obj(Srv, Domain, ?DOMAIN_USER, Opts) of
         {ok, Obj} ->
             case nkdomain:create(Srv, Obj, #{}) of
                 {ok, ?DOMAIN_USER, ObjId, Path, Pid} ->
@@ -247,8 +246,10 @@ do_login(_Pid, _ObjId, _Opts) ->
 %% @private
 do_start_session(SrvId, UserId, Opts) ->
     Pid = maps:get(session_pid, Opts),
-    Opts2 = Opts#{referred_id=>UserId, pid=>Pid},
-    case nkdomain_session_obj:create(SrvId, Opts2) of
+    Opts1 = maps:with([session_id, local, remote], Opts),
+    Opts2 = Opts1#{referred_id=>UserId, pid=>Pid},
+    lager:error("Opts2: ~p", [Opts2]),
+    case nkdomain_session_obj:create(SrvId, UserId, Opts2) of
         {ok, _Type, ObjId, _Path, _Pid} ->
             {ok, ObjId};
         {error, Error} ->

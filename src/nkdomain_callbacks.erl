@@ -65,7 +65,6 @@ api_error(invalid_object_id)                -> "Invalid object id";
 api_error(invalid_object_type)              -> "Invalid object type";
 api_error(invalid_object_path)              -> "Invalid object path";
 api_error({invalid_object_path, P})         -> {"Invalid object path '~s'", [P]};
-api_error(missing_domain)                   -> "Domain is missing";
 api_error(object_already_exists)            -> "Object already exists";
 api_error(object_clean_pid)                 -> "Object cleaned (pid)";
 api_error(object_clean_expire)              -> "Object cleaned (expired)";
@@ -75,6 +74,7 @@ api_error(object_parent_conflict) 	        -> "Object has conflicting parent";
 api_error(object_is_stopped) 		        -> "Object is stopped";
 api_error(object_not_found) 		        -> "Object not found";
 api_error(object_stopped) 		            -> "Object stopped";
+api_error(unknown_domain)                   -> "Domain is unknown";
 api_error(_)   		                        -> continue.
 
 
@@ -633,7 +633,7 @@ plugin_config(#{domain:=_}=Config, _Service) ->
     {ok, Config};
 
 plugin_config(_Config, _Service) ->
-    {error, missing_domain}.
+    {error, unknown_domain}.
 
 
 %% @private
@@ -643,25 +643,25 @@ service_init(_Service, State) ->
 
 
 %% @private
-service_handle_cast(nkdomain_load_domain, State) ->
-    #{id:=SrvId} = State,
-    #{domain:=Domain} = SrvId:config(),
-    case nkdomain:load(SrvId, Domain) of
-        {ok, ?DOMAIN_DOMAIN, ObjId, Path, Pid} ->
-            lager:info("Service loaded domain ~s (~s)", [Path, ObjId]),
-            monitor(process, Pid),
-            DomainData = #{
-                domain_obj_id => ObjId,
-                domain_path => Path,
-                domain_pid => Pid
-            },
-            nkservice_srv:put(SrvId, nkdomain_data, DomainData),
-            State2 = State#{nkdomain => DomainData},
-            {noreply, State2};
-        {error, Error} ->
-            ?LLOG(warning, "could not load domain ~s: ~p", [Domain, Error]),
-            {noreply, State}
-    end;
+%%service_handle_cast(nkdomain_load_domain, State) ->
+%%    #{id:=SrvId} = State,
+%%    #{domain:=Domain} = SrvId:config(),
+%%    case nkdomain:load(SrvId, Domain) of
+%%        {ok, ?DOMAIN_DOMAIN, ObjId, Path, Pid} ->
+%%            lager:info("Service loaded domain ~s (~s)", [Path, ObjId]),
+%%            monitor(process, Pid),
+%%            DomainData = #{
+%%                domain_obj_id => ObjId,
+%%                domain_path => Path,
+%%                domain_pid => Pid
+%%            },
+%%            nkservice_srv:put(SrvId, nkdomain_data, DomainData),
+%%            State2 = State#{nkdomain => DomainData},
+%%            {noreply, State2};
+%%        {error, Error} ->
+%%            ?LLOG(warning, "could not load domain ~s: ~p", [Domain, Error]),
+%%            {noreply, State}
+%%    end;
 
 service_handle_cast(_Msg, _State) ->
     continue.

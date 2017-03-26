@@ -24,7 +24,7 @@
 -behavior(nkdomain_obj).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([create/2]).
+-export([create/3]).
 -export([object_get_info/0, object_mapping/0, object_syntax/1,
          object_api_syntax/3, object_api_allow/4, object_api_cmd/4]).
 
@@ -40,10 +40,8 @@
         session_id => binary(),
         referred_id => binary(),
         pid => pid(),
-        session => #{
-            local => binary(),
-            remote => binary()
-        }
+        local => binary(),
+        remote => binary()
     }.
 
 
@@ -51,11 +49,11 @@
 %% Public
 %% ===================================================================
 
--spec create(nkservice:id(), create_opts()) ->
+-spec create(nkservice:id(), nkdomain:obj_id(), create_opts()) ->
     {ok, SessId::nkdomain:obj_id(), pid()} | {error, term()}.
 
-create(SrvId, Opts) ->
-    MakeList = [
+create(SrvId, Domain, Opts) ->
+    Make1 = [
         {active, true},
         case Opts of
             #{session_id:=SessId} -> {obj_id, SessId};
@@ -64,20 +62,20 @@ create(SrvId, Opts) ->
         case Opts of
             #{referred_id:=ReferId} -> {referred_id, ReferId};
             _ -> []
-        end
+        end,
+        {type_obj, maps:with([local, remote], Opts)}
     ],
-    Make = maps:from_list(lists:flatten(MakeList)),
-    Base = maps:get(session, Opts, #{}),
-    CreateList = [
-        {remove_after_stop, true},
-        case Opts of
-            #{pid:=Pid} -> {register, {?MODULE, Pid}};
-            _ -> []
-        end
-    ],
-    Create = maps:from_list(lists:flatten(CreateList)),
-    case nkdomain_obj_lib:make_obj(SrvId, ?DOMAIN_SESSION, Base, Make) of
+    Make2 = maps:from_list(lists:flatten(Make1)),
+    case nkdomain_obj_lib:make_obj(SrvId, Domain, ?DOMAIN_SESSION, Make2) of
         {ok, Obj} ->
+            CreateList = [
+                {remove_after_stop, true},
+                case Opts of
+                    #{pid:=Pid} -> {register, {?MODULE, Pid}};
+                    _ -> []
+                end
+            ],
+            Create = maps:from_list(lists:flatten(CreateList)),
             nkdomain:create(SrvId, Obj, Create);
         {error, Error} ->
             {error, Error}

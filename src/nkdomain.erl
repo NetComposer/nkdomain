@@ -78,8 +78,6 @@
     #{
         obj_id => obj_id(),
         register => nklib:link(),
-        %%        user_id => obj_id(),
-        %%        user_session => nkservice:user_session(),
         events => [nkservice_events:type()],
         enabled => boolean(),                        % Start disabled
         remove_after_stop => boolean()

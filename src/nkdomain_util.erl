@@ -190,12 +190,13 @@ update(Srv, Type, Id, Fun) ->
 %% @doc
 add_destroyed(SrvId, Reason, Obj) ->
     {Code, Txt} = nkapi_util:api_error(SrvId, Reason),
+    Obj2 = maps:remove(active, Obj),
     ?ADD_TO_OBJ(
         #{
             destroyed_time => nklib_util:m_timestamp(),
             destroyed_code => Code,
             destroyed_reason => Txt
-        }, Obj).
+        }, Obj2).
 
 
 %% @doc

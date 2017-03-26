@@ -41,7 +41,7 @@ create() ->
         description => <<"NetComposer">>,
         created_time => nklib_util:m_timestamp()
     },
-    nkdomain:create(root, Obj, #{}).
+    nkdomain_store_es:object_store_save_raw(axft4mi, <<"root">>, Obj).
 
 
 
@@ -96,17 +96,22 @@ stop() ->
 
 %% @doc
 admin_create() ->
-    Obj = #{
-        type => <<"user">>,
+    Opts = #{
         obj_id => <<"admin">>,
-        path => <<"/users/admin">>,
-        parent_id => <<"root">>,
-        created_time => nklib_util:m_timestamp(),
-        description => <<"Admin User">>,
-        user => #{
+        type_obj => #{
             name => <<"Admin">>,
             surname => <<"User">>,
             password => "1234"
         }
     },
-    nkdomain:create(root, Obj, #{}).
+    case nkdomain_obj_lib:make_obj(root, <<"root">>, ?DOMAIN_USER, Opts) of
+        {ok, Obj} ->
+            case nkdomain:create(root, Obj, #{}) of
+                {ok, ?DOMAIN_USER, _ObjId, _Path, _Pid} ->
+                    ok;
+                {error, Error} ->
+                    {error, Error}
+            end;
+        {error, Error} ->
+            {error, Error}
+    end.
