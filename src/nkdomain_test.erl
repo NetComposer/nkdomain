@@ -25,9 +25,10 @@ user_get() ->
 user_get(Id) ->
     cmd(user, get, #{id=>Id}).
 
-user_create(Name, Surname, Email) ->
+user_create(Domain, Name, Surname, Email) ->
     Data = #{
         obj_name => Name,
+        domain => Domain,
         user => #{
             name => to_bin(Name),
             surname => to_bin(Surname),
@@ -67,11 +68,11 @@ domain_get() ->
 domain_get(Id) ->
     cmd(domain, get, #{id=>Id}).
 
-domain_create(Path, Desc) ->
+domain_create(Domain, Name, Desc) ->
     Data = #{
-        path => to_bin(Path),
-        description => Desc,
-        aliases => [dom1, dom2]
+        obj_name => Name,
+        domain => Domain,
+        description => Desc
     },
     case cmd(domain, create, Data) of
         {ok, #{<<"obj_id">>:=ObjId}} -> {ok, ObjId};
@@ -92,23 +93,32 @@ domain_update(Id, Desc, Aliases) ->
     cmd(domain, update, Data).
 
 
-domain_get_types(Id) ->
-    cmd(domain, get_types, #{id=>Id}).
+domain_find_types(Id) ->
+    cmd(domain, find_types, #{id=>Id}).
 
 
-domain_get_all_types() ->
-    cmd(domain, get_all_types, #{}).
+domain_find_all_types() ->
+    cmd(domain, find_all_types, #{}).
 
 
-domain_get_childs(Id) ->
-    cmd(domain, get_childs, #{id=>Id}).
+domain_find_childs(Id) ->
+    cmd(domain, find_childs, #{id=>Id}).
 
 
-domain_get_all_childs() ->
-    cmd(domain, get_all_childs, #{}).
+domain_find_all_childs() ->
+    cmd(domain, find_all_childs, #{sort=>[type, path]}).
 
-domain_get_all_users() ->
-    cmd(domain, get_all_childs, #{type=>user}).
+domain_find_all_users() ->
+    cmd(domain, find_all_childs, #{type=>user}).
+
+
+session_get() ->
+    cmd(session, get, #{}).
+
+
+
+
+
 
 
 %% ===================================================================

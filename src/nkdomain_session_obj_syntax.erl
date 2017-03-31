@@ -33,12 +33,16 @@
 
 
 %% @doc
-api('', destroy, Syntax) ->
-    Syntax2 = Syntax#{
+api('', get, Syntax) ->
+    Syntax#{
+        id => binary
+    };
+
+api('', delete, Syntax) ->
+    Syntax#{
         id => binary,
         reason => binary
-    },
-    nklib_syntax:add_mandatory([id], Syntax2);
+    };
 
 api(_Sub, _Cmd, Syntax) ->
     lager:error("unknown syntax: ~p, ~p", [_Sub, _Cmd]),

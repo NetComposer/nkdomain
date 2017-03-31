@@ -24,9 +24,7 @@
 -export([is_path/1, get_parts/2, name/1, update/4]).
 -export([add_destroyed/3]).
 -export([get_service_domain/1]).
--export([error_code/2, add_mandatory/3]).
--export([api_cmd_common/4, api_cmd_get/3, api_cmd_create/3, api_cmd_delete/3, api_cmd_update/3]).
--export([api_search/2, api_getid/3, api_add_id/3]).
+-export([error_code/2]).
 -export_type([error/0]).
 
 -type error() ::
@@ -156,31 +154,20 @@ error_code(_SrvId, Term) ->
     {unknown_error, to_bin(erlang:ref_to_list(Ref))}.
 
 
-%% @doc Add mandatory fields to syntax
--spec add_mandatory([atom()], module(), map()) ->
-    map().
-
-add_mandatory(Fields, Module, Base) ->
-    Fields2 = [list_to_binary([to_bin(Module), $., to_bin(F)]) || F<- Fields],
-    Mandatory1 = maps:get('__mandatory', Base, []),
-    Mandatory2 = Fields2 ++ Mandatory1,
-    Base#{'__mandatory' => Mandatory2}.
-
-
 %% @doc
 -spec update(nkservice:id(), nkdomain:type(), nkdomain:id(), nkdomain_obj:apply_fun()) ->
     {ok, term()} | {error, term()}.
 
 update(Srv, Type, Id, Fun) ->
-    case nkdomain:load(Srv, Id, #{}) of
-        {ok, Type, _ObjId, _Path, Pid} ->
+    case nkdomain_obj_lib:load(Srv, Id, #{}) of
+        #obj_id_ext{type=Type, pid=Pid} ->
             case nkdomain_obj:sync_op(Pid, {apply, Fun}) of
                 {ok, Reply} ->
                     {ok, Reply};
                 {error, Error} ->
                     {error, Error}
             end;
-        {ok, _, _, _, _} ->
+        #obj_id_ext{} ->
             {error, invalid_object};
         {error, Error} ->
             {error, Error}
@@ -197,133 +184,6 @@ add_destroyed(SrvId, Reason, Obj) ->
             destroyed_code => Code,
             destroyed_reason => Txt
         }, Obj2).
-
-
-%% @doc
-api_cmd_common(Type, Cmd, Data, State) ->
-    case Cmd of
-        get ->
-            api_cmd_get(Type, Data, State);
-        create ->
-            api_cmd_create(Type, Data, State);
-        delete ->
-            api_cmd_delete(Type, Data, State);
-        update ->
-            api_cmd_update(Type, Data, State);
-        _ ->
-            {error, not_implemented, State}
-    end.
-
-
-%% @doc
-api_cmd_get(Type, Data, #{srv_id:=SrvId}=State) ->
-    case api_getid(Type, Data, State) of
-        {ok, Id} ->
-            case nkdomain:load(SrvId, Id, #{}) of
-                {ok, _Type, _ObjId, _Path, Pid} ->
-                    case nkdomain_obj:get_session(Pid) of
-                        {ok, #obj_session{obj=Obj}} ->
-                            {ok, Obj, State};
-                        {error, Error} ->
-                            {error, Error, State}
-                    end;
-                {error, Error} ->
-                    {error, Error, State}
-            end;
-        Error ->
-            Error
-    end.
-
-
-%% @doc
-api_cmd_create(Type, Data, #{srv_id:=SrvId}=State) ->
-    case nkdomain:create(SrvId, Data#{type=>Type}, #{}) of
-        {ok, _Type, ObjId, Path, _Pid} ->
-            {ok, #{obj_id=>ObjId, path=>Path}, State};
-        {error, Error} ->
-            {error, Error, State}
-    end.
-
-
-%% @doc
-api_cmd_delete(Type, Data, #{srv_id:=SrvId}=State) ->
-    case api_getid(Type, Data, State) of
-        {ok, Id} ->
-            Reason = maps:get(reason, Data, api_delete),
-            case nkdomain:load(SrvId, Id) of
-                {ok, _Type, ObjId, _Path, _Pid} ->
-                    case nkdomain_obj:delete(ObjId, Reason) of
-                        ok ->
-                            {ok, #{}, State};
-                        {error, Error} ->
-                            {error, Error, State}
-                    end;
-                {error, Error} ->
-                    {error, Error, State}
-            end;
-        Error ->
-            Error
-    end.
-
-
-%% @doc
-api_cmd_update(Type, Data, #{srv_id:=SrvId}=State) ->
-    case api_getid(Type, Data, State) of
-        {ok, Id} ->
-            case nkdomain:load(SrvId, Id) of
-                {ok, _Type, ObjId, _Path, _Pid} ->
-                    case nkdomain_obj:update(ObjId, Data) of
-                        ok ->
-                            {ok, #{}, State};
-                        {error, Error} ->
-                            {error, Error, State}
-                    end;
-                {error, Error} ->
-                    {error, Error, State}
-            end;
-        Error ->
-            Error
-    end.
-
-
-%% @doc
-api_search({ok, Total, List}, State) ->
-    Data = #{
-        total => Total,
-        data =>
-            lists:map(
-                fun({Type, ObjId, Path}) -> #{type=>Type, obj_id=>ObjId, path=>Path} end,
-                List)
-    },
-    {ok, Data, State};
-
-api_search({error, Error}, State) ->
-    {error, Error, State}.
-
-
-%% @doc
-api_getid(_Type, #{id:=Id}, _State) ->
-    {ok, Id};
-
-api_getid(Type, _Data, #{nkdomain_obj_ids:=ObjIds}=State) ->
-    case maps:find(Type, ObjIds) of
-        {ok, Id} ->
-            {ok, Id};
-        error ->
-            {error, missing_id, State}
-    end;
-
-api_getid(_Type, _Data, State) ->
-    {error, missing_id, State}.
-
-
-%% @doc Adds 'logged in' information to the state
-api_add_id(Type, Id, State) ->
-    ObjIds1 = maps:get(nkdomain_obj_ids, State, #{}),
-    ObjIds2 = ObjIds1#{Type => Id},
-    ?ADD_TO_API_SESSION(nkdomain_obj_ids, ObjIds2, State).
-
-
 
 
 %% @private

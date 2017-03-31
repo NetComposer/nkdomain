@@ -40,10 +40,11 @@ api('', get, Syntax) ->
 
 api('', create, Syntax) ->
     Syntax2 = Syntax#{
+        obj_name => binary,
         domain => binary,
         description => binary
     },
-    nklib_syntax:add_mandatory([domain, description], Syntax2);
+    nklib_syntax:add_mandatory([obj_name, domain, description], Syntax2);
 
 api('', delete, Syntax) ->
     Syntax#{
@@ -56,15 +57,15 @@ api('', update, Syntax) ->
         description => binary
     };
 
-api('', get_types, Syntax) ->
+api('', find_types, Syntax) ->
     Syntax#{
         id => binary
     };
 
-api('', get_all_types, Syntax) ->
-    api('', get_types, Syntax);
+api('', find_all_types, Syntax) ->
+    api('', find_types, Syntax);
 
-api('', get_childs, Syntax) ->
+api('', find_childs, Syntax) ->
     Search = nkelastic_search:syntax(),
     Syntax2 = Syntax#{
         id => binary,
@@ -72,8 +73,8 @@ api('', get_childs, Syntax) ->
     },
     maps:merge(Syntax2, Search);
 
-api('', get_all_childs, Syntax) ->
-    api('', get_childs, Syntax);
+api('', find_all_childs, Syntax) ->
+    api('', find_childs, Syntax);
 
 api(_Sub, _Cmd, Syntax) ->
     lager:error("unknown syntax: ~p, ~p", [_Sub, _Cmd]),

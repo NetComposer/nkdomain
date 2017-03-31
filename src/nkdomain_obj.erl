@@ -166,6 +166,14 @@ delete(Id, Reason) ->
     do_call(Id, {nkdomain_delete, Reason}).
 
 
+%%%% @doc
+%%-spec delete_childs(id(), nkservice:error()) ->
+%%    ok | {error, term()}.
+%%
+%%delete_childs(Id, Reason) ->
+%%    do_call(Id, {nkdomain_delete_childs, Reason}).
+
+
 %% @doc
 -spec unload(id(), nkservice:error()) ->
     ok | {error, term()}.
@@ -224,7 +232,8 @@ unregister(Id, Link) ->
 
 % @doc
 -spec get_childs(id()) ->
-    ok | {error, term()}.
+    {ok, [{nkdomain:type(), nkdomain:obj_id(), nkdomain:name(), pid()}]} |
+    {error, term()}.
 
 get_childs(Id) ->
     do_call(Id, nkdomain_get_childs).
@@ -361,7 +370,12 @@ handle_call(nkdomain_get_timelog, _From, #state{timelog=Log}=State) ->
     reply({ok, Log}, State);
 
 handle_call(nkdomain_get_childs, _From, #state{childs=Childs}=State) ->
-    reply({ok, Childs}, State);
+    Data = lists:map(
+        fun(#child{obj_id=ObjId, type_name={Type, Name}, pid=Pid}) ->
+            {Type, ObjId, Name, Pid}
+        end,
+        Childs),
+    reply({ok, Data}, State);
 
 handle_call(nkdomain_get_state, _From, State) ->
     reply(State, State);
@@ -379,17 +393,26 @@ handle_call({nkdomain_update, Map}, _From, State) ->
             end
     end;
 
-handle_call({nkdomain_delete, Reason}, From, #state{srv_id=SrvId, obj_id=ObjId}=State) ->
-    case SrvId:object_store_find_childs(SrvId, ObjId, #{size=>0}) of
-        {ok, 0, []} ->
-            State2 = do_delete(Reason, State),
+handle_call({nkdomain_delete, Reason}, From, State) ->
+    case do_delete(Reason, State) of
+        {ok, State2} ->
             gen_server:reply(From, ok),
             do_stop(object_deleted, State2);
-        {ok, _N, []} ->
-            reply({error, object_has_childs}, State);
-        {error, Error} ->
-            reply({error, Error}, State)
+        {error, Error, State2} ->
+            reply({error, Error}, State2)
     end;
+
+%%handle_call({nkdomain_delete_childs, Reason}, From, #state{srv_id=SrvId, obj_id=ObjId}=State) ->
+%%    case SrvId:object_store_find_childs(SrvId, ObjId, #{size=>0}) of
+%%        {ok, 0, []} ->
+%%            State2 = do_delete(Reason, State),
+%%            gen_server:reply(From, ok),
+%%            do_stop(object_deleted, State2);
+%%        {ok, _N, []} ->
+%%            reply({error, object_has_childs}, State);
+%%        {error, Error} ->
+%%            reply({error, Error}, State)
+%%    end;
 
 handle_call({nkdomain_sync_op, Op}, From, State) ->
     case is_stopped(State) of
@@ -410,44 +433,6 @@ handle_call({nkdomain_sync_op, Op}, From, State) ->
                     do_sync_op(Op, From, State2)
             end
     end;
-
-%%handle_call({nkdomain_check_create_child, ObjType, ObjPath}, _From, State) ->
-%%    Reply = case do_check_child(ObjType, ObjPath, State) of
-%%        {ok, _Name, _Data} ->
-%%            do_check_create_child(ObjType, ObjPath, State);
-%%        {error, Error} ->
-%%            {error, Error}
-%%    end,
-%%    reply(Reply, State);
-%%
-%%handle_call({nkdomain_check_child, ObjType, ObjPath}, _From, State) ->
-%%    case do_check_child(ObjType, ObjPath, State) of
-%%        {ok, _Name, Data} ->
-%%            reply({ok, Data}, State);
-%%        {error, Error} ->
-%%            reply({error, Error}, State)
-%%    end;
-%%
-%%handle_call({nkdomain_set_child, ObjType, ObjId, ObjPath, Pid}, _From, State) ->
-%%    case is_stopped(State) of
-%%        true ->
-%%            reply({error, object_is_stopped}, State);
-%%        false ->
-%%            #state{childs=Childs} = State,
-%%            case do_check_child(ObjType, ObjPath, State) of
-%%                {ok, ObjName, Data} ->
-%%                    Child = #child{
-%%                        obj_id = ObjId,
-%%                        type_name = {ObjType, ObjName},
-%%                        pid = Pid
-%%                    },
-%%                    monitor(process, Pid),
-%%                    Childs2 = [Child|Childs],
-%%                    reply({ok, Data}, State#state{childs=Childs2});
-%%                {error, Error} ->
-%%                    reply({error, Error}, State)
-%%            end
-%%    end;
 
 handle_call({nkdomain_create_child, Obj, Meta}, From, State) ->
     #{type:=ChildType, path:=ChildPath} = Obj,
@@ -752,26 +737,30 @@ do_save(State) ->
 do_delete(_Reason, #state{is_deleted=true}=State) ->
     State;
 
-do_delete(Reason, #state{srv_id=SrvId}=State) ->
-    {ok, State2} = handle(object_deleted, [Reason], State),
-    #state{session=#obj_session{obj=Obj}=Session} = State2,
-    Obj2 = nkdomain_util:add_destroyed(SrvId, Reason, Obj),
-    State3 = State2#state{session=Session#obj_session{obj=Obj, is_dirty=true}},
-    State4 = case handle(object_archive, [Obj2], State3) of
-        {ok, ArchState} ->
-            ArchState;
-        {error, _Error1, ArchState} ->
-            ArchState
-    end,
-    ?DEBUG("delete object", [], State4),
-    State5 = case handle(object_delete, [], State4) of
-        {ok, RemState} ->
-            RemState;
-        {error, _Error2, RemState} ->
-            %% Errors will be managed by nkdomain_store
-            RemState
-    end,
-    State5#state{is_deleted=true}.
+do_delete(Reason, #state{childs=[], srv_id=SrvId}=State) ->
+    case handle(object_delete, [], State) of
+        {ok, State2} ->
+            ?DEBUG("object deleted", [], State2),
+            #state{session=#obj_session{obj=Obj}=Session} = State2,
+            Obj2 = nkdomain_util:add_destroyed(SrvId, Reason, Obj),
+            State3 = State2#state{session=Session#obj_session{obj=Obj, is_dirty=true}, is_deleted=true},
+            {ok, State4} = handle(object_deleted, [Reason], State3),
+            case handle(object_archive, [Obj2], State4) of
+                {ok, State5} ->
+                    ?DEBUG("object archived", [], State3),
+                    {ok, State5};
+                {error, Error, State5} ->
+                    ?DEBUG("object NOT archived: ~p", [Error], State2),
+                    %% nkdomain_store will retry
+                    {ok, State5}
+            end;
+        {error, Error, State2} ->
+            ?DEBUG("object NOT deleted: ~p", [Error], State2),
+            {error, Error, State2}
+    end;
+
+do_delete(_Reason, State) ->
+    {error, object_has_childs, State}.
 
 
 %% @private
@@ -786,13 +775,6 @@ do_stop(Reason, #state{srv_id=SrvId}=State) ->
             % Give time for possible registrations to success and capture stop event
             State4 = do_status({stopped, Reason}, State3),
             #state{session=#obj_session{obj=_Obj}=_Session} = State4,
-%%            State5 = case Obj of
-%%                #{pid:=Pid} when Pid==self() ->
-%%                    Session2 = Session#obj_session{obj=maps:remove(pid, Obj), is_dirty=true},
-%%                    do_save(State4#state{session=Session2});
-%%                _ ->
-%%                    State4
-%%            end,
             do_stop2(Reason, State4)
     end.
 
@@ -803,7 +785,10 @@ do_stop2(Reason, #state{started=Started}=State) ->
     #state{session = #obj_session{meta = Meta}} = State2,
     State3 = case Meta of
         #{remove_after_stop:=true} ->
-            do_delete(object_stopped, State2);
+            case do_delete(object_stopped, State2) of
+                {ok, DeleteState} -> DeleteState;
+                {error, _Error, DeleteState} -> DeleteState
+            end;
         _ ->
             State2
     end,
@@ -817,8 +802,6 @@ do_stop2(Reason, #state{started=Started}=State) ->
             self() ! nkdomain_destroy
     end,
     noreply(State3).
-
-
 
 
 %% @private
@@ -965,7 +948,7 @@ do_check_links_down(State) ->
     case links_is_empty(State) of
         true ->
             case handle(object_all_links_down, [], State) of
-                {ok, State2} ->
+                {keepalive, State2} ->
                     noreply(State2);
                 {stop, Reason, State2} ->
                     do_stop(Reason, State2)

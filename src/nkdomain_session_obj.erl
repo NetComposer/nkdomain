@@ -27,6 +27,7 @@
 -export([create/3]).
 -export([object_get_info/0, object_mapping/0, object_syntax/1,
          object_api_syntax/3, object_api_allow/4, object_api_cmd/4]).
+-export([object_check_active/2]).
 
 -include("nkdomain.hrl").
 
@@ -76,7 +77,12 @@ create(SrvId, Domain, Opts) ->
                 end
             ],
             Create = maps:from_list(lists:flatten(CreateList)),
-            nkdomain:create(SrvId, Obj, Create);
+            case nkdomain_obj_lib:create(SrvId, Obj, Create) of
+                #obj_id_ext{type = ?DOMAIN_SESSION, obj_id=ObjId, pid=ObjPid} ->
+                    {ok, ObjId, ObjPid};
+                {error, Error} ->
+                    {error, Error}
+            end;
         {error, Error} ->
             {error, Error}
     end.
@@ -123,4 +129,19 @@ object_api_allow(_Sub, _Cmd, _Data, State) ->
 object_api_cmd(Sub, Cmd, Data, State) ->
     nkdomain_session_obj_api:cmd(Sub, Cmd, Data, State).
 
+
+%% ===================================================================
+%% nkdomain callbacks
+%% ===================================================================
+
+%% @private
+object_check_active(SrvId, ObjId) ->
+    case nkdomain_obj_lib:do_find(ObjId) of
+        #obj_id_ext{pid=Pid} when is_pid(Pid) ->
+            true;
+        not_found ->
+            lager:notice("Removing active object ~s", [ObjId]),
+            nkdomain_obj_lib:archive(SrvId, ObjId, object_clean_process),
+            false
+    end.
 

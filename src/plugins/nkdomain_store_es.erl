@@ -30,7 +30,7 @@
          object_store_find_childs/3, object_store_find_all_childs/3,
          object_store_find_alias/2, object_store_find_referred/3,
          object_store_delete_childs/3, object_store_delete_all_childs/3]).
--export([object_store_archive_raw/3, object_store_clean/1]).
+-export([object_store_archive_find/3, object_store_archive_save_raw/3, object_store_clean/1]).
 -export([elastic_get_indices/2, elastic_get_mappings/3, elastic_get_aliases/3,
          elastic_get_templates/2]).
 -export([reload_types/1, remove_index/1]).
@@ -40,6 +40,7 @@
 -define(ES_TYPE, <<"objs">>).
 -define(ES_LOG_TEMPLATE, <<"nkdomain_objs">>).
 -define(ES_ARCHIVE_INDEX, <<"nkarchive_v1">>).
+-define(ES_ITER_SIZE, 100).
 
 -define(LLOG(Type, Txt, Args),
     lager:Type("NkDOMAIN Store ES "++Txt, Args)).
@@ -144,8 +145,13 @@ object_store_delete_raw(SrvId, ObjId) ->
 
 
 %% @doc
-object_store_archive_raw(SrvId, ObjId, Map) ->
-    archive_obj(SrvId, Map#{obj_id=>ObjId}).
+object_store_archive_find(SrvId, ObjId, Spec) ->
+    archive_find(SrvId, ObjId, Spec).
+
+
+%% @doc
+object_store_archive_save_raw(SrvId, ObjId, Map) ->
+    archive_save_obj(SrvId, Map#{obj_id=>ObjId}).
 
 
 %% @doc
@@ -292,7 +298,14 @@ save_obj(SrvId, #{obj_id:=ObjId}=Store) ->
 %% @doc Removes an object
 delete_obj(SrvId, ObjId) ->
     #es_config{index=Index, type=IdxType} = SrvId:config_nkdomain_store_es(),
-    nkelastic_api:delete(SrvId, Index, IdxType, ObjId).
+    case find_obj_childs(SrvId, ObjId, #{size=>0}) of
+        {ok, 0, []} ->
+            nkelastic_api:delete(SrvId, Index, IdxType, ObjId);
+        {ok, _, _} ->
+            {error, object_has_childs};
+        {error, Error} ->
+            {error, Error}
+    end.
 
 
 %% @doc Finds an object from its path
@@ -412,7 +425,23 @@ find_referred(SrvId, ObjId, Opts) ->
 
 
 %% @doc Archive an object
-archive_obj(SrvId, #{obj_id:=ObjId}=Store) ->
+archive_find(SrvId, IdOrPath, Spec) ->
+    Query = case path_filter(IdOrPath) of
+        {ok, Filter} ->
+            query_filter(Filter);
+        {error, _} ->
+            query_filter(#{term => #{obj_id => IdOrPath}})
+    end,
+    case search_archive(SrvId, Query, Spec) of
+        {ok, N, List, _Aggs, _Meta} ->
+            {ok, N, List};
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
+%% @doc Archive an object
+archive_save_obj(SrvId, #{obj_id:=ObjId}=Store) ->
     #es_config{archive_index=Index, type=IdxType} = SrvId:config_nkdomain_store_es(),
     {{Y,M,D}, {_H,_Mi,_S}} = calendar:universal_time(),
     Index2 = list_to_binary(io_lib:format("~s-~4..0B~2..0B~2..0B", [Index, Y,M,D])),
@@ -455,41 +484,26 @@ delete_obj_all_childs(SrvId, Path, Opts) ->
 %% @private
 clean(SrvId) ->
     #es_config{index = Index, type = IdxType} = SrvId:config_nkdomain_store_es(),
-    do_clean_active(SrvId, Index, IdxType, 0, 10).
+    Active = do_clean_active(SrvId, Index, IdxType),
+    {ok, #{active=>Active}}.
 
 
 %% @private
-do_clean_active(SrvId, Index, IdxType, From, Size) ->
-    Query = #{
-        constant_score => #{
-            filter => #{term => #{active => true}}
-        }
-    },
-    Opts = #{
-        from => From,
-        size => Size,
-        fields => [<<"type">>]
-    },
-    case nkelastic_api:search(SrvId, Index, IdxType, Query, Opts) of
-        {ok, _N, [], _Aggs, _Meta} ->
-            ok;
-        {ok, _N, List, _Aggs, _Meta} ->
-            lists:foreach(
-                fun(#{<<"_id">>:=ObjId, <<"_source">>:=#{<<"type">>:=Type}}) ->
-                    case nkdomain_obj_lib:check_active(SrvId, Type, ObjId) of
-                        ok ->
-                            ok;
-                        {error, Error} ->
-                            ?LLOG(notice, "error in check_active for ~s:~s: ~p",
-                                  [Type, ObjId, Error])
-                    end
-                end,
-                List),
-            do_clean_active(SrvId, Index, IdxType, From+Size, Size);
-        {error, Error} ->
-            {error, Error}
+do_clean_active(SrvId, Index, IdxType) ->
+    Query = query_filter(#{term => #{active => true}}),
+    Opts = #{size=>?ES_ITER_SIZE, fields=>[<<"type">>]},
+    Fun = fun(#{<<"obj_id">>:=ObjId, <<"type">>:=Type}, Acc) ->
+        case SrvId:object_check_active(SrvId, Type, ObjId) of
+            false ->
+                Acc+1;
+            true ->
+                Acc
+        end
+    end,
+    case nkelastic_api:iterate_fun(SrvId, Index, IdxType, Query, Opts, Fun, 0) of
+        {ok, Num} -> Num;
+        {error, _Error} -> 0
     end.
-
 
 
 %% ===================================================================
@@ -652,6 +666,7 @@ search(SrvId, Query, Opts) ->
         fields => [<<"type">>, <<"path">>]
     },
     #es_config{index=Index, type=IdxType} = SrvId:config_nkdomain_store_es(),
+
     case nkelastic_api:search(SrvId, Index, IdxType, Query, Opts2) of
         {ok, N, List, Aggs, Meta} ->
             Data = lists:map(
@@ -680,3 +695,22 @@ delete(SrvId, Query) ->
             {error, Error}
     end.
 
+
+%% @private
+search_archive(SrvId, Query, Opts) ->
+    #es_config{archive_index=Index, type=IdxType} = SrvId:config_nkdomain_store_es(),
+    case nkelastic_api:search(SrvId, <<Index/binary, $*>>, IdxType, Query, Opts) of
+        {ok, N, List, Aggs, Meta} ->
+            Data = lists:map(
+                fun(#{<<"_index">>:=Idx, <<"_id">>:=ObjId}=D) ->
+                    Base = maps:get(<<"_source">>, D, #{}),
+                    Base#{<<"_store_index">>=>Idx, <<"obj_id">>=>ObjId}
+                end,
+                List),
+            {ok, N, Data, Aggs, Meta};
+        {error, search_error} ->
+            {ok, 0, [], #{}, #{error=>search_error}};
+        {error, Error} ->
+            ?LLOG(notice, "Error calling search (~p, ~p): ~p", [Query, Opts, Error]),
+            {ok, 0, [], #{}, #{}}
+    end.

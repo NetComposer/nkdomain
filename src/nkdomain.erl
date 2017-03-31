@@ -33,6 +33,7 @@
 
 %%-include_lib("nklib/include/nklib.hrl").
 
+-include("nkdomain.hrl").
 
 %% ===================================================================
 %% Types
@@ -106,7 +107,12 @@
     {error, object_not_found|term()}.
 
 find(Srv, IdOrPath) ->
-    nkdomain_obj_lib:find(Srv, IdOrPath).
+    case nkdomain_obj_lib:find(Srv, IdOrPath) of
+        #obj_id_ext{type=Type, obj_id=ObjId, path=Path, pid=Pid} ->
+            {ok, Type, ObjId, Path, Pid};
+        {error, Error} ->
+            {error, Error}
+    end.
 
 
 %% @doc Finds an objects's pid or loads it from storage
@@ -120,11 +126,16 @@ load(Srv, IdOrPath) ->
 
 %% @doc Finds an objects's pid or loads it from storage
 -spec load(nkservice:id(), obj_id()|path(), load_opts()) ->
-    {ok, type(), obj_id(), pid()} |
+    {ok, type(), obj_id(), path(), pid()} |
     {error, obj_not_found|term()}.
 
 load(Srv, IdOrPath, Meta) ->
-    nkdomain_obj_lib:load(Srv, IdOrPath, Meta).
+    case nkdomain_obj_lib:load(Srv, IdOrPath, Meta) of
+        #obj_id_ext{type=Type, obj_id=ObjId, path=Path, pid=Pid} ->
+            {ok, Type, ObjId, Path, Pid};
+        {error, Error} ->
+            {error, Error}
+    end.
 
 
 %% @doc Creates a new object
@@ -132,7 +143,12 @@ load(Srv, IdOrPath, Meta) ->
     {ok, type(), obj_id(), path(), pid()}.
 
 create(Srv, Obj, Meta) ->
-    nkdomain_obj_lib:create(Srv, Obj, Meta).
+    case nkdomain_obj_lib:create(Srv, Obj, Meta) of
+        #obj_id_ext{type=Type, obj_id=ObjId, path=Path, pid=Pid} ->
+            {ok, Type, ObjId, Path, Pid};
+        {error, Error} ->
+            {error, Error}
+    end.
 
 
 

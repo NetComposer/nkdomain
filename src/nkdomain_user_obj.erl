@@ -71,17 +71,7 @@ create(Srv, Domain, Name, Data) ->
                 _ -> []
             end
     },
-    case nkdomain_obj_lib:make_obj(Srv, Domain, ?DOMAIN_USER, Opts) of
-        {ok, Obj} ->
-            case nkdomain:create(Srv, Obj, #{}) of
-                {ok, ?DOMAIN_USER, ObjId, Path, Pid} ->
-                    {ok, ObjId, Path, Pid};
-                {error, Error} ->
-                    {error, Error}
-            end;
-        {error, Error} ->
-            {error, Error}
-    end.
+    nkdomain_obj_lib:make_and_create(Srv, Domain, ?DOMAIN_USER, Opts).
 
 
 %% @doc
@@ -108,9 +98,9 @@ login(SrvId, Login, Opts) ->
     end.
 
 %% @doc
-find_referred(SrvId, Id, Spec) ->
-    case nkdomain:find(SrvId, Id) of
-        {ok, _Type, ObjId, _Path, _Pid} ->
+find_referred(Srv, Id, Spec) ->
+    case nkdomain_obj_lib:find(Srv, Id) of
+        #obj_id_ext{srv_id=SrvId, obj_id=ObjId} ->
             SrvId:object_store_find_referred(SrvId, ObjId, Spec);
         {error, Error} ->
             {error, Error}
@@ -195,8 +185,8 @@ object_api_cmd(Sub, Cmd, Data, State) ->
 %% @private
 do_load(SrvId, Login, Opts) ->
     LoadOpts = maps:with([register], Opts),
-    case nkdomain:load(SrvId, Login, LoadOpts) of
-        {ok, ?DOMAIN_USER, ObjId, _Path, Pid} ->
+    case nkdomain_obj_lib:load(SrvId, Login, LoadOpts) of
+        #obj_id_ext{type = ?DOMAIN_USER, obj_id=ObjId, pid=Pid} ->
             {ok, ObjId, Pid};
         _ ->
             case SrvId:object_store_find_alias(SrvId, Login) of
@@ -207,8 +197,8 @@ do_load(SrvId, Login, Opts) ->
                         false ->
                             ok
                     end,
-                    case nkdomain:load(SrvId, ObjId, LoadOpts) of
-                        {ok, ?DOMAIN_USER, ObjId, _Path, Pid} ->
+                    case nkdomain_obj_lib:load(SrvId, ObjId, LoadOpts) of
+                        #obj_id_ext{type = ?DOMAIN_USER, obj_id=ObjId, pid=Pid} ->
                             {ok, ObjId, Pid};
                         _ ->
                             {error, user_not_found}
@@ -248,9 +238,8 @@ do_start_session(SrvId, UserId, Opts) ->
     Pid = maps:get(session_pid, Opts),
     Opts1 = maps:with([session_id, local, remote], Opts),
     Opts2 = Opts1#{referred_id=>UserId, pid=>Pid},
-    lager:error("Opts2: ~p", [Opts2]),
     case nkdomain_session_obj:create(SrvId, UserId, Opts2) of
-        {ok, _Type, ObjId, _Path, _Pid} ->
+        {ok, ObjId, _Pid} ->
             {ok, ObjId};
         {error, Error} ->
             {error, Error}

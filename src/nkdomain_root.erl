@@ -77,8 +77,8 @@ start() ->
     case nkservice:start(root, Spec3) of
         {ok, _} ->
             lager:info("Root service started"),
-            case nkdomain:load(root, <<"root">>, #{}) of
-                {ok, <<"domain">>, <<"root">>, _Path, _Pid} ->
+            case nkdomain_obj_lib:load(root, <<"root">>, #{}) of
+                #obj_id_ext{type = ?DOMAIN_DOMAIN, obj_id = <<"root">>} ->
                     ok;
                 {error, Error} ->
                     lager:error("Could not load ROOT domain: ~p", [Error])
@@ -106,8 +106,8 @@ admin_create() ->
     },
     case nkdomain_obj_lib:make_obj(root, <<"root">>, ?DOMAIN_USER, Opts) of
         {ok, Obj} ->
-            case nkdomain:create(root, Obj, #{}) of
-                {ok, ?DOMAIN_USER, _ObjId, _Path, _Pid} ->
+            case nkdomain_obj_lib:create(root, Obj, #{}) of
+                #obj_id_ext{type = ?DOMAIN_USER} ->
                     ok;
                 {error, Error} ->
                     {error, Error}

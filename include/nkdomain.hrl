@@ -47,6 +47,16 @@
     data :: term()
 }).
 
+-record(obj_id_ext, {
+    srv_id :: nkservice:id(),
+    type :: nkdomain:type(),
+    obj_id :: nkdomain:obj_id(),
+    path :: nkdomain:path(),
+    pid :: pid() | undefined
+}).
+
+
+
 
 -define(DOMAIN_USER, <<"user">>).
 -define(DOMAIN_DOMAIN, <<"domain">>).

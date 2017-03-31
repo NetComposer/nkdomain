@@ -33,7 +33,8 @@
          object_reg_down/3, object_start/1, object_stop/2,
          object_handle_call/3, object_handle_cast/2, object_handle_info/2]).
 -export([object_store_reload_types/1, object_store_read_raw/2, object_store_save_raw/3,
-         object_store_delete_raw/2, object_store_archive_raw/3]).
+         object_store_delete_raw/2,
+         object_store_archive_find/3, object_store_archive_save_raw/3]).
 -export([object_store_find_obj_id/2, object_store_find_path/2,
          object_store_find_types/2, object_store_find_all_types/2,
          object_store_find_childs/3, object_store_find_all_childs/3,
@@ -66,7 +67,7 @@ api_error(invalid_object_type)              -> "Invalid object type";
 api_error(invalid_object_path)              -> "Invalid object path";
 api_error({invalid_object_path, P})         -> {"Invalid object path '~s'", [P]};
 api_error(object_already_exists)            -> "Object already exists";
-api_error(object_clean_pid)                 -> "Object cleaned (pid)";
+api_error(object_clean_process)             -> "Object cleaned (process stopped)";
 api_error(object_clean_expire)              -> "Object cleaned (expired)";
 api_error(object_deleted) 		            -> "Object removed";
 api_error(object_has_childs) 		        -> "Object has childs";
@@ -148,7 +149,8 @@ object_syntax(update) ->
         enabled => boolean,
         description => binary,
         aliases => {list, binary},
-        icon_id => binary
+        icon_id => binary,
+        id => ignore                                % Used in APIs
     }.
 
 
@@ -265,25 +267,35 @@ object_unparse(#obj_session{srv_id=SrvId, type=Type, module=Module, obj=Obj}) ->
     BaseMap2#{Type => ModMap}.
 
 
+
+
+
+%% ===================================================================
+%% Object-related callbacks
+%% ===================================================================
+
+
 %% @doc Called if an active object is detected on storage
+%% If 'true' is returned, the object is ok
+%% If 'false' is returned, it only means that the object has been processed
 -spec object_check_active(nkservice:id(), nkdomain:type(), nkdomain:obj_id()) ->
-    load | delete | {archive, Reason::nkservce:error()} |
-    find_or_delete | {find_or_achive, Reason::nkservce:error()} |
-    ignore.
+    boolean().
 
-object_check_active(_SrvId, ?DOMAIN_SESSION, _ObjId) ->
-    {archive, object_clean_process};
-
-object_check_active(_SrvId, _Type, _ObjId) ->
-    ignore.
+object_check_active(SrvId, Type, ObjId) ->
+    case call_type(object_check_active, [SrvId, ObjId], Type) of
+        ok ->
+            true;
+        Other ->
+            Other
+    end.
 
 
 %% @doc Called when an object is modified
 -spec object_updated(map(), session()) ->
     {ok, session()}.
 
-object_updated(_Update, Session) ->
-    {ok, Session}.
+object_updated(Update, Session) ->
+    call_module(object_updated, [Update], Session).
 
 
 %% @doc Called when an object is enabled or disabled
@@ -291,15 +303,15 @@ object_updated(_Update, Session) ->
     {ok, session()}.
 
 object_enabled(Session) ->
-    {ok, Session}.
+    call_module(object_enabled, [], Session).
 
 
 %% @doc Called when an object is removed
 -spec object_deleted(term(), session()) ->
     {ok, session()}.
 
-object_deleted(_Reason, Session) ->
-    {ok, Session}.
+object_deleted(Reason, Session) ->
+    call_module(object_deleted, [Reason], Session).
 
 
 %% @doc
@@ -310,8 +322,13 @@ object_deleted(_Reason, Session) ->
     {stop, Reason::term(), session()} |
     continue().
 
-object_sync_op(_Op, _From, _Session) ->
-    continue.
+object_sync_op(Op, From, Session) ->
+    case call_module(object_sync_op, [Op, From], Session) of
+        {ok, _Session} ->
+            continue;
+        Other ->
+            Other
+    end.
 
 
 %% @doc
@@ -320,48 +337,54 @@ object_sync_op(_Op, _From, _Session) ->
     {stop, Reason::term(), session()} |
     continue().
 
-object_async_op(_Op, _Session) ->
-    continue.
+object_async_op(Op, Session) ->
+    case call_module(object_async_op, [Op], Session) of
+        {ok, _Session} ->
+            continue;
+        Other ->
+            Other
+    end.
 
 
 %% @doc
 -spec object_status(term(), session()) ->
     {ok, session()}.
 
-object_status(_Status, Session) ->
-    {ok, Session}.
+object_status(Status, Session) ->
+    call_module(object_status, [Status], Session).
 
 
 %% @doc
 -spec object_all_links_down(session()) ->
-    {ok, session()} | {stop, nkservice:error()}.
-
-object_all_links_down(#obj_session{type = ?DOMAIN_DOMAIN}=Session) ->
-    {ok, Session};
+    {keepalive, session()} | {stop, nkservice:error(), session()}.
 
 object_all_links_down(Session) ->
-    {stop, no_usages, Session}.
+    case call_module(object_all_links_down, [], Session) of
+        {ok, Session2} ->
+            {stop, no_usages, Session2};
+        Other ->
+            Other
+    end.
 
 
 %% ===================================================================
 %% Low level object
 %% ===================================================================
 
-
 %% @doc Called when a new session starts
 -spec object_init(session()) ->
     {ok, session()} | {stop, Reason::term()}.
 
 object_init(Session) ->
-    {ok, Session}.
+    call_module(object_init, [], Session).
 
 
 %% @doc Called when the session stops
 -spec object_terminate(Reason::term(), session()) ->
     {ok, session()}.
 
-object_terminate(_Reason, Session) ->
-    {ok, Session}.
+object_terminate(Reason, Session) ->
+    call_module(object_terminate, [Reason], Session).
 
 
 %% @private
@@ -369,48 +392,53 @@ object_terminate(_Reason, Session) ->
     {ok, session()} | continue().
 
 object_start(Session) ->
-    {ok, Session}.
+    call_module(object_start, [], Session).
 
 
 %% @private
 -spec object_stop(nkservice:error(), session()) ->
     {ok, session()} | continue().
 
-object_stop(_Reason, Session) ->
-    {ok, Session}.
+object_stop(Reason, Session) ->
+    call_module(object_stop, [Reason], Session).
 
 
 %%  @doc Called when an event is sent
 -spec object_event(nkdomain_obj:event(), session()) ->
     {ok, session()} | continue().
 
-object_event(_Event, Session) ->
-    {ok, Session}.
+object_event(Event, Session) ->
+    call_module(object_event, [Event], Session).
 
 
 %% @doc Called when an event is sent, for each registered process to the session
 -spec object_reg_event(nklib:link(), nkdomain_obj:event(), session()) ->
     {ok, session()} | continue().
 
-object_reg_event(_Link, _Event, Session) ->
-    {ok, Session}.
+object_reg_event(Link, Event, Session) ->
+    call_module(object_reg_event, [Link, Event], Session).
 
 
 %% @doc Called when a registered process fails
 -spec object_reg_down(nklib:link(), term(), session()) ->
     {ok, session()} | {stop, Reason::term(), session()} | continue().
 
-object_reg_down(_Link, _Reason, Session) ->
-    {ok, Session}.
+object_reg_down(Link, Reason, Session) ->
+    call_module(object_reg_down, [Link, Reason], Session).
 
 
 %% @doc
 -spec object_handle_call(term(), {pid(), term()}, session()) ->
     {reply, term(), session()} | {noreply, session()} | continue().
 
-object_handle_call(Msg, _From, Session) ->
-    lager:error("Module nkdomain_obj received unexpected call: ~p", [Msg]),
-    {noreply, Session}.
+object_handle_call(Msg, From, Session) ->
+    case call_module(object_handle_call, [Msg, From], Session) of
+        {ok, Session2} ->
+            lager:error("Module nkdomain_obj received unexpected call: ~p", [Msg]),
+            {noreply, Session2};
+        Other ->
+            Other
+    end.
 
 
 %% @doc
@@ -418,8 +446,13 @@ object_handle_call(Msg, _From, Session) ->
     {noreply, session()} | continue().
 
 object_handle_cast(Msg, Session) ->
-    lager:error("Module nkdomain_obj received unexpected cast: ~p", [Msg]),
-    {noreply, Session}.
+    case call_module(object_handle_cast, [Msg], Session) of
+        {ok, Session2} ->
+            lager:error("Module nkdomain_obj received unexpected cast: ~p", [Msg]),
+            {noreply, Session2};
+        Other ->
+            Other
+    end.
 
 
 %% @doc
@@ -427,8 +460,13 @@ object_handle_cast(Msg, Session) ->
     {noreply, session()} | continue().
 
 object_handle_info(Msg, Session) ->
-    lager:warning("Module nkdomain_obj received unexpected info: ~p", [Msg]),
-    {noreply, Session}.
+    case call_module(object_handle_info, [Msg], Session) of
+        {ok, Session2} ->
+            lager:warning("Module nkdomain_obj received unexpected info: ~p", [Msg]),
+            {noreply, Session2};
+        Other ->
+            Other
+    end.
 
 
 
@@ -447,7 +485,7 @@ object_store_reload_types(_SrvId) ->
 
 %% @doc
 -spec object_store_read_raw(nkservice:id(), nkdomain:obj_id()) ->
-    {ok, map()} | {error, term()}.
+    {ok, [map()]} | {error, term()}.
 
 object_store_read_raw(_SrvId, _ObjId) ->
     {error, store_not_implemented}.
@@ -463,7 +501,7 @@ object_store_save_raw(_SrvId, _ObjId, _Map) ->
 
 %% @doc
 -spec object_store_delete_raw(nkservice:id(), nkdomain:obj_id()) ->
-    ok | {error, term()}.
+    ok | {error, object_has_chids|term()}.
 
 object_store_delete_raw(_SrvId, _ObjId) ->
     {error, store_not_implemented}.
@@ -538,10 +576,18 @@ object_store_find_referred(_SrvId, _ObjId, _Spec) ->
 
 
 %% @doc
--spec object_store_archive_raw(nkservice:id(), nkdomain:obj_id(), map()) ->
+-spec object_store_archive_find(nkservice:id(), nkdomain:obj_id(), Spec::map()) ->
+    {ok, integer(), [map()]} | {error, term()}.
+
+object_store_archive_find(_SrvId, _IdOrPath, _Spec) ->
+    {error, store_not_implemented}.
+
+
+%% @doc
+-spec object_store_archive_save_raw(nkservice:id(), nkdomain:obj_id(), map()) ->
     ok | {error, term()}.
 
-object_store_archive_raw(_SrvId, _ObjId, _Map) ->
+object_store_archive_save_raw(_SrvId, _ObjId, _Map) ->
     {error, store_not_implemented}.
 
 
@@ -565,7 +611,7 @@ object_store_delete_all_childs(_SrvId, _Path, _Spec) ->
 
 
 %% @doc Called to perform a cleanup of the store (expired objects, etc.)
-%% Should call nkdomain_obj_lib:check_active/3
+%% Should call object_check_active/3 for each 'active' object found
 -spec object_store_clean(nkservice:id()) ->
     ok.
 
@@ -606,7 +652,20 @@ api_server_allow(_Req, _State) ->
 %% @doc
 api_server_cmd(#nkapi_req{module=Module}=Req, State) when Module/=undefined ->
     #nkapi_req{subclass=Sub, cmd=Cmd, data=Data} = Req,
-    nklib_util:apply(Module, object_api_cmd, [Sub, Cmd, Data, State]);
+    #{srv_id:=SrvId} = State,
+    Domain = case maps:find(domain, Data) of
+        {ok, UserDomain} ->
+            UserDomain;
+        error ->
+            nkdomain_util:get_service_domain(SrvId)
+    end,
+    case Domain of
+        undefined ->
+            {error, unknown_domain, State};
+        _ ->
+            State2 = ?ADD_TO_API_SESSION(domain, Domain, State),
+            nklib_util:apply(Module, object_api_cmd, [Sub, Cmd, Data, State2])
+    end;
 
 api_server_cmd(_Req, _State) ->
     continue.
@@ -643,27 +702,60 @@ service_init(_Service, State) ->
 
 
 %% @private
-%%service_handle_cast(nkdomain_load_domain, State) ->
-%%    #{id:=SrvId} = State,
-%%    #{domain:=Domain} = SrvId:config(),
-%%    case nkdomain:load(SrvId, Domain) of
-%%        {ok, ?DOMAIN_DOMAIN, ObjId, Path, Pid} ->
-%%            lager:info("Service loaded domain ~s (~s)", [Path, ObjId]),
-%%            monitor(process, Pid),
-%%            DomainData = #{
-%%                domain_obj_id => ObjId,
-%%                domain_path => Path,
-%%                domain_pid => Pid
-%%            },
-%%            nkservice_srv:put(SrvId, nkdomain_data, DomainData),
-%%            State2 = State#{nkdomain => DomainData},
-%%            {noreply, State2};
-%%        {error, Error} ->
-%%            ?LLOG(warning, "could not load domain ~s: ~p", [Domain, Error]),
-%%            {noreply, State}
-%%    end;
+service_handle_cast(nkdomain_load_domain, State) ->
+    #{id:=SrvId} = State,
+    #{domain:=Domain} = SrvId:config(),
+    case nkdomain_obj_lib:load(SrvId, Domain, #{}) of
+        #obj_id_ext{type = ?DOMAIN_DOMAIN, obj_id=ObjId, path=Path, pid=Pid} ->
+            lager:info("Service loaded domain ~s (~s)", [Path, ObjId]),
+            monitor(process, Pid),
+            DomainData = #{
+                domain_obj_id => ObjId,
+                domain_path => Path,
+                domain_pid => Pid
+            },
+            nkservice_srv:put(SrvId, nkdomain_data, DomainData),
+            State2 = State#{nkdomain => DomainData},
+            {noreply, State2};
+        {error, Error} ->
+            ?LLOG(warning, "could not load domain ~s: ~p", [Domain, Error]),
+            {noreply, State}
+    end;
 
 service_handle_cast(_Msg, _State) ->
     continue.
+
+
+%% ===================================================================
+%% Internal
+%% ===================================================================
+
+
+%% @private
+call_type(Fun, Args, Type) ->
+    case nkdomain_types:get_module(Type) of
+        undefined ->
+            ok;
+        Module ->
+            case erlang:function_exported(Module, Fun, length(Args)) of
+                true ->
+                    apply(Module, Fun, Args);
+                false ->
+                    ok
+            end
+    end.
+
+
+%% @private
+call_module(Fun, Args, #obj_session{module=Module}=Session) ->
+    case erlang:function_exported(Module, Fun, length(Args)+1) of
+        true ->
+            apply(Module, Fun, Args++[Session]);
+        false ->
+            {ok, Session}
+    end.
+
+
+
 
 

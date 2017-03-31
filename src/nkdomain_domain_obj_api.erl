@@ -31,36 +31,46 @@
 %% ===================================================================
 
 %% @doc
-cmd('', get_types, Data, #{srv_id:=SrvId}=State) ->
+cmd('', create, Data, State) ->
+    #{obj_name:=Name, description:=Desc} = Data,
+    #{srv_id:=SrvId, domain:=Domain} = State,
+    case nkdomain_domain_obj:create(SrvId, Domain, Name, Desc) of
+        {ok, ObjId, Path, _Pid} ->
+            {ok, #{obj_id=>ObjId, path=>Path}, State};
+        {error, Error} ->
+            {error, Error, State}
+    end;
+
+cmd('', find_types, Data, #{srv_id:=SrvId}=State) ->
     Id = get_domain(Data, SrvId),
-    case nkdomain_domain_obj:get_types(SrvId, Id) of
+    case nkdomain_domain_obj:find_types(SrvId, Id) of
         {ok, Total, List} ->
             {ok, #{total=>Total, data=>maps:from_list(List)}, State};
         {error, Error} ->
             {error, Error, State}
     end;
 
-cmd('', get_all_types, Data, #{srv_id:=SrvId}=State) ->
+cmd('', find_all_types, Data, #{srv_id:=SrvId}=State) ->
     Id = get_domain(Data, SrvId),
-    case nkdomain_domain_obj:get_all_types(SrvId, Id) of
+    case nkdomain_domain_obj:find_all_types(SrvId, Id) of
         {ok, Total, List} ->
             {ok, #{total=>Total, data=>maps:from_list(List)}, State};
         {error, Error} ->
             {error, Error, State}
     end;
 
-cmd('', get_childs, Data, #{srv_id:=SrvId}=State) ->
+cmd('', find_childs, Data, #{srv_id:=SrvId}=State) ->
     Id = get_domain(Data, SrvId),
-    Search = nkdomain_domain_obj:get_childs(SrvId, Id, Data),
-    nkdomain_util:api_search(Search, State);
+    Search = nkdomain_domain_obj:find_childs(SrvId, Id, Data),
+    nkdomain_api_util:search(Search, State);
 
-cmd('', get_all_childs, Data, #{srv_id:=SrvId}=State) ->
+cmd('', find_all_childs, Data, #{srv_id:=SrvId}=State) ->
     Id = get_domain(Data, SrvId),
-    Search = nkdomain_domain_obj:get_all_childs(SrvId, Id, Data),
-    nkdomain_util:api_search(Search, State);
+    Search = nkdomain_domain_obj:find_all_childs(SrvId, Id, Data),
+    nkdomain_api_util:search(Search, State);
 
 cmd('', Cmd, Data, State) ->
-    nkdomain_util:api_cmd_common(?DOMAIN_DOMAIN, Cmd, Data, State);
+    nkdomain_api_util:cmd_common(?DOMAIN_DOMAIN, Cmd, Data, State);
 
 cmd(_Sub, _Cmd, _Data, State) ->
     {error, not_implemented, State}.

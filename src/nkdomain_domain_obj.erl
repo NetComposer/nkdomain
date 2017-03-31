@@ -24,9 +24,10 @@
 -behavior(nkdomain_obj).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([create/4, get_types/2, get_all_types/2, get_childs/3, get_all_childs/3]).
+-export([create/4, find_types/2, find_all_types/2, find_childs/3, find_all_childs/3]).
 -export([object_get_info/0, object_mapping/0, object_syntax/1,
          object_api_syntax/3, object_api_allow/4, object_api_cmd/4]).
+-export([object_all_links_down/1]).
 
 -include("nkdomain.hrl").
 
@@ -46,23 +47,13 @@ create(Srv, Parent, Name, Desc) ->
         name => Name,
         description => Desc
     },
-    case nkdomain_obj_lib:make_obj(Srv, Parent, ?DOMAIN_DOMAIN, Opts) of
-        {ok, Obj} ->
-            case nkdomain:create(Srv, Obj, #{}) of
-                {ok, ?DOMAIN_DOMAIN, ObjId, Path, Pid} ->
-                    {ok, ObjId, Path, Pid};
-                {error, Error} ->
-                    {error, Error}
-            end;
-        {error, Error} ->
-            {error, Error}
-    end.
+    nkdomain_obj_lib:make_and_create(Srv, Parent, ?DOMAIN_DOMAIN, Opts).
 
 
 %% @doc
-get_types(SrvId, Id) ->
-    case nkdomain:find(SrvId, Id) of
-        {ok, _Type, ObjId, _Path, _Pid} ->
+find_types(Srv, Id) ->
+    case nkdomain_obj_lib:find(Srv, Id) of
+        #obj_id_ext{srv_id=SrvId, obj_id=ObjId} ->
             SrvId:object_store_find_types(SrvId, ObjId);
         {error, Error} ->
             {error, Error}
@@ -70,9 +61,9 @@ get_types(SrvId, Id) ->
 
 
 %% @doc
-get_all_types(SrvId, Id) ->
-    case nkdomain:find(SrvId, Id) of
-        {ok, _Type, _ObjId, Path, _Pid} ->
+find_all_types(Srv, Id) ->
+    case nkdomain_obj_lib:find(Srv, Id) of
+        #obj_id_ext{srv_id=SrvId, path=Path} ->
             SrvId:object_store_find_all_types(SrvId, Path);
         {error, Error} ->
             {error, Error}
@@ -80,9 +71,9 @@ get_all_types(SrvId, Id) ->
 
 
 %% @doc
-get_childs(SrvId, Id, Spec) ->
-    case nkdomain:find(SrvId, Id) of
-        {ok, _Type, ObjId, _Path, _Pid} ->
+find_childs(Srv, Id, Spec) ->
+    case nkdomain_obj_lib:find(Srv, Id) of
+        #obj_id_ext{srv_id=SrvId, obj_id=ObjId} ->
             SrvId:object_store_find_childs(SrvId, ObjId, Spec);
         {error, Error} ->
             {error, Error}
@@ -90,9 +81,9 @@ get_childs(SrvId, Id, Spec) ->
 
 
 %% @doc
-get_all_childs(SrvId, Id, Spec) ->
-    case nkdomain:find(SrvId, Id) of
-        {ok, _Type, _ObjId, Path, _Pid} ->
+find_all_childs(Srv, Id, Spec) ->
+    case nkdomain_obj_lib:find(Srv, Id) of
+        #obj_id_ext{srv_id=SrvId, path=Path} ->
             SrvId:object_store_find_all_childs(SrvId, Path, Spec);
         {error, Error} ->
             {error, Error}
@@ -142,3 +133,11 @@ object_api_cmd(Sub, Cmd, Data, State) ->
     nkdomain_domain_obj_api:cmd(Sub, Cmd, Data, State).
 
 
+
+%% ===================================================================
+%% nkdomain callbacks
+%% ===================================================================
+
+%% @private
+object_all_links_down(Session) ->
+    {keepalive, Session}.

@@ -23,7 +23,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -behaviour(gen_server).
 
--export([save/3, delete/2, archive/3]).
+-export([save/3, delete/2, archive/3, clean/1]).
 -export([get_data/0, start_link/0]).
 -export([init/1, terminate/2, code_change/3, handle_call/3,
          handle_cast/2, handle_info/2]).
@@ -78,6 +78,8 @@ delete(Srv, ObjId) ->
                     ok;
                 {error, object_not_found} ->
                     {error, object_not_found};
+                {error, object_has_childs} ->
+                    {error, object_has_childs};
                 {error, Error} ->
                     ?LLOG(info, "could not delete object ~s (~s), delaying", [ObjId, SrvId:name()]),
                     gen_server:cast(?MODULE, {delete, SrvId, ObjId}),
@@ -97,7 +99,7 @@ archive(Srv, ObjId, Obj) ->
     case nkservice_srv:get_srv_id(Srv) of
         {ok, SrvId} ->
             wait_remove_op(SrvId, ObjId),
-            case SrvId:object_store_archive_raw(SrvId, ObjId, Obj) of
+            case SrvId:object_store_archive_save_raw(SrvId, ObjId, Obj) of
                 ok ->
                     ok;
                 {error, Error} ->
@@ -113,6 +115,19 @@ archive(Srv, ObjId, Obj) ->
 %% @private
 wait_remove_op(SrvId, ObjId) ->
     _ = gen_server:call(?MODULE, {remove_op, SrvId, ObjId}, 60000).
+
+
+%% @private Performs a periodic cleanup
+-spec clean(nkservice:id()) ->
+    {ok, map()} | {error, term()}.
+
+clean(Srv) ->
+    case nkservice_srv:get_srv_id(Srv) of
+        {ok, SrvId} ->
+            SrvId:object_store_clean(SrvId);
+        not_found ->
+            {error, service_not_found}
+    end.
 
 
 %% @private
@@ -311,10 +326,11 @@ do_save_srv_id(SrvId, [QueueOp|Rest]=List, Now, State) ->
                     case SrvId:object_store_delete_raw(SrvId, ObjId) of
                         ok -> ok;
                         {error, object_not_found} -> ok;
+                        {error, object_has_childs} -> ok;
                         {error, ResError} -> {error, ResError}
                     end;
                 archive ->
-                    case SrvId:object_store_archive_raw(SrvId, ObjId) of
+                    case SrvId:object_store_archive_save_raw(SrvId, ObjId) of
                         ok -> ok;
                         {error, ResError} -> {error, ResError}
                     end
