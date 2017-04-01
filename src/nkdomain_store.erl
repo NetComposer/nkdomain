@@ -75,6 +75,7 @@ delete(Srv, ObjId) ->
             wait_remove_op(SrvId, ObjId),
             case SrvId:object_store_delete_raw(SrvId, ObjId) of
                 ok ->
+                    nkdomain_obj_lib:do_cast(ObjId, nkdomain_obj_deleted),
                     ok;
                 {error, object_not_found} ->
                     {error, object_not_found};
@@ -319,20 +320,29 @@ do_save_srv_id(SrvId, [QueueOp|Rest]=List, Now, State) ->
             Res = case Op of
                 save ->
                     case SrvId:object_store_save_raw(SrvId, ObjId, Obj) of
-                        {ok, _Vsn} -> ok;
-                        {error, ResError} -> {error, ResError}
+                        {ok, _Vsn} ->
+                            ok;
+                        {error, ResError} ->
+                            {error, ResError}
                     end;
                 delete ->
                     case SrvId:object_store_delete_raw(SrvId, ObjId) of
-                        ok -> ok;
-                        {error, object_not_found} -> ok;
-                        {error, object_has_childs} -> ok;
-                        {error, ResError} -> {error, ResError}
+                        ok ->
+                            nkdomain_obj_lib:do_cast(ObjId, nkdomain_obj_deleted),
+                            ok;
+                        {error, object_not_found} ->
+                            ok;
+                        {error, object_has_childs} ->
+                            ok;
+                        {error, ResError} ->
+                            {error, ResError}
                     end;
                 archive ->
                     case SrvId:object_store_archive_save_raw(SrvId, ObjId) of
-                        ok -> ok;
-                        {error, ResError} -> {error, ResError}
+                        ok ->
+                            ok;
+                        {error, ResError} ->
+                            {error, ResError}
                     end
             end,
             case Res of

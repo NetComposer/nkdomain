@@ -7,13 +7,17 @@
 -define(ADMIN_PASS, "1234").
 
 
-test() ->
+test1() ->
     {ok, _SessId, Pid, _Reply} = login("admin", ?ADMIN_PASS),
     ok = test_basic_1(Pid),
     {ok, _UId} = test_create_user(Pid),
     ok = test_session(Pid),
     ok = test_session2(Pid),
     test_delete(Pid).
+
+test2() ->
+    {ok, _SessId, Pid, _Reply} = login("admin", ?ADMIN_PASS),
+    test_basic_2(Pid).
 
 
 %% Probar ahora dominios y subdominios
@@ -206,6 +210,7 @@ test_session2(Pid) ->
     ok.
 
 
+%% Delete the user object
 test_delete(Pid) ->
     {ok, #{<<"obj_id">>:=ObjId}} = cmd(Pid, user, get, #{id=><<"/users/user1">>}),
     {ok, #{}} = cmd(Pid, user, delete, #{id=> <<"/users/user1">>}),
@@ -219,10 +224,100 @@ test_delete(Pid) ->
     ok.
 
 
+%% Create domains and users
+test_basic_2(Pid) ->
+    S1Id = case nkdomain:load(root, "/stest1", #{}) of
+        {ok, <<"domain">>, S1Id_0, <<"/stest1">>, _Pid1} ->
+            lager:warning("/stest1 was already present"),
+            S1Id_0;
+        {error, object_not_found} ->
+            {ok, #{<<"obj_id">>:=S1Id_0, <<"path">>:=<<"/stest1">>}} =
+                cmd(Pid, domain, create, #{obj_name=>stest1, description=>"Test Sub1"}),
+            S1Id_0
+    end,
+    case nkdomain_domain_obj:find_childs(root, "/stest1", #{}) of
+        {ok, 0, []} ->
+            ok;
+        _ ->
+            lager:warning("Deleting all childs for /stest1"),
+            nkdomain_store_es:object_store_delete_all_childs(axft4mi, "/stest1", #{}),
+            timer:sleep(3000)
+    end,
+
+    {error,{<<"name_is_already_used">>, <<"Name is already used: 'stest1'">>}} =
+        cmd(Pid, domain, create, #{obj_name=>stest1, description=>"Test Sub1"}),
+
+    {ok, #{<<"obj_id">>:=S2Id, <<"path">>:=<<"/stest1/stest2">>}} =
+        cmd(Pid, domain, create, #{obj_name=>stest2, domain=>"/stest1", description=>"Test Sub2"}),
+
+    {error,{<<"could_not_load_parent">>, <<"Object could not load parent '/stest2'">>}} =
+        cmd(Pid, domain, create, #{obj_name=>stest2, domain=>"/stest2", description=>"Test Sub2B"}),
+
+    {ok,
+        #{
+            <<"type">> := <<"domain">>,
+            <<"obj_id">> := S1Id,
+            <<"path">> := <<"/stest1">>,
+            <<"created_time">> := _CT1,
+            <<"description">> := <<"Test Sub1">>,
+            <<"parent_id">> := <<"root">>
+        }} =
+        cmd(Pid, domain, get, #{id=>"/stest1"}),
+
+    {ok,
+        #{
+            <<"type">> := <<"domain">>,
+            <<"obj_id">> := S2Id,
+            <<"path">> := <<"/stest1/stest2">>,
+            <<"created_time">> := CT2,
+            <<"description">> := <<"Test Sub2">>,
+            <<"parent_id">> := S1Id
+        }} =
+        cmd(Pid, domain, get, #{id=>"/stest1/stest2"}),
 
 
+    {ok, #{}} = cmd(Pid, domain, update, #{id=>S2Id, description=><<"Test-Sub2">>}),
+    {ok,
+        #{
+            <<"type">> := <<"domain">>,
+            <<"obj_id">> := S2Id,
+            <<"path">> := <<"/stest1/stest2">>,
+            <<"created_time">> := CT2,
+            <<"description">> := <<"Test-Sub2">>,
+            <<"parent_id">> := S1Id
+        }} =
+        cmd(Pid, domain, get, #{id=>S2Id}),
 
+    U1 = #{name=>n1, surname=>s1, email=>"u1@sub1"},
+    {ok, #{<<"obj_id">>:=U1Id, <<"path">>:=<<"/stest1/users/u1">>}} =
+        cmd(Pid, user, create, #{domain=>S1Id, obj_name=>u1, user=>U1}),
 
+    {error,{<<"name_is_already_used">>, <<"Name is already used: 'users/u1'">>}} =
+        cmd(Pid, user, create, #{domain=>S1Id, obj_name=>u1, user=>U1}),
+
+    U2 = #{name=>n2, surname=>s2, email=>"n2@sub1.sub2"},
+    {ok, #{<<"obj_id">>:=_U2Id, <<"path">>:=<<"/stest1/stest2/users/u1">>}} =
+        cmd(Pid, user, create, #{domain=>S2Id, obj_name=>u1, user=>U2}),
+
+    {ok, #{<<"data">> := #{<<"domain">> := 1,<<"user">> := 1},<<"total">> := 2}} =
+        cmd(Pid, domain, find_types, #{id=><<"/stest1">>}),
+
+    {ok,#{<<"data">> := #{<<"domain">> := 1,<<"user">> := 2},<<"total">> := 3}} =
+        cmd(Pid, domain, find_all_types, #{id=><<"/stest1">>}),
+
+    {ok, #{<<"total">> := 2, <<"data">> := [
+        #{
+            <<"obj_id">> := U1Id,
+            <<"path">> := <<"/stest1/users/u1">>,
+            <<"type">> := <<"user">>
+        },
+        #{
+            <<"obj_id">> := S2Id,
+            <<"path">> := <<"/stest1/stest2">>,
+            <<"type">> := <<"domain">>
+        }
+    ]}} =
+        cmd(Pid, domain, find_childs, #{id=><<"/stest1">>, sort=>[<<"path">>]}).
 
 
 

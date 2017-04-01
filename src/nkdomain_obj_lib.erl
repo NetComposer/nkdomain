@@ -26,7 +26,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([find/2, load/3, create/3]).
--export([make_obj/4, make_and_create/4, archive/3, delete/3]).
+-export([make_obj/4, make_and_create/4, archive/3, delete/3, delete_all_childs/2]).
 -export([find_archive/2]).
 -export([do_find/1, do_call/2, do_call/3, do_cast/2, do_info/2]).
 
@@ -129,6 +129,8 @@ make_obj(Srv, Parent, Type, Opts) ->
             {ok, maps:from_list(lists:flatten(Obj))};
         {error, object_not_found} ->
             {error, {could_not_load_parent, Parent}};
+        {error, path_not_found} ->
+            {error, {could_not_load_parent, Parent}};
         {error, Error} ->
             {error, Error}
     end.
@@ -224,9 +226,39 @@ find(Srv, IdOrPath) ->
     end.
 
 
+
 %% @doc Finds an objects's pid or loads it from storage
 -spec load(nkservice:id(), nkdomain:obj_id()|nkdomain:path(), nkdomain:load_opts()) ->
     #obj_id_ext{} | {error, obj_not_found|term()}.
+
+%%load(Srv, IdOrPath, Meta) ->
+%%    case find(Srv, IdOrPath) of
+%%        #obj_id_ext{pid=Pid}=ObjIdExt when is_pid(Pid) ->
+%%            case Meta of
+%%                #{register:=Link} ->
+%%                    register(Pid, Link);
+%%                _ ->
+%%                    ok
+%%            end,
+%%            ObjIdExt;
+%%        #obj_id_ext{}=ObjIdExt ->
+%%            do_load2(ObjIdExt, Meta);
+%%        {error, path_not_found} ->
+%%            {error, object_not_found};
+%%        {error, object_not_found} ->
+%%            case nkservice_srv:get_srv_id(Srv) of
+%%                {ok, SrvId} ->
+%%                    ObjIdExt = #obj_id_ext{
+%%                        srv_id = SrvId,
+%%                        obj_id = nklib_util:to_binary(IdOrPath)
+%%                    },
+%%                    do_load2(ObjIdExt, Meta);
+%%                not_found ->
+%%                    {error, service_not_found}
+%%            end;
+%%        {error, Error} ->
+%%            {error, Error}
+%%    end.
 
 load(Srv, IdOrPath, Meta) ->
     case find(Srv, IdOrPath) of
@@ -242,17 +274,6 @@ load(Srv, IdOrPath, Meta) ->
             do_load2(ObjIdExt, Meta);
         {error, path_not_found} ->
             {error, object_not_found};
-        {error, object_not_found} ->
-            case nkservice_srv:get_srv_id(Srv) of
-                {ok, SrvId} ->
-                    ObjIdExt = #obj_id_ext{
-                        srv_id = SrvId,
-                        obj_id = nklib_util:to_binary(IdOrPath)
-                    },
-                    do_load2(ObjIdExt, Meta);
-                not_found ->
-                    {error, service_not_found}
-            end;
         {error, Error} ->
             {error, Error}
     end.
@@ -331,6 +352,17 @@ delete(Srv, Id, Reason) ->
         {error, Error} ->
             {error, Error}
     end.
+
+
+%% @doc
+delete_all_childs(Srv, Id) ->
+    case nkservice_srv:get_srv_id(Srv) of
+        {ok, SrvId} ->
+            SrvId:object_store_delete_all_childs(SrvId, Id, #{});
+        not_found ->
+            {error, service_not_found}
+    end.
+
 
 
 %% @private

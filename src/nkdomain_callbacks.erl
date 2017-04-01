@@ -35,11 +35,11 @@
 -export([object_store_reload_types/1, object_store_read_raw/2, object_store_save_raw/3,
          object_store_delete_raw/2,
          object_store_archive_find/3, object_store_archive_save_raw/3]).
--export([object_store_find_obj_id/2, object_store_find_path/2,
+-export([object_store_find_obj/2, object_store_find_obj_id/2, object_store_find_path/2,
          object_store_find_types/2, object_store_find_all_types/2,
          object_store_find_childs/3, object_store_find_all_childs/3,
          object_store_find_alias/2, object_store_find_referred/3,
-         object_store_delete_childs/3, object_store_delete_all_childs/3,
+         object_store_delete_all_childs/3,
          object_store_clean/1]).
 
 -define(LLOG(Type, Txt, Args), lager:Type("NkDOMAIN Callbacks: "++Txt, Args)).
@@ -75,6 +75,7 @@ api_error(object_parent_conflict) 	        -> "Object has conflicting parent";
 api_error(object_is_stopped) 		        -> "Object is stopped";
 api_error(object_not_found) 		        -> "Object not found";
 api_error(object_stopped) 		            -> "Object stopped";
+api_error(path_not_found) 		            -> "Path not found";
 api_error(unknown_domain)                   -> "Domain is unknown";
 api_error(_)   		                        -> continue.
 
@@ -508,6 +509,14 @@ object_store_delete_raw(_SrvId, _ObjId) ->
 
 
 %% @doc
+-spec object_store_find_obj(nkservice:id(), nkdomain:id()) ->
+    {ok, nkdomain:type(), nkdomain:obj_id(), nkdomain:path()} | {error, term()}.
+
+object_store_find_obj(_SrvId, _Id) ->
+    {error, store_not_implemented}.
+
+
+%% @doc
 -spec object_store_find_obj_id(nkservice:id(), nkdomain:obj_id()) ->
     {ok, nkdomain:type(), nkdomain:path()} | {error, term()}.
 
@@ -591,18 +600,7 @@ object_store_archive_save_raw(_SrvId, _ObjId, _Map) ->
     {error, store_not_implemented}.
 
 
-
-%% @doc
-%% TODO: It does not remove loaded objects!!
--spec object_store_delete_childs(nkservice:id(), nkdomain:obj_id(), Spec::map()) ->
-    {ok, Total::integer()} | {error, term()}.
-
-object_store_delete_childs(_SrvId, _ObjId, _Spec) ->
-    {error, store_not_implemented}.
-
-
-%% @doc
-%% TODO: It does not remove loaded objects!!
+%% @doc Must stop loaded objects
 -spec object_store_delete_all_childs(nkservice:id(), nkdomain:path(), Spec::map()) ->
     {ok, Total::integer()} | {error, term()}.
 

@@ -524,6 +524,14 @@ handle_cast({nkdomain_unload, Error}, State) ->
     ?DEBUG("received stop: ~p", [Error], State),
     do_stop(Error, State);
 
+%% Called from nkdomain_store
+handle_cast(nkdomain_obj_deleted, #state{is_deleted=true}=State) ->
+    noreply(State);
+
+handle_cast(nkdomain_obj_deleted, State) ->
+    ?LLOG(notice, "received 'object deleted'", [], State),
+    do_stop(object_deleted, State);
+
 handle_cast(Msg, State) ->
     handle(object_handle_cast, [Msg], State).
 

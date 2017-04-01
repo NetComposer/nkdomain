@@ -44,7 +44,7 @@ api('', create, Syntax) ->
         domain => binary,
         description => binary
     },
-    nklib_syntax:add_mandatory([obj_name, domain, description], Syntax2);
+    nklib_syntax:add_mandatory([obj_name, description], Syntax2);
 
 api('', delete, Syntax) ->
     Syntax#{
