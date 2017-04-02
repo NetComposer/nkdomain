@@ -8,26 +8,26 @@
 
 
 test1() ->
+    remove_data(),
     {ok, _SessId, Pid, _Reply} = login("admin", ?ADMIN_PASS),
     ok = test_basic_1(Pid),
-    {ok, _UId} = test_create_user(Pid),
+    ok = test_create_user(Pid),
     ok = test_session(Pid),
     ok = test_session2(Pid),
-    test_delete(Pid).
+    ok = test_delete(Pid),
+    remove_data().
 
 test2() ->
+    remove_data(),
     {ok, _SessId, Pid, _Reply} = login("admin", ?ADMIN_PASS),
-    test_basic_2(Pid).
-
-
-%% Probar ahora dominios y subdominios
-%% Búsqueda de hijos y tipos
-%% Enable
-
+    ok = test_basic_2(Pid),
+    remove_data().
 
 
 %% Check for root domain and admin user
 test_basic_1(Pid) ->
+
+    % Get admin user
     {ok,
         #{
             <<"type">> := <<"user">>,
@@ -47,6 +47,7 @@ test_basic_1(Pid) ->
     {ok, U1} = cmd(Pid, user, get, #{id=><<"/users/admin">>}),
     {error, {<<"object_not_found">>,<<"Object not found">>}} = cmd(Pid, user, get, #{id=><<"admin2">>}),
 
+    % Get root domain
     {ok,
         #{
             <<"type">> := <<"domain">>,
@@ -63,19 +64,13 @@ test_basic_1(Pid) ->
     ok.
 
 
-%% Create user /users/user1, load, unload, update
 test_create_user(Pid) ->
-    case nkdomain_obj_lib:delete(root, "/users/user1", normal) of
-        {error, path_not_found} ->
-            ok;
-        ok ->
-            timer:sleep(1000)
-    end,
-    {error, path_not_found} = nkdomain:find(root, "/users/user1"),
-    {error, object_not_found} = nkdomain:load(root, "/users/user1"),
+    {error, path_not_found} = nkdomain:find(root, "/users/tuser1"),
+    {error, object_not_found} = nkdomain:load(root, "/users/tuser1"),
 
+    %% Create user /users/tuser1,
     U2_Create = #{
-        obj_name => user1,
+        obj_name => tuser1,
         user => #{
             name => user1,
             surname => surname1,
@@ -83,17 +78,17 @@ test_create_user(Pid) ->
             password => pass1
         }
     },
-    {ok, #{<<"obj_id">>:=U2Id, <<"path">>:=<<"/users/user1">>}} =
-        cmd(Pid, user, create, U2_Create),
-    {error, {<<"name_is_already_used">>, <<"Name is already used: 'users/user1'">>}} =
+    {ok, #{<<"obj_id">>:=U2Id, <<"path">>:=<<"/users/tuser1">>}} = cmd(Pid, user, create, U2_Create),
+    {error, {<<"name_is_already_used">>, <<"Name is already used: 'users/tuser1'">>}} =
         cmd(Pid, user, create, U2_Create),
 
+    % Check user, creation date and password
     {ok,
         #{
             <<"type">> := <<"user">>,
             <<"obj_id">> := U2Id,
             <<"parent_id">> := <<"root">>,
-            <<"path">> := <<"/users/user1">>,
+            <<"path">> := <<"/users/tuser1">>,
             <<"created_time">> := CT,
             <<"user">> := #{
                 <<"name">> := <<"user1">>,
@@ -104,32 +99,35 @@ test_create_user(Pid) ->
             }
         } = U2} =
         cmd(Pid, user, get, #{id=>U2Id}),
-    true = nklib_util:m_timestamp() - CT < 1000,
+    true = nklib_util:m_timestamp() - CT < 500,
     {ok, P2} = nkdomain_user_obj:user_pass("pass1"),
 
-    timer:sleep(1000),
-    {ok, U2} = cmd(Pid, user, get, #{id=><<"/users/user1">>}),
-    {ok, <<"user">>, U2Id, <<"/users/user1">>, Pid1} = F1 = nkdomain:find(root, "/users/user1"),
+    % Find user by several ways
+    {ok, U2} = cmd(Pid, user, get, #{id=><<"/users/tuser1">>}),
+    {ok, <<"user">>, U2Id, <<"/users/tuser1">>, Pid1} = F1 = nkdomain:find(root, "/users/tuser1"),
     F1 = nkdomain:find(root, U2Id),
-    F1 = nkdomain:load(root, "/users/user1"),
+    F1 = nkdomain:load(root, "/users/tuser1"),
     F1 = nkdomain:load(root, U2Id),
 
+    % Unload the user
     ok = nkdomain_obj:unload(U2Id, normal),
-    timer:sleep(2000),
-    {ok, <<"user">>, U2Id, <<"/users/user1">>, undefined} = F2 = nkdomain:find(root, "/users/user1"),
+    % We must wait > MIN_STARTED_TIME
+    timer:sleep(2100),
+    {ok, <<"user">>, U2Id, <<"/users/tuser1">>, undefined} = F2 = nkdomain:find(root, "/users/tuser1"),
     F2 = nkdomain:find(root, U2Id),
-    {ok, <<"user">>, U2Id, <<"/users/user1">>, Pid2} = F3 = nkdomain:load(root, "/users/user1"),
+    {ok, <<"user">>, U2Id, <<"/users/tuser1">>, Pid2} = F3 = nkdomain:load(root, "/users/tuser1"),
     F3 = nkdomain:find(root, U2Id),
     false = Pid1 == Pid2,
 
+    % Update the user
     U2_Update = #{surname=><<"surname-1">>, password=><<"pass2">>},
-    {ok, #{}} = cmd(Pid, user, update, #{id=><<"/users/user1">>, user=>U2_Update}),
+    {ok, #{}} = cmd(Pid, user, update, #{id=><<"/users/tuser1">>, user=>U2_Update}),
     {ok,
         #{
             <<"type">> := <<"user">>,
             <<"obj_id">> := U2Id,
             <<"parent_id">> := <<"root">>,
-            <<"path">> := <<"/users/user1">>,
+            <<"path">> := <<"/users/tuser1">>,
             <<"created_time">> := CT,
             <<"user">> := #{
                 <<"name">> := <<"user1">>,
@@ -141,30 +139,30 @@ test_create_user(Pid) ->
         }} =
         cmd(Pid, user, get, #{id=>U2Id}),
     {ok, P3} = nkdomain_user_obj:user_pass("pass2"),
-    {ok, U2Id}.
+    ok.
 
 
-%% A session is created along the user login.
-%% On logout, session is removed
 test_session(Pid) ->
-    {ok, SessId, Pid2, _Reply} = login("/users/user1", pass2),
-    {ok, #{<<"type">>:=<<"user">>, <<"path">>:=<<"/users/user1">>, <<"obj_id">>:=UId}} = cmd(Pid2, user, get, #{}),
+    % Do login over tuser1, check the session is created and loaded
+    {ok, SessId, Pid2, _Reply} = login("/users/tuser1", pass2),
+    {ok, #{<<"type">>:=<<"user">>, <<"path">>:=<<"/users/tuser1">>, <<"obj_id">>:=UId}} = cmd(Pid2, user, get, #{}),
     {ok, #{<<"type">>:=<<"user">>, <<"path">>:=<<"/users/admin">>}} = cmd(Pid, user, get, #{}),
-    {ok, <<"session">>, SessId, <<"/users/user1/sessions/", SessId/binary>>, SPid} = nkdomain:find(root, SessId),
+    {ok, <<"session">>, SessId, <<"/users/tuser1/sessions/", SessId/binary>>, SPid} = nkdomain:find(root, SessId),
     true = is_pid(Pid),
 
-    % Object has active childs
+    % Object has active childs, we cannot delete it
     {error,
         {<<"object_has_childs">>,<<"Object has childs">>}} =
         cmd(Pid, user, delete, #{id=>UId, reason=>wont_work}),
 
+    % Get info about the session
     {ok, #{
         <<"type">> := <<"session">>,
         <<"obj_id">> := SessId,
         <<"parent_id">> := UId,
         <<"active">> := true,
         <<"created_time">> := _,
-        <<"path">> := <<"/users/user1/sessions/", SessId/binary>>,
+        <<"path">> := <<"/users/tuser1/sessions/", SessId/binary>>,
         <<"referred_id">> := UId,
         <<"session">> := #{
             <<"local">> := <<"ws:0.0.0.0:9202">>,
@@ -173,8 +171,10 @@ test_session(Pid) ->
     }} =
         cmd(Pid2, session, get, #{}),
 
+    % If we stop the WS connection, the session is stopped and destroyed, but found on archive
     nkapi_client:stop(Pid2),
-    timer:sleep(2000),
+    % Wait > MIN_STARTED_TIME
+    timer:sleep(2100),
     false = is_process_alive(SPid),
     {error, object_not_found} = nkdomain:find(root, SessId),
     {ok, 1, [S2]} = nkdomain_obj_lib:find_archive(root, SessId),
@@ -189,70 +189,63 @@ test_session(Pid) ->
 
 %% Find session and childs of admin user
 test_session2(Pid) ->
+    % Get the admin user (without id) and its current session
     {ok, #{<<"obj_id">>:=SessId}} = cmd(Pid, session, get, #{}),
     {ok, <<"session">>, SessId, Path, SessPid} = nkdomain:find(root, SessId),
     {ok, Childs} = nkdomain_obj:get_childs(<<"admin">>),
     {<<"session">>, SessId, _Name, SessPid} = lists:keyfind(SessId, 2, Childs),
+
+    % If we kill the session, admin notices
     exit(SessPid, kill),
-    timer:sleep(1100),
+    timer:sleep(100),
     {ok, Childs2} = nkdomain_obj:get_childs(<<"admin">>),
     false = lists:keyfind(SessId, 2, Childs2),
     {ok, <<"session">>, SessId, Path, undefined} = nkdomain:find(root, SessId),
 
-    % Object has not active childs, but the child is still found
+    % Object has not active childs, but the child is still found on disk
     {error, object_has_childs} = nkdomain_obj:delete(<<"admin">>, wont_work),
 
+    % If we force a clean of the database, the stale object is deleted and archived
     {ok, #{active:=1}} = nkdomain_store:clean(root),
-    timer:sleep(1100),
     {error, object_not_found} = nkdomain:find(root, SessId),
+    % Archive has a 1-second refresh time
+    timer:sleep(1100),
     {ok, 1, [#{<<"destroyed_code">>:=<<"object_clean_process">>}]} =
         nkdomain_obj_lib:find_archive(root, SessId),
     ok.
 
 
-%% Delete the user object
 test_delete(Pid) ->
-    {ok, #{<<"obj_id">>:=ObjId}} = cmd(Pid, user, get, #{id=><<"/users/user1">>}),
-    {ok, #{}} = cmd(Pid, user, delete, #{id=> <<"/users/user1">>}),
+    %% Delete the tuser1 object and find it in archive
+    {ok, #{<<"obj_id">>:=ObjId}} = cmd(Pid, user, get, #{id=><<"/users/tuser1">>}),
+    {ok, #{}} = cmd(Pid, user, delete, #{id=> <<"/users/tuser1">>}),
     {error,{<<"object_not_found">>,<<"Object not found">>}} =
-        cmd(Pid, user, delete, #{id=> <<"/users/user1">>}),
+        cmd(Pid, user, delete, #{id=> <<"/users/tuser1">>}),
+
     timer:sleep(1100),
-    {ok, 1, [#{<<"path">>:=<<"/users/user1">>}]} =
+    {ok, 1, [#{<<"path">>:=<<"/users/tuser1">>}]} =
         nkdomain_obj_lib:find_archive(root, ObjId),
-    {ok, _N, [#{<<"path">>:=<<"/users/user1">>}|_]} =
-        nkdomain_obj_lib:find_archive(root, <<"/users/user1">>),
+    {ok, _N, [#{<<"path">>:=<<"/users/tuser1">>}|_]} =
+        nkdomain_obj_lib:find_archive(root, <<"/users/tuser1">>),
     ok.
 
 
 %% Create domains and users
 test_basic_2(Pid) ->
-    S1Id = case nkdomain:load(root, "/stest1", #{}) of
-        {ok, <<"domain">>, S1Id_0, <<"/stest1">>, _Pid1} ->
-            lager:warning("/stest1 was already present"),
-            S1Id_0;
-        {error, object_not_found} ->
-            {ok, #{<<"obj_id">>:=S1Id_0, <<"path">>:=<<"/stest1">>}} =
-                cmd(Pid, domain, create, #{obj_name=>stest1, description=>"Test Sub1"}),
-            S1Id_0
-    end,
-    case nkdomain_domain_obj:find_childs(root, "/stest1", #{}) of
-        {ok, 0, []} ->
-            ok;
-        _ ->
-            lager:warning("Deleting all childs for /stest1"),
-            nkdomain_store_es:object_store_delete_all_childs(axft4mi, "/stest1", #{}),
-            timer:sleep(3000)
-    end,
 
+    % Create /stest1 and check we cannot create it again
+    {ok, #{<<"obj_id">>:=S1Id, <<"path">>:=<<"/stest1">>}} =
+        cmd(Pid, domain, create, #{obj_name=>stest1, description=>"Test Sub1"}),
     {error,{<<"name_is_already_used">>, <<"Name is already used: 'stest1'">>}} =
         cmd(Pid, domain, create, #{obj_name=>stest1, description=>"Test Sub1"}),
 
+    % Create /stest1/stest2 and check we cannot create a child with missing father
     {ok, #{<<"obj_id">>:=S2Id, <<"path">>:=<<"/stest1/stest2">>}} =
         cmd(Pid, domain, create, #{obj_name=>stest2, domain=>"/stest1", description=>"Test Sub2"}),
-
     {error,{<<"could_not_load_parent">>, <<"Object could not load parent '/stest2'">>}} =
         cmd(Pid, domain, create, #{obj_name=>stest2, domain=>"/stest2", description=>"Test Sub2B"}),
 
+    % Check the created objects
     {ok,
         #{
             <<"type">> := <<"domain">>,
@@ -260,7 +253,8 @@ test_basic_2(Pid) ->
             <<"path">> := <<"/stest1">>,
             <<"created_time">> := _CT1,
             <<"description">> := <<"Test Sub1">>,
-            <<"parent_id">> := <<"root">>
+            <<"parent_id">> := <<"root">>,
+            <<"_is_enabled">> := true
         }} =
         cmd(Pid, domain, get, #{id=>"/stest1"}),
 
@@ -271,11 +265,13 @@ test_basic_2(Pid) ->
             <<"path">> := <<"/stest1/stest2">>,
             <<"created_time">> := CT2,
             <<"description">> := <<"Test Sub2">>,
-            <<"parent_id">> := S1Id
+            <<"parent_id">> := S1Id,
+            <<"_is_enabled">> := true
         }} =
         cmd(Pid, domain, get, #{id=>"/stest1/stest2"}),
 
 
+    % Update /stest1/stest2
     {ok, #{}} = cmd(Pid, domain, update, #{id=>S2Id, description=><<"Test-Sub2">>}),
     {ok,
         #{
@@ -288,43 +284,138 @@ test_basic_2(Pid) ->
         }} =
         cmd(Pid, domain, get, #{id=>S2Id}),
 
+    % Create /stest1/users/u1
     U1 = #{name=>n1, surname=>s1, email=>"u1@sub1"},
     {ok, #{<<"obj_id">>:=U1Id, <<"path">>:=<<"/stest1/users/u1">>}} =
         cmd(Pid, user, create, #{domain=>S1Id, obj_name=>u1, user=>U1}),
-
     {error,{<<"name_is_already_used">>, <<"Name is already used: 'users/u1'">>}} =
         cmd(Pid, user, create, #{domain=>S1Id, obj_name=>u1, user=>U1}),
 
+    % Create /stest1/stest2/users/u1
     U2 = #{name=>n2, surname=>s2, email=>"n2@sub1.sub2"},
-    {ok, #{<<"obj_id">>:=_U2Id, <<"path">>:=<<"/stest1/stest2/users/u1">>}} =
+    {ok, #{<<"obj_id">>:=U2Id, <<"path">>:=<<"/stest1/stest2/users/u1">>}} =
         cmd(Pid, user, create, #{domain=>S2Id, obj_name=>u1, user=>U2}),
 
+    % Find types and childs on /stest1
     {ok, #{<<"data">> := #{<<"domain">> := 1,<<"user">> := 1},<<"total">> := 2}} =
         cmd(Pid, domain, find_types, #{id=><<"/stest1">>}),
-
     {ok,#{<<"data">> := #{<<"domain">> := 1,<<"user">> := 2},<<"total">> := 3}} =
         cmd(Pid, domain, find_all_types, #{id=><<"/stest1">>}),
-
     {ok, #{<<"total">> := 2, <<"data">> := [
-        #{
-            <<"obj_id">> := U1Id,
-            <<"path">> := <<"/stest1/users/u1">>,
-            <<"type">> := <<"user">>
-        },
         #{
             <<"obj_id">> := S2Id,
             <<"path">> := <<"/stest1/stest2">>,
             <<"type">> := <<"domain">>
+        },
+        #{
+            <<"obj_id">> := U1Id,
+            <<"path">> := <<"/stest1/users/u1">>,
+            <<"type">> := <<"user">>
         }
     ]}} =
-        cmd(Pid, domain, find_childs, #{id=><<"/stest1">>, sort=>[<<"path">>]}).
+        cmd(Pid, domain, find_childs, #{id=><<"/stest1">>, sort=>[<<"path">>]}),
+    {ok, #{<<"total">> := 3, <<"data">> := [
+        #{
+            <<"obj_id">> := S2Id,
+            <<"path">> := <<"/stest1/stest2">>,
+            <<"type">> := <<"domain">>
+        },
+        #{
+            <<"obj_id">> := U2Id,
+            <<"path">> := <<"/stest1/stest2/users/u1">>,
+            <<"type">> := <<"user">>
+        },
+        #{
+            <<"obj_id">> := U1Id,
+            <<"path">> := <<"/stest1/users/u1">>,
+            <<"type">> := <<"user">>
+        }]}} =
+        cmd(Pid, domain, find_all_childs, #{id=><<"/stest1">>, sort=>[<<"path">>]}),
 
+    % We disable /stest1, all childs will be disabled (but stored property does change at childs)
+    {ok, #{}} = cmd(Pid, domain, enable, #{id=><<"/stest1">>, enable=>false}),
+    {ok, #{<<"enabled">>:=false, <<"_is_enabled">>:=false}} = cmd(Pid, domain, get, #{id=>"/stest1"}),
+    {ok, #{<<"_is_enabled">>:=false}=S2_E1} = cmd(Pid, domain, get, #{id=>"/stest1/stest2"}),
+    false = maps:is_key(enabled, S2_E1),
+    {ok, #{<<"_is_enabled">>:=false}=S1_U1} = cmd(Pid, domain, get, #{id=>"/stest1/users/u1"}),
+    false = maps:is_key(enabled, S1_U1),
+    {ok, #{<<"_is_enabled">>:=false}=S2_U1} = cmd(Pid, domain, get, #{id=>"/stest1/stest2/users/u1"}),
+    false = maps:is_key(enabled, S2_U1),
+
+    % This will not change the status (the stored status was already 'enabled')
+    {ok, #{}} = cmd(Pid, domain, enable, #{id=><<"/stest1/stest2">>, enable=>true}),
+    {ok, #{<<"_is_enabled">>:=false}=S2_E2} = cmd(Pid, domain, get, #{id=>"/stest1/stest2"}),
+    false = maps:is_key(enabled, S2_E2),
+
+    % We disable by hand /stest1/stest2
+    {ok, #{}} = cmd(Pid, domain, enable, #{id=><<"/stest1/stest2">>, enable=>false}),
+    {ok, #{<<"_is_enabled">>:=false, <<"enabled">>:=false}} = cmd(Pid, domain, get, #{id=>"/stest1/stest2"}),
+
+    % When we activate again /stest1, /stest1/stest2 and childs remain disabled
+    {ok, #{}} = cmd(Pid, domain, enable, #{id=><<"/stest1">>, enable=>true}),
+    {ok, #{<<"enabled">>:=true, <<"_is_enabled">>:=true}} = cmd(Pid, domain, get, #{id=>"/stest1"}),
+    {ok, #{<<"_is_enabled">>:=true}} = cmd(Pid, domain, get, #{id=>"/stest1/users/u1"}),
+    {ok, #{<<"_is_enabled">>:=false, <<"enabled">>:=false}} = cmd(Pid, domain, get, #{id=>"/stest1/stest2"}),
+    {ok, #{<<"_is_enabled">>:=false}} = cmd(Pid, domain, get, #{id=>"/stest1/stest2/users/u1"}),
+
+    % We unload everything, we loading, every enabled status remains
+    true = is_loaded("/stest1"),
+    true = is_loaded("/stest1/users/u1"),
+    true = is_loaded("/stest1/stest2"),
+    true = is_loaded("/stest1/stest2/users/u1"),
+    nkdomain_obj:unload({root, "/stest1"}, normal),
+    timer:sleep(500),
+    false = is_loaded("/stest1"),
+    false = is_loaded("/stest1/users/u1"),
+    false = is_loaded("/stest1/stest2"),
+    false = is_loaded("/stest1/stest2/users/u1"),
+
+    % This user will load everything on its branch
+    {ok, #{<<"_is_enabled">>:=false}} = cmd(Pid, domain, get, #{id=>"/stest1/stest2/users/u1"}),
+    true = is_loaded("/stest1/stest2/users/u1"),
+    true = is_loaded("/stest1/stest2"),
+    true = is_loaded("/stest1"),
+    false = is_loaded("/stest1/users/u1"),
+
+    {ok, #{<<"_is_enabled">>:=false, <<"enabled">>:=false}} = cmd(Pid, domain, get, #{id=>"/stest1/stest2"}),
+    {ok, #{<<"enabled">>:=true, <<"_is_enabled">>:=true}} = cmd(Pid, domain, get, #{id=>"/stest1"}),
+    {ok, #{<<"_is_enabled">>:=true}} = cmd(Pid, domain, get, #{id=>"/stest1/users/u1"}),
+
+    % We enable again /stest1/stest2
+    {ok, #{}} = cmd(Pid, domain, enable, #{id=><<"/stest1/stest2">>, enable=>true}),
+    {ok, #{<<"_is_enabled">>:=true, <<"enabled">>:=true}} = cmd(Pid, domain, get, #{id=>"/stest1/stest2"}),
+    {ok, #{<<"_is_enabled">>:=true}} = cmd(Pid, domain, get, #{id=>"/stest1/users/u1"}),
+
+    ok.
 
 
 
 %% ===================================================================
 %% Client fun
 %% ===================================================================
+
+remove_data() ->
+    case nkdomain:find(root, "/users/tuser1") of
+        {ok, <<"user">>, UId, <<"/users/tuser1">>, _} ->
+            ok = nkdomain_store:delete(root, UId);
+        {error, path_not_found} ->
+            ok
+    end,
+    case nkdomain_domain_obj:find_childs(root, "/stest1", #{}) of
+        {ok, 0, []} ->
+            ok;
+        _ ->
+            %% lager:notice("Deleting all childs for /stest1"),
+            nkdomain_store_es:object_store_delete_all_childs(axft4mi, "/stest1", #{})
+    end,
+    case nkdomain:find(root, "/stest1") of
+        {ok, <<"domain">>, S1Id_0, <<"/stest1">>, _} ->
+        %% lager:warning("/stest1 was already present"),
+        ok = nkdomain_store:delete(root, S1Id_0);
+        {error, path_not_found} ->
+            ok
+    end.
+
 
 
 login(User, Pass) ->
@@ -354,3 +445,8 @@ cmd(Pid, Class, Cmd, Data) ->
     nkapi_client:cmd(Pid, Class, <<>>, Cmd, Data).
 
 
+is_loaded(Id) ->
+    case nkdomain:find(root, Id) of
+        {ok, _Type, _ObjId, _Path, Pid} when is_pid(Pid) -> true;
+        _ -> false
+    end.

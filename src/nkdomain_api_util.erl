@@ -21,7 +21,7 @@
 -module(nkdomain_api_util).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([cmd_common/4, cmd_get/3, cmd_create/3, cmd_delete/3, cmd_update/3]).
+-export([cmd_common/4, cmd_get/3, cmd_create/3, cmd_delete/3, cmd_update/3, cmd_enable/3]).
 -export([search/2, getid/3, add_id/3]).
 
 -include("nkdomain.hrl").
@@ -57,6 +57,8 @@ cmd_common(Type, Cmd, Data, State) ->
             cmd_delete(Type, Data, State);
         update ->
             cmd_update(Type, Data, State);
+        enable ->
+            cmd_enable(Type, Data, State);
         _ ->
             {error, not_implemented, State}
     end.
@@ -69,8 +71,8 @@ cmd_get(Type, Data, #{srv_id:=SrvId}=State) ->
             case nkdomain_obj_lib:load(SrvId, Id, #{}) of
                 #obj_id_ext{pid=Pid} ->
                     case nkdomain_obj:get_session(Pid) of
-                        {ok, #obj_session{obj=Obj}} ->
-                            {ok, Obj, State};
+                        {ok, #obj_session{obj=Obj, is_enabled=Enabled}} ->
+                            {ok, Obj#{'_is_enabled'=>Enabled}, State};
                         {error, Error} ->
                             {error, Error, State}
                     end;
@@ -120,6 +122,27 @@ cmd_update(Type, Data, #{srv_id:=SrvId}=State) ->
             case nkdomain_obj_lib:load(SrvId, Id, #{}) of
                 #obj_id_ext{obj_id=ObjId} ->
                     case nkdomain_obj:update(ObjId, Data) of
+                        ok ->
+                            {ok, #{}, State};
+                        {error, Error} ->
+                            {error, Error, State}
+                    end;
+                {error, Error} ->
+                    {error, Error, State}
+            end;
+        Error ->
+            Error
+    end.
+
+
+%% @doc
+cmd_enable(Type, Data, #{srv_id:=SrvId}=State) ->
+    Enabled = maps:get(enable, Data, true),
+    case getid(Type, Data, State) of
+        {ok, Id} ->
+            case nkdomain_obj_lib:load(SrvId, Id, #{}) of
+                #obj_id_ext{obj_id=ObjId} ->
+                    case nkdomain_obj:enable(ObjId, Enabled) of
                         ok ->
                             {ok, #{}, State};
                         {error, Error} ->

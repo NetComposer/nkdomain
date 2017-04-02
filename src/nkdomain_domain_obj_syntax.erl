@@ -57,6 +57,12 @@ api('', update, Syntax) ->
         description => binary
     };
 
+api('', enable, Syntax) ->
+    Syntax#{
+        id => binary,
+        enable => boolean
+    };
+
 api('', find_types, Syntax) ->
     Syntax#{
         id => binary

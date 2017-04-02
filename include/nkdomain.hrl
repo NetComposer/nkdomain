@@ -1,7 +1,5 @@
 %% -------------------------------------------------------------------
 %%
-%% nkcore.hrl: Common types and records definition
-%%
 %% Copyright (c) 2017 Carlos Gonzalez Florido.  All Rights Reserved.
 %%
 %% This file is provided to you under the Apache License,
@@ -41,7 +39,7 @@
     obj :: nkdomain:obj(),
     srv_id :: nkservice:id(),
     is_dirty :: boolean(),
-    enabled :: boolean(),
+    is_enabled :: boolean(),
     status :: nkdomain_obj:status(),
     meta :: map(),
     data :: term()

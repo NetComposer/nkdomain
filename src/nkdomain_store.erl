@@ -72,10 +72,10 @@ save(Srv, ObjId, Obj) ->
 delete(Srv, ObjId) ->
     case nkservice_srv:get_srv_id(Srv) of
         {ok, SrvId} ->
+            nkdomain_obj_lib:do_cast(ObjId, nkdomain_obj_deleted),
             wait_remove_op(SrvId, ObjId),
             case SrvId:object_store_delete_raw(SrvId, ObjId) of
                 ok ->
-                    nkdomain_obj_lib:do_cast(ObjId, nkdomain_obj_deleted),
                     ok;
                 {error, object_not_found} ->
                     {error, object_not_found};
@@ -328,7 +328,6 @@ do_save_srv_id(SrvId, [QueueOp|Rest]=List, Now, State) ->
                 delete ->
                     case SrvId:object_store_delete_raw(SrvId, ObjId) of
                         ok ->
-                            nkdomain_obj_lib:do_cast(ObjId, nkdomain_obj_deleted),
                             ok;
                         {error, object_not_found} ->
                             ok;

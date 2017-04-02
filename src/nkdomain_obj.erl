@@ -31,7 +31,7 @@
 -behaviour(gen_server).
 
 -export([get_session/1, save/1, unload/2]).
--export([update/2, set_enabled/2, delete/2, sync_op/2, async_op/2]).
+-export([update/2, enable/2, delete/2, sync_op/2, async_op/2]).
 -export([register/2, unregister/2, get_childs/1]).
 -export([create_child/3, load_child/3]).
 -export([start/3, init/1, terminate/2, code_change/3, handle_call/3,
@@ -128,9 +128,7 @@
     fun((session()) -> {ok, Reply::term()} | {ok, Reply::term(), session()} | {error, term()}).
 
 -type op() ::
-    {set_enabled, boolean()} |
-    {apply, apply_fun()} |
-    {remove, Reason::nkservice:error()}.
+    {apply, apply_fun()}.
 
 -type status() ::
     init |
@@ -166,14 +164,6 @@ delete(Id, Reason) ->
     do_call(Id, {nkdomain_delete, Reason}).
 
 
-%%%% @doc
-%%-spec delete_childs(id(), nkservice:error()) ->
-%%    ok | {error, term()}.
-%%
-%%delete_childs(Id, Reason) ->
-%%    do_call(Id, {nkdomain_delete_childs, Reason}).
-
-
 %% @doc
 -spec unload(id(), nkservice:error()) ->
     ok | {error, term()}.
@@ -183,11 +173,11 @@ unload(Id, Reason) ->
 
 
 %% @doc
--spec set_enabled(id(), boolean()) ->
+-spec enable(id(), boolean()) ->
     ok | {error, term()}.
 
-set_enabled(Id, Enabled) when is_boolean(Enabled)->
-    async_op(Id, {set_enabled, Enabled}).
+enable(Id, Enabled) when is_boolean(Enabled)->
+    do_call(Id, {nkdomain_enable, Enabled}).
 
 
 %% @doc
@@ -333,7 +323,7 @@ init({SrvId, Obj, Meta}) ->
         status = init,
         meta = maps:without([srv_id, is_dirty, obj_id, parent_id, parent_pid], Meta),
         is_dirty = maps:get(is_dirty, Meta, false),
-        enabled = Enabled
+        is_enabled = Enabled
     },
     State1 = #state{
         obj_id = ObjId,
@@ -355,7 +345,9 @@ init({SrvId, Obj, Meta}) ->
     ?LLOG(info, "loaded (~p)", [self()], State2),
     gen_server:cast(self(), nkdomain_do_start),
     {ok, State3} = handle(object_init, [], State2),
-    {ok, State3}.
+    %% For just created objects, is_dirty will be true. For loaded objects, save does nothing
+    State4 = do_save(State3),
+    {ok, State4}.
 
 
 %% @private
@@ -402,17 +394,18 @@ handle_call({nkdomain_delete, Reason}, From, State) ->
             reply({error, Error}, State2)
     end;
 
-%%handle_call({nkdomain_delete_childs, Reason}, From, #state{srv_id=SrvId, obj_id=ObjId}=State) ->
-%%    case SrvId:object_store_find_childs(SrvId, ObjId, #{size=>0}) of
-%%        {ok, 0, []} ->
-%%            State2 = do_delete(Reason, State),
-%%            gen_server:reply(From, ok),
-%%            do_stop(object_deleted, State2);
-%%        {ok, _N, []} ->
-%%            reply({error, object_has_childs}, State);
-%%        {error, Error} ->
-%%            reply({error, Error}, State)
-%%    end;
+handle_call({nkdomain_enable, Enable}, _From, #state{session=#obj_session{obj=Obj}}=State) ->
+    case maps:get(enabled, Obj, true) of
+        Enable ->
+            reply(ok, State);
+        _ ->
+            case do_update(#{enabled=>Enable}, State) of
+                {ok, State2} ->
+                    reply(ok, do_enabled(Enable, State2));
+                {error, Error, State2} ->
+                    reply({error, Error}, State2)
+            end
+    end;
 
 handle_call({nkdomain_sync_op, Op}, From, State) ->
     case is_stopped(State) of
@@ -471,12 +464,11 @@ handle_call(Msg, From, State) ->
 
 handle_cast(nkdomain_do_start, State) ->
     {ok, State2} = handle(object_start, [], State),
-    State3 = do_save(State2),
-    case do_check_expire(State3) of
+    case do_check_expire(State2) of
         false ->
-            noreply(do_event(loaded, State3));
+            noreply(do_event(loaded, State2));
         true ->
-            do_stop(object_expired, State3)
+            do_stop(object_expired, State2)
     end;
 
 handle_cast({nkdomain_add_timelog, Data}, State) ->
@@ -653,19 +645,6 @@ do_sync_op(Op, _From, State) ->
 
 
 %% @private
-do_async_op({set_enabled, Enabled}, #state{session=#obj_session{obj=Obj}}=State) ->
-    State2 = case maps:get(enabled, Obj, true) of
-        Enabled ->
-            State;
-        _ ->
-            ?DEBUG("setting enabled to: ~p", [Enabled], State),
-            case do_update(#{enabled=>Enabled}, State) of
-                {ok, UpdateState} -> UpdateState;
-                {error, _Error, UpdateState} -> UpdateState
-            end
-    end,
-    noreply(do_enabled(Enabled, State2));
-
 do_async_op({apply, Fun}, #state{session=Session}=State) ->
     State2 = try Fun(Session) of
         {ok, _Reply} ->
@@ -849,7 +828,7 @@ do_check_child(ChildType, ChildPath, Meta, State) ->
                     Meta2 = Meta#{
                         parent_id => ParentId,
                         parent_pid => self(),
-                        enabled => Session#obj_session.enabled
+                        enabled => Session#obj_session.is_enabled
                     },
                     {ok, ChildName, Meta2}
             end;
@@ -884,8 +863,8 @@ do_update(Update, #state{srv_id=SrvId, session=Session}=State) ->
                     {ok, State};
                 Obj2 ->
                     Session2 = Session#obj_session{obj=Obj2, is_dirty=true},
-                    {ok, State2} = handle(object_updated, [Update], State#state{session=Session2}),
-                    State3 = do_save(State2),
+                    State2 = do_save(State#state{session=Session2}),
+                    {ok, State3} = handle(object_updated, [Update], State2),
                     {ok, do_event({updated, Update}, State3)}
             end;
         {error, Error} ->
@@ -894,7 +873,7 @@ do_update(Update, #state{srv_id=SrvId, session=Session}=State) ->
 
 
 %% @private
-do_enabled(Enabled, #state{session=#obj_session{enabled=Enabled}}=State) ->
+do_enabled(Enabled, #state{session=#obj_session{is_enabled=Enabled}}=State) ->
     State;
 
 do_enabled(false, State) ->
@@ -911,7 +890,7 @@ do_enabled(true, #state{session=#obj_session{obj=Obj}}=State) ->
 
 %% @private
 do_set_enabled(Enabled, #state{session=Session, childs=Childs}=State) ->
-    Session2 = Session#obj_session{enabled=Enabled},
+    Session2 = Session#obj_session{is_enabled=Enabled},
     {ok, State2} = handle(object_enabled, [], State#state{session=Session2}),
     lists:foreach(
         fun(#child{pid=Pid}) -> gen_server:cast(Pid, {nkdomain_parent_enabled, Enabled}) end,
