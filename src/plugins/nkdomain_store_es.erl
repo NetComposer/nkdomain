@@ -337,7 +337,7 @@ delete_obj(SrvId, ObjId) ->
 
 find_obj_id(SrvId, ObjId) ->
     Query = query_filter(#{term => #{obj_id => ObjId}}),
-    case search_objs(SrvId, Query, #{}) of
+    case do_search_objs(SrvId, Query, #{}) of
         {ok, 0, []} ->
             {error, object_not_found};
         {ok, 1, [{Type, _ObjId, Path}]} ->
@@ -356,7 +356,7 @@ find_path(SrvId, Path) ->
     case nkdomain_util:is_path(Path) of
         {true, Path2} ->
             Query = query_filter(#{term => #{path => Path2}}),
-            case search_objs(SrvId, Query, #{}) of
+            case do_search_objs(SrvId, Query, #{}) of
                 {ok, 0, []} ->
                     {error, object_not_found};
                 {ok, 1, [{Type, ObjId, _Path}]} ->
@@ -378,7 +378,7 @@ find_all_types(SrvId, Path, Opts) ->
     case path_filter(Path) of
         {ok, Filter} ->
             Query = query_filter(Filter),
-            search_types(SrvId, Query, Opts);
+            do_search_types(SrvId, Query, Opts);
         {error, Error} ->
             {error, Error}
     end.
@@ -390,7 +390,7 @@ find_all_types(SrvId, Path, Opts) ->
 
 find_types(SrvId, ObjId, Opts) ->
     Query = query_filter(#{term => #{parent_id => ObjId}}),
-    search_types(SrvId, Query, Opts).
+    do_search_types(SrvId, Query, Opts).
 
 
 %% @doc Finds all objects on a path
@@ -404,7 +404,7 @@ find_obj_childs(SrvId, ParentId, Opts) ->
         find_objs_filter(Opts)
     ],
     Query = query_filter(Filter),
-    search_objs(SrvId, Query, Opts).
+    do_search_objs(SrvId, Query, Opts).
 
 
 %% @doc Finds all objects on a path
@@ -415,7 +415,7 @@ find_obj_all_childs(SrvId, Path, Opts) ->
     case path_filter(Path) of
         {ok, Filter} ->
             Query = query_filter([Filter | find_objs_filter(Opts)]),
-            search_objs(SrvId, Query, Opts);
+            do_search_objs(SrvId, Query, Opts);
         {error, Error} ->
             {error, Error}
     end.
@@ -430,7 +430,11 @@ find_obj_alias(SrvId, Alias) ->
     Filter = [
         #{term => #{aliases => nklib_util:to_binary(Alias)}}
     ],
-    search_objs(SrvId, query_filter(Filter), #{}).
+    do_search_objs(SrvId, query_filter(Filter), #{}).
+
+
+
+
 
 
 %% @doc Finds all referred objects
@@ -444,13 +448,13 @@ find_referred(SrvId, ObjId, Opts) ->
         find_objs_filter(Opts)
     ],
     Query = query_filter(Filter),
-    search_objs(SrvId, Query, Opts).
+    do_search_objs(SrvId, Query, Opts).
 
 
 %% @doc Archive an object
 archive_find(SrvId, Id, Spec) ->
     Query = query_id(Id),
-    case search_archive(SrvId, Query, Spec) of
+    case do_search_archive(SrvId, Query, Spec) of
         {ok, N, List, _Aggs, _Meta} ->
             {ok, N, List};
         {error, Error} ->
@@ -645,8 +649,8 @@ query_id(Id) ->
 
 
 %% @private
-search_objs(SrvId, Query, Opts) ->
-    case search(SrvId, Query, Opts) of
+do_search_objs(SrvId, Query, Opts) ->
+    case do_search(SrvId, Query, Opts) of
         {ok, N, Data, _Aggs, _Meta} ->
             {ok, N, Data};
         {error, Error} ->
@@ -655,7 +659,7 @@ search_objs(SrvId, Query, Opts) ->
 
 
 %% @private
-search_types(SrvId, Query, Opts) ->
+do_search_types(SrvId, Query, Opts) ->
     Opts2 = Opts#{
         aggs => #{
             types => #{
@@ -666,7 +670,7 @@ search_types(SrvId, Query, Opts) ->
         },
         size => 0
     },
-    case search(SrvId, Query, Opts2) of
+    case do_search(SrvId, Query, Opts2) of
         {ok, N, [], #{<<"types">>:=Types}, _Meta} ->
             Data = lists:map(
                 fun(#{<<"key">>:=Key, <<"doc_count">>:=Count}) -> {Key, Count} end,
@@ -680,7 +684,7 @@ search_types(SrvId, Query, Opts) ->
 
 
 %% @private
-search(SrvId, Query, Opts) ->
+do_search(SrvId, Query, Opts) ->
     Opts2 = Opts#{
         fields => [<<"type">>, <<"path">>]
     },
@@ -716,7 +720,7 @@ search(SrvId, Query, Opts) ->
 
 
 %% @private
-search_archive(SrvId, Query, Opts) ->
+do_search_archive(SrvId, Query, Opts) ->
     #es_config{archive_index=Index, type=IdxType} = SrvId:config_nkdomain_store_es(),
     case nkelastic_api:search(SrvId, <<Index/binary, $*>>, IdxType, Query, Opts) of
         {ok, N, List, Aggs, Meta} ->
