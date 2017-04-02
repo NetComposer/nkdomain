@@ -177,7 +177,7 @@ test_session(Pid) ->
     timer:sleep(2100),
     false = is_process_alive(SPid),
     {error, object_not_found} = nkdomain:find(root, SessId),
-    {ok, 1, [S2]} = nkdomain_obj_lib:find_archive(root, SessId),
+    {1, [S2]} = find_archive(SessId),
     #{
         <<"obj_id">>:=SessId,
         <<"destroyed_time">>:= T1,
@@ -206,12 +206,12 @@ test_session2(Pid) ->
     {error, object_has_childs} = nkdomain_obj:delete(<<"admin">>, wont_work),
 
     % If we force a clean of the database, the stale object is deleted and archived
-    {ok, #{active:=1}} = nkdomain_store:clean(root),
+    {ok, #{active:=N}} = nkdomain_store:clean(root),
+    true = N >= 1,
     {error, object_not_found} = nkdomain:find(root, SessId),
     % Archive has a 1-second refresh time
     timer:sleep(1100),
-    {ok, 1, [#{<<"destroyed_code">>:=<<"object_clean_process">>}]} =
-        nkdomain_obj_lib:find_archive(root, SessId),
+    {1, [#{<<"destroyed_code">>:=<<"object_clean_process">>}]} = find_archive(SessId),
     ok.
 
 
@@ -223,10 +223,8 @@ test_delete(Pid) ->
         cmd(Pid, user, delete, #{id=> <<"/users/tuser1">>}),
 
     timer:sleep(1100),
-    {ok, 1, [#{<<"path">>:=<<"/users/tuser1">>}]} =
-        nkdomain_obj_lib:find_archive(root, ObjId),
-    {ok, _N, [#{<<"path">>:=<<"/users/tuser1">>}|_]} =
-        nkdomain_obj_lib:find_archive(root, <<"/users/tuser1">>),
+    {1, [#{<<"path">>:=<<"/users/tuser1">>}]} = find_archive(ObjId),
+    {_N, [#{<<"path">>:=<<"/users/tuser1">>}|_]} = find_archive(<<"/users/tuser1">>),
     ok.
 
 
@@ -416,6 +414,10 @@ remove_data() ->
             ok
     end.
 
+
+find_archive(Id) ->
+    {ok, N, Data, _, _} = nkdomain_store:find_archive(root, #{filters=>#{id=>Id}, fields=><<"_all">>}),
+    {N, Data}.
 
 
 login(User, Pass) ->

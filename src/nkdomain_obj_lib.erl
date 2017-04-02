@@ -27,7 +27,6 @@
 
 -export([find/2, load/3, create/3]).
 -export([make_obj/4, make_and_create/4, archive/3, delete/3, delete_all_childs/2]).
--export([find_archive/2]).
 -export([do_find/1, do_call/2, do_call/3, do_cast/2, do_info/2]).
 
 -include("nkdomain.hrl").
@@ -364,15 +363,6 @@ delete_all_childs(Srv, Id) ->
     end.
 
 
-
-%% @private
-find_archive(Srv, IdOrPath) ->
-    case nkservice_srv:get_srv_id(Srv) of
-        {ok, SrvId} ->
-            SrvId:object_store_archive_find(SrvId, IdOrPath, #{fields=><<"_all">>});
-        not_found ->
-            {error, service_not_found}
-    end.
 
 
 %% ===================================================================

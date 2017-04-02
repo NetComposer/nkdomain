@@ -26,11 +26,11 @@
 -export([object_store_reload_types/1, object_store_read_raw/2, object_store_save_raw/3,
          object_store_delete_raw/2]).
 -export([object_store_find_obj_id/2, object_store_find_path/2,
-         object_store_find_types/2, object_store_find_all_types/2,
+         object_store_find_types/3, object_store_find_all_types/3,
          object_store_find_childs/3, object_store_find_all_childs/3,
-         object_store_find_alias/2, object_store_find_referred/3,
-         object_store_delete_all_childs/3]).
--export([object_store_archive_find/3, object_store_archive_save_raw/3, object_store_clean/1]).
+         object_store_find_alias/2, object_store_delete_all_childs/3,
+         object_store_find/2]).
+-export([object_store_archive_find/2, object_store_archive_save_raw/3, object_store_clean/1]).
 -export([elastic_get_indices/2, elastic_get_mappings/3, elastic_get_aliases/3,
          elastic_get_templates/2]).
 -export([reload_types/1, remove_index/1]).
@@ -145,8 +145,8 @@ object_store_delete_raw(SrvId, ObjId) ->
 
 
 %% @doc
-object_store_archive_find(SrvId, ObjId, Spec) ->
-    archive_find(SrvId, ObjId, Spec).
+object_store_archive_find(SrvId, Spec) ->
+    archive_find(SrvId, Spec).
 
 
 %% @doc
@@ -175,23 +175,18 @@ object_store_find_alias(SrvId, Alias) ->
 
 
 %% @doc
-object_store_find_referred(SrvId, ObjId, Spec) ->
-    find_referred(SrvId, ObjId, Spec).
+object_store_find_types(SrvId, ObjId, Spec) ->
+    find_types(SrvId, ObjId, Spec).
 
 
 %% @doc
-object_store_find_types(SrvId, ObjId) ->
-    find_types(SrvId, ObjId, #{}).
+object_store_find_all_types(SrvId, ObjId, Spec) ->
+    find_all_types(SrvId, ObjId, Spec).
 
 
 %% @doc
-object_store_find_all_types(SrvId, ObjId) ->
-    find_all_types(SrvId, ObjId, #{}).
-
-
-%% @doc
-object_store_find_childs(SrvId, ObjId, Opts) ->
-    find_obj_childs(SrvId, ObjId, Opts).
+object_store_find_childs(SrvId, ObjId, Spec) ->
+    find_obj_childs(SrvId, ObjId, Spec).
 
 
 %% @doc
@@ -202,6 +197,11 @@ object_store_find_all_childs(SrvId, Path, Spec) ->
 %% @doc
 object_store_delete_all_childs(SrvId, Path, Spec) ->
     delete_obj_all_childs(SrvId, Path, Spec).
+
+
+%% @doc
+object_store_find(SrvId, Spec) ->
+    find(SrvId, Spec).
 
 
 %% @doc
@@ -370,14 +370,13 @@ find_path(SrvId, Path) ->
     end.
 
 
-%% @doc Finds all types
--spec find_all_types(nkservice:id(), nkdomain:path(), nkelastic_api:search_opts()) ->
+%% @doc Finds types
+-spec find_types(nkservice:id(), nkdomain:obj_id(), nkelastic_api:search_opts()) ->
     {ok, integer(), [{nkdomain:type(), nkdomain:obj_id(), nkdomain:path()}]}.
 
-find_all_types(SrvId, Path, Opts) ->
-    case path_filter(Path) of
-        {ok, Filter} ->
-            Query = query_filter(Filter),
+find_types(SrvId, ObjId, Opts) ->
+    case query_filters(#{parent_id=>ObjId}, Opts) of
+        {ok, Query} ->
             do_search_types(SrvId, Query, Opts);
         {error, Error} ->
             {error, Error}
@@ -385,12 +384,16 @@ find_all_types(SrvId, Path, Opts) ->
 
 
 %% @doc Finds all types
--spec find_types(nkservice:id(), nkdomain:obj_id(), nkelastic_api:search_opts()) ->
+-spec find_all_types(nkservice:id(), nkdomain:path(), nkelastic_api:search_opts()) ->
     {ok, integer(), [{nkdomain:type(), nkdomain:obj_id(), nkdomain:path()}]}.
 
-find_types(SrvId, ObjId, Opts) ->
-    Query = query_filter(#{term => #{parent_id => ObjId}}),
-    do_search_types(SrvId, Query, Opts).
+find_all_types(SrvId, Path, Opts) ->
+    case query_filters(#{childs_of=>Path}, Opts) of
+        {ok, Query} ->
+            do_search_types(SrvId, Query, Opts);
+        {error, Error} ->
+            {error, Error}
+    end.
 
 
 %% @doc Finds all objects on a path
@@ -399,12 +402,12 @@ find_types(SrvId, ObjId, Opts) ->
     {ok, integer(), [{nkdomain:type(), nkdomain:obj_id(), nkdomain:path()}]}.
 
 find_obj_childs(SrvId, ParentId, Opts) ->
-    Filter = [
-        #{term => #{parent_id => ParentId}} |
-        find_objs_filter(Opts)
-    ],
-    Query = query_filter(Filter),
-    do_search_objs(SrvId, Query, Opts).
+    case query_filters(#{parent_id=>ParentId}, Opts) of
+        {ok, Query} ->
+            do_search_objs(SrvId, Query, Opts);
+        {error, Error} ->
+            {error, Error}
+    end.
 
 
 %% @doc Finds all objects on a path
@@ -412,9 +415,8 @@ find_obj_childs(SrvId, ParentId, Opts) ->
     {ok, integer(), [{nkdomain:type(), nkdomain:obj_id()}]}.
 
 find_obj_all_childs(SrvId, Path, Opts) ->
-    case path_filter(Path) of
-        {ok, Filter} ->
-            Query = query_filter([Filter | find_objs_filter(Opts)]),
+    case query_filters(#{childs_of=>Path}, Opts) of
+        {ok, Query} ->
             do_search_objs(SrvId, Query, Opts);
         {error, Error} ->
             {error, Error}
@@ -427,36 +429,44 @@ find_obj_all_childs(SrvId, Path, Opts) ->
     {error, object_not_found}.
 
 find_obj_alias(SrvId, Alias) ->
-    Filter = [
-        #{term => #{aliases => nklib_util:to_binary(Alias)}}
-    ],
-    do_search_objs(SrvId, query_filter(Filter), #{}).
+    case query_filters(#{aliases=>Alias}, #{}) of
+        {ok, Query} ->
+            do_search_objs(SrvId, Query, #{});
+        {error, Error} ->
+            {error, Error}
+    end.
 
 
+%% @doc Generic find
+-spec find(nkservice:id(), map()) ->
+    {ok, integer(), [map()], map(), map()} |
+    {error, object_not_found}.
 
+find(SrvId, Spec) ->
+    case query_filters(#{}, Spec) of
+        {ok, Query} ->
+            case do_search2(SrvId, Query, Spec) of
+                {ok, N, Data, _Aggs, Meta} ->
+                    {ok, N, Data, Meta};
+                {error, Error} ->
+                    {error, Error}
+            end;
+        {error, Error} ->
+            {error, Error}
+    end.
 
-
-
-%% @doc Finds all referred objects
--spec find_referred(nkservice:id(), nkdomain:obj_id(),
-    nkelastic_api:search_opts() | #{type:=nkdomain:type()}) ->
-    {ok, integer(), [{nkdomain:type(), nkdomain:obj_id(), nkdomain:path()}]}.
-
-find_referred(SrvId, ObjId, Opts) ->
-    Filter = [
-        #{term => #{referred_id => ObjId}} |
-        find_objs_filter(Opts)
-    ],
-    Query = query_filter(Filter),
-    do_search_objs(SrvId, Query, Opts).
 
 
 %% @doc Archive an object
-archive_find(SrvId, Id, Spec) ->
-    Query = query_id(Id),
-    case do_search_archive(SrvId, Query, Spec) of
-        {ok, N, List, _Aggs, _Meta} ->
-            {ok, N, List};
+archive_find(SrvId, Opts) ->
+    case query_filters(#{}, Opts) of
+        {ok, Query} ->
+            case do_search_archive(SrvId, Query, Opts) of
+                {ok, N, Data, _Aggs, Meta} ->
+                    {ok, N, Data, Meta};
+                {error, Error} ->
+                    {error, Error}
+            end;
         {error, Error} ->
             {error, Error}
     end.
@@ -480,9 +490,8 @@ archive_save_obj(SrvId, #{obj_id:=ObjId}=Store) ->
     {ok, integer(), [{nkdomain:type(), nkdomain:obj_id()}]}.
 
 delete_obj_all_childs(SrvId, Path, Opts) ->
-    case path_filter(Path) of
-        {ok, Filter} ->
-            Query = query_filter([Filter | find_objs_filter(Opts)]),
+    case query_filters(#{childs_of=>Path}, Opts) of
+        {ok, Query} ->
             Opts2 = Opts#{fields=>[<<"path">>], sort=>[#{<<"path">> => #{order=>desc}}]},
             Fun = fun(#{<<"obj_id">>:=ObjId, <<"path">>:=ObjPath}, Acc) ->
                 lager:notice("Deleting ~s (~s)", [ObjPath, ObjId]),
@@ -599,26 +608,67 @@ get_templates(SrvId) ->
     }.
 
 
-%% @private
-find_objs_filter(Opts) ->
-    lists:flatten([
-        case Opts of
-            #{type:=Type} -> #{term => #{type => Type}};
-            _ -> []
-        end
-    ]).
-
 
 %% @private
-path_filter(Path) ->
-    case nkdomain_util:is_path(Path) of
-        {true, <<"/">>} ->
-            {ok, #{wildcard => #{path => <<"/?*">>}}};
-        {true, Path2} ->
-            {ok, #{prefix => #{path => <<Path2/binary, $/>>}}};
-        false ->
-            {error, invalid_path}
+query_filters(AddFilters, Opts) ->
+    Filters1 = maps:get(filters, Opts, #{}),
+    Filters2 = maps:merge(Filters1, AddFilters),
+    case get_filters(maps:to_list(Filters2), []) of
+        {ok, [EsFilter]} ->
+            {ok, #{
+                constant_score => #{
+                    filter => EsFilter
+                }
+            }};
+        {ok, EsFilters} ->
+            {ok, #{
+                bool => #{
+                    filter => EsFilters
+                }
+            }};
+        {error, Error} ->
+            {error, Error}
     end.
+
+
+%% @private
+get_filters([], Acc) ->
+    {ok, Acc};
+
+get_filters([{Field, Value}|Rest], Acc) ->
+    Filter = case Field of
+        id ->
+            case nkdomain_util:is_path(Value) of
+                {true, Path} ->
+                    #{term => #{path => Path}};
+                false ->
+                    term_filter(obj_id, Value)
+            end;
+        childs_of ->
+            case nkdomain_util:is_path(Value) of
+                {true, <<"/">>} ->
+                    #{wildcard => #{path => <<"/?*">>}};
+                {true, Path} ->
+                    #{prefix => #{path => <<Path/binary, $/>>}};
+                false ->
+                    {error, invalid_path}
+            end;
+        created_range ->
+            {D1, D2} = Value,
+            #{range => #{created_time => #{gte=>D1, lte=>D2}}};
+        _ ->
+            term_filter(Field, Value)
+    end,
+    get_filters(Rest, [Filter|Acc]).
+
+
+%% @private
+term_filter(Key, Id) when is_atom(Id); is_binary(Id) ->
+    #{term => #{Key => Id}};
+term_filter(Key, [Num|_]=List) when is_integer(Num) ->
+    term_filter(Key, list_to_binary(List));
+term_filter(Key, List) when is_list(List) ->
+    #{terms => #{Key => [nklib_util:to_binary(Val) || Val<-List]}}.
 
 
 %% @private
@@ -637,22 +687,30 @@ query_filter(Filter) ->
     }.
 
 
-%% @private
-query_id(Id) ->
-    Filter = case nkdomain_util:is_path(Id) of
-        {true, Path} ->
-            #{term => #{path => Path}};
-        false ->
-            #{term => #{obj_id => Id}}
-    end,
-    query_filter(Filter).
+%%%% @private
+%%query_id(Id) ->
+%%    Filter = case nkdomain_util:is_path(Id) of
+%%        {true, Path} ->
+%%            #{term => #{path => Path}};
+%%        false ->
+%%            #{term => #{obj_id => Id}}
+%%    end,
+%%    query_filter(Filter).
 
 
 %% @private
 do_search_objs(SrvId, Query, Opts) ->
-    case do_search(SrvId, Query, Opts) of
+    Opts2 = Opts#{
+        fields => [<<"type">>, <<"path">>]
+    },
+    case do_search2(SrvId, Query, Opts2) of
         {ok, N, Data, _Aggs, _Meta} ->
-            {ok, N, Data};
+            Data2 = lists:map(
+                fun(#{<<"obj_id">>:=ObjId, <<"type">>:=Type, <<"path">>:=Path}) ->
+                    {Type, ObjId, Path}
+                end,
+                Data),
+            {ok, N, Data2};
         {error, Error} ->
             {error, Error}
     end.
@@ -670,7 +728,7 @@ do_search_types(SrvId, Query, Opts) ->
         },
         size => 0
     },
-    case do_search(SrvId, Query, Opts2) of
+    case do_search2(SrvId, Query, Opts2) of
         {ok, N, [], #{<<"types">>:=Types}, _Meta} ->
             Data = lists:map(
                 fun(#{<<"key">>:=Key, <<"doc_count">>:=Count}) -> {Key, Count} end,
@@ -683,19 +741,38 @@ do_search_types(SrvId, Query, Opts) ->
     end.
 
 
-%% @private
-do_search(SrvId, Query, Opts) ->
-    Opts2 = Opts#{
-        fields => [<<"type">>, <<"path">>]
-    },
-    #es_config{index=Index, type=IdxType} = SrvId:config_nkdomain_store_es(),
+%%%% @private
+%%do_search(SrvId, Query, Opts) ->
+%%    Opts2 = Opts#{
+%%        fields => [<<"type">>, <<"path">>]
+%%    },
+%%    #es_config{index=Index, type=IdxType} = SrvId:config_nkdomain_store_es(),
+%%    case nkelastic_api:search(SrvId, Index, IdxType, Query, Opts2) of
+%%        {ok, N, List, Aggs, Meta} ->
+%%            Data = lists:map(
+%%                fun(#{<<"_id">>:=ObjId, <<"_source">>:=Source}) ->
+%%                    #{<<"type">>:=Type, <<"path">>:=Path} = Source,
+%%                    {Type, ObjId, Path}
+%%                end,
+%%                List),
+%%            {ok, N, Data, Aggs, Meta};
+%%        {error, search_error} ->
+%%            {ok, 0, [], #{}, #{error=>search_error}};
+%%        {error, Error} ->
+%%            ?LLOG(notice, "Error calling search (~p, ~p): ~p", [Query, Opts, Error]),
+%%            {ok, 0, [], #{}, #{}}
+%%    end.
 
-    case nkelastic_api:search(SrvId, Index, IdxType, Query, Opts2) of
+
+%% @private
+do_search2(SrvId, Query, Opts) ->
+    #es_config{index=Index, type=IdxType} = SrvId:config_nkdomain_store_es(),
+    case nkelastic_api:search(SrvId, Index, IdxType, Query, Opts) of
         {ok, N, List, Aggs, Meta} ->
             Data = lists:map(
-                fun(#{<<"_id">>:=ObjId, <<"_source">>:=Source}) ->
-                    #{<<"type">>:=Type, <<"path">>:=Path} = Source,
-                    {Type, ObjId, Path}
+                fun(#{<<"_id">>:=ObjId}=D) ->
+                    Source = maps:get(<<"_source">>, D, {}),
+                    Source#{<<"obj_id">>=>ObjId}
                 end,
                 List),
             {ok, N, Data, Aggs, Meta};
@@ -705,6 +782,7 @@ do_search(SrvId, Query, Opts) ->
             ?LLOG(notice, "Error calling search (~p, ~p): ~p", [Query, Opts, Error]),
             {ok, 0, [], #{}, #{}}
     end.
+
 
 
 %%%% @private
@@ -726,8 +804,8 @@ do_search_archive(SrvId, Query, Opts) ->
         {ok, N, List, Aggs, Meta} ->
             Data = lists:map(
                 fun(#{<<"_index">>:=Idx, <<"_id">>:=ObjId}=D) ->
-                    Base = maps:get(<<"_source">>, D, #{}),
-                    Base#{<<"_store_index">>=>Idx, <<"obj_id">>=>ObjId}
+                    Source = maps:get(<<"_source">>, D, #{}),
+                    Source#{<<"_store_index">>=>Idx, <<"obj_id">>=>ObjId}
                 end,
                 List),
             {ok, N, Data, Aggs, Meta};

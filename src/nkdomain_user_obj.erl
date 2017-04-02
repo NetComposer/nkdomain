@@ -98,6 +98,7 @@ login(SrvId, Login, Opts) ->
     end.
 
 %% @doc
+%% TODO: change
 find_referred(Srv, Id, Spec) ->
     case nkdomain_obj_lib:find(Srv, Id) of
         #obj_id_ext{srv_id=SrvId, obj_id=ObjId} ->

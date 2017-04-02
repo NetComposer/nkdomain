@@ -34,13 +34,12 @@
          object_handle_call/3, object_handle_cast/2, object_handle_info/2]).
 -export([object_store_reload_types/1, object_store_read_raw/2, object_store_save_raw/3,
          object_store_delete_raw/2,
-         object_store_archive_find/3, object_store_archive_save_raw/3]).
+         object_store_archive_find/2, object_store_archive_save_raw/3]).
 -export([object_store_find_obj_id/2, object_store_find_path/2,
-         object_store_find_types/2, object_store_find_all_types/2,
+         object_store_find_types/3, object_store_find_all_types/3,
          object_store_find_childs/3, object_store_find_all_childs/3,
-         object_store_find_alias/2, object_store_find_referred/3,
-         object_store_delete_all_childs/3,
-         object_store_clean/1]).
+         object_store_find_alias/2, object_store_delete_all_childs/3,
+         object_store_find/2, object_store_clean/1]).
 
 -define(LLOG(Type, Txt, Args), lager:Type("NkDOMAIN Callbacks: "++Txt, Args)).
 
@@ -534,18 +533,18 @@ object_store_find_path(_SrvId, _Path) ->
 
 
 %% @doc
--spec object_store_find_types(nkservice:id(), nkdomain:obj_id()) ->
+-spec object_store_find_types(nkservice:id(), nkdomain:obj_id(), map()) ->
     {ok, Total::integer(), [{nkdomain:type(), integer()}]} | {error, term()}.
 
-object_store_find_types(_SrvId, _ObjId) ->
+object_store_find_types(_SrvId, _ObjId, _Spec) ->
     {error, store_not_implemented}.
 
 
 %% @doc
--spec object_store_find_all_types(nkservice:id(), nkdomain:path()) ->
+-spec object_store_find_all_types(nkservice:id(), nkdomain:path(), map()) ->
     {ok, Total::integer(), [{nkdomain:type(), integer()}]} | {error, term()}.
 
-object_store_find_all_types(_SrvId, _ObjId) ->
+object_store_find_all_types(_SrvId, _ObjId, _Spec) ->
     {error, store_not_implemented}.
 
 
@@ -577,19 +576,19 @@ object_store_find_alias(_SrvId, _Alias) ->
 
 
 %% @doc
--spec object_store_find_referred(nkservice:id(), nkdomain:obj_id(), Spec::map()) ->
-    {ok, Total::integer(), [{nkdomain:type(), nkdomain:obj_id(), nkdomain:path()}]} |
+-spec object_store_find(nkservice:id(), map()) ->
+    {ok, Total::integer(), [map()], map(), map()} |
     {error, term()}.
 
-object_store_find_referred(_SrvId, _ObjId, _Spec) ->
+object_store_find(_SrvId, _Spec) ->
     {error, store_not_implemented}.
 
 
 %% @doc
--spec object_store_archive_find(nkservice:id(), nkdomain:obj_id(), Spec::map()) ->
+-spec object_store_archive_find(nkservice:id(), Spec::map()) ->
     {ok, integer(), [map()]} | {error, term()}.
 
-object_store_archive_find(_SrvId, _IdOrPath, _Spec) ->
+object_store_archive_find(_SrvId, _Spec) ->
     {error, store_not_implemented}.
 
 

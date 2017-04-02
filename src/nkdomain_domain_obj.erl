@@ -54,7 +54,7 @@ create(Srv, Parent, Name, Desc) ->
 find_types(Srv, Id) ->
     case nkdomain_obj_lib:find(Srv, Id) of
         #obj_id_ext{srv_id=SrvId, obj_id=ObjId} ->
-            SrvId:object_store_find_types(SrvId, ObjId);
+            SrvId:object_store_find_types(SrvId, ObjId, #{});
         {error, Error} ->
             {error, Error}
     end.
@@ -64,7 +64,7 @@ find_types(Srv, Id) ->
 find_all_types(Srv, Id) ->
     case nkdomain_obj_lib:find(Srv, Id) of
         #obj_id_ext{srv_id=SrvId, path=Path} ->
-            SrvId:object_store_find_all_types(SrvId, Path);
+            SrvId:object_store_find_all_types(SrvId, Path, #{});
         {error, Error} ->
             {error, Error}
     end.

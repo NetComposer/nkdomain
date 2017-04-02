@@ -23,7 +23,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -behaviour(gen_server).
 
--export([save/3, delete/2, archive/3, clean/1]).
+-export([save/3, delete/2, archive/3, find/2, find_archive/2, clean/1]).
 -export([get_data/0, start_link/0]).
 -export([init/1, terminate/2, code_change/3, handle_call/3,
          handle_cast/2, handle_info/2]).
@@ -117,6 +117,26 @@ archive(Srv, ObjId, Obj) ->
 %% @private
 wait_remove_op(SrvId, ObjId) ->
     _ = gen_server:call(?MODULE, {remove_op, SrvId, ObjId}, 60000).
+
+
+%% @doc
+find(Srv, Spec) ->
+    case nkservice_srv:get_srv_id(Srv) of
+        {ok, SrvId} ->
+            SrvId:object_store_find(SrvId, Spec);
+        not_found ->
+            {error, service_not_found}
+    end.
+
+
+%% @private
+find_archive(Srv, Spec) ->
+    case nkservice_srv:get_srv_id(Srv) of
+        {ok, SrvId} ->
+            SrvId:object_store_archive_find(SrvId, Spec);
+        not_found ->
+            {error, service_not_found}
+    end.
 
 
 %% @private Performs a periodic cleanup
