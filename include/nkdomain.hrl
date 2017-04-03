@@ -60,6 +60,7 @@
 -define(DOMAIN_DOMAIN, <<"domain">>).
 -define(DOMAIN_SESSION, <<"session">>).
 -define(DOMAIN_TOKEN, <<"token">>).
+-define(DOMAIN_CONFIG, <<"config">>).
 
 
 -endif.

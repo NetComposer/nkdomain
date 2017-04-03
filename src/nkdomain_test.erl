@@ -116,9 +116,20 @@ session_get() ->
     cmd(session, get, #{}).
 
 
+config_create(Sub, Parent, Config) ->
+    cmd(config, create, #{subtype=>Sub, parent=>Parent, config=>Config}).
 
+config_get(Id) ->
+    cmd(config, get, #{id=>Id}).
 
+config_update(Id, Config) ->
+    cmd(config, update, #{id=>Id, config=>Config}).
 
+config_delete(Id, Reason) ->
+    cmd(config, update, #{id=>Id, reason=>Reason}).
+
+config_find(SubType, Parent) ->
+    cmd(config, find, #{parent=>Parent, subtype=>SubType}).
 
 
 %% ===================================================================

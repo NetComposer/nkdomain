@@ -73,7 +73,7 @@ make_obj(Srv, Parent, Type, Opts) ->
                     <<Type2/binary, $-, (nklib_util:luid())/binary>>
             end,
             Name1 = case Opts of
-                #{name:=Name0} ->
+                #{name:=Name0} when is_binary(Name0), byte_size(Name0) > 0 ->
                     nkdomain_util:name(Name0);
                 _ ->
                     ObjId
@@ -103,6 +103,12 @@ make_obj(Srv, Parent, Type, Opts) ->
                 case Opts of
                     #{description:=Description} ->
                         {description, Description};
+                    _ ->
+                        []
+                end,
+                case Opts of
+                    #{subtype:=SubType} ->
+                        {subtype, SubType};
                     _ ->
                         []
                 end,
@@ -142,6 +148,7 @@ make_obj(Srv, Parent, Type, Opts) ->
 make_and_create(Srv, Parent, Type, Opts) ->
     case make_obj(Srv, Parent, Type, Opts) of
         {ok, Obj} ->
+            %% lager:warning("Obj: ~p", [Obj]),
             case nkdomain_obj_lib:create(Srv, Obj, #{}) of
                 #obj_id_ext{type=Type, obj_id=ObjId, path=Path, pid=Pid} ->
                     {ok, ObjId, Path, Pid};
@@ -355,9 +362,9 @@ delete(Srv, Id, Reason) ->
 
 %% @doc
 delete_all_childs(Srv, Id) ->
-    case nkservice_srv:get_srv_id(Srv) of
-        {ok, SrvId} ->
-            SrvId:object_store_delete_all_childs(SrvId, Id, #{});
+    case nkdomain_obj_lib:find(Srv, Id) of
+        #obj_id_ext{srv_id=SrvId, path=Path} ->
+            SrvId:object_store_delete_all_childs(SrvId, Path, #{});
         not_found ->
             {error, service_not_found}
     end.

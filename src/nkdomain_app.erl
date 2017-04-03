@@ -126,7 +126,8 @@ stop(_) ->
 register_types() ->
     ok = nkdomain_types:register_type(nkdomain_domain_obj, ?DOMAIN_DOMAIN),
     ok = nkdomain_types:register_type(nkdomain_user_obj, ?DOMAIN_USER),
-    ok = nkdomain_types:register_type(nkdomain_session_obj, ?DOMAIN_SESSION).
+    ok = nkdomain_types:register_type(nkdomain_session_obj, ?DOMAIN_SESSION),
+    ok = nkdomain_types:register_type(nkdomain_config_obj, ?DOMAIN_CONFIG).
 
 
 %% @doc gets a configuration value

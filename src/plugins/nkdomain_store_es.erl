@@ -252,6 +252,8 @@ elastic_get_templates(Acc, #{id:=SrvId}=Service) ->
 reload_types(SrvId) ->
     #es_config{index=Index, type=IdxType} = SrvId:config_nkdomain_store_es(),
     Mappings = get_mappings(SrvId, Index),
+    lager:info("Mappings: ~s", [nklib_json:encode_pretty(Mappings)]),
+
     case nkelastic_api:add_mapping(SrvId, Index, IdxType, Mappings) of
         ok ->
             do_reload_templates(SrvId, maps:to_list(get_templates(SrvId)));
@@ -445,7 +447,7 @@ find_obj_alias(SrvId, Alias) ->
 find(SrvId, Spec) ->
     case query_filters(#{}, Spec) of
         {ok, Query} ->
-            case do_search2(SrvId, Query, Spec) of
+            case do_search(SrvId, Query, Spec) of
                 {ok, N, Data, _Aggs, Meta} ->
                     {ok, N, Data, Meta};
                 {error, Error} ->
@@ -560,11 +562,7 @@ get_mappings(SrvId, Index) ->
             lists:foldl(
                 fun(Module, Acc) ->
                     #{type:=Type} = Module:object_get_info(),
-                    Obj = #{
-                        type => object,
-                        dynamic => false,
-                        properties => Module:object_mapping()
-                    },
+                    Obj = get_object_mappings(Module),
                     Acc#{Type => Obj}
                 end,
                 Base,
@@ -573,6 +571,24 @@ get_mappings(SrvId, Index) ->
         _ ->
             #{}
     end.
+
+
+%% @private
+get_object_mappings(Module) ->
+    case Module:object_mapping() of
+        Map when is_map(Map) ->
+            #{
+                type => object,
+                dynamic => false,
+                properties => Map
+            };
+        disabled ->
+            #{
+                enabled => false
+            }
+    end.
+
+
 
 
 %% @doc Get ES aliases
@@ -653,9 +669,6 @@ get_filters([{Field, Value}|Rest], Acc) ->
                 false ->
                     {error, invalid_path}
             end;
-        created_range ->
-            {D1, D2} = Value,
-            #{range => #{created_time => #{gte=>D1, lte=>D2}}};
         _ ->
             term_filter(Field, Value)
     end,
@@ -663,6 +676,12 @@ get_filters([{Field, Value}|Rest], Acc) ->
 
 
 %% @private
+term_filter(Key, {none, To}) ->
+    #{range => #{Key => #{lte=>To}}};
+term_filter(Key, {From, none}) ->
+    #{range => #{Key => #{gte=>From}}};
+term_filter(Key, {From, To}) ->
+    #{range => #{Key => #{gte=>From, lte=>To}}};
 term_filter(Key, Id) when is_atom(Id); is_binary(Id) ->
     #{term => #{Key => Id}};
 term_filter(Key, [Num|_]=List) when is_integer(Num) ->
@@ -703,7 +722,7 @@ do_search_objs(SrvId, Query, Opts) ->
     Opts2 = Opts#{
         fields => [<<"type">>, <<"path">>]
     },
-    case do_search2(SrvId, Query, Opts2) of
+    case do_search(SrvId, Query, Opts2) of
         {ok, N, Data, _Aggs, _Meta} ->
             Data2 = lists:map(
                 fun(#{<<"obj_id">>:=ObjId, <<"type">>:=Type, <<"path">>:=Path}) ->
@@ -728,7 +747,7 @@ do_search_types(SrvId, Query, Opts) ->
         },
         size => 0
     },
-    case do_search2(SrvId, Query, Opts2) of
+    case do_search(SrvId, Query, Opts2) of
         {ok, N, [], #{<<"types">>:=Types}, _Meta} ->
             Data = lists:map(
                 fun(#{<<"key">>:=Key, <<"doc_count">>:=Count}) -> {Key, Count} end,
@@ -765,13 +784,13 @@ do_search_types(SrvId, Query, Opts) ->
 
 
 %% @private
-do_search2(SrvId, Query, Opts) ->
+do_search(SrvId, Query, Opts) ->
     #es_config{index=Index, type=IdxType} = SrvId:config_nkdomain_store_es(),
     case nkelastic_api:search(SrvId, Index, IdxType, Query, Opts) of
         {ok, N, List, Aggs, Meta} ->
             Data = lists:map(
                 fun(#{<<"_id">>:=ObjId}=D) ->
-                    Source = maps:get(<<"_source">>, D, {}),
+                    Source = maps:get(<<"_source">>, D, #{}),
                     Source#{<<"obj_id">>=>ObjId}
                 end,
                 List),

@@ -55,8 +55,7 @@ test_basic_1(Pid) ->
             <<"parent_id">> := <<>>,
             <<"path">> := <<"/">>,
             <<"created_time">> := _,
-            <<"description">> := _,
-            <<"domain">> := #{}
+            <<"description">> := _
         } = D1} =
         cmd(Pid, domain, get, #{}),
     {ok, D1} = cmd(Pid, user, get, #{id=><<"root">>}),
@@ -416,7 +415,7 @@ remove_data() ->
 
 
 find_archive(Id) ->
-    {ok, N, Data, _, _} = nkdomain_store:find_archive(root, #{filters=>#{id=>Id}, fields=><<"_all">>}),
+    {ok, N, Data, _} = nkdomain_store:find_archive(root, #{filters=>#{id=>Id}, fields=><<"_all">>}),
     {N, Data}.
 
 

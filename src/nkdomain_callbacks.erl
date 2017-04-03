@@ -226,11 +226,16 @@ object_parse(SrvId, Mode, Type, Map) ->
             BaseSyn = SrvId:object_syntax(Mode),
             BaseMand = maps:get('__mandatory', BaseSyn, []),
             ModSyn = Module:object_syntax(Mode),
-            ModMand = [
-                <<Type/binary, $., (nklib_util:to_binary(F))/binary>>
-                || F <- maps:get('__mandatory', ModSyn, [])
-            ],
-            Mandatory = BaseMand ++ ModMand,
+            Mandatory = case is_map(ModSyn) of
+                true ->
+                    ModMand = [
+                        <<Type/binary, $., (nklib_util:to_binary(F))/binary>>
+                        || F <- maps:get('__mandatory', ModSyn, [])
+                    ],
+                    BaseMand ++ ModMand;
+                false ->
+                    BaseMand
+            end,
             TypeAtom = binary_to_atom(Type, utf8),
             Syntax = BaseSyn#{TypeAtom => ModSyn, '__mandatory'=>Mandatory},
             Opts = #{
@@ -263,9 +268,14 @@ object_unparse(#obj_session{srv_id=SrvId, type=Type, module=Module, obj=Obj}) ->
             BaseMap1
     end,
     ModData = maps:get(Type, Obj, #{}),
-    ModKeys = maps:keys(Module:object_mapping()),
-    ModMap = maps:with(ModKeys, ModData),
-    BaseMap2#{Type => ModMap}.
+    case Module:object_mapping() of
+        disabled ->
+            BaseMap2#{Type => ModData};
+        Map when is_map(Map) ->
+            ModKeys = maps:keys(Map),
+            ModMap = maps:with(ModKeys, ModData),
+            BaseMap2#{Type => ModMap}
+    end.
 
 
 

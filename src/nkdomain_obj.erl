@@ -76,7 +76,7 @@
 
 
 -callback object_mapping() ->
-    map().
+    map() | disabled.
 
 
 -callback object_syntax(load|update) ->
