@@ -36,13 +36,13 @@
     type :: binary(),
     path :: nkdomain:path(),
     parent_id :: nkdomain:obj_id(),
+    parent_pid :: pid(),
     obj :: nkdomain:obj(),
     srv_id :: nkservice:id(),
     is_dirty :: boolean(),
     is_enabled :: boolean(),
     status :: nkdomain_obj:status(),
     meta :: map(),                      % Object load metadata
-    internal_obj :: term(),             % Internal representation of object
     data :: term()                      % Type-specific metadata
 }).
 

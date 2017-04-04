@@ -271,7 +271,6 @@ start(SrvId, Obj, Meta) ->
 
 -record(state, {
     obj_id :: nkdomain:obj_id(),
-    parent_pid :: pid(),
     srv_id :: nkservice:id(),
     stop_reason = false :: false | nkservice:error(),
     links :: nklib_links:links(),
@@ -318,6 +317,7 @@ init({SrvId, Obj, Meta}) ->
         path = Path,
         type = Type,
         parent_id = ParentId,
+        parent_pid = ParentPid,
         obj = Obj,
         srv_id = SrvId,
         status = init,
@@ -329,7 +329,6 @@ init({SrvId, Obj, Meta}) ->
     State1 = #state{
         obj_id = ObjId,
         srv_id = SrvId,
-        parent_pid = ParentPid,
         links = nklib_links:new(),
         session = Session,
         started = nklib_util:m_timestamp()
@@ -552,7 +551,7 @@ handle_info({timeout, Ref, nkdomain_session_timeout}, #state{timer=Ref}=State) -
     ?DEBUG("session timeout", [], State),
     do_stop(nkdomain_session_timeout, State);
 
-handle_info({'DOWN', _Ref, process, Pid, _Reason}, #state{parent_pid=Pid}=State) ->
+handle_info({'DOWN', _Ref, process, Pid, _Reason}, #state{session=#obj_session{parent_pid=Pid}}=State) ->
     ?DEBUG("parent stopped", [], State),
     do_stop(parent_stopped, State);
 
@@ -702,21 +701,17 @@ do_check_expire(#state{session=#obj_session{obj=Obj}}) ->
 
 
 %% @private
-do_save(#state{session=#obj_session{is_dirty=false}}=State) ->
-    State;
-
 do_save(State) ->
     ?DEBUG("save object", [], State),
-    State2 = case handle(object_save, [], State) of
-        {ok, SaveState} ->
-            SaveState;
-        {error, _Error, SaveState} ->
+    % Should check if is_dirty
+    % Not checked before because could be set on a plugin
+    case handle(object_save, [], State) of
+        {ok, State2} ->
+            State2;
+        {error, _Error, State2} ->
             % Error will be managed by nkdomain_store
-            SaveState
-    end,
-    #state{session=Session} = State2,
-    Session2 = Session#obj_session{is_dirty=false},
-    State#state{session=Session2}.
+            State2
+    end.
 
 
 %% @private

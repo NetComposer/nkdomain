@@ -180,7 +180,7 @@ getid(Type, _Data, #{nkdomain_obj_ids:=ObjIds}=State) ->
         {ok, Id} ->
             {ok, Id};
         error ->
-            lager:error("OI: ~s ~p", [Type, ObjIds]),
+            % lager:error("OI: ~s ~p", [Type, ObjIds]),
             {error, missing_id, State}
     end;
 

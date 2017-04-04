@@ -189,13 +189,17 @@ object_load(SrvId, ObjId) ->
 -spec object_save(session()) ->
     {ok, session()} | {error, term(), session()}.
 
+object_save(#obj_session{is_dirty=false}=Session) ->
+    {ok, Session};
+
 object_save(#obj_session{srv_id=SrvId, obj_id=ObjId}=Session) ->
-    Map = SrvId:object_unparse(Session),
+    {ok, Session2} = call_module(object_save, [], Session),
+    Map = SrvId:object_unparse(Session2),
     case nkdomain_store:save(SrvId, ObjId, Map) of
         {ok, _Vsn} ->
-            {ok, Session};
+            {ok, Session2#obj_session{is_dirty=false}};
         {error, Error} ->
-            {error, Error, Session}
+            {error, Error, Session2}
     end.
 
 
