@@ -24,9 +24,11 @@
 -behaviour(gen_server).
 
 -export([save/3, delete/2, archive/3, find/2, find_archive/2, clean/1]).
+-export([delete_all_childs/2, delete_all_childs_type/3]).
 -export([get_data/0, start_link/0]).
 -export([init/1, terminate/2, code_change/3, handle_call/3,
          handle_cast/2, handle_info/2]).
+
 
 -define(LLOG(Type, Txt, Args),
     lager:Type("NkDOMAIN Store "++Txt, Args)).
@@ -37,6 +39,7 @@
 -define(MAX_DELETE_TIME, 60000).
 -define(MAX_ARCHIVE_TIME, 60000).
 
+-include("nkdomain.hrl").
 
 %% ===================================================================
 %% Public
@@ -114,9 +117,27 @@ archive(Srv, ObjId, Obj) ->
     end.
 
 
-%% @private
-wait_remove_op(SrvId, ObjId) ->
-    _ = gen_server:call(?MODULE, {remove_op, SrvId, ObjId}, 60000).
+
+%% @doc
+delete_all_childs(Srv, Id) ->
+    case nkdomain_obj_lib:find(Srv, Id) of
+        #obj_id_ext{srv_id=SrvId, path=Path} ->
+            SrvId:object_store_delete_all_childs(SrvId, Path, #{});
+        not_found ->
+            {error, service_not_found}
+    end.
+
+
+%% @doc
+delete_all_childs_type(Srv, Id, Type) ->
+    case nkdomain_obj_lib:find(Srv, Id) of
+        #obj_id_ext{srv_id=SrvId, path=Path} ->
+            Opts = #{filters => #{type=>Type}},
+            SrvId:object_store_delete_all_childs(SrvId, Path, Opts);
+        not_found ->
+            {error, service_not_found}
+    end.
+
 
 
 %% @doc
@@ -386,6 +407,11 @@ reply(Reply, State) ->
 noreply(State) ->
     {noreply, State}.
 
+
+
+%% @private
+wait_remove_op(SrvId, ObjId) ->
+    _ = gen_server:call(?MODULE, {remove_op, SrvId, ObjId}, 60000).
 
 
 

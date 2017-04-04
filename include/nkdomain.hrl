@@ -41,8 +41,9 @@
     is_dirty :: boolean(),
     is_enabled :: boolean(),
     status :: nkdomain_obj:status(),
-    meta :: map(),
-    data :: term()
+    meta :: map(),                      % Object load metadata
+    internal_obj :: term(),             % Internal representation of object
+    data :: term()                      % Type-specific metadata
 }).
 
 -record(obj_id_ext, {

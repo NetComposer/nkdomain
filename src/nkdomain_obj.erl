@@ -322,6 +322,7 @@ init({SrvId, Obj, Meta}) ->
         srv_id = SrvId,
         status = init,
         meta = maps:without([srv_id, is_dirty, obj_id, parent_id, parent_pid], Meta),
+        data = #{},
         is_dirty = maps:get(is_dirty, Meta, false),
         is_enabled = Enabled
     },
@@ -368,9 +369,6 @@ handle_call(nkdomain_get_childs, _From, #state{childs=Childs}=State) ->
         end,
         Childs),
     reply({ok, Data}, State);
-
-handle_call(nkdomain_get_state, _From, State) ->
-    reply(State, State);
 
 handle_call({nkdomain_update, Map}, _From, State) ->
     case is_stopped(State) of
@@ -454,6 +452,9 @@ handle_call({nkdomain_load_child, Obj, Meta}, _From, #state{srv_id=SrvId}=State)
             reply({error, Error}, State)
     end;
 
+handle_call(nkdomain_get_state, _From, State) ->
+    {reply, State, State};
+
 handle_call(Msg, From, State) ->
     handle(object_handle_call, [Msg, From], State).
 
@@ -504,11 +505,9 @@ handle_cast({nkdomain_send_info, Info, Meta}, State) ->
     noreply(do_event({info, Info, Meta}, State));
 
 handle_cast({nkdomain_register, Link}, State) ->
-    ?DEBUG("registered link (~p)", [Link], State),
     noreply(links_add(Link, State));
 
 handle_cast({nkdomain_unregister, Link}, State) ->
-    ?DEBUG("proc unregistered (~p)", [Link], State),
     State2 = links_remove(Link, State),
     do_check_links_down(State2);
 
@@ -759,10 +758,10 @@ do_stop(Reason, #state{srv_id=SrvId}=State) ->
             {ok, State2} = handle(object_stop, [Reason], State#state{stop_reason=Reason}),
             {Code, Txt} = nkapi_util:api_error(SrvId, Reason),
             State3 = do_add_timelog(#{msg=>stopped, code=>Code, reason=>Txt}, State2),
+            State4 = do_save(State3),
             % Give time for possible registrations to success and capture stop event
-            State4 = do_status({stopped, Reason}, State3),
-            #state{session=#obj_session{obj=_Obj}=_Session} = State4,
-            do_stop2(Reason, State4)
+            State5 = do_status({stopped, Reason}, State4),
+            do_stop2(Reason, State5)
     end.
 
 
@@ -977,6 +976,7 @@ do_add_timelog(#{msg:=_}=Data, #state{started=Started, timelog=Log}=State) ->
 
 %% @private
 links_add(Link, #state{links=Links}=State) ->
+    ?DEBUG("registered link (~p)", [Link], State),
     State#state{links=nklib_links:add(Link, Links)}.
 
 
@@ -987,6 +987,7 @@ links_add(Link, #state{links=Links}=State) ->
 
 %% @private
 links_remove(Link, #state{links=Links}=State) ->
+    ?DEBUG("proc unregistered (~p)", [Link], State),
     State#state{links=nklib_links:remove(Link, Links)}.
 
 

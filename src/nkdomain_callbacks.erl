@@ -163,9 +163,21 @@ object_syntax(update) ->
 object_load(SrvId, ObjId) ->
     case SrvId:object_store_read_raw(SrvId, ObjId) of
         {ok, #{<<"type">>:=Type}=Map} ->
-            SrvId:object_parse(SrvId, load, Type, Map);
+            case SrvId:object_parse(SrvId, load, Type, Map) of
+                {ok, Obj} ->
+                    {ok, Obj};
+                {error, Error} ->
+                    ?LLOG(warning, "error parsing loaded object ~s: ~p\n~p", [ObjId, Error, Map]),
+                    {error, object_load_error}
+            end;
         {ok, #{type:=Type}=Map} ->
-            SrvId:object_parse(SrvId, load, Type, Map);
+            case SrvId:object_parse(SrvId, load, Type, Map) of
+                {ok, Obj} ->
+                    {ok, Obj};
+                {error, Error} ->
+                    ?LLOG(warning, "error parsing loaded object ~s: ~p\n~p", [ObjId, Error, Map]),
+                    {error, object_load_error}
+            end;
         {ok, _Map} ->
             {error, invalid_object_type};
         {error, Error} ->
