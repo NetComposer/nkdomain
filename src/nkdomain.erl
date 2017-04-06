@@ -23,8 +23,8 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 
--export([find/1, find/2, load/1, load/2, load/3, create/3]).
--export_type([obj_id/0, name/0, obj/0, path/0, type/0, class/0, history/0, history_op/0]).
+-export([find_loaded/1, find/1, find/2, load/1, load/2, load/3, create/3]).
+-export_type([obj_id/0, name/0, obj/0, path/0, type/0, id/0, class/0, history/0, history_op/0]).
 
 %%-include_lib("nklib/include/nklib.hrl").
 
@@ -39,6 +39,8 @@
 -type name() :: binary().
 
 -type path() :: [binary()].
+
+-type id() :: obj_id() | path().
 
 -type type() :: binary().
 
@@ -94,6 +96,20 @@
 %% ===================================================================
 %% Public
 %% ===================================================================
+
+%% @doc Finds and loaded object from UUID or Path
+-spec find_loaded(id()) ->
+    {ok, type(), domain:obj_id(), path(), pid()} |
+    {error, object_not_loaded|term()}.
+
+find_loaded(IdOrPath) ->
+    case nkdomain_obj_lib:find_loaded(IdOrPath) of
+        #obj_id_ext{type=Type, obj_id=ObjId, path=Path, pid=Pid} ->
+            {ok, Type, ObjId, Path, Pid};
+        not_found ->
+            {error, object_not_loaded}
+    end.
+
 
 %% @doc
 find(IdOrPath) ->

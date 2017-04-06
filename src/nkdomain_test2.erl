@@ -1,6 +1,7 @@
 -module(nkdomain_test2).
 -compile(export_all).
 
+-include("nkdomain.hrl").
 -include_lib("nkapi/include/nkapi.hrl").
 
 -define(WS, "ws://127.0.0.1:9202/api/ws").
@@ -360,8 +361,10 @@ test_basic_2(Pid) ->
     true = is_loaded("/stest1/users/u1"),
     true = is_loaded("/stest1/stest2"),
     true = is_loaded("/stest1/stest2/users/u1"),
-    nkdomain_obj:unload({root, "/stest1"}, normal),
-    timer:sleep(500),
+    nkdomain_obj:unload("/stest1", normal),
+
+    % Wait MIN_TIME
+    timer:sleep(2100),
     false = is_loaded("/stest1"),
     false = is_loaded("/stest1/users/u1"),
     false = is_loaded("/stest1/stest2"),
@@ -407,8 +410,8 @@ remove_data() ->
     end,
     case nkdomain:find(root, "/stest1") of
         {ok, <<"domain">>, S1Id_0, <<"/stest1">>, _} ->
-        %% lager:warning("/stest1 was already present"),
-        ok = nkdomain_store:delete(root, S1Id_0);
+            %% lager:warning("/stest1 was already present"),
+            ok = nkdomain_store:delete(root, S1Id_0);
         {error, object_not_found} ->
             ok
     end.
@@ -447,7 +450,7 @@ cmd(Pid, Class, Cmd, Data) ->
 
 
 is_loaded(Id) ->
-    case nkdomain:find(root, Id) of
-        {ok, _Type, _ObjId, _Path, Pid} when is_pid(Pid) -> true;
+    case nkdomain_obj_lib:find_loaded(Id) of
+        #obj_id_ext{} -> true;
         _ -> false
     end.

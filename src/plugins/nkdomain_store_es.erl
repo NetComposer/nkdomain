@@ -25,7 +25,8 @@
 -export([plugin_deps/0, plugin_syntax/0, plugin_defaults/0, plugin_config/2]).
 -export([object_store_reload_types/1, object_store_read_raw/2, object_store_save_raw/3,
          object_store_delete_raw/2]).
--export([object_store_find_obj_id/2, object_store_find_path/2,
+-export([object_store_find_obj/2,
+         %% object_store_find_obj_id/2, object_store_find_path/2,
          object_store_find_types/3, object_store_find_all_types/3,
          object_store_find_childs/3, object_store_find_all_childs/3,
          object_store_find_alias/2, object_store_delete_all_childs/3,
@@ -154,19 +155,19 @@ object_store_archive_save_raw(SrvId, ObjId, Map) ->
     archive_save_obj(SrvId, Map#{obj_id=>ObjId}).
 
 
+%% @doc
+object_store_find_obj(SrvId, Id) ->
+    find_obj(SrvId, Id).
+
+
 %%%% @doc
-%%object_store_find_obj(SrvId, Id) ->
-%%    find_obj(SrvId, Id).
-
-
-%% @doc
-object_store_find_obj_id(SrvId, ObjId) ->
-    find_obj_id(SrvId, ObjId).
-
-
-%% @doc
-object_store_find_path(SrvId, Path) ->
-    find_path(SrvId, Path).
+%%object_store_find_obj_id(SrvId, ObjId) ->
+%%    find_obj_id(SrvId, ObjId).
+%%
+%%
+%%%% @doc
+%%object_store_find_path(SrvId, Path) ->
+%%    find_path(SrvId, Path).
 
 
 %% @doc
@@ -310,66 +311,66 @@ delete_obj(SrvId, ObjId) ->
     end.
 
 
-%%%% @doc Finds an object from its ID or Path
-%%-spec find_obj(nkservice:id(), nkdomain:id()) ->
-%%    {ok, nkdomain:type(), nkdomain:obj_id(), nkdomain:path()} | {error, object_not_found|term()}.
-%%
-%%find_obj(SrvId, Id) ->
-%%    Filter = case nkdomain_util:is_path(Id) of
-%%        {true, Path} ->
-%%            #{term => #{path => Path}};
-%%        false ->
-%%            #{term => #{obj_id => Id}}
-%%    end,
-%%    case search_objs(SrvId, query_filter(Filter), #{}) of
-%%        {ok, 0, []} ->
-%%            {error, object_not_found};
-%%        {ok, 1, [{Type, ObjId, ObjPath}]} ->
-%%            {ok, Type, ObjId, ObjPath};
-%%        {ok, _, [{Type, ObjId, ObjPath}|_]} ->
-%%            ?LLOG(warning, "Multiple objects for path ~s", [ObjPath]),
-%%            {ok, Type, ObjId, ObjPath}
-%%    end.
+%% @doc Finds an object from its ID or Path
+-spec find_obj(nkservice:id(), nkdomain:id()) ->
+    {ok, nkdomain:type(), nkdomain:obj_id(), nkdomain:path()} | {error, object_not_found|term()}.
 
-
-
-%% @doc Finds an object from its path
--spec find_obj_id(nkservice:id(), nkdomain:obj_id()) ->
-    {ok, nkdomain:type(), nkdomain:path()} | {error, object_not_found|term()}.
-
-find_obj_id(SrvId, ObjId) ->
-    Query = query_filter(#{term => #{obj_id => ObjId}}),
-    case do_search_objs(SrvId, Query, #{}) of
+find_obj(SrvId, Id) ->
+    Filter = case nkdomain_util:is_path(Id) of
+        {true, Path} ->
+            #{term => #{path => Path}};
+        false ->
+            #{term => #{obj_id => nklib_util:to_binary(Id)}}
+    end,
+    case do_search_objs(SrvId, query_filter(Filter), #{}) of
         {ok, 0, []} ->
             {error, object_not_found};
-        {ok, 1, [{Type, _ObjId, Path}]} ->
-            {ok, Type, Path};
-        {ok, _, [{Type, _ObjId, Path}|_]} ->
-            ?LLOG(warning, "Multiple objects for path ~s", [Path]),
-            {ok, Type, Path}
+        {ok, 1, [{Type, ObjId, ObjPath}]} ->
+            {ok, Type, ObjId, ObjPath};
+        {ok, _, [{Type, ObjId, ObjPath}|_]} ->
+            ?LLOG(warning, "Multiple objects for path ~s", [ObjPath]),
+            {ok, Type, ObjId, ObjPath}
     end.
 
 
-%% @doc Finds an object from its path
--spec find_path(nkservice:id(), nkdomain:path()) ->
-    {ok, nkdomain:type(), nkdomain:obj_id()} | {error, object_not_found|term()}.
 
-find_path(SrvId, Path) ->
-    case nkdomain_util:is_path(Path) of
-        {true, Path2} ->
-            Query = query_filter(#{term => #{path => Path2}}),
-            case do_search_objs(SrvId, Query, #{}) of
-                {ok, 0, []} ->
-                    {error, object_not_found};
-                {ok, 1, [{Type, ObjId, _Path}]} ->
-                    {ok, Type, ObjId};
-                {ok, _, [{Type, ObjId, _Path}|_]} ->
-                    ?LLOG(warning, "Multiple objects for path ~s", [Path]),
-                    {ok, Type, ObjId}
-            end;
-        false ->
-            {error, invalid_path}
-    end.
+%%%% @doc Finds an object from its path
+%%-spec find_obj_id(nkservice:id(), nkdomain:obj_id()) ->
+%%    {ok, nkdomain:type(), nkdomain:path()} | {error, object_not_found|term()}.
+%%
+%%find_obj_id(SrvId, ObjId) ->
+%%    Query = query_filter(#{term => #{obj_id => ObjId}}),
+%%    case do_search_objs(SrvId, Query, #{}) of
+%%        {ok, 0, []} ->
+%%            {error, object_not_found};
+%%        {ok, 1, [{Type, _ObjId, Path}]} ->
+%%            {ok, Type, Path};
+%%        {ok, _, [{Type, _ObjId, Path}|_]} ->
+%%            ?LLOG(warning, "Multiple objects for path ~s", [Path]),
+%%            {ok, Type, Path}
+%%    end.
+%%
+%%
+%%%% @doc Finds an object from its path
+%%-spec find_path(nkservice:id(), nkdomain:path()) ->
+%%    {ok, nkdomain:type(), nkdomain:obj_id()} | {error, object_not_found|term()}.
+%%
+%%find_path(SrvId, Path) ->
+%%    case nkdomain_util:is_path(Path) of
+%%        {true, Path2} ->
+%%            Query = query_filter(#{term => #{path => Path2}}),
+%%            case do_search_objs(SrvId, Query, #{}) of
+%%                {ok, 0, []} ->
+%%                    {error, object_not_found};
+%%                {ok, 1, [{Type, ObjId, _Path}]} ->
+%%                    {ok, Type, ObjId};
+%%                {ok, _, [{Type, ObjId, _Path}|_]} ->
+%%                    ?LLOG(warning, "Multiple objects for path ~s", [Path]),
+%%                    {ok, Type, ObjId}
+%%            end;
+%%        false ->
+%%            {error, invalid_path}
+%%    end.
 
 
 %% @doc Finds types

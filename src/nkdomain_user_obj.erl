@@ -221,7 +221,7 @@ do_login(Pid, ObjId, #{password:=Pass}) ->
                 {ok, false}
         end
     end,
-    case nkdomain_obj:sync_op(Pid, {apply, Fun}) of
+    case nkdomain_obj:apply(Pid, Fun) of
         {ok, true} ->
             {ok, ObjId};
         {ok, false} ->

@@ -756,7 +756,7 @@ do_save(#state{wait_save=Wait}=State) ->
 
 %% @private
 do_delete(_Reason, #state{is_deleted=true}=State) ->
-    {ok, State};
+    {error, object_not_found, State};
 
 do_delete(Reason, #state{childs=[], srv_id=SrvId}=State) ->
     case handle(object_delete, [], State) of
@@ -856,11 +856,11 @@ is_stopped(_) ->
 do_check_create_path(ObjType, ObjPath, #state{srv_id=SrvId}=State) ->
     case nkdomain_util:get_parts(ObjType, ObjPath) of
         {ok, _Path, ObjName} ->
-            case SrvId:object_store_find_path(SrvId, ObjPath) of
+            case SrvId:object_store_find_obj(SrvId, ObjPath) of
                 {error, object_not_found} ->
                     ok;
-                {ok, _N, _L} ->
-                    ?LLOG(notice, "cannot create childs: path ~s exists", [ObjPath], State),
+                {ok, _, _, _} ->
+                    ?LLOG(notice, "cannot create child: path ~s exists", [ObjPath], State),
                     {error, {name_is_already_used, ObjName}};
                 {error, Error} ->
                     {error, Error}
@@ -1032,7 +1032,9 @@ handle(Fun, Args, State) ->
 
 %% @private
 send_parent(Msg, #state{session=#obj_session{parent_pid=Pid}}) when is_pid(Pid) ->
-    gen_server:cast(Pid, Msg).
+    gen_server:cast(Pid, Msg);
+send_parent(_Msg, _State) ->
+    ok.
 
 
 %% @private
@@ -1083,12 +1085,12 @@ links_fold(Fun, Acc, #state{links=Links}) ->
 
 %% @private
 do_call(Id, Msg) ->
-    nkdomain_obj_lib:do_call(Id, Msg).
+    nkdomain_obj_lib:call(Id, Msg).
 
 %% @private
 do_call(Id, Msg, Time) ->
-    nkdomain_obj_lib:do_call(Id, Msg, Time).
+    nkdomain_obj_lib:call(Id, Msg, Time).
 
 %% @private
 do_cast(Id, Msg) ->
-    nkdomain_obj_lib:do_cast(Id, Msg).
+    nkdomain_obj_lib:cast(Id, Msg).

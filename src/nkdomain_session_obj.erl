@@ -137,7 +137,7 @@ object_api_cmd(Sub, Cmd, Data, State) ->
 
 %% @private
 object_check_active(SrvId, ObjId) ->
-    case nkdomain_obj_lib:do_find(ObjId) of
+    case nkdomain_obj_lib:find_loaded(ObjId) of
         #obj_id_ext{pid=Pid} when is_pid(Pid) ->
             true;
         not_found ->

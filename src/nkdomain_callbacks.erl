@@ -35,7 +35,8 @@
 -export([object_store_reload_types/1, object_store_read_raw/2, object_store_save_raw/3,
          object_store_delete_raw/2,
          object_store_archive_find/2, object_store_archive_save_raw/3]).
--export([object_store_find_obj_id/2, object_store_find_path/2,
+-export([object_store_find_obj/2,
+         %% object_store_find_obj_id/2, object_store_find_path/2,
          object_store_find_types/3, object_store_find_all_types/3,
          object_store_find_childs/3, object_store_find_all_childs/3,
          object_store_find_alias/2, object_store_delete_all_childs/3,
@@ -536,28 +537,28 @@ object_store_delete_raw(_SrvId, _ObjId) ->
     {error, store_not_implemented}.
 
 
+%% @doc
+-spec object_store_find_obj(nkservice:id(), nkdomain:id()) ->
+    {ok, nkdomain:type(), nkdomain:obj_id(), nkdomain:path()} | {error, term()}.
+
+object_store_find_obj(_SrvId, _Id) ->
+    {error, store_not_implemented}.
+
+
 %%%% @doc
-%%-spec object_store_find_obj(nkservice:id(), nkdomain:id()) ->
-%%    {ok, nkdomain:type(), nkdomain:obj_id(), nkdomain:path()} | {error, term()}.
+%%-spec object_store_find_obj_id(nkservice:id(), nkdomain:obj_id()) ->
+%%    {ok, nkdomain:type(), nkdomain:path()} | {error, term()}.
 %%
-%%object_store_find_obj(_SrvId, _Id) ->
+%%object_store_find_obj_id(_SrvId, _ObjId) ->
 %%    {error, store_not_implemented}.
-
-
-%% @doc
--spec object_store_find_obj_id(nkservice:id(), nkdomain:obj_id()) ->
-    {ok, nkdomain:type(), nkdomain:path()} | {error, term()}.
-
-object_store_find_obj_id(_SrvId, _ObjId) ->
-    {error, store_not_implemented}.
-
-
-%% @doc
--spec object_store_find_path(nkservice:id(), nkdomain:path()) ->
-    {ok, nkdomain:type(), nkdomain:obj_id()} | {error, term()}.
-
-object_store_find_path(_SrvId, _Path) ->
-    {error, store_not_implemented}.
+%%
+%%
+%%%% @doc
+%%-spec object_store_find_path(nkservice:id(), nkdomain:path()) ->
+%%    {ok, nkdomain:type(), nkdomain:obj_id()} | {error, term()}.
+%%
+%%object_store_find_path(_SrvId, _Path) ->
+%%    {error, store_not_implemented}.
 
 
 %% @doc
