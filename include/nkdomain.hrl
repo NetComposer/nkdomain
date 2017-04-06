@@ -63,6 +63,5 @@
 -define(DOMAIN_TOKEN, <<"token">>).
 -define(DOMAIN_CONFIG, <<"config">>).
 
-
 -endif.
 

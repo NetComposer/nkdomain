@@ -18,329 +18,213 @@
 %%
 %% -------------------------------------------------------------------
 
-%% @doc NkDomain main module
--module(nkdomain).
+%% @doc Utility to monitor a number of objects
+-module(nkdomain_monitor).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
+-export([new/2, get_obj/2, get_objs/1, get_disabled/1, add_obj/2, rm_obj/2]).
+-export([reload_disabled/1, down_obj/2]).
+-export_type([monitor/0]).
 
--export([find/2, load/2, load/3, create/3]).
+-include_lib("nkdomain/include/nkdomain.hrl").
 
--export([load_file/1, export/1, get_aliases/1, get_pid/1, get_obj/1, remove/1]).
--export([get_roles/1, get_role_objs/2, find_role_objs/2, has_role/3]).
--export([resolve/1, multi_resolve/1]).
--export([register_update_callback/3]).
--export_type([obj_id/0, name/0, obj/0, path/0, type/0, class/0, history/0, history_op/0]).
-
-%%-include_lib("nklib/include/nklib.hrl").
-
--include("nkdomain.hrl").
 
 %% ===================================================================
 %% Types
 %% ===================================================================
 
--type obj_id() :: binary().
 
--type name() :: binary().
+-record(obj_monitor, {
+    srv_id :: nkservice:id(),
+    module :: module(),
+    objs = #{} :: #{nkdomain:obj_id() => pid()},
+    disabled = #{} :: #{ConvId::nkdomain:obj_id() => nkutil:timestamp()},
+    pids = #{} :: #{pid() => {ConvId::nkdomain:obj_id(), reference()}}
+}).
 
--type path() :: [binary()].
-
--type type() :: binary().
-
--type class() :: atom().
-
--type history_op() :: term().
-
--type history() :: [{nklib_util:m_timestamp(), User::obj_id(), history_op()}].
-
-
-%% @see nkdomain_callbacks:domain_store_base_mapping/0
--type obj() :: #{
-    obj_id => obj_id(),
-    domain => path(),
-    type => type(),
-    subtype => atom(),
-    description => binary(),
-    created_by => obj_id(),
-    created_time => nklib_util:m_timestamp(),
-    parent_id => obj_id(),
-    enabled => boolean(),
-    expires_time => nklib_util:m_timestamp(),
-    destroyed_time => nklib_util:m_timestamp(),
-    destroyed_reason => term(),
-    icon_id => binary(),
-    aliases => [binary()],
-    service_id => [nkservice:id()],         % Only for service-related objects
-    class() => map()
-}.
-
-
--type create_opts() ::
-    #{
-        obj_id => obj_id(),
-        register => nklib:link(),
-        events => [nkservice_events:type()],
-        enabled => boolean(),                        % Start disabled
-        remove_after_stop => boolean()
-    }.
-
--type load_opts() ::
-    #{
-        register => nklib:link()
-    }.
+-type monitor() :: #obj_monitor{}.
 
 
 %% ===================================================================
 %% Public
 %% ===================================================================
 
+%% @doc Creates a monitor
+-spec new(nkservice:id(), atom()) ->
+    monitor().
+
+new(SrvId, Module) ->
+    #obj_monitor{srv_id=SrvId, module=Module}.
 
 
+%% @doc Get all objects
+-spec get_obj(nkdomain:id(), monitor()) ->
+    {enabled, pid()} | {disabled, nklib_util:timestamp()} | not_found.
 
-%% ===================================================================
-%% Public
-%% ===================================================================
-
-%% @doc Finds and object from UUID or Path, in memory and disk
--spec find(nkservice:id(), obj_id()|path()) ->
-    {ok, type(), domain:obj_id(), path(), pid()|undefined} |
-    {error, object_not_found|term()}.
-
-find(Srv, IdOrPath) ->
-    case nkdomain_obj_lib:find(Srv, IdOrPath) of
-        #obj_id_ext{type=Type, obj_id=ObjId, path=Path, pid=Pid} ->
-            {ok, Type, ObjId, Path, Pid};
-        {error, Error} ->
-            {error, Error}
+get_obj(Id, #obj_monitor{objs=Objs, disabled=Disabled}) ->
+    case maps:find(Id, Objs) of
+        {ok, Pid} when is_pid(Pid) ->
+            {enabled, Pid};
+        {ok, undefined} ->
+            Time = maps:get(Id, Disabled),
+            {disabled, Time};
+        error ->
+            not_found
     end.
 
 
-%% @doc Finds an objects's pid or loads it from storage
--spec load(nkservice:id(), obj_id()|path()) ->
-    {ok, type(), obj_id(), path(), pid()} |
-    {error, obj_not_found|term()}.
+%% @doc Get all objects
+-spec get_objs(monitor()) ->
+    [nkdomain:obj_id()].
 
-load(Srv, IdOrPath) ->
-    load(Srv, IdOrPath, #{}).
-
-
-%% @doc Finds an objects's pid or loads it from storage
--spec load(nkservice:id(), obj_id()|path(), load_opts()) ->
-    {ok, type(), obj_id(), path(), pid()} |
-    {error, obj_not_found|term()}.
-
-load(Srv, IdOrPath, Meta) ->
-    case nkdomain_obj_lib:load(Srv, IdOrPath, Meta) of
-        #obj_id_ext{type=Type, obj_id=ObjId, path=Path, pid=Pid} ->
-            {ok, Type, ObjId, Path, Pid};
-        {error, Error} ->
-            {error, Error}
-    end.
+get_objs(#obj_monitor{objs=Objs}) ->
+    maps:keys(Objs).
 
 
-%% @doc Creates a new object
--spec create(nkservice:id(), map(), create_opts()) ->
-    {ok, type(), obj_id(), path(), pid()}.
+%% @doc Get disabled objects
+-spec get_disabled(monitor()) ->
+    [{nkdomain:obj_id(), nklib_util:timestamp()}].
 
-create(Srv, Obj, Meta) ->
-    case nkdomain_obj_lib:create(Srv, Obj, Meta) of
-        #obj_id_ext{type=Type, obj_id=ObjId, path=Path, pid=Pid} ->
-            {ok, Type, ObjId, Path, Pid};
-        {error, Error} ->
-            {error, Error}
-    end.
+get_disabled(#obj_monitor{disabled=Disabled}) ->
+    maps:to_list(Disabled).
 
 
+%% @doc Adds a new object
+-spec add_obj(nkobject:id(), monitor()) ->
+    {enabled, monitor()} | {disabled, monitor()} | {error, term()}.
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-%% @doc Loads a domain configuration from a YAML or JSON file
--spec load_file(string()|binary()) ->
-    {ok, #{obj_id() => nkdomain_load:load_result()}} | {error, term()}.
-
-load_file(File) ->
-    nkdomain_load:load_file(File, #{token=>admin}).
-
-
-%%%% @doc Loads a domain configuration from an erlang map string or binary
-%%-spec load(map(), nkdomain_load:load_opts()) ->
-%%    {ok, #{obj_id() => nkdomain_load:load_result()}} | {error, term()}.
-%%
-%%load(Data, Opts) ->
-%%    nkdomain_load:load(map, Data, Opts).
-
-
-%% @doc Exports a full domain specification as a map
--spec export(string()|binary()) ->
-    {ok, map()} | {error, term()} .
-
-export(DomainId) ->
-    nkdomain_obj2:export(domain, DomainId).
-
-
-%% @doc Finds all pointing objects for an alias
--spec get_aliases(string()|binary()) ->
-    [obj_id()].
-
-get_aliases(Alias) ->
-    case nkdomain_obj2:get_obj(alias, Alias) of
-        {ok, #{aliases:=Aliases}} -> Aliases;
-        {error, _} -> []
-    end.
-
-
-%% @doc Get's de pid for an object
--spec get_pid(string()|binary()) ->
-    {ok, pid()} | {error, not_found|term()}.
-
-get_pid(UserObjId) ->
-    case resolve(UserObjId) of
-        {ok, _Class, _ObjId, Pid} ->
-            {ok, Pid};
-        {error, Error} ->
-            {error, Error}
-    end.
-
-
-%% @doc Gets a full object
--spec get_obj(string()|binary()) ->
-    {ok, obj()} | {error, term()}.
- 
-get_obj(UserObjId) ->
-    case resolve(UserObjId) of
-        {ok, {Class, ObjId, _Pid}} ->
-            case nkdomain_obj2:get_obj(Class, ObjId) of
-                {ok, Obj} ->
-                    {ok, Class, ObjId, Obj};
+add_obj(Id, #obj_monitor{srv_id=SrvId, module=Module}=Monitor) ->
+    case nkdomain_obj_lib:find(SrvId, Id) of
+        #obj_id_ext{obj_id=ObjId, pid=Pid} when is_pid(Pid) ->
+            nkdomain_obj:register(Pid, {Module, self()}),
+            {enabled, do_add_enabled(ObjId, Pid, Monitor)};
+        #obj_id_ext{obj_id=ObjId} ->
+            case nkdomain_obj_lib:load(SrvId, ObjId, #{register=>{Module, self()}}) of
+                #obj_id_ext{obj_id=ObjId, pid=Pid} ->
+                    {enabled, do_add_enabled(ObjId, Pid, Monitor)};
+                {error, object_not_found} ->
+                    {disabled, do_add_disabled(ObjId, Monitor)};
                 {error, Error} ->
                     {error, Error}
-            end;
-        {error, Error} ->
-            {error, Error}
+            end
     end.
 
 
-%% @doc Removes an object
-%% Most objects can also be removed loading a remove => true field
--spec remove(string()|binary()) ->
-    ok | {error, term()}.
+%% @doc Removes a new object
+-spec rm_obj(nkobject:id(), monitor()) ->
+    {ok, monitor()} | {error, term()}.
 
-remove(UserObjId) ->
-    case resolve(UserObjId) of
-        {ok, {Class, ObjId, _Pid}} ->
-            nkdomain_obj2:remove_obj(Class, ObjId);
-        {error, Error} ->
-            {error, Error}
+rm_obj(Id, #obj_monitor{srv_id=SrvId, objs=Objs}=Monitor) ->
+    case maps:find(Id, Objs) of
+        {ok, _} ->
+            {ok, do_remove(Id, Monitor)};
+        error ->
+            case nkdomain_obj_lib:find(SrvId, Id) of
+                #obj_id_ext{obj_id=ObjId} ->
+                    case maps:find(ObjId, Objs) of
+                        {ok, _} ->
+                            {ok, do_remove(Id, Monitor)};
+                        error ->
+                            {error, member_not_found}
+                    end;
+                {error, Error} when Error==object_not_found; Error==path_not_found ->
+                    {error, object_not_found};
+                {error, Error} ->
+                    {error, Error}
+            end
     end.
 
 
-%% @doc Gets an object's roles
--spec get_roles(string()|binary()) ->
-    {ok, [nkrole:role()]} | {error, term()}.
+%% @doc Notifies a process down
+-spec down_obj(pid(), monitor()) ->
+    {ok, nkdomain:obj_id(), monitor()} | not_found.
 
-get_roles(UserObjId) ->
-    nkdomain_role:get_roles(UserObjId).
-
-
-%% @doc Gets object direct roles
--spec get_role_objs(nkrole:role(), string()|binary()) ->
-    {ok, [nkrole:role_spec()]} | {error, term()}.
-
-get_role_objs(Role, UserObjId) ->
-    nkdomain_role:get_role_objs(Role, UserObjId).
-
-
-%% @doc Gets an object's roles iterating at all levels
--spec find_role_objs(nkrole:role(), string()|binary()) ->
-    {ok, [obj_id()]} | {error, term()}.
-
-find_role_objs(Role, UserObjId) ->
-    nkdomain_role:find_role_objs(Role, UserObjId).
-
-
-%% @doc Check if Id has Role over Target
--spec has_role(string()|binary(), nkrole:role(), string()|binary()) ->
-    {ok, boolean()} | {error, term()}.
-
-has_role(Id, Role, Target) ->
-    nkdomain_role:has_role(Id, Role, Target).
-
-
-%% @doc Resolves any id or alias
--spec resolve(binary()|string()) ->
-    {ok, {class(), obj_id(), pid()}} | {error, term()}.
-
-resolve(UserObjId) ->
-    UserObjId1 = nklib_util:to_binary(UserObjId),
-    case get_aliases(UserObjId1) of
-        [] ->
-            nkdomain_util2:resolve(UserObjId1);
-        [UserObjId2] -> 
-            nkdomain_util2:resolve(UserObjId2);
-        _ ->
-            {error, multiple_aliases}
+down_obj(Pid, #obj_monitor{pids=Pids}=Monitor) ->
+    case maps:find(Pid, Pids) of
+        {ok, {ObjId, _Ref}} ->
+            {disabled, ObjId, do_add_disabled(ObjId, Monitor)};
+        error ->
+            not_found
     end.
 
 
-%% @doc Resolves any id or alias, allowing multiple alias
--spec multi_resolve(binary()|string()) ->
-    [{class(), obj_id(), pid()}].
+%% @doc Tries to reload disabled objects
+-spec reload_disabled(monitor()) ->
+    monitor().
 
-multi_resolve(UserObjId) ->
-    UserObjId1 = nklib_util:to_binary(UserObjId),
-    case get_aliases(UserObjId1) of
-        [] ->
-            case nkdomain_util2:resolve(UserObjId1) of
-                {ok, Data} -> [Data];
-                {error, _} -> []
-            end;
-        UserObjIdList ->
-            lists:foldl(
-                fun(Id, Acc) ->
-                    case nkdomain_util2:resolve(Id) of
-                        {ok, {Class, ObjId, Pid}} -> 
-                            [{Class, ObjId, Pid}|Acc];
-                        {error, _} -> 
-                            Acc
-                    end
-                end,
-                [],
-                UserObjIdList)
-    end.
+reload_disabled(#obj_monitor{disabled=Disabled}=Monitor) ->
+    lists:foldl(
+        fun({ObjId, true}, Acc) ->
+            case add_obj(ObjId, Acc) of
+                {enabled, Acc2} -> Acc2;
+                {disabled, Acc2} -> Acc2;
+                {error, _Error} -> Acc
+            end
+        end,
+        Monitor,
+        maps:to_list(Disabled)).
 
 
 
-%% @doc Registers a callback that will be called any time and object is updated
-%% as Mod:Fun(ObjId, Spec|removed)
--spec register_update_callback(class(), atom(), atom()) ->
-    ok.
-
-register_update_callback(Class, Mod, Fun) when is_atom(Class) ->
-    code:ensure_loaded(Mod),
-    ok = nkdomain_app:put({update, Class}, {Mod, Fun}).
 
 
 
+%% ===================================================================
+%% Public
+%% ===================================================================
+
+%% @private
+do_add_enabled(ObjId, Pid, Monitor) ->
+    #obj_monitor{objs=Objs, pids=Pids, disabled=Disabled} = Monitor,
+    Objs2 = Objs#{ObjId => Pid},
+    Pids2 = case maps:is_key(Pid, Pids) of
+        true ->
+            Pids;
+        false ->
+            Ref = monitor(process, Pid),
+            Pids#{Pid => {ObjId, Ref}}
+    end,
+    Disabled2 = maps:remove(ObjId, Disabled),
+    Monitor#obj_monitor{objs=Objs2, pids=Pids2, disabled=Disabled2}.
+
+
+%% @private
+do_add_disabled(ObjId, Monitor) ->
+    #obj_monitor{objs=Objs, pids=Pids, disabled=Disabled} = Monitor,
+    Objs2 = Objs#{ObjId => undefined},
+    Pids2 = case maps:find(ObjId, Objs) of
+        {ok, undefined} ->
+            Pids;
+        {ok, Pid} ->
+            {ObjId, Ref} = maps:get(Pid, Pids),
+            demonitor(Ref, [flush]),
+            maps:remove(Pid, Pids);
+        error ->
+            Pids
+    end,
+    Disabled2 = case maps:is_key(ObjId, Disabled) of
+        true ->
+            Disabled;
+        false ->
+            Disabled#{ObjId => nklib_util:timestamp()}
+    end,
+    Monitor#obj_monitor{objs=Objs2, pids=Pids2, disabled=Disabled2}.
+
+
+%% @private
+do_remove(ObjId, Monitor) ->
+    #obj_monitor{objs=Objs, pids=Pids, disabled=Disabled, module=Module} = Monitor,
+    Pids2 = case maps:find(ObjId, Objs) of
+        {ok, undefined} ->
+            Pids;
+        {ok, Pid} ->
+            {ObjId, Ref} = maps:get(Pid, Pids),
+            demonitor(Ref, [flush]),
+            nkdomain_obj:unregister(Pid, {Module, self()}),
+            maps:remove(Pid, Pids);
+        error ->
+            Pids
+    end,
+    Objs2 = maps:remove(ObjId, Objs),
+    Disabled2 = maps:remove(ObjId, Disabled),
+    Monitor#obj_monitor{objs=Objs2, pids=Pids2, disabled=Disabled2}.

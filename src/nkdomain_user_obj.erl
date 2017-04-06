@@ -61,7 +61,7 @@
 -spec create(nkservice:id(), nkdomain:id(), nkdomain:name(), map()) ->
     {ok, nkdomain:obj_id(), nkdomain:path(), pid()} | {error, term()}.
 
-create(Srv, Domain, Name, Data) ->
+create(Srv, Parent, Name, Data) ->
     Opts = #{
         name => Name,
         type_obj => Data,
@@ -71,7 +71,7 @@ create(Srv, Domain, Name, Data) ->
                 _ -> []
             end
     },
-    nkdomain_obj_lib:make_and_create(Srv, Domain, ?DOMAIN_USER, Opts).
+    nkdomain_obj_lib:make_and_create(Srv, Parent, ?DOMAIN_USER, Opts).
 
 
 %% @doc

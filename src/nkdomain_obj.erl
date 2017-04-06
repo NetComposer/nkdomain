@@ -109,7 +109,10 @@
 
 -type object_info() ::
     #{
-        type => nkdomain:type()
+        type => nkdomain:type(),
+        min_started_time => integer(),      %% msecs
+        min_first_time => integer(),        %% msecs
+        remove_after_stop => boolean()
     }.
 
 -type session() :: #obj_session{}.
@@ -337,8 +340,14 @@ init({SrvId, Obj, Meta}) ->
          #{register:=Link} ->
             links_add(Link, State1);
          _ ->
-            erlang:send_after(?MIN_FIRST_TIME, self(), nkdomain_check_childs),
-            State1
+             Info = Module:object_get_info(),
+             case maps:get(min_first_time, Info, ?MIN_FIRST_TIME) of
+                 MinTime when MinTime > 0 ->
+                     erlang:send_after(MinTime, self(), nkdomain_check_childs);
+                 _ ->
+                     ok
+             end,
+             State1
     end,
     set_log(State2),
     nkservice_util:register_for_changes(SrvId),
@@ -410,16 +419,22 @@ handle_call({nkdomain_sync_op, Op}, From, State) ->
             reply({error, object_is_stopped}, State);
         false ->
             case handle(object_sync_op, [Op, From], State) of
-                {reply, Reply, State2} ->
+                {reply, Reply, #state{}=State2} ->
+                    lager:error("ANS1"),
                     reply(Reply, State2);
-                {noreply, State2} ->
+                {reply_and_save, Reply, #state{}=State2} ->
+                    lager:error("ANS2: ~p, ~p", [Reply, State2]),
+                    reply(Reply, save(State2));
+                {noreply, #state{}=State2} ->
                     noreply(State2);
-                {stop, Reason, Reply, State2} ->
+                {noreply_and_save, #state{}=State2} ->
+                    noreply(save(State2));
+                {stop, Reason, Reply, #state{}=State2} ->
                     gen_server:reply(From, Reply),
                     do_stop(Reason, State2);
-                {stop, Reason, State2} ->
+                {stop, Reason, #state{}=State2} ->
                     do_stop(Reason, State2);
-                {continue, State2} ->
+                {continue, #state{}=State2} ->
                     do_sync_op(Op, From, State2)
             end
     end;
@@ -483,11 +498,13 @@ handle_cast({nkdomain_async_op, Op}, State) ->
             noreply(State);
         false ->
             case handle(object_async_op, [Op], State) of
-                {noreply, State2} ->
+                {noreply, #state{}=State2} ->
                     noreply(State2);
-                {stop, Reason, State2} ->
+                {noreply_and_save, #state{}=State2} ->
+                    noreply(save(State2));
+                {stop, Reason, #state{}=State2} ->
                     do_stop(Reason, State2);
-                {continue, State2} ->
+                {continue, #state{}=State2} ->
                     do_async_op(Op, State2)
             end
     end;
@@ -625,9 +642,14 @@ do_sync_op({apply, Fun}, _From, #state{session=Session}=State) ->
     {Reply2, State2} = try Fun(Session) of
         {ok, Reply} ->
             {{ok, Reply}, State};
+        {ok_and_save, Reply} ->
+            {{ok, Reply}, save(State)};
         {ok, Reply, #obj_session{}=Session2} ->
             ?LLOG(notice, "fun updated state", [], State),
             {{ok, Reply}, State#state{session=Session2}};
+        {ok_and_save, Reply, #obj_session{}=Session2} ->
+            ?LLOG(notice, "fun updated state", [], State),
+            {{ok, Reply}, save(State#state{session=Session2})};
         {error, Error} ->
             {{error, Error}, State}
     catch
@@ -635,7 +657,7 @@ do_sync_op({apply, Fun}, _From, #state{session=Session}=State) ->
             ?LLOG(warning, "error calling apply fun: ~p", [Error], State),
             {{error, internal_error}, State}
     end,
-    reply(Reply2, do_save(State2));
+    reply(Reply2, State2);
 
 do_sync_op(Op, _From, State) ->
     ?LLOG(notice, "unknown sync op: ~p", [Op], State),
@@ -763,8 +785,9 @@ do_stop(Reason, #state{srv_id=SrvId}=State) ->
 %% @private
 do_stop2(Reason, #state{started=Started}=State) ->
     State2 = do_event({unloaded, Reason}, State),
-    #state{session = #obj_session{meta = Meta}} = State2,
-    State3 = case Meta of
+    #state{session = #obj_session{module=Module}} = State2,
+    Info = Module:object_get_info(),
+    State3 = case Info of
         #{remove_after_stop:=true} ->
             case do_delete(object_stopped, State2) of
                 {ok, DeleteState} -> DeleteState;
@@ -774,7 +797,8 @@ do_stop2(Reason, #state{started=Started}=State) ->
             State2
     end,
     Now = nklib_util:m_timestamp(),
-    case (Started + ?MIN_STARTED_TIME) - Now of
+    MinTime = maps:get(min_started_time, Info, ?MIN_STARTED_TIME),
+    case (Started + MinTime) - Now of
         Time when Time > 0 ->
             % Save a minimum running time
             erlang:send_after(Time, self(), nkdomain_destroy);
@@ -919,9 +943,6 @@ do_status(Status, #state{session=#obj_session{status=OldStatus}=Session}=State) 
 
 
 %% @private
-do_check_links_down(#state{session=#obj_session{module=nkdomain_domain}}=State) ->
-    noreply(State);
-
 do_check_links_down(#state{childs=Childs}=State) when Childs /= [] ->
     noreply(State);
 
@@ -945,6 +966,7 @@ do_check_links_down(State) ->
 
 %% @private
 reply(Reply, #state{}=State) ->
+    lager:error("REP1"),
     {reply, Reply, State}.
 
 

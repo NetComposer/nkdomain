@@ -151,9 +151,9 @@ make_obj(Srv, Parent, Type, Opts) ->
 make_and_create(Srv, Parent, Type, Opts) ->
     case make_obj(Srv, Parent, Type, Opts) of
         {ok, Obj} ->
-             lager:warning("Obj: ~p", [Obj]),
+            %% lager:warning("Obj: ~p", [Obj]),
             case nkdomain_obj_lib:create(Srv, Obj, #{}) of
-                #obj_id_ext{type=Type, obj_id=ObjId, path=Path, pid=Pid} ->
+                #obj_id_ext{type = Type, obj_id = ObjId, path = Path, pid = Pid} ->
                     {ok, ObjId, Path, Pid};
                 {error, Error} ->
                     {error, Error}

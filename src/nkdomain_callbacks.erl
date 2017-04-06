@@ -343,8 +343,8 @@ object_deleted(Reason, Session) ->
 
 %% @doc
 -spec object_sync_op(term(), {pid(), reference()}, session()) ->
-    {reply, Reply::term(), session} |
-    {noreply, session()} |
+    {reply, Reply::term(), session} | {reply_and_save, Reply::term(), session} |
+    {noreply, session()} | {noreply_and_save, session} |
     {stop, Reason::term(), Reply::term(), session()} |
     {stop, Reason::term(), session()} |
     continue().
@@ -360,7 +360,7 @@ object_sync_op(Op, From, Session) ->
 
 %% @doc
 -spec object_async_op(term(), session()) ->
-    {noreply, session()} |
+    {noreply, session()} | {noreply_and_save, session} |
     {stop, Reason::term(), session()} |
     continue().
 

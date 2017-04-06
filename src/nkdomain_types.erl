@@ -23,7 +23,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -behaviour(gen_server).
 
--export([get_module/1, get_modules/0, get_type/1, get_types/0, register_type/2]).
+-export([get_module/1, get_modules/0, get_type/1, get_types/0, register/1]).
 -export([make_syntax/3, make_syntax_fun/3]).
 -export([start_link/0]).
 -export([init/1, terminate/2, code_change/3, handle_call/3,
@@ -81,10 +81,11 @@ get_types() ->
 
 
 %% @doc Gets the obj module for a type
--spec register_type(module(), nkdomain:type()) ->
+-spec register(module()) ->
     ok.
 
-register_type(Module, Type) when is_atom(Module)->
+register(Module) ->
+    #{type:=Type} = Module:object_get_info(),
     gen_server:call(?MODULE, {register_type, Module, to_bin(Type)}).
 
 

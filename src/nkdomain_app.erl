@@ -103,7 +103,7 @@ start(_Type, _Args) ->
                 true ->
                     spawn_link(
                         fun() ->
-                            timer:sleep(5000),
+                            timer:sleep(2000),
                             nkdomain_root:start()
                         end);
                 false ->
@@ -124,10 +124,10 @@ stop(_) ->
 
 %% @doc Register our types
 register_types() ->
-    ok = nkdomain_types:register_type(nkdomain_domain_obj, ?DOMAIN_DOMAIN),
-    ok = nkdomain_types:register_type(nkdomain_user_obj, ?DOMAIN_USER),
-    ok = nkdomain_types:register_type(nkdomain_session_obj, ?DOMAIN_SESSION),
-    ok = nkdomain_types:register_type(nkdomain_config_obj, ?DOMAIN_CONFIG).
+    ok = nkdomain_types:register(nkdomain_domain_obj),
+    ok = nkdomain_types:register(nkdomain_user_obj),
+    ok = nkdomain_types:register(nkdomain_session_obj),
+    ok = nkdomain_types:register(nkdomain_config_obj).
 
 
 %% @doc gets a configuration value

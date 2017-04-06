@@ -121,10 +121,10 @@ archive(Srv, ObjId, Obj) ->
 %% @doc
 delete_all_childs(Srv, Id) ->
     case nkdomain_obj_lib:find(Srv, Id) of
-        #obj_id_ext{srv_id=SrvId, path=Path} ->
+        #obj_id_ext{srv_id = SrvId, path = Path} ->
             SrvId:object_store_delete_all_childs(SrvId, Path, #{});
-        not_found ->
-            {error, service_not_found}
+        {error, Error} ->
+            {error, Error}
     end.
 
 

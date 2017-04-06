@@ -23,7 +23,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 
--export([find/2, load/2, load/3, create/3]).
+-export([find/1, find/2, load/1, load/2, load/3, create/3]).
 
 -export([load_file/1, export/1, get_aliases/1, get_pid/1, get_obj/1, remove/1]).
 -export([get_roles/1, get_role_objs/2, find_role_objs/2, has_role/3]).
@@ -101,6 +101,11 @@
 %% Public
 %% ===================================================================
 
+%% @doc
+find(IdOrPath) ->
+    find(root, IdOrPath).
+
+
 %% @doc Finds and object from UUID or Path, in memory and disk
 -spec find(nkservice:id(), obj_id()|path()) ->
     {ok, type(), domain:obj_id(), path(), pid()|undefined} |
@@ -113,6 +118,11 @@ find(Srv, IdOrPath) ->
         {error, Error} ->
             {error, Error}
     end.
+
+
+%% @doc
+load(IdOrPath) ->
+    load(root, IdOrPath, #{}).
 
 
 %% @doc Finds an objects's pid or loads it from storage
