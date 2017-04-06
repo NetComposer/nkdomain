@@ -8,7 +8,8 @@
         yamerl,
         nkdist,
         nkrole,
-        nkservice
+        nkservice,
+        nkapi
     ]},
     {env, [
     ]}
