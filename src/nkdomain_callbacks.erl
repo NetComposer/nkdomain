@@ -65,6 +65,8 @@ api_error(invalid_object_id)                -> "Invalid object id";
 api_error(invalid_object_type)              -> "Invalid object type";
 api_error(invalid_object_path)              -> "Invalid object path";
 api_error({invalid_object_path, P})         -> {"Invalid object path '~s'", [P]};
+api_error(member_already_present)           -> "Member is already present";
+api_error(member_not_found)                 -> "Member not found";
 api_error(object_already_exists)            -> "Object already exists";
 api_error(object_clean_process)             -> "Object cleaned (process stopped)";
 api_error(object_clean_expire)              -> "Object cleaned (expired)";
@@ -75,7 +77,6 @@ api_error(object_is_stopped) 		        -> "Object is stopped";
 api_error(object_not_found) 		        -> "Object not found";
 api_error(object_stopped) 		            -> "Object stopped";
 api_error(parent_stopped) 		            -> "Parent stopped";
-api_error(path_not_found) 		            -> "Path not found";
 api_error(unknown_domain)                   -> "Domain is unknown";
 api_error(_)   		                        -> continue.
 
@@ -456,7 +457,8 @@ object_reg_down(Link, Reason, Session) ->
 
 %% @doc
 -spec object_handle_call(term(), {pid(), term()}, session()) ->
-    {reply, term(), session()} | {noreply, session()} | continue().
+    {reply, term(), session()} | {noreply, session()} |
+    {stop, term(), term(), session()} | {stop, term(), session()} | continue.
 
 object_handle_call(Msg, From, Session) ->
     case call_module(object_handle_call, [Msg, From], Session) of
@@ -470,7 +472,7 @@ object_handle_call(Msg, From, Session) ->
 
 %% @doc
 -spec object_handle_cast(term(), session()) ->
-    {noreply, session()} | continue().
+    {noreply, session()} | {stop, term(), session()} | continue.
 
 object_handle_cast(Msg, Session) ->
     case call_module(object_handle_cast, [Msg], Session) of
@@ -484,7 +486,7 @@ object_handle_cast(Msg, Session) ->
 
 %% @doc
 -spec object_handle_info(term(), session()) ->
-    {noreply, session()} | continue().
+    {noreply, session()} | {stop, term(), session()} | continue.
 
 object_handle_info(Msg, Session) ->
     case call_module(object_handle_info, [Msg], Session) of
@@ -763,7 +765,12 @@ call_type(Fun, Args, Type) ->
         Module ->
             case erlang:function_exported(Module, Fun, length(Args)) of
                 true ->
-                    apply(Module, Fun, Args);
+                    case apply(Module, Fun, Args) of
+                        continue ->
+                            ok;
+                        Other ->
+                            Other
+                    end;
                 false ->
                     ok
             end
@@ -774,7 +781,12 @@ call_type(Fun, Args, Type) ->
 call_module(Fun, Args, #obj_session{module=Module}=Session) ->
     case erlang:function_exported(Module, Fun, length(Args)+1) of
         true ->
-            apply(Module, Fun, Args++[Session]);
+            case apply(Module, Fun, Args++[Session]) of
+                continue ->
+                    {ok, Session};
+                Other ->
+                    Other
+            end;
         false ->
             {ok, Session}
     end.

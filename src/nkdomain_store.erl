@@ -79,7 +79,7 @@ delete(Srv, ObjId) ->
             case SrvId:object_store_delete_raw(SrvId, ObjId) of
                 ok ->
                     % If the object is deleted (it didn't has childs, etc.) notify the owner (if still present)
-                    nkdomain_obj_lib:do_cast(ObjId, nkdomain_obj_deleted),
+                    nkdomain_obj:object_has_been_deleted(ObjId),
                     ok;
                 {error, object_not_found} ->
                     {error, object_not_found};
@@ -370,7 +370,7 @@ do_save_srv_id(SrvId, [QueueOp|Rest]=List, Now, State) ->
                 delete ->
                     case SrvId:object_store_delete_raw(SrvId, ObjId) of
                         ok ->
-                            nkdomain_obj_lib:do_cast(ObjId, nkdomain_obj_deleted),
+                            nkdomain_obj:object_has_been_deleted(ObjId),
                             ok;
                         {error, object_not_found} ->
                             ok;

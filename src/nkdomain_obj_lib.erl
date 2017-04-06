@@ -137,8 +137,6 @@ make_obj(Srv, Parent, Type, Opts) ->
             {ok, maps:from_list(lists:flatten(Obj))};
         {error, object_not_found} ->
             {error, {could_not_load_parent, Parent}};
-        {error, path_not_found} ->
-            {error, {could_not_load_parent, Parent}};
         {error, Error} ->
             {error, Error}
     end.
@@ -196,7 +194,7 @@ create(Srv, #{obj_id:=ObjId, type:=Type}=Obj, Meta) ->
 
 %% @doc Finds and object from UUID or Path, in memory and disk
 -spec find(nkservice:id(), nkdomain:obj_id()|nkdomain:path()) ->
-    #obj_id_ext{} | {error, object_not_found|path_not_found|term()}.
+    #obj_id_ext{} | {error, object_not_found|term()}.
 
 find(Srv, IdOrPath) ->
     case nkservice_srv:get_srv_id(Srv) of
@@ -211,8 +209,6 @@ find(Srv, IdOrPath) ->
                                 not_found ->
                                     #obj_id_ext{srv_id=SrvId, type=Type, obj_id=ObjId, path=Path}
                             end;
-                        {error, object_not_found} ->
-                            {error, path_not_found};
                         {error, Error} ->
                             {error, Error}
                     end;
@@ -252,8 +248,6 @@ load(Srv, IdOrPath, Meta) ->
             ObjIdExt;
         #obj_id_ext{}=ObjIdExt ->
             do_load2(ObjIdExt, Meta);
-        {error, path_not_found} ->
-            {error, object_not_found};
         {error, Error} ->
             {error, Error}
     end.
@@ -326,8 +320,10 @@ archive(SrvId, ObjId, Reason) ->
 delete(Srv, Id, Reason) ->
     case find(Srv, Id) of
         #obj_id_ext{pid=Pid} when is_pid(Pid) ->
+            lager:error("DEL1"),
             nkdomain_obj:delete(Pid, Reason);
         #obj_id_ext{srv_id=SrvId, obj_id=ObjId} ->
+            lager:error("DEL2"),
             nkdomain_store:delete(SrvId, ObjId);
         {error, Error} ->
             {error, Error}

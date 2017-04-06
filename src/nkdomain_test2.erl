@@ -64,7 +64,7 @@ test_basic_1(Pid) ->
 
 
 test_create_user(Pid) ->
-    {error, path_not_found} = nkdomain:find(root, "/users/tuser1"),
+    {error, object_not_found} = nkdomain:find(root, "/users/tuser1"),
     {error, object_not_found} = nkdomain:load(root, "/users/tuser1"),
 
     %% Create user /users/tuser1,
@@ -395,7 +395,7 @@ remove_data() ->
     case nkdomain:find(root, "/users/tuser1") of
         {ok, <<"user">>, UId, <<"/users/tuser1">>, _} ->
             ok = nkdomain_store:delete(root, UId);
-        {error, path_not_found} ->
+        {error, object_not_found} ->
             ok
     end,
     case nkdomain_domain_obj:find_childs(root, "/stest1", #{}) of
@@ -409,7 +409,7 @@ remove_data() ->
         {ok, <<"domain">>, S1Id_0, <<"/stest1">>, _} ->
         %% lager:warning("/stest1 was already present"),
         ok = nkdomain_store:delete(root, S1Id_0);
-        {error, path_not_found} ->
+        {error, object_not_found} ->
             ok
     end.
 

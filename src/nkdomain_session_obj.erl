@@ -95,7 +95,8 @@ create(SrvId, Domain, Opts) ->
 %% @private
 object_get_info() ->
     #{
-        type => ?DOMAIN_SESSION
+        type => ?DOMAIN_SESSION,
+        remove_after_stop => true
     }.
 
 

@@ -67,33 +67,19 @@ start(_Type, _Args) ->
         elastic_pass => binary,
         api_server => binary,
 
-        user_timeout => {integer, 1, none},
-        alias_timeout => {integer, 1, none},
-        token_timeout => {integer, 1, none},
         role_proxy_timeout => {integer, 1, none},
         user_password_pbkdf2_iters => {integer, 1, none},
-        syntax_callback_mod => atom,
-        syntax_callback_fun => atom,
         '__defaults' => #{
             start_root => false,
             elastic_url => <<"http://127.0.0.1:9200/">>,
             api_server => <<"ws:all:9202/api/ws, http:all:9202/api">>,
 
-            user_timeout => 5000,
-            alias_timeout => 5000,
-            token_timeout => 60 * 60 * 1000,
             role_proxy_timeout => 10000,
-            user_password_pbkdf2_iters => 1,
-            syntax_callback_mod => nkservice_util,
-            syntax_callback_fun => get_syntax
+            user_password_pbkdf2_iters => 1
         }
     },
     case nklib_config:load_env(?APP, Syntax) of
         {ok, _} ->
-            SyntaxMod = get(syntax_callback_mod),
-            SyntaxFun = get(syntax_callback_fun),
-            code:ensure_loaded(SyntaxMod),
-            put(syntax_callback, {SyntaxMod, SyntaxFun}),
             {ok, Pid} = nkdomain_sup:start_link(),
             %% ok = riak_core_ring_events:add_guarded_handler(nkdomain_ring_handler, []),
             {ok, Vsn} = application:get_key(nkdomain, vsn),
