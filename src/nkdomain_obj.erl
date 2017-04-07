@@ -472,30 +472,31 @@ handle_call({nkdomain_apply, Fun}, _From, #state{session=Session}=State) ->
     end,
     reply(Reply2, State2);
 
-handle_call({nkdomain_create_child, Obj, Meta}, From, State) ->
+handle_call({nkdomain_create_child, Obj, Meta}, _From, State) ->
     #{path:=Path} = Obj,
     ?DEBUG("creating child ~s", [Path], State),
-    case do_check_create_path(Path, State) of
-        ok ->
-            handle_call({nkdomain_load_child, Obj, Meta#{is_dirty=>true}}, From, State);
+    case do_check_child(Obj, Meta, State) of
+        {ok, Name, #{skip_path_check:=true}=Meta2} ->
+            {ok, State2} = handle(object_child_created, [Obj], State),
+            do_load_child(Name, Obj, Meta2#{is_dirty=>true}, State2);
+        {ok, Name, Meta2} ->
+            case do_check_create_path(Path, State) of
+                ok ->
+                    {ok, State2} = handle(object_child_created, [Obj], State),
+                    do_load_child(Name, Obj, Meta2#{is_dirty=>true}, State2);
+                {error, Error} ->
+                    reply({error, Error}, State)
+            end;
         {error, Error} ->
             reply({error, Error}, State)
     end;
 
-handle_call({nkdomain_load_child, Obj, Meta}, _From, #state{srv_id=SrvId}=State) ->
-    #{obj_id:=ObjId, type:=Type, path:=Path} = Obj,
+handle_call({nkdomain_load_child, Obj, Meta}, _From, State) ->
+    #{path:=Path} = Obj,
     ?DEBUG("loading child ~s", [Path], State),
-    ?DEBUG("loading child ~s", [Path], State),
-    case do_check_child(Type, Path, Meta, State) of
+    case do_check_child(Obj, Meta, State) of
         {ok, Name, Meta2} ->
-            case start(SrvId, Obj, Meta2) of
-                {ok, ChildPid} ->
-                    State2 = do_add_child(Type, ObjId, Name, ChildPid, State),
-                    reply({ok, ChildPid}, State2);
-                {error, Error} ->
-                    ?LLOG(notice, "could not start child ~s:~s: ~p", [Type, ObjId, Error], State),
-                    reply({error, could_not_start_child}, State)
-            end;
+            do_load_child(Name, Obj, Meta2, State);
         {error, Error} ->
             reply({error, Error}, State)
     end;
@@ -698,6 +699,19 @@ do_check_expire(#state{session=#obj_session{obj=Obj}}) ->
 
 
 %% @private
+do_load_child(Name, #{type:=Type, obj_id:=ObjId}=Obj, Meta, #state{srv_id=SrvId}=State) ->
+    case start(SrvId, Obj, Meta) of
+        {ok, ChildPid} ->
+            State2 = do_add_child(Type, ObjId, Name, ChildPid, State),
+            {ok, State3} = handle(object_child_loaded, [Obj], State2),
+            reply({ok, ChildPid}, State3);
+        {error, Error} ->
+            ?LLOG(notice, "could not start child ~s:~s: ~p", [Type, ObjId, Error], State),
+            reply({error, could_not_start_child}, State)
+    end.
+
+
+%% @private
 do_save(#state{session=#obj_session{is_dirty=false}}=State) ->
     State;
 
@@ -795,7 +809,7 @@ do_check_create_path(ObjPath, #state{srv_id=SrvId}=State) ->
 
 
 %% @private
-do_check_child(Type, Path, Meta, State) ->
+do_check_child(#{type:=Type, path:=Path}, Meta, State) ->
     #state{obj_id=ParentId, session=Session} = State,
     #obj_session{path=Base, childs=Childs} = Session,
     case nkdomain_util:get_parts(Type, Path) of
@@ -856,7 +870,7 @@ do_rm_child(Pid, #state{session=Session, child_pids=Pids}=State) ->
             Pids2 = maps:remove(Pid, Pids),
             ?DEBUG("child ~s:~s stopped", [Type, Name], State),
             {true, State#state{session=Session2, child_pids=Pids2}};
-        false ->
+        error ->
             false
     end.
 
@@ -871,8 +885,8 @@ do_update(Update, #state{srv_id=SrvId, session=Session}=State) ->
                     {ok, State};
                 Obj2 ->
                     Session2 = Session#obj_session{obj=Obj2, is_dirty=true},
-                    State2 = do_save(State#state{session=Session2}),
-                    {ok, State3} = handle(object_updated, [Update], State2),
+                    {ok, State2} = handle(object_updated, [Update], State#state{session=Session2}),
+                    State3 = do_save(State2),
                     {ok, do_event({updated, Update}, State3)}
             end;
         {error, Error} ->

@@ -178,8 +178,8 @@ object_api_cmd(Sub, Cmd, Data, State) ->
 
 
 %% @private
-object_start(#obj_session{srv_id=SrvId, obj_id=ObjId}=Session) ->
-    spawn(fun() -> start_dom_childs(SrvId, ObjId) end),
+object_start(#obj_session{srv_id=SrvId, obj_id=ObjId, path=Path}=Session) ->
+    spawn(fun() -> start_dom_childs(SrvId, ObjId, Path) end),
     {ok, Session}.
 
 
@@ -193,14 +193,15 @@ object_all_links_down(Session) ->
 %% ===================================================================
 
 %% @private
-start_dom_childs(SrvId, ObjId) ->
+start_dom_childs(SrvId, ObjId, Path) ->
     case find_childs_type(SrvId, ObjId, ?DOMAIN_DOMAIN, #{}) of
         {ok, 0, []} ->
             ok;
         {ok, _N, List} ->
-            lager:notice("Domain starting childs: ~p", [List]),
             lists:foreach(
-                fun({?DOMAIN_DOMAIN, ChildId, _Path}) -> nkdomain:load(SrvId, ChildId, #{}) end,
+                fun({?DOMAIN_DOMAIN, ChildId, ChildPath}) ->
+                    lager:notice("Domain ~s starting child ~s", [Path, ChildPath]),
+                    nkdomain:load(SrvId, ChildId, #{}) end,
                 List);
         {error, Error} ->
             ?LLOG(warning, "could not find childs: ~p", [Error])

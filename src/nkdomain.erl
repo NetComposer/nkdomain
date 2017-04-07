@@ -24,7 +24,9 @@
 
 
 -export([find_loaded/1, find/1, find/2, load/1, load/2, load/3, create/3]).
+-export([enable/3, update/3, delete/3, force_delete/3, archive/3]).
 -export_type([obj_id/0, name/0, obj/0, path/0, type/0, id/0, class/0, history/0, history_op/0]).
+-export_type([session_msg/0]).
 
 %%-include_lib("nklib/include/nklib.hrl").
 
@@ -50,6 +52,10 @@
 
 -type history() :: [{nklib_util:m_timestamp(), User::obj_id(), history_op()}].
 
+-type session_msg() ::
+    {created, MsgId::obj_id(), map()} |
+    {updated, MsgId::obj_id(), map()} |
+    {deleted, MsgId::obj_id(), map()}.
 
 %% @see nkdomain_callbacks:domain_store_base_mapping/0
 -type obj() :: #{
@@ -169,4 +175,84 @@ create(Srv, Obj, Meta) ->
         {error, Error} ->
             {error, Error}
     end.
+
+
+
+%% @doc Enables/disabled an object
+-spec enable(nkservice:id(), nkdomain:id(), boolean()) ->
+    ok | {error, term()}.
+
+enable(Srv, Id, Enable) ->
+    case nkdomain_obj_lib:load(Srv, Id, #{}) of
+        #obj_id_ext{pid=Pid} ->
+            nkdomain_obj:enable(Pid, Enable);
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
+%% @doc Updates an object
+-spec update(nkservice:id(), nkdomain:id(), nkservice:error()) ->
+    ok | {error, term()}.
+
+update(Srv, Id, Update) ->
+    case nkdomain_obj_lib:load(Srv, Id, #{}) of
+        #obj_id_ext{pid=Pid} ->
+            nkdomain_obj:update(Pid, Update);
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
+
+%% @doc Remove an object
+-spec delete(nkservice:id(), nkdomain:id(), nkservice:error()) ->
+    ok | {error, term()}.
+
+delete(Srv, Id, Reason) ->
+    case nkdomain_obj_lib:load(Srv, Id, #{}) of
+        #obj_id_ext{pid=Pid} ->
+            nkdomain_obj:delete(Pid, Reason);
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
+%% @doc Remove an object
+%% If the object can be loaded, it is sent a delete message
+%% If not, it is deleted from disk
+-spec force_delete(nkservice:id(), nkdomain:id(), nkservice:error()) ->
+    ok | {error, term()}.
+
+force_delete(Srv, Id, Reason) ->
+    case find(Srv, Id) of
+        #obj_id_ext{pid=Pid} when is_pid(Pid) ->
+            nkdomain_obj:delete(Pid, Reason);
+        #obj_id_ext{srv_id=SrvId, obj_id=ObjId} ->
+            nkdomain_store:delete(SrvId, ObjId);
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
+
+%% @doc Archives an object
+-spec archive(nkservice:id(), nkdomain:obj_id(), nkservice:error()) ->
+    ok | {error, term()}.
+
+archive(SrvId, ObjId, Reason) ->
+    case SrvId:object_load(SrvId, ObjId) of
+        {ok, Obj} ->
+            Obj2 = nkdomain_util:add_destroyed(SrvId, Reason, Obj),
+            case nkdomain_store:archive(SrvId, ObjId, Obj2) of
+                ok ->
+                    nkdomain_store:delete(SrvId, ObjId);
+                {error, Error} ->
+                    {error, Error}
+            end;
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
 

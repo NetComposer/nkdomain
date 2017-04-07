@@ -142,7 +142,7 @@ object_check_active(SrvId, ObjId) ->
             true;
         not_found ->
             lager:notice("Removing active object ~s", [ObjId]),
-            nkdomain_obj_lib:archive(SrvId, ObjId, object_clean_process),
+            nkdomain:archive(SrvId, ObjId, object_clean_process),
             false
     end.
 

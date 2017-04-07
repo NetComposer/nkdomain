@@ -99,14 +99,9 @@ cmd_delete(Type, Data, #{srv_id:=SrvId}=State) ->
     case getid(Type, Data, State) of
         {ok, Id} ->
             Reason = maps:get(reason, Data, api_delete),
-            case nkdomain_obj_lib:load(SrvId, Id, #{}) of
-                #obj_id_ext{obj_id=ObjId} ->
-                    case nkdomain_obj:delete(ObjId, Reason) of
-                        ok ->
-                            {ok, #{}, State};
-                        {error, Error} ->
-                            {error, Error, State}
-                    end;
+            case nkdomain:delete(SrvId, Id, Reason) of
+                ok ->
+                    {ok, #{}, State};
                 {error, Error} ->
                     {error, Error, State}
             end;
@@ -119,14 +114,9 @@ cmd_delete(Type, Data, #{srv_id:=SrvId}=State) ->
 cmd_update(Type, Data, #{srv_id:=SrvId}=State) ->
     case getid(Type, Data, State) of
         {ok, Id} ->
-            case nkdomain_obj_lib:load(SrvId, Id, #{}) of
-                #obj_id_ext{obj_id=ObjId} ->
-                    case nkdomain_obj:update(ObjId, Data) of
-                        ok ->
-                            {ok, #{}, State};
-                        {error, Error} ->
-                            {error, Error, State}
-                    end;
+            case nkdomain:update(SrvId, Id, Data) of
+                ok ->
+                    {ok, #{}, State};
                 {error, Error} ->
                     {error, Error, State}
             end;
@@ -140,14 +130,9 @@ cmd_enable(Type, Data, #{srv_id:=SrvId}=State) ->
     Enabled = maps:get(enable, Data, true),
     case getid(Type, Data, State) of
         {ok, Id} ->
-            case nkdomain_obj_lib:load(SrvId, Id, #{}) of
-                #obj_id_ext{obj_id=ObjId} ->
-                    case nkdomain_obj:enable(ObjId, Enabled) of
-                        ok ->
-                            {ok, #{}, State};
-                        {error, Error} ->
-                            {error, Error, State}
-                    end;
+            case nkdomain:enable(SrvId, Id, Enabled) of
+                ok ->
+                    {ok, #{}, State};
                 {error, Error} ->
                     {error, Error, State}
             end;

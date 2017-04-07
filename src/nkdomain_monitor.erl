@@ -22,8 +22,8 @@
 -module(nkdomain_monitor).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([new/2, get_obj/2, get_objs/1, get_disabled/1]).
--export([load_obj/2, add_obj/2, rm_obj/2]).
+-export([new/2, get_obj/2, get_obj_ids/1, get_obj_values/1, get_disabled/1]).
+-export([update_obj/3, load_obj/3, add_obj/3, rm_obj/2]).
 -export([reload_disabled/1, down_obj/2]).
 -export_type([monitor/0]).
 
@@ -34,11 +34,12 @@
 %% Types
 %% ===================================================================
 
+-type obj() :: term().
 
 -record(obj_monitor, {
     srv_id :: nkservice:id(),
-    module :: module(),
-    objs = #{} :: #{nkdomain:obj_id() => pid()},
+    regtag :: term(),
+    objs = #{} :: #{nkdomain:obj_id() => {obj(), pid()}},
     disabled = #{} :: #{ConvId::nkdomain:obj_id() => nkutil:timestamp()},
     pids = #{} :: #{pid() => {ConvId::nkdomain:obj_id(), reference()}}
 }).
@@ -51,35 +52,64 @@
 %% ===================================================================
 
 %% @doc Creates a monitor
--spec new(nkservice:id(), atom()) ->
+-spec new(nkservice:id(), term()) ->
     monitor().
 
-new(SrvId, Module) ->
-    #obj_monitor{srv_id=SrvId, module=Module}.
+new(SrvId, RegTag) ->
+    #obj_monitor{srv_id=SrvId, regtag=RegTag}.
 
 
 %% @doc Get all objects
 -spec get_obj(nkdomain:id(), monitor()) ->
-    {enabled, pid()} | {disabled, nklib_util:timestamp()} | not_found.
+    {enabled, obj(), pid()} | {disabled, obj(), nklib_util:timestamp()} | not_found.
 
 get_obj(Id, #obj_monitor{objs=Objs, disabled=Disabled}) ->
     case maps:find(Id, Objs) of
-        {ok, Pid} when is_pid(Pid) ->
-            {enabled, Pid};
-        {ok, undefined} ->
+        {ok, {Obj, Pid}} when is_pid(Pid) ->
+            {enabled, Obj, Pid};
+        {ok, {Obj, undefined}} ->
             Time = maps:get(Id, Disabled),
-            {disabled, Time};
+            {disabled, Obj, Time};
         error ->
             not_found
     end.
 
 
 %% @doc Get all objects
--spec get_objs(monitor()) ->
+-spec get_obj_ids(monitor()) ->
     [nkdomain:obj_id()].
 
-get_objs(#obj_monitor{objs=Objs}) ->
+get_obj_ids(#obj_monitor{objs=Objs}) ->
     maps:keys(Objs).
+
+
+%% @doc Get all objects
+-spec get_obj_values(monitor()) ->
+    [{enabled|disabled, nkdomain:obj()}].
+
+get_obj_values(#obj_monitor{objs=Objs}) ->
+    lists:map(
+        fun({Obj, Pid}) ->
+            {
+                case is_pid(Pid) of true -> enabled; false -> disabled end,
+                Obj
+            }
+        end,
+        maps:values(Objs)).
+
+
+%% @doc Updates an object
+-spec update_obj(nkdomain:id(), obj(), monitor()) ->
+    {ok, monitor()} | not_found.
+
+update_obj(Id, Obj, #obj_monitor{objs=Objs}=Monitor) ->
+    case maps:find(Id, Objs) of
+        {ok, {_, Pid}} ->
+            Objs2 = maps:put(Id, {Obj, Pid}, Objs),
+            {ok, Monitor#obj_monitor{objs=Objs2}};
+        error ->
+            not_found
+    end.
 
 
 %% @doc Get disabled objects
@@ -91,45 +121,32 @@ get_disabled(#obj_monitor{disabled=Disabled}) ->
 
 
 %% @doc Adds a new object, or, it not found, is added as 'disabled'
--spec load_obj(nkobject:id(), monitor()) ->
+-spec load_obj(nkobject:id(), obj(), monitor()) ->
     {enabled, monitor()} | {disabled, monitor()} | {error, Error}
     when Error :: member_already_present | term().
 
-load_obj(Id, Monitor) ->
-    case add_obj(Id, Monitor) of
+load_obj(Id, Obj, Monitor) ->
+    case add_obj(Id, Obj, Monitor) of
         {ok, _ObjId, Monitor2} ->
             {enabled, Monitor2};
         {error, object_not_found} ->
-            {disabled, do_add_disabled(nklib_util:to_binary(Id), Monitor)};
+            {disabled, do_add_disabled(nklib_util:to_binary(Id), Obj, Monitor)};
         {error, Error} ->
             {error, Error}
     end.
 
 
 %% @doc Adds a new object
--spec add_obj(nkobject:id(), monitor()) ->
+-spec add_obj(nkobject:id(), obj(), monitor()) ->
     {ok, nkdomain:obj_id(), monitor()} |
     {error, Error} when Error :: object_not_found | member_already_present | term().
 
-add_obj(Id, #obj_monitor{srv_id=SrvId, module=Module}=Monitor) ->
-    case nkdomain_obj_lib:find(SrvId, Id) of
-        #obj_id_ext{obj_id=ObjId, pid=Pid} when is_pid(Pid) ->
-            case do_add_enabled(ObjId, Pid, Monitor) of
+add_obj(Id, Obj, #obj_monitor{srv_id=SrvId, regtag=RegTag}=Monitor) ->
+    case nkdomain_obj_lib:load(SrvId, Id, #{register=>{RegTag, self()}}) of
+        #obj_id_ext{obj_id=ObjId, pid=Pid} ->
+            case do_add_enabled(ObjId, Obj, Pid, Monitor) of
                 {ok, Monitor2} ->
-                    nkdomain_obj:register(Pid, {Module, self()}),
                     {ok, ObjId, Monitor2};
-                {error, Error} ->
-                    {error, Error}
-            end;
-        #obj_id_ext{obj_id=ObjId} ->
-            case nkdomain_obj_lib:load(SrvId, ObjId, #{register=>{Module, self()}}) of
-                #obj_id_ext{obj_id=ObjId, pid=Pid} ->
-                    case do_add_enabled(ObjId, Pid, Monitor) of
-                        {ok, Monitor2} ->
-                            {ok, ObjId, Monitor2};
-                        {error, Error} ->
-                            {error, Error}
-                    end;
                 {error, Error} ->
                     {error, Error}
             end;
@@ -164,12 +181,13 @@ rm_obj(Id, #obj_monitor{srv_id=SrvId, objs=Objs}=Monitor) ->
 
 %% @doc Notifies a process down
 -spec down_obj(pid(), monitor()) ->
-    {ok, nkdomain:obj_id(), monitor()} | not_found.
+    {ok, nkdomain:obj_id(), obj(), monitor()} | not_found.
 
-down_obj(Pid, #obj_monitor{pids=Pids}=Monitor) ->
+down_obj(Pid, #obj_monitor{pids=Pids, objs=Objs}=Monitor) ->
     case maps:find(Pid, Pids) of
         {ok, {ObjId, _Ref}} ->
-            {disabled, ObjId, do_add_disabled(ObjId, Monitor)};
+            {Obj, Pid} = maps:get(ObjId, Objs),
+            {ok, ObjId, Obj, do_add_disabled(ObjId, Obj, Monitor)};
         error ->
             not_found
     end.
@@ -182,12 +200,14 @@ down_obj(Pid, #obj_monitor{pids=Pids}=Monitor) ->
 reload_disabled(#obj_monitor{disabled=Disabled}=Monitor) ->
     reload_disabled(maps:to_list(Disabled), [], Monitor).
 
+
 %% @private
 reload_disabled([], Acc, Monitor) ->
     {Acc, Monitor};
 
-reload_disabled([{ObjId, _Time}|Rest], Acc, Monitor) ->
-    case add_obj(ObjId, Monitor) of
+reload_disabled([{ObjId, _Time}|Rest], Acc, #obj_monitor{objs=Objs}=Monitor) ->
+    {Obj, _} = maps:get(ObjId, Objs),
+    case add_obj(ObjId, Obj, Monitor) of
         {ok, ObjId, Monitor2} ->
             reload_disabled(Rest, [ObjId|Acc], Monitor2);
         {error, _Error} ->
@@ -200,14 +220,14 @@ reload_disabled([{ObjId, _Time}|Rest], Acc, Monitor) ->
 %% ===================================================================
 
 %% @private
-do_add_enabled(ObjId, Pid, Monitor) ->
+do_add_enabled(ObjId, Obj, Pid, Monitor) ->
     #obj_monitor{objs=Objs, pids=Pids, disabled=Disabled} = Monitor,
     case maps:find(ObjId, Objs) of
-        {ok, Pid} ->
+        {ok, {Obj, Pid}} ->
             {error, member_already_present};
         _ ->
             % Not found or disabled or different pid
-            Objs2 = Objs#{ObjId => Pid},
+            Objs2 = Objs#{ObjId => {Obj, Pid}},
             Pids2 = case maps:is_key(Pid, Pids) of
                 true ->
                     Pids;
@@ -221,13 +241,13 @@ do_add_enabled(ObjId, Pid, Monitor) ->
 
 
 %% @private
-do_add_disabled(ObjId, Monitor) ->
+do_add_disabled(ObjId, Obj, Monitor) ->
     #obj_monitor{objs=Objs, pids=Pids, disabled=Disabled} = Monitor,
-    Objs2 = Objs#{ObjId => undefined},
+    Objs2 = Objs#{ObjId => {Obj, undefined}},
     Pids2 = case maps:find(ObjId, Objs) of
-        {ok, undefined} ->
+        {ok, {_, undefined}} ->
             Pids;
-        {ok, Pid} ->
+        {ok, {_, Pid}} ->
             {ObjId, Ref} = maps:get(Pid, Pids),
             demonitor(Ref, [flush]),
             maps:remove(Pid, Pids);
@@ -245,14 +265,14 @@ do_add_disabled(ObjId, Monitor) ->
 
 %% @private
 do_remove(ObjId, Monitor) ->
-    #obj_monitor{objs=Objs, pids=Pids, disabled=Disabled, module=Module} = Monitor,
+    #obj_monitor{objs=Objs, pids=Pids, disabled=Disabled, regtag=RegTag} = Monitor,
     Pids2 = case maps:find(ObjId, Objs) of
-        {ok, undefined} ->
+        {ok, {_, undefined}} ->
             Pids;
-        {ok, Pid} ->
+        {ok, {_, Pid}} ->
             {ObjId, Ref} = maps:get(Pid, Pids),
             demonitor(Ref, [flush]),
-            nkdomain_obj:unregister(Pid, {Module, self()}),
+            nkdomain_obj:unregister(Pid, {RegTag, self()}),
             maps:remove(Pid, Pids);
         error ->
             Pids

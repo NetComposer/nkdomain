@@ -24,12 +24,14 @@
 -behavior(nkdomain_obj).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([create/4, login/3, find_referred/3]).
+-export([create/4, login/3, send_push/6]).
 -export([object_get_info/0, object_mapping/0, object_syntax/1,
-         object_api_syntax/3, object_api_allow/4, object_api_cmd/4]).
+         object_api_syntax/3, object_api_allow/4, object_api_cmd/4,
+         object_sync_op/2]).
 -export([user_pass/1]).
 
 -include("nkdomain.hrl").
+-include("nkdomain_debug.hrl").
 
 -define(LLOG(Type, Txt, Args),
     lager:Type("NkDOMAIN User "++Txt, Args)).
@@ -97,15 +99,35 @@ login(SrvId, Login, Opts) ->
             {error, Error}
     end.
 
-%% @doc
-%% TODO: change
-find_referred(Srv, Id, Spec) ->
-    case nkdomain_obj_lib:find(Srv, Id) of
-        #obj_id_ext{srv_id=SrvId, obj_id=ObjId} ->
-            SrvId:object_store_find_referred(SrvId, ObjId, Spec);
+
+%% @doc 
+-spec send_push(nkservice:id(), nkdomain:id(), nkdomain:type(), nkdomain:obj_id(),
+                nkdomain:obj_id(), map()) ->
+    ok | {error, term()}.
+
+send_push(Srv, Id, Type, ObjId, MsgId, Msg) ->
+    case nkdomain_obj_lib:load(Srv, Id, #{}) of
+        #obj_id_ext{pid=Pid} ->
+            nkdomain_obj:sync_op(Pid, {?MODULE, send_push, Srv, Id, Type, ObjId, MsgId, Msg});
         {error, Error} ->
             {error, Error}
     end.
+
+
+
+
+
+
+
+%%%% @doc
+%%%% TODO: change
+%%find_referred(Srv, Id, Spec) ->
+%%    case nkdomain_obj_lib:find(Srv, Id) of
+%%        #obj_id_ext{srv_id=SrvId, obj_id=ObjId} ->
+%%            SrvId:object_store_find_referred(SrvId, ObjId, Spec);
+%%        {error, Error} ->
+%%            {error, Error}
+%%    end.
 
 
 
@@ -169,14 +191,12 @@ object_api_cmd(Sub, Cmd, Data, State) ->
     nkdomain_user_obj_api:cmd(Sub, Cmd, Data, State).
 
 
+%% @private
+object_sync_op({?MODULE, get_push, _Type, _ObjId}, #obj_session{obj_id=UserId}=Session) ->
+    {reply, {ok, UserId, none}, Session};
 
-
-%% ===================================================================
-%% Internal
-%% ===================================================================
-
-
-
+object_sync_op(_Op, _Session) ->
+    continue.
 
 
 %% ===================================================================

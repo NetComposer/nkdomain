@@ -26,7 +26,8 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([find/2, load/3, create/3]).
--export([make_obj/4, make_and_create/4, archive/3, delete/3]).
+-export([make_obj/4, make_and_create/4]).
+-export([unload/4, sync_op/4, async_op/4]).
 -export([find_loaded/1, call/2, call/3, cast/2, info/2]).
 
 -include("nkdomain.hrl").
@@ -150,7 +151,13 @@ make_and_create(Srv, Parent, Type, Opts) ->
     case make_obj(Srv, Parent, Type, Opts) of
         {ok, Obj} ->
             %% lager:warning("Obj: ~p", [Obj]),
-            case nkdomain_obj_lib:create(Srv, Obj, #{}) of
+            Meta = case maps:is_key(obj_id, Opts) orelse maps:is_key(name, Opts) of
+                true ->
+                    #{};
+                false ->
+                    #{skip_path_check=>true}
+            end,
+            case nkdomain_obj_lib:create(Srv, Obj, Meta) of
                 #obj_id_ext{type = Type, obj_id = ObjId, path = Path, pid = Pid} ->
                     {ok, ObjId, Path, Pid};
                 {error, Error} ->
@@ -169,7 +176,7 @@ create(Srv, #{obj_id:=ObjId, type:=Type}=Obj, Meta) ->
     case nkservice_srv:get_srv_id(Srv) of
         {ok, SrvId} ->
             case SrvId:object_parse(SrvId, load, Type, Obj) of
-                {ok, #{obj_id:=ObjId, parent_id:=ParentId, path:=Path}=Obj2} ->
+                {ok, #{obj_id:=ObjId, path:=Path}=Obj2} ->
                     % We know type is valid here
                     Ext = #obj_id_ext{srv_id=SrvId, type=Type, obj_id=ObjId, path=Path},
                     do_create(Ext, Obj2, Meta);
@@ -182,24 +189,18 @@ create(Srv, #{obj_id:=ObjId, type:=Type}=Obj, Meta) ->
 
 
 %% @private
-do_create(#obj_id_ext{srv_id=SrvId, path=Path}=Ext, #{parent_id:=ParentId}=Obj, Meta) ->
-    case find(SrvId, Path) of
-        {error, object_not_found} ->
-            case load(SrvId, ParentId, #{}) of
-                #obj_id_ext{pid=ParentPid} ->
-                    case nkdomain_obj:create_child(ParentPid, Obj, Meta) of
-                        {ok, ObjPid} ->
-                            Ext#obj_id_ext{pid=ObjPid};
-                        {error, Error} ->
-                            {error, Error}
-                    end;
-                {error, object_not_found} ->
-                    {error, {could_not_load_parent, ParentId}};
+%% @private
+do_create(#obj_id_ext{srv_id=SrvId}=Ext, #{parent_id:=ParentId}=Obj, Meta) ->
+    case load(SrvId, ParentId, #{}) of
+        #obj_id_ext{pid=ParentPid} ->
+            case nkdomain_obj:create_child(ParentPid, Obj, Meta) of
+                {ok, ObjPid} ->
+                    Ext#obj_id_ext{pid=ObjPid};
                 {error, Error} ->
                     {error, Error}
             end;
-        #obj_id_ext{} ->
-            {error, object_already_exists};
+        {error, object_not_found} ->
+            {error, {could_not_load_parent, ParentId}};
         {error, Error} ->
             {error, Error}
     end.
@@ -287,41 +288,44 @@ do_load3(#obj_id_ext{srv_id=SrvId}=ObjIdExt, #{parent_id:=ParentId}=Obj, Meta) -
     end.
 
 
-%% @doc Archives an object
--spec archive(nkservice:id(), nkdomain:obj_id(), nkservice:error()) ->
-    ok | {error, term()}.
-
-archive(SrvId, ObjId, Reason) ->
-    case SrvId:object_load(SrvId, ObjId) of
-        {ok, Obj} ->
-            Obj2 = nkdomain_util:add_destroyed(SrvId, Reason, Obj),
-            case nkdomain_store:archive(SrvId, ObjId, Obj2) of
-                ok ->
-                    nkdomain_store:delete(SrvId, ObjId);
-                {error, Error} ->
-                    {error, Error}
-            end;
-        {error, Error} ->
-            {error, Error}
-    end.
-
-
-
-%% @doc Remove an object
-%% If the object can be loaded, it is sent a delete message
-%% If not, it is deleted from disk
--spec delete(nkservice:id(), nkdomain:id(), nkservice:error()) ->
-    ok | {error, term()}.
-
-delete(Srv, Id, Reason) ->
+%% @doc
+unload(Srv, Id, Reason, NotFound) ->
     case find(Srv, Id) of
         #obj_id_ext{pid=Pid} when is_pid(Pid) ->
-            nkdomain_obj:delete(Pid, Reason);
-        #obj_id_ext{srv_id=SrvId, obj_id=ObjId} ->
-            nkdomain_store:delete(SrvId, ObjId);
+            nkdomain_obj:unload(Pid, Reason);
+        {error, object_not_found} ->
+            {error, NotFound};
         {error, Error} ->
             {error, Error}
     end.
+
+
+%% @doc
+sync_op(Srv, Id, Msg, NotFound) ->
+    case load(Srv, Id, #{}) of
+        #obj_id_ext{pid=Pid} when is_pid(Pid) ->
+            nkdomain_obj:sync_op(Pid, Msg);
+        {error, object_not_found} ->
+            {error, NotFound};
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
+%% @doc
+async_op(Srv, Id, Msg, NotFound) ->
+    case load(Srv, Id, #{}) of
+        #obj_id_ext{pid=Pid} when is_pid(Pid) ->
+            nkdomain_obj:async_op(Pid, Msg);
+        {error, object_not_found} ->
+            {error, NotFound};
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
+
+
 
 
 %% ===================================================================
