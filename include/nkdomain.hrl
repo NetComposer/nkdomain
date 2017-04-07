@@ -31,10 +31,10 @@
 -define(REMOVE_FROM_OBJ(Key, Obj), maps:remove(Key, Obj)).
 
 -record(obj_session, {
-    obj_id :: nkdomain:obj_id(),
-    module :: module(),
     type :: binary(),
+    obj_id :: nkdomain:obj_id(),
     path :: nkdomain:path(),
+    module :: module(),
     parent_id :: nkdomain:obj_id(),
     parent_pid :: pid(),
     obj :: nkdomain:obj(),
@@ -43,7 +43,10 @@
     is_enabled :: boolean(),
     status :: nkdomain_obj:status(),
     meta :: map(),                      % Object load metadata
-    data :: term()                      % Type-specific metadata
+    data :: term(),                     % Type-specific metadata
+    started :: nklib_util:m_timestamp(),
+    childs :: #{nkdomain:type() => #{nkdomain:name() => {nkdomain:obj_id(), pid()}}},
+    links :: nklib_links:links()
 }).
 
 -record(obj_id_ext, {

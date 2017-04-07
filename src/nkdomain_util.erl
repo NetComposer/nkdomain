@@ -21,7 +21,7 @@
 -module(nkdomain_util).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([is_path/1, get_parts/2, name/1, update/4]).
+-export([is_path/1, get_parts/2, class/1, name/1, update/4]).
 -export([add_destroyed/3]).
 -export([get_service_domain/1]).
 -export([error_code/2]).
@@ -72,20 +72,20 @@ is_path(Path) ->
 
 
 %% @doc
-%% /domain/users/user1 -> {ok, <<"/domain">>, <<"users/user1">>
+%% /domain/users/user1 -> {ok, <<"/domain">>, <<"user1">>}
 -spec get_parts(nkdomain:type(), nkdomain:path()) ->
     {ok, Base::nkdomain:path(), Name::binary()} | {error, term()}.
 
-get_parts(<<"domain">>, <<"/">>) ->
+get_parts(?DOMAIN_DOMAIN, <<"/">>) ->
     {ok, <<"/">>, <<>>};
 
-get_parts(Type, Path) ->
+get_parts(Type, Path) when is_binary(Type) ->
     case is_path(Path) of
         {true, Path2} ->
             case lists:reverse(binary:split(Path2, <<"/">>, [global])) of
                 [<<>>|_] ->
                     {error, {invalid_object_path, Path2}};
-                [ObjName|Parts] when Type==<<"domain">> ->
+                [ObjName|Parts] when Type==?DOMAIN_DOMAIN ->
                     ObjName2 = name(ObjName),
                     case nklib_util:bjoin(lists:reverse(Parts), <<"/">>) of
                         <<>> ->
@@ -94,14 +94,13 @@ get_parts(Type, Path) ->
                             {ok, Base, ObjName2}
                     end;
                 [ObjName, Class|Parts] ->
-                    ObjName2 = name(ObjName),
-                    case <<Type/binary, "s">> of
+                    case class(Type) of
                          Class ->
                             case nklib_util:bjoin(lists:reverse(Parts), <<"/">>) of
                                 <<>> ->
-                                    {ok, <<"/">>, <<Class/binary, $/, ObjName2/binary>>};
+                                    {ok, <<"/">>, name(ObjName)};
                                 Base ->
-                                    {ok, Base, <<Class/binary, $/, ObjName2/binary>>}
+                                    {ok, Base, name(ObjName)}
                             end;
                         _ ->
                             {error, {invalid_object_path, Path2}}
@@ -111,7 +110,17 @@ get_parts(Type, Path) ->
             end;
         false ->
             {error, {invalid_object_path, to_bin(Path)}}
-    end.
+    end;
+
+get_parts(Type, Path) ->
+    get_parts(to_bin(Type), Path).
+
+
+%% @private
+class(?DOMAIN_DOMAIN) ->
+    <<>>;
+class(Type) ->
+    <<Type/binary, "s">>.
 
 
 %% @private

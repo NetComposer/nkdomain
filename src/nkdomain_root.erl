@@ -76,13 +76,7 @@ start() ->
     end,
     case nkservice:start(root, Spec3) of
         {ok, _} ->
-            lager:info("Root service started"),
-            case nkdomain_obj_lib:load(root, <<"root">>, #{}) of
-                #obj_id_ext{type = ?DOMAIN_DOMAIN, obj_id = <<"root">>} ->
-                    ok;
-                {error, Error} ->
-                    lager:error("Could not load ROOT domain: ~p", [Error])
-            end;
+            lager:info("Root service started");
         {error, Error} ->
             lager:error("Could not start root service: ~p (~p)", [Error, Spec3]),
             error(start_root_error)

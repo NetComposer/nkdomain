@@ -79,8 +79,7 @@ test_create_user(Pid) ->
         }
     },
     {ok, #{<<"obj_id">>:=U2Id, <<"path">>:=<<"/users/tuser1">>}} = cmd(Pid, user, create, U2_Create),
-    {error, {<<"name_is_already_used">>, <<"Name is already used: 'users/tuser1'">>}} =
-        cmd(Pid, user, create, U2_Create),
+    {error, {<<"object_already_exists">>, _}} = cmd(Pid, user, create, U2_Create),
 
     % Check user, creation date and password
     {ok,
@@ -111,8 +110,7 @@ test_create_user(Pid) ->
 
     % Unload the user
     ok = nkdomain_obj:unload(U2Id, normal),
-    % We must wait > MIN_STARTED_TIME
-    timer:sleep(2100),
+    timer:sleep(100),
     {ok, <<"user">>, U2Id, <<"/users/tuser1">>, undefined} = F2 = nkdomain:find(root, "/users/tuser1"),
     F2 = nkdomain:find(root, U2Id),
     {ok, <<"user">>, U2Id, <<"/users/tuser1">>, Pid2} = F3 = nkdomain:load(root, "/users/tuser1"),
@@ -172,16 +170,16 @@ test_session(Pid) ->
         cmd(Pid2, session, get, #{}),
 
     % If we stop the WS connection, the session is stopped and destroyed, but found on archive
+    % We must wait for it to be deleted and archived for the process to disappear
     nkapi_client:stop(Pid2),
-    % Wait > MIN_STARTED_TIME
-    timer:sleep(2100),
+    timer:sleep(1200),
     false = is_process_alive(SPid),
     {error, object_not_found} = nkdomain:find(root, SessId),
     {1, [S2]} = find_archive(SessId),
     #{
         <<"obj_id">>:=SessId,
         <<"destroyed_time">>:= T1,
-        <<"destroyed_code">> := <<"object_stopped">>
+        <<"destroyed_code">> := _
     } = S2,
     true = nklib_util:m_timestamp() - T1 < 5000,
     ok.
@@ -193,13 +191,16 @@ test_session2(Pid) ->
     {ok, #{<<"obj_id">>:=SessId}} = cmd(Pid, session, get, #{}),
     {ok, <<"session">>, SessId, Path, SessPid} = nkdomain:find(root, SessId),
     {ok, Childs} = nkdomain_obj:get_childs(<<"admin">>),
-    {<<"session">>, SessId, _Name, SessPid} = lists:keyfind(SessId, 2, Childs),
+    SessName = nkdomain_util:name(SessId),
+    {SessId, SessPid} = maps:get(SessName, maps:get(<<"session">>, Childs)),
 
     % If we kill the session, admin notices
     exit(SessPid, kill),
     timer:sleep(100),
     {ok, Childs2} = nkdomain_obj:get_childs(<<"admin">>),
-    false = lists:keyfind(SessId, 2, Childs2),
+
+    Sessions = maps:get(<<"session">>, Childs2, #{}),
+    error = maps:find(SessName, Sessions),
     {ok, <<"session">>, SessId, Path, undefined} = nkdomain:find(root, SessId),
 
     % Object has not active childs, but the child is still found on disk
@@ -219,10 +220,10 @@ test_delete(Pid) ->
     %% Delete the tuser1 object and find it in archive
     {ok, #{<<"obj_id">>:=ObjId}} = cmd(Pid, user, get, #{id=><<"/users/tuser1">>}),
     {ok, #{}} = cmd(Pid, user, delete, #{id=> <<"/users/tuser1">>}),
-    {error,{<<"object_not_found">>,<<"Object not found">>}} =
-        cmd(Pid, user, delete, #{id=> <<"/users/tuser1">>}),
 
     timer:sleep(1100),
+    {error,{<<"object_not_found">>,<<"Object not found">>}} =
+        cmd(Pid, user, delete, #{id=> <<"/users/tuser1">>}),
     {1, [#{<<"path">>:=<<"/users/tuser1">>}]} = find_archive(ObjId),
     {_N, [#{<<"path">>:=<<"/users/tuser1">>}|_]} = find_archive(<<"/users/tuser1">>),
     ok.
@@ -233,15 +234,15 @@ test_basic_2(Pid) ->
 
     % Create /stest1 and check we cannot create it again
     {ok, #{<<"obj_id">>:=S1Id, <<"path">>:=<<"/stest1">>}} =
-        cmd(Pid, domain, create, #{obj_name=>stest1, description=>"Test Sub1"}),
-    {error,{<<"name_is_already_used">>, <<"Name is already used: 'stest1'">>}} =
-        cmd(Pid, domain, create, #{obj_name=>stest1, description=>"Test Sub1"}),
+        cmd(Pid, domain, create, #{obj_name=>stest1, description=><<"Test Sub1">>}),
+    {error,{<<"object_already_exists">>, _}} =
+        cmd(Pid, domain, create, #{obj_name=>stest1, description=><<"Test Sub1">>}),
 
     % Create /stest1/stest2 and check we cannot create a child with missing father
     {ok, #{<<"obj_id">>:=S2Id, <<"path">>:=<<"/stest1/stest2">>}} =
-        cmd(Pid, domain, create, #{obj_name=>stest2, domain=>"/stest1", description=>"Test Sub2"}),
+        cmd(Pid, domain, create, #{obj_name=>stest2, domain=>"/stest1", description=><<"Test Sub2">>}),
     {error,{<<"could_not_load_parent">>, <<"Object could not load parent '/stest2'">>}} =
-        cmd(Pid, domain, create, #{obj_name=>stest2, domain=>"/stest2", description=>"Test Sub2B"}),
+        cmd(Pid, domain, create, #{obj_name=>stest2, domain=>"/stest2", description=><<"Test Sub2B">>}),
 
     % Check the created objects
     {ok,
@@ -286,7 +287,7 @@ test_basic_2(Pid) ->
     U1 = #{name=>n1, surname=>s1, email=>"u1@sub1"},
     {ok, #{<<"obj_id">>:=U1Id, <<"path">>:=<<"/stest1/users/u1">>}} =
         cmd(Pid, user, create, #{domain=>S1Id, obj_name=>u1, user=>U1}),
-    {error,{<<"name_is_already_used">>, <<"Name is already used: 'users/u1'">>}} =
+    {error,{<<"object_already_exists">>, _}} =
         cmd(Pid, user, create, #{domain=>S1Id, obj_name=>u1, user=>U1}),
 
     % Create /stest1/stest2/users/u1
@@ -363,8 +364,7 @@ test_basic_2(Pid) ->
     true = is_loaded("/stest1/stest2/users/u1"),
     nkdomain_obj:unload("/stest1", normal),
 
-    % Wait MIN_TIME
-    timer:sleep(2100),
+    timer:sleep(100),
     false = is_loaded("/stest1"),
     false = is_loaded("/stest1/users/u1"),
     false = is_loaded("/stest1/stest2"),

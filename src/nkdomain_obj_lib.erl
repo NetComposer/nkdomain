@@ -171,24 +171,37 @@ create(Srv, #{obj_id:=ObjId, type:=Type}=Obj, Meta) ->
             case SrvId:object_parse(SrvId, load, Type, Obj) of
                 {ok, #{obj_id:=ObjId, parent_id:=ParentId, path:=Path}=Obj2} ->
                     % We know type is valid here
-                    case load(SrvId, ParentId, #{}) of
-                        #obj_id_ext{obj_id=ParentId, pid=ParentPid} ->
-                            case nkdomain_obj:create_child(ParentPid, Obj2, Meta) of
-                                {ok, ObjPid} ->
-                                    #obj_id_ext{srv_id=SrvId, type=Type, obj_id=ObjId, path=Path, pid=ObjPid};
-                                {error, Error} ->
-                                    {error, Error}
-                            end;
-                        {error, object_not_found} ->
-                            {error, {could_not_load_parent, ParentId}};
-                        {error, Error} ->
-                            {error, Error}
-                    end;
+                    Ext = #obj_id_ext{srv_id=SrvId, type=Type, obj_id=ObjId, path=Path},
+                    do_create(Ext, Obj2, Meta);
                 {error, Error} ->
                     {error, Error}
             end;
         not_found ->
             {error, service_not_found}
+    end.
+
+
+%% @private
+do_create(#obj_id_ext{srv_id=SrvId, path=Path}=Ext, #{parent_id:=ParentId}=Obj, Meta) ->
+    case find(SrvId, Path) of
+        {error, object_not_found} ->
+            case load(SrvId, ParentId, #{}) of
+                #obj_id_ext{pid=ParentPid} ->
+                    case nkdomain_obj:create_child(ParentPid, Obj, Meta) of
+                        {ok, ObjPid} ->
+                            Ext#obj_id_ext{pid=ObjPid};
+                        {error, Error} ->
+                            {error, Error}
+                    end;
+                {error, object_not_found} ->
+                    {error, {could_not_load_parent, ParentId}};
+                {error, Error} ->
+                    {error, Error}
+            end;
+        #obj_id_ext{} ->
+            {error, object_already_exists};
+        {error, Error} ->
+            {error, Error}
     end.
 
 
@@ -303,10 +316,8 @@ archive(SrvId, ObjId, Reason) ->
 delete(Srv, Id, Reason) ->
     case find(Srv, Id) of
         #obj_id_ext{pid=Pid} when is_pid(Pid) ->
-            lager:error("DEL1"),
             nkdomain_obj:delete(Pid, Reason);
         #obj_id_ext{srv_id=SrvId, obj_id=ObjId} ->
-            lager:error("DEL2"),
             nkdomain_store:delete(SrvId, ObjId);
         {error, Error} ->
             {error, Error}
@@ -317,19 +328,6 @@ delete(Srv, Id, Reason) ->
 %% Private
 %% ===================================================================
 
-%% @private
-%%find_loaded({Srv, Path}) ->
-%%    case nkservice_srv:get_srv_id(Srv) of
-%%        {ok, SrvId} ->
-%%            case SrvId:object_store_find_path(SrvId, Path) of
-%%                {ok, _Type, ObjId} when is_binary(ObjId) ->
-%%                    find_loaded(ObjId);
-%%                _ ->
-%%                    not_found
-%%            end;
-%%        not_found ->
-%%            not_found
-%%    end;
 
 find_loaded(IdOrPath) when is_binary(IdOrPath) ->
     case nklib_proc:values({nkdomain_obj, IdOrPath}) of

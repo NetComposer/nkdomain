@@ -24,13 +24,16 @@
 -behavior(nkdomain_obj).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([create/4, find_types/2, find_all_types/2, find_childs/2, find_childs/3,
+-export([create/4, find_types/2, find_all_types/2, find_childs/2, find_childs/3, find_childs_type/4,
          find_all_childs/2, find_all_childs/3, find_all_childs_type/3, find_all_childs_type/4]).
 -export([object_get_info/0, object_mapping/0, object_syntax/1,
          object_api_syntax/3, object_api_allow/4, object_api_cmd/4]).
--export([object_all_links_down/1]).
+-export([object_start/1, object_all_links_down/1]).
 
 -include("nkdomain.hrl").
+
+-define(LLOG(Type, Txt, Args),
+    lager:Type("NkDOMAIN Obj Domain "++ Txt, Args)).
 
 
 %% ===================================================================
@@ -81,6 +84,19 @@ find_childs(Srv, Id, Spec) ->
     case nkdomain_obj_lib:find(Srv, Id) of
         #obj_id_ext{srv_id=SrvId, obj_id=ObjId} ->
             SrvId:object_store_find_childs(SrvId, ObjId, Spec);
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
+%% @doc
+find_childs_type(Srv, Id, Type, Spec) ->
+    Filters1 = maps:get(filters, Spec, #{}),
+    Filters2 = Filters1#{type=>Type},
+    Spec2 = Spec#{filters=>Filters2},
+    case nkdomain_obj_lib:find(Srv, Id) of
+        #obj_id_ext{srv_id=SrvId, obj_id=ObjId} ->
+            SrvId:object_store_find_childs(SrvId, ObjId, Spec2);
         {error, Error} ->
             {error, Error}
     end.
@@ -161,11 +177,31 @@ object_api_cmd(Sub, Cmd, Data, State) ->
     nkdomain_domain_obj_api:cmd(Sub, Cmd, Data, State).
 
 
+%% @private
+object_start(#obj_session{srv_id=SrvId, obj_id=ObjId}=Session) ->
+    spawn(fun() -> start_dom_childs(SrvId, ObjId) end),
+    {ok, Session}.
 
-%% ===================================================================
-%% nkdomain callbacks
-%% ===================================================================
 
 %% @private
 object_all_links_down(Session) ->
     {keepalive, Session}.
+
+
+%% ===================================================================
+%% Internal
+%% ===================================================================
+
+%% @private
+start_dom_childs(SrvId, ObjId) ->
+    case find_childs_type(SrvId, ObjId, ?DOMAIN_DOMAIN, #{}) of
+        {ok, 0, []} ->
+            ok;
+        {ok, _N, List} ->
+            lager:notice("Domain starting childs: ~p", [List]),
+            lists:foreach(
+                fun({?DOMAIN_DOMAIN, ChildId, _Path}) -> nkdomain:load(SrvId, ChildId, #{}) end,
+                List);
+        {error, Error} ->
+            ?LLOG(warning, "could not find childs: ~p", [Error])
+    end.
