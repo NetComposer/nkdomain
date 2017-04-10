@@ -292,6 +292,8 @@ unload(Srv, Id, Reason, NotFound) ->
     case find(Srv, Id) of
         #obj_id_ext{pid=Pid} when is_pid(Pid) ->
             nkdomain_obj:unload(Pid, Reason);
+        #obj_id_ext{} ->
+            ok;
         {error, object_not_found} ->
             {error, NotFound};
         {error, Error} ->

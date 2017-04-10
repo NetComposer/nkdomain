@@ -122,13 +122,13 @@ get_disabled(#obj_monitor{disabled=Disabled}) ->
 
 %% @doc Adds a new object, or, it not found, is added as 'disabled'
 -spec load_obj(nkobject:id(), obj(), monitor()) ->
-    {enabled, monitor()} | {disabled, monitor()} | {error, Error}
+    {enabled, nkdomain:obj_id(), pid(), monitor()} | {disabled, monitor()} | {error, Error}
     when Error :: member_already_present | term().
 
 load_obj(Id, Obj, Monitor) ->
     case add_obj(Id, Obj, Monitor) of
-        {ok, _ObjId, Monitor2} ->
-            {enabled, Monitor2};
+        {ok, ObjId, Pid, Monitor2} ->
+            {enabled, ObjId, Pid, Monitor2};
         {error, object_not_found} ->
             {disabled, do_add_disabled(nklib_util:to_binary(Id), Obj, Monitor)};
         {error, Error} ->
@@ -138,7 +138,7 @@ load_obj(Id, Obj, Monitor) ->
 
 %% @doc Adds a new object
 -spec add_obj(nkobject:id(), obj(), monitor()) ->
-    {ok, nkdomain:obj_id(), monitor()} |
+    {ok, nkdomain:obj_id(), pid(), monitor()} |
     {error, Error} when Error :: object_not_found | member_already_present | term().
 
 add_obj(Id, Obj, #obj_monitor{srv_id=SrvId, regtag=RegTag}=Monitor) ->
@@ -146,7 +146,7 @@ add_obj(Id, Obj, #obj_monitor{srv_id=SrvId, regtag=RegTag}=Monitor) ->
         #obj_id_ext{obj_id=ObjId, pid=Pid} ->
             case do_add_enabled(ObjId, Obj, Pid, Monitor) of
                 {ok, Monitor2} ->
-                    {ok, ObjId, Monitor2};
+                    {ok, ObjId, Pid, Monitor2};
                 {error, Error} ->
                     {error, Error}
             end;

@@ -31,7 +31,7 @@
          object_check_active/3,
          object_sync_op/3, object_async_op/2,
          object_status/2, object_all_links_down/1,
-         object_session_msg/2, object_send_push/5]).
+         object_session_msg/4, object_send_push/5]).
 -export([object_init/1, object_terminate/2, object_event/2, object_reg_event/3,
          object_reg_down/3, object_start/1, object_stop/2,
          object_handle_call/3, object_handle_cast/2, object_handle_info/2]).
@@ -419,10 +419,10 @@ object_all_links_down(Session) ->
 
 
 %% @doc Implemented by sessions to process messages
--spec object_session_msg(nklib:link(), session_msg()) ->
+-spec object_session_msg(nklib:link(), nkdomain:type(), nkdomain:obj_id(), session_msg()) ->
     ok | {error, term()}.
 
-object_session_msg(_Link, _Msg) ->
+object_session_msg(_Link, _Type, _ObjId, _Msg) ->
     {error, not_implemented}.
 
 

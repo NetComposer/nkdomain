@@ -352,7 +352,7 @@ init({SrvId, Obj, Meta}) ->
         obj = Obj,
         srv_id = SrvId,
         status = init,
-        meta = maps:without([srv_id, is_dirty, obj_id, parent_id, parent_pid], Meta),
+        meta = maps:without([srv_id, is_dirty, obj_id, register, parent_id, parent_pid], Meta),
         data = #{},
         is_dirty = maps:get(is_dirty, Meta, false),
         is_enabled = Enabled,
@@ -447,7 +447,7 @@ handle_call({nkdomain_sync_op, Op}, From, State) ->
         {stop, Reason, #state{}=State2} ->
             do_stop(Reason, State2);
         {continue, #state{}=State2} ->
-            ?LLOG(notice, "unknown async op: ~p", [Op], State2),
+            ?LLOG(notice, "unknown sync op: ~p", [Op], State2),
             reply({error, unknown_op}, State2)
     end;
 
