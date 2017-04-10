@@ -27,7 +27,7 @@
 
 -export([find/2, load/3, create/3]).
 -export([make_obj/4, make_and_create/4]).
--export([unload/4, sync_op/4, async_op/4]).
+-export([unload/4, sync_op/5, async_op/5]).
 -export([find_loaded/1, call/2, call/3, cast/2, info/2]).
 
 -include("nkdomain.hrl").
@@ -189,7 +189,6 @@ create(Srv, #{obj_id:=ObjId, type:=Type}=Obj, Meta) ->
 
 
 %% @private
-%% @private
 do_create(#obj_id_ext{srv_id=SrvId}=Ext, #{parent_id:=ParentId}=Obj, Meta) ->
     case load(SrvId, ParentId, #{}) of
         #obj_id_ext{pid=ParentPid} ->
@@ -301,10 +300,12 @@ unload(Srv, Id, Reason, NotFound) ->
 
 
 %% @doc
-sync_op(Srv, Id, Msg, NotFound) ->
+sync_op(Srv, Id, Type, Msg, NotFound) ->
     case load(Srv, Id, #{}) of
-        #obj_id_ext{pid=Pid} when is_pid(Pid) ->
+        #obj_id_ext{type=Type, pid=Pid} when is_pid(Pid) ->
             nkdomain_obj:sync_op(Pid, Msg);
+        #obj_id_ext{} ->
+            {error, invalid_object};
         {error, object_not_found} ->
             {error, NotFound};
         {error, Error} ->
@@ -313,10 +314,12 @@ sync_op(Srv, Id, Msg, NotFound) ->
 
 
 %% @doc
-async_op(Srv, Id, Msg, NotFound) ->
+async_op(Srv, Id, Type, Msg, NotFound) ->
     case load(Srv, Id, #{}) of
-        #obj_id_ext{pid=Pid} when is_pid(Pid) ->
+        #obj_id_ext{type=Type, pid=Pid} when is_pid(Pid) ->
             nkdomain_obj:async_op(Pid, Msg);
+        #obj_id_ext{} ->
+            {error, invalid_object};
         {error, object_not_found} ->
             {error, NotFound};
         {error, Error} ->

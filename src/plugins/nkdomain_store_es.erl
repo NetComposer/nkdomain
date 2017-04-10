@@ -418,7 +418,8 @@ find_obj_childs(SrvId, ParentId, Opts) ->
     {ok, integer(), [{nkdomain:type(), nkdomain:obj_id()}]}.
 
 find_obj_all_childs(SrvId, Path, Opts) ->
-    case query_filters(#{childs_of=>Path}, Opts) of
+    QueryFilters = query_filters(#{childs_of=>Path}, Opts),
+    case QueryFilters of
         {ok, Query} ->
             do_search_objs(SrvId, Query, Opts);
         {error, Error} ->

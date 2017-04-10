@@ -108,6 +108,10 @@ domain_find_childs(Id) ->
 domain_find_all_childs() ->
     cmd(domain, find_all_childs, #{sort=>[type, path]}).
 
+domain_count_all_childs() ->
+    cmd(domain, find_all_childs, #{size=>0}).
+
+
 domain_find_all_users() ->
     cmd(domain, find_all_childs, #{type=>user}).
 

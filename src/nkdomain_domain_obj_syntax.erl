@@ -85,3 +85,11 @@ api('', find_all_childs, Syntax) ->
 api(_Sub, _Cmd, Syntax) ->
     lager:error("unknown syntax: ~p, ~p", [_Sub, _Cmd]),
     Syntax.
+
+
+%% ===================================================================
+%% Search syntax
+%% ===================================================================
+
+
+

@@ -24,7 +24,7 @@
 
 
 -export([find_loaded/1, find/1, find/2, load/1, load/2, load/3, create/3]).
--export([enable/3, update/3, delete/3, force_delete/3, archive/3]).
+-export([get/2, enable/3, update/3, delete/3, force_delete/3, archive/3]).
 -export_type([obj_id/0, name/0, obj/0, path/0, type/0, id/0, class/0, history/0, history_op/0]).
 -export_type([session_msg/0]).
 
@@ -162,6 +162,37 @@ load(Srv, IdOrPath, Meta) ->
         {error, Error} ->
             {error, Error}
     end.
+
+
+%% @doc
+-spec get(nkservice:id(), id()) ->
+    {ok, map()} | {error, term()}.
+
+get(Srv, IdOrPath) ->
+    case nkdomain_obj_lib:load(Srv, IdOrPath, #{}) of
+        #obj_id_ext{pid=Pid} ->
+            case nkdomain_obj:get_session(Pid) of
+                {ok, #obj_session{
+                    module = Module,
+                    parent_id = ParentId,
+                    status = Status,
+                    started = Started,
+                    obj = Obj
+                }} ->
+                    {ok, Obj#{
+                        '_module' => Module,
+                        '_parent_id' => ParentId,
+                        '_status' => Status,
+                        '_started' => Started
+                        }};
+                {error, Error} ->
+                    {error, Error}
+            end;
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
 
 
 %% @doc Creates a new object

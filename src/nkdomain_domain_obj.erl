@@ -109,9 +109,17 @@ find_all_childs(Srv, Id) ->
 
 %% @doc
 find_all_childs(Srv, Id, Spec) ->
+    Filters1 = maps:get(filters, Spec, #{}),
+    Filters2 = case Spec of
+        #{type:=Type} ->
+            Filters1#{type=>Type};
+        _ ->
+            Filters1
+    end,
+    Spec2 = Spec#{filters=>Filters2},
     case nkdomain_obj_lib:find(Srv, Id) of
         #obj_id_ext{srv_id=SrvId, path=Path} ->
-            SrvId:object_store_find_all_childs(SrvId, Path, Spec);
+            SrvId:object_store_find_all_childs(SrvId, Path, Spec2);
         {error, Error} ->
             {error, Error}
     end.
@@ -124,15 +132,7 @@ find_all_childs_type(Srv, Id, Type) ->
 
 %% @doc
 find_all_childs_type(Srv, Id, Type, Spec) ->
-    Filters1 = maps:get(filters, Spec, #{}),
-    Filters2 = Filters1#{type=>Type},
-    Spec2 = Spec#{filters=>Filters2},
-    case nkdomain_obj_lib:find(Srv, Id) of
-        #obj_id_ext{srv_id=SrvId, path=Path} ->
-            SrvId:object_store_find_all_childs(SrvId, Path, Spec2);
-        {error, Error} ->
-            {error, Error}
-    end.
+    find_all_childs(Srv, Id, Spec#{type=>Type}).
 
 
 

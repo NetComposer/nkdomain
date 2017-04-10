@@ -27,7 +27,7 @@
 -export([create/4, login/3, send_push/6]).
 -export([object_get_info/0, object_mapping/0, object_syntax/1,
          object_api_syntax/3, object_api_allow/4, object_api_cmd/4,
-         object_sync_op/2]).
+         object_sync_op/2, object_async_op/2]).
 -export([user_pass/1]).
 
 -include("nkdomain.hrl").
@@ -108,7 +108,7 @@ login(SrvId, Login, Opts) ->
 send_push(Srv, Id, Type, ObjId, MsgId, Msg) ->
     case nkdomain_obj_lib:load(Srv, Id, #{}) of
         #obj_id_ext{pid=Pid} ->
-            nkdomain_obj:sync_op(Pid, {?MODULE, send_push, Srv, Id, Type, ObjId, MsgId, Msg});
+            nkdomain_obj:async_op(Pid, {?MODULE, send_push, Type, ObjId, MsgId, Msg});
         {error, Error} ->
             {error, Error}
     end.
@@ -192,10 +192,16 @@ object_api_cmd(Sub, Cmd, Data, State) ->
 
 
 %% @private
-object_sync_op({?MODULE, get_push, _Type, _ObjId}, #obj_session{obj_id=UserId}=Session) ->
-    {reply, {ok, UserId, none}, Session};
-
 object_sync_op(_Op, _Session) ->
+    continue.
+
+
+%% @private
+object_async_op({?MODULE, send_push, Type, ObjId, MsgId, Msg}, Session) ->
+    ?LLOG(notice, "sending push (~s:~s): ~p (~s)", [Type, ObjId, Msg, MsgId], Session),
+    {noreply, Session};
+
+object_async_op(_Op, _Session) ->
     continue.
 
 
