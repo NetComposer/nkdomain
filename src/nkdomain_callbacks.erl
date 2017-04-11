@@ -27,7 +27,7 @@
 -export([object_mapping/0, object_syntax/1, object_parse/4, object_unparse/1]).
 -export([object_load/2, object_save/1, object_delete/1, object_archive/2]).
 -export([object_child_created/2, object_child_loaded/2,
-         object_updated/2, object_enabled/1, object_deleted/2,
+         object_updated/2, object_enabled/1, object_deleted/1,
          object_check_active/3,
          object_sync_op/3, object_async_op/2,
          object_status/2, object_all_links_down/1,
@@ -358,11 +358,11 @@ object_enabled(Session) ->
 
 
 %% @doc Called when an object is removed
--spec object_deleted(term(), session()) ->
+-spec object_deleted(session()) ->
     {ok, session()}.
 
-object_deleted(Reason, Session) ->
-    call_module(object_deleted, [Reason], Session).
+object_deleted(Session) ->
+    call_module(object_deleted, [], Session).
 
 
 %% @doc

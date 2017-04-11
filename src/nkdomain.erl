@@ -24,7 +24,7 @@
 
 
 -export([find_loaded/1, find/1, find/2, load/1, load/2, load/3, create/3]).
--export([get/2, enable/3, update/3, delete/3, force_delete/3, archive/3]).
+-export([get/2, enable/3, update/3, delete/2, force_delete/2, archive/3]).
 -export_type([obj_id/0, name/0, obj/0, path/0, type/0, id/0, class/0, history/0, history_op/0]).
 -export_type([session_msg/0]).
 
@@ -77,18 +77,17 @@
     class() => map()
 }.
 
-
 -type create_opts() ::
+    load_opts() |
     #{
-        obj_id => obj_id(),
-        register => nklib:link(),
-        %%  events => [nkservice_events:type()],
-        enabled => boolean()                        % Start disabled
+        wait_for_save => integer()
     }.
+
 
 -type load_opts() ::
     #{
-        register => nklib:link()
+        register => nklib:link(),
+        enabled => boolean()                        % Start disabled if false
     }.
 
 
@@ -237,13 +236,13 @@ update(Srv, Id, Update) ->
 
 
 %% @doc Remove an object
--spec delete(nkservice:id(), nkdomain:id(), nkservice:error()) ->
+-spec delete(nkservice:id(), nkdomain:id()) ->
     ok | {error, term()}.
 
-delete(Srv, Id, Reason) ->
+delete(Srv, Id) ->
     case nkdomain_obj_lib:load(Srv, Id, #{}) of
         #obj_id_ext{pid=Pid} ->
-            nkdomain_obj:delete(Pid, Reason);
+            nkdomain_obj:delete(Pid);
         {error, Error} ->
             {error, Error}
     end.
@@ -252,13 +251,13 @@ delete(Srv, Id, Reason) ->
 %% @doc Remove an object
 %% If the object can be loaded, it is sent a delete message
 %% If not, it is deleted from disk
--spec force_delete(nkservice:id(), nkdomain:id(), nkservice:error()) ->
+-spec force_delete(nkservice:id(), nkdomain:id()) ->
     ok | {error, term()}.
 
-force_delete(Srv, Id, Reason) ->
+force_delete(Srv, Id) ->
     case find(Srv, Id) of
         #obj_id_ext{pid=Pid} when is_pid(Pid) ->
-            nkdomain_obj:delete(Pid, Reason);
+            nkdomain_obj:delete(Pid);
         #obj_id_ext{srv_id=SrvId, obj_id=ObjId} ->
             nkdomain_store:delete(SrvId, ObjId);
         {error, Error} ->

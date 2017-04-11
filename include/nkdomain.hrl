@@ -61,10 +61,15 @@
 
 
 -define(DOMAIN_USER, <<"user">>).
+-define(DOMAIN_USER_ATOM, 'user').
 -define(DOMAIN_DOMAIN, <<"domain">>).
+-define(DOMAIN_DOMAIN_ATOM, 'domain').
 -define(DOMAIN_SESSION, <<"session">>).
+-define(DOMAIN_SESSION_ATOM, 'session').
 -define(DOMAIN_TOKEN, <<"token">>).
+-define(DOMAIN_TOKEN_ATOM, 'token').
 -define(DOMAIN_CONFIG, <<"config">>).
+-define(DOMAIN_CONFIG_ATOM, 'config').
 
 -endif.
 

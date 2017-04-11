@@ -56,7 +56,6 @@ create(Srv, SubType, Parent, Name, Config) ->
     nkdomain_obj_lib:make_and_create(Srv, Parent, ?DOMAIN_CONFIG, Opts).
 
 
-
 %% @doc
 find_configs(Srv, SubType, Parent) ->
     case nkdomain_obj_lib:load(Srv, Parent, #{}) of

@@ -32,7 +32,7 @@
 
 %% @doc
 cmd('', create, Data, State) ->
-    #{obj_name:=Name, user:=User} = Data,
+    #{obj_name:=Name, ?DOMAIN_USER_ATOM:=User} = Data,
     #{srv_id:=SrvId, domain:=Domain} = State,
     case nkdomain_user_obj:create(SrvId, Domain, Name, User) of
         {ok, ObjId, Path, _Pid} ->
@@ -62,26 +62,14 @@ cmd('', login, #{id:=User}=Data, #{srv_id:=SrvId}=State) ->
             {error, Error, State}
     end;
 
-%%cmd('', get_token, #{id:=User}=Data, #{srv_id:=SrvId}=State) ->
-%%    Password = maps:get(password, Data, <<>>),
-%%    case nkdomain_user_obj:login(SrvId, User, Password, #{}) of
-%%        {ok, UserId} ->
-%%            {ok, #{obj_id=>UserId}, State};
-%%        {error, Error} ->
-%%            {error, Error, State}
+%%cmd('', find_referred, #{id:=Id}=Data, #{srv_id:=SrvId}=State) ->
+%%    case nkdomain_api_util:getid(?DOMAIN_USER, Data, State) of
+%%        {ok, Id} ->
+%%            Search = nkdomain_user_obj:find_referred(SrvId, Id, Data),
+%%            nkdomain_api_util:search(Search, State);
+%%        Error ->
+%%            Error
 %%    end;
 
-cmd('', find_referred, #{id:=Id}=Data, #{srv_id:=SrvId}=State) ->
-    case nkdomain_api_util:getid(?DOMAIN_USER, Data, State) of
-        {ok, Id} ->
-            Search = nkdomain_user_obj:find_referred(SrvId, Id, Data),
-            nkdomain_api_util:search(Search, State);
-        Error ->
-            Error
-    end;
-
-cmd('', Cmd, Data, State) ->
-    nkdomain_api_util:cmd_common(?DOMAIN_USER, Cmd, Data, State);
-
-cmd(_Sub, _Cmd, _Data, State) ->
-    {error, not_implemented, State}.
+cmd(Sub, Cmd, Data, State) ->
+    nkdomain_api_util:cmd_common(Sub, Cmd, Data, ?DOMAIN_USER, State).

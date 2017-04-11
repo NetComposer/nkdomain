@@ -31,9 +31,9 @@
 -behaviour(gen_server).
 
 -export([get_session/1, save/1, unload/2]).
--export([update/2, enable/2, delete/2, sync_op/2, async_op/2, apply/2]).
+-export([update/2, enable/2, delete/1, sync_op/2, async_op/2, apply/2]).
 -export([register/2, unregister/2, get_childs/1]).
--export([wait_save/1, wait_save/2]).
+-export([wait_for_save/2]).
 -export([create_child/3, load_child/3, object_has_been_deleted/1]).
 -export([start/3, init/1, terminate/2, code_change/3, handle_call/3,
          handle_cast/2, handle_info/2]).
@@ -129,11 +129,11 @@
 
 -type start_meta() ::
     #{
+        parent_id => nkdomain:obj_id(),     % Mandatory
+        parent_pid => pid(),                % Mandatory
         enabled => boolean(),
-        is_dirty => boolean(),
-        parent_id => nkdomain:id(),
-        parent_pid => pid(),
-        register => nklib:link()
+        register => nklib:link(),
+        is_created => boolean()
     }.
 
 -type status() ::
@@ -163,11 +163,11 @@ save(Id) ->
 
 
 %% @doc
--spec delete(id(), nkservice:error()) ->
+-spec delete(id()) ->
     ok | {error, term()}.
 
-delete(Id, Reason) ->
-    do_call(Id, {nkdomain_delete, Reason}).
+delete(Id) ->
+    do_call(Id, nkdomain_delete).
 
 
 %% @doc
@@ -244,19 +244,11 @@ get_childs(Id) ->
 
 
 % @doc Waits for the object to be saved
--spec wait_save(id()) ->
+-spec wait_for_save(id(), integer()) ->
     ok | {error, term()}.
 
-wait_save(Id) ->
-    wait_save(Id, 10000).
-
-
-% @doc Waits for the object to be saved
--spec wait_save(id(), integer()) ->
-    ok | {error, term()}.
-
-wait_save(Id, Time) ->
-    do_call(Id, nkdomain_wait_save, Time).
+wait_for_save(Id, Time) ->
+    do_call(Id, nkdomain_wait_for_save, Time).
 
 
 %% @private
@@ -342,6 +334,7 @@ init({SrvId, Obj, Meta}) ->
         error ->
             maps:get(enabled, Obj, true)
     end,
+    IgnoreMeta = [register, enabled, parent_id, parent_pid],
     Session = #obj_session{
         obj_id = ObjId,
         module = Module,
@@ -352,9 +345,9 @@ init({SrvId, Obj, Meta}) ->
         obj = Obj,
         srv_id = SrvId,
         status = init,
-        meta = maps:without([srv_id, is_dirty, obj_id, register, parent_id, parent_pid], Meta),
+        meta = maps:without(IgnoreMeta, Meta),
         data = #{},
-        is_dirty = maps:get(is_dirty, Meta, false),
+        is_dirty = maps:get(is_created, Meta, false),
         is_enabled = Enabled,
         links = nklib_links:new(),
         childs = #{},
@@ -408,11 +401,11 @@ handle_call({nkdomain_update, Map}, _From, State) ->
             reply({error, Error}, State2)
     end;
 
-handle_call({nkdomain_delete, Reason}, From, State) ->
-    case do_delete(Reason, State) of
+handle_call(nkdomain_delete, From, State) ->
+    case do_delete(State) of
         {ok, State2} ->
             gen_server:reply(From, ok),
-            State3 = do_archive(Reason, State2),
+            State3 = do_archive(object_deleted, State2),
             do_stop(object_deleted, State3);
         {error, Error, State2} ->
             reply({error, Error}, State2)
@@ -478,15 +471,17 @@ handle_call({nkdomain_create_child, Obj, Meta}, _From, State) ->
     case do_check_child(Obj, Meta, State) of
         {ok, Name, #{skip_path_check:=true}=Meta2} ->
             {ok, State2} = handle(object_child_created, [Obj], State),
-            do_load_child(Name, Obj, Meta2#{is_dirty=>true}, State2);
+            do_load_child(Name, Obj, Meta2#{is_created=>true}, State2);
         {ok, Name, Meta2} ->
             case do_check_create_path(Path, State) of
                 ok ->
                     {ok, State2} = handle(object_child_created, [Obj], State),
-                    do_load_child(Name, Obj, Meta2#{is_dirty=>true}, State2);
+                    do_load_child(Name, Obj, Meta2#{is_created=>true}, State2);
                 {error, Error} ->
                     reply({error, Error}, State)
             end;
+        {error, object_is_already_loaded} ->
+            reply({error, object_already_exists}, State);
         {error, Error} ->
             reply({error, Error}, State)
     end;
@@ -501,10 +496,11 @@ handle_call({nkdomain_load_child, Obj, Meta}, _From, State) ->
             reply({error, Error}, State)
     end;
 
-handle_call(nkdomain_wait_save, _From, #state{session=#obj_session{is_dirty=false}}=State) ->
+handle_call(nkdomain_wait_for_save, _From,
+            #state{session=#obj_session{is_dirty=false}}=State) ->
     {reply, ok, State};
 
-handle_call(nkdomain_wait_save, From, #state{wait_save=Wait}=State) ->
+handle_call(nkdomain_wait_for_save, From, #state{wait_save=Wait}=State) ->
     {noreply, State#state{wait_save=[From|Wait]}};
 
 handle_call(nkdomain_get_state, _From, State) ->
@@ -700,7 +696,8 @@ do_check_expire(#state{session=#obj_session{obj=Obj}}) ->
 
 %% @private
 do_load_child(Name, #{type:=Type, obj_id:=ObjId}=Obj, Meta, #state{srv_id=SrvId}=State) ->
-    case start(SrvId, Obj, Meta) of
+    Meta2 = maps:without([skip_path_check, wait_for_save], Meta),
+    case start(SrvId, Obj, Meta2) of
         {ok, ChildPid} ->
             State2 = do_add_child(Type, ObjId, Name, ChildPid, State),
             {ok, State3} = handle(object_child_loaded, [Obj], State2),
@@ -729,18 +726,18 @@ do_save(#state{wait_save=Wait}=State) ->
 
 
 %% @private
-do_delete(Reason, #state{child_pids=Pids}=State) when map_size(Pids)==0 ->
+do_delete(#state{child_pids=Pids}=State) when map_size(Pids)==0 ->
     case handle(object_delete, [], State) of
         {ok, State2} ->
             ?DEBUG("object deleted", [], State2),
-            {ok, State3} = handle(object_deleted, [Reason], State2),
+            {ok, State3} = handle(object_deleted, [], State2),
             {ok, State3};
         {error, Error, State2} ->
             ?DEBUG("object NOT deleted: ~p", [Error], State2),
             {error, Error, State2}
     end;
 
-do_delete(_Reason, State) ->
+do_delete(State) ->
     {error, object_has_childs, State}.
 
 
@@ -781,7 +778,7 @@ do_stop2(Reason, #state{srv_id=SrvId, stop_reason=false, timelog=Log}=State) ->
     #state{session = #obj_session{module=Module}} = State6,
     case Module:object_get_info() of
         #{remove_after_stop:=true} ->
-            case do_delete(object_stopped, State6) of
+            case do_delete(State6) of
                 {ok, DeleteState} ->
                     do_archive(Reason, DeleteState);
                 {error, _Error, DeleteState} ->
@@ -817,8 +814,8 @@ do_check_child(#{type:=Type, path:=Path}, Meta, State) ->
             TypeChilds = maps:get(Type, Childs, #{}),
             case maps:is_key(Name, TypeChilds) of
                 true ->
-                    ?LLOG(info, "cannnot load child, ~s is already loaded", [Path], State),
-                    {error, {name_is_already_used, Name}};
+                    ?LLOG(notice, "cannnot load child, ~s is already loaded", [Path], State),
+                    {error, object_is_already_loaded};
                 false ->
                     Meta2 = Meta#{
                         parent_id => ParentId,

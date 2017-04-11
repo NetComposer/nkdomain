@@ -491,16 +491,21 @@ archive_save_obj(SrvId, #{obj_id:=ObjId}=Store) ->
 
 %% @doc Finds all objects on a path
 -spec delete_obj_all_childs(nkservice:id(), nkdomain:domain(), nkelastic_api:list_opts()) ->
-    {ok, integer(), [{nkdomain:type(), nkdomain:obj_id()}]}.
+    {ok, integer()} | {error, term()}.
 
 delete_obj_all_childs(SrvId, Path, Opts) ->
     case query_filters(#{childs_of=>Path}, Opts) of
         {ok, Query} ->
             Opts2 = Opts#{fields=>[<<"path">>], sort=>[#{<<"path">> => #{order=>desc}}]},
             Fun = fun(#{<<"obj_id">>:=ObjId, <<"path">>:=ObjPath}, Acc) ->
-                lager:notice("Deleting ~s (~s)", [ObjPath, ObjId]),
-                nkdomain_store:delete(SrvId, ObjId),
-                Acc
+                case nkdomain_store:delete(SrvId, ObjId) of
+                    ok ->
+                        {ok, Acc+1};
+                    {error, object_not_found} ->
+                        {ok, Acc};
+                    {error, Error} ->
+                        {error, Error}
+                end
             end,
             iterate(SrvId, Query, Opts2, Fun, 0);
         {error, Error} ->
@@ -521,9 +526,9 @@ do_clean_active(SrvId) ->
     Fun = fun(#{<<"obj_id">>:=ObjId, <<"type">>:=Type}, Acc) ->
         case SrvId:object_check_active(SrvId, Type, ObjId) of
             false ->
-                Acc+1;
+                {ok, Acc+1};
             true ->
-                Acc
+                {ok, Acc}
         end
     end,
     iterate(SrvId, Query, Opts, Fun, 0).
@@ -840,7 +845,4 @@ do_search_archive(SrvId, Query, Opts) ->
 %% @private
 iterate(SrvId, Query, Opts, Fun, Acc0) ->
     #es_config{index = Index, type = IdxType} = SrvId:config_nkdomain_store_es(),
-    case nkelastic_api:iterate_fun(SrvId, Index, IdxType, Query, Opts, Fun, Acc0) of
-        {ok, Num} -> Num;
-        {error, _Error} -> 0
-    end.
+    nkelastic_api:iterate_fun(SrvId, Index, IdxType, Query, Opts, Fun, Acc0).

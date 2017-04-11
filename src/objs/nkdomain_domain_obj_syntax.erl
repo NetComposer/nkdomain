@@ -20,7 +20,7 @@
 
 %% @doc User Object Syntax
 
--module(nkdomain_user_obj_syntax).
+-module(nkdomain_domain_obj_syntax).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([api/3]).
@@ -33,64 +33,47 @@
 
 
 %% @doc
-api('', login, Syntax) ->
-    Syntax2 = Syntax#{
-        id => binary,
-        password => binary,
-        domain => binary,
-        meta => map
-    },
-    nklib_syntax:add_mandatory([id], Syntax2);
-
-api('', get_token, Syntax) ->
-    Syntax2 = Syntax#{
-        id => binary,
-        password => binary,
-        domain => binary
-    },
-    nklib_syntax:add_mandatory([id], Syntax2);
-
-api('', get, Syntax) ->
-    Syntax#{
-        id => binary
-    };
-
 api('', create, Syntax) ->
     Syntax2 = Syntax#{
         obj_name => binary,
-        user => #{
-            name => binary,
-            surname => binary,
-            password => binary,
-            email => email
-        },
-        domain => binary
+        domain => binary,
+        description => binary,
+        wait_for_save => boolean
     },
-    nklib_syntax:add_mandatory([obj_name, 'user.name', 'user.surname'], Syntax2);
-
-api('', delete, Syntax) ->
-    Syntax#{
-        id => binary,
-        reason => binary
-    };
+    nklib_syntax:add_mandatory([obj_name, description], Syntax2);
 
 api('', update, Syntax) ->
     Syntax#{
         id => binary,
-        user => #{
-            name => binary,
-            surname => binary,
-            password => binary,
-            email => email
-        }
+        description => binary
     };
 
-api('', find_referred, Syntax) ->
+api('', find_types, Syntax) ->
     Syntax#{
+        id => binary
+    };
+
+api('', find_all_types, Syntax) ->
+    api('', find_types, Syntax);
+
+api('', find_childs, Syntax) ->
+    Search = nkelastic_search:syntax(),
+    Syntax2 = Syntax#{
         id => binary,
         type => binary
-    };
+    },
+    maps:merge(Syntax2, Search);
 
-api(_Sub, _Cmd, Syntax) ->
-    lager:error("unknown syntax: ~p, ~p", [_Sub, _Cmd]),
-    Syntax.
+api('', find_all_childs, Syntax) ->
+    api('', find_childs, Syntax);
+
+api(Sub, Cmd, Syntax) ->
+    nkdomain_api_util:syntax_common(Sub, Cmd, Syntax).
+
+
+%% ===================================================================
+%% Search syntax
+%% ===================================================================
+
+
+

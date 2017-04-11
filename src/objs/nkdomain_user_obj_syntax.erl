@@ -20,12 +20,12 @@
 
 %% @doc User Object Syntax
 
--module(nkdomain_domain_obj_syntax).
+-module(nkdomain_user_obj_syntax).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([api/3]).
 
-
+-include("nkdomain.hrl").
 
 %% ===================================================================
 %% Syntax
@@ -33,63 +33,57 @@
 
 
 %% @doc
-api('', get, Syntax) ->
-    Syntax#{
-        id => binary
-    };
+api('', login, Syntax) ->
+    Syntax2 = Syntax#{
+        id => binary,
+        password => binary,
+        domain => binary,
+        meta => map,
+        wait_for_save => boolean
+    },
+    nklib_syntax:add_mandatory([id], Syntax2);
+
+api('', get_token, Syntax) ->
+    Syntax2 = Syntax#{
+        id => binary,
+        password => binary,
+        domain => binary
+    },
+    nklib_syntax:add_mandatory([id], Syntax2);
 
 api('', create, Syntax) ->
     Syntax2 = Syntax#{
         obj_name => binary,
-        domain => binary,
-        description => binary
+        ?DOMAIN_USER_ATOM => #{
+            name => binary,
+            surname => binary,
+            password => binary,
+            email => email
+        },
+        domain => binary
     },
-    nklib_syntax:add_mandatory([obj_name, description], Syntax2);
-
-api('', delete, Syntax) ->
-    Syntax#{
-        reason => binary
-    };
+    nklib_syntax:add_mandatory([
+        obj_name,
+        <<?DOMAIN_USER/binary, ".name">>,
+        <<?DOMAIN_USER/binary, ".surname">>
+    ], Syntax2);
 
 api('', update, Syntax) ->
     Syntax#{
         id => binary,
-        description => binary
+        ?DOMAIN_USER_ATOM => #{
+            name => binary,
+            surname => binary,
+            password => binary,
+            email => email
+        }
     };
 
-api('', enable, Syntax) ->
-    Syntax#{
-        id => binary,
-        enable => boolean
-    };
+%%api('', find_referred, Syntax) ->
+%%    Syntax#{
+%%        id => binary,
+%%        type => binary
+%%    };
 
-api('', find_types, Syntax) ->
-    Syntax#{
-        id => binary
-    };
-
-api('', find_all_types, Syntax) ->
-    api('', find_types, Syntax);
-
-api('', find_childs, Syntax) ->
-    Search = nkelastic_search:syntax(),
-    Syntax2 = Syntax#{
-        id => binary,
-        type => binary
-    },
-    maps:merge(Syntax2, Search);
-
-api('', find_all_childs, Syntax) ->
-    api('', find_childs, Syntax);
-
-api(_Sub, _Cmd, Syntax) ->
-    lager:error("unknown syntax: ~p, ~p", [_Sub, _Cmd]),
-    Syntax.
-
-
-%% ===================================================================
-%% Search syntax
-%% ===================================================================
-
-
-
+api(Sub, Cmd, Syntax) ->
+    nkdomain_api_util:syntax_common(Sub, Cmd, Syntax).

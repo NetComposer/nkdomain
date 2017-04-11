@@ -18,32 +18,18 @@
 %%
 %% -------------------------------------------------------------------
 
-%% @doc User Object Syntax
-
--module(nkdomain_session_obj_syntax).
+%% @doc Session User Object API
+-module(nkdomain_session_obj_api).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([api/3]).
+-export([cmd/4]).
 
-
+-include("nkdomain.hrl").
 
 %% ===================================================================
-%% Syntax
+%% API
 %% ===================================================================
-
 
 %% @doc
-api('', get, Syntax) ->
-    Syntax#{
-        id => binary
-    };
-
-api('', delete, Syntax) ->
-    Syntax#{
-        id => binary,
-        reason => binary
-    };
-
-api(_Sub, _Cmd, Syntax) ->
-    lager:error("unknown syntax: ~p, ~p", [_Sub, _Cmd]),
-    Syntax.
+cmd(Sub, Cmd, Data, State) ->
+    nkdomain_api_util:cmd_common(Sub, Cmd, Data, ?DOMAIN_SESSION, State).

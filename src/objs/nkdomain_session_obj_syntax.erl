@@ -18,9 +18,9 @@
 %%
 %% -------------------------------------------------------------------
 
-%% @doc Config Object Syntax
+%% @doc User Object Syntax
 
--module(nkdomain_config_obj_syntax).
+-module(nkdomain_session_obj_syntax).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([api/3]).
@@ -32,43 +32,5 @@
 %% ===================================================================
 
 
-%% @doc
-api('', create, Syntax) ->
-    Syntax2 = Syntax#{
-        obj_name => binary,
-        subtype => binary,
-        parent => binary,
-        config => map
-    },
-    nklib_syntax:add_mandatory([subtype, parent, config], Syntax2);
-
-api('', get, Syntax) ->
-    Syntax2 = Syntax#{
-        id => binary
-    },
-    nklib_syntax:add_mandatory([id], Syntax2);
-
-api('', delete, Syntax) ->
-    Syntax2 = Syntax#{
-        id => binary,
-        reason => binary
-    },
-    nklib_syntax:add_mandatory([id], Syntax2);
-
-api('', update, Syntax) ->
-    Syntax2 = Syntax#{
-        id => binary,
-        config => map
-    },
-    nklib_syntax:add_mandatory([id, config], Syntax2);
-
-api('', find, Syntax) ->
-    Syntax2 = Syntax#{
-        parent => binary,
-        subtype => binary
-    },
-    nklib_syntax:add_mandatory([parent, subtype], Syntax2);
-
-api(_Sub, _Cmd, Syntax) ->
-    lager:error("unknown syntax: ~p, ~p", [_Sub, _Cmd]),
-    Syntax.
+api(Sub, Cmd, Syntax) ->
+    nkdomain_api_util:syntax_common(Sub, Cmd, Syntax).

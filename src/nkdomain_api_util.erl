@@ -21,7 +21,7 @@
 -module(nkdomain_api_util).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([cmd_common/4, cmd_get/3, cmd_create/3, cmd_delete/3, cmd_update/3, cmd_enable/3]).
+-export([syntax_common/3, cmd_common/5]).
 -export([search/2, getid/3, add_id/3]).
 
 -include("nkdomain.hrl").
@@ -33,35 +33,56 @@
 %% Public
 %% ===================================================================
 
+%% @doc
+syntax_common('', get, Syntax) ->
+    Syntax#{
+        id => binary
+    };
 
+syntax_common('', enable, Syntax) ->
+    Syntax2 = Syntax#{
+        id => binary,
+        enable => boolean
+    },
+    nklib_syntax:add_mandatory([enable], Syntax2);
 
-%%%% @doc Add mandatory fields to syntax
-%%-spec add_mandatory([atom()], module(), map()) ->
-%%    map().
-%%
-%%add_mandatory(Fields, Module, Base) ->
-%%    Fields2 = [list_to_binary([to_bin(Module), $., to_bin(F)]) || F<- Fields],
-%%    Mandatory1 = maps:get('__mandatory', Base, []),
-%%    Mandatory2 = Fields2 ++ Mandatory1,
-%%    Base#{'__mandatory' => Mandatory2}.
+syntax_common('', delete, Syntax) ->
+    Syntax#{
+        id => binary,
+        delete_childs => boolean
+    };
+
+syntax_common('', wait_for_save, Syntax) ->
+    Syntax#{
+        id => binary,
+        time => {integer, {1, none}}
+    };
+
+syntax_common(_Sub, _Cmd, Syntax) ->
+    lager:error("unknown syntax: ~p, ~p", [_Sub, _Cmd]),
+    Syntax.
+
 
 
 %% @doc
-cmd_common(Type, Cmd, Data, State) ->
+cmd_common('', Cmd, Data, Type, State) ->
     case Cmd of
         get ->
             cmd_get(Type, Data, State);
-        create ->
-            cmd_create(Type, Data, State);
-        delete ->
-            cmd_delete(Type, Data, State);
-        update ->
-            cmd_update(Type, Data, State);
         enable ->
             cmd_enable(Type, Data, State);
+        delete ->
+            cmd_delete(Type, Data, State);
+        wait_for_save ->
+            cmd_wait_for_save(Type, Data, State);
+        update ->
+            cmd_update(Type, Data, State);
         _ ->
             {error, not_implemented, State}
-    end.
+    end;
+
+cmd_common(_Sub, _Cmd, _Data, _Type, State) ->
+    {error, not_implemented, State}.
 
 
 %% @doc
@@ -85,29 +106,31 @@ cmd_get(Type, Data, #{srv_id:=SrvId}=State) ->
 
 
 %% @doc
-cmd_create(Type, Data, #{srv_id:=SrvId}=State) ->
-    case nkdomain_obj_lib:create(SrvId, Data#{type=>Type}, #{}) of
-        #obj_id_ext{obj_id=ObjId, path=Path} ->
-            {ok, #{obj_id=>ObjId, path=>Path}, State};
-        {error, Error} ->
-            {error, Error, State}
-    end.
-
-
-%% @doc
 cmd_delete(Type, Data, #{srv_id:=SrvId}=State) ->
     case getid(Type, Data, State) of
         {ok, Id} ->
-            Reason = maps:get(reason, Data, api_delete),
-            case nkdomain:delete(SrvId, Id, Reason) of
-                ok ->
-                    {ok, #{}, State};
+            case cmd_delete_childs(Data, SrvId, Id) of
+                {ok, Num} ->
+                    case nkdomain:delete(SrvId, Id) of
+                        ok ->
+                            {ok, #{deleted=>Num+1}, State};
+                        {error, Error} ->
+                            {error, Error, State}
+                    end;
                 {error, Error} ->
                     {error, Error, State}
             end;
         Error ->
             Error
     end.
+
+
+%% @private
+cmd_delete_childs(#{delete_childs:=true}, SrvId, Id) ->
+    nkdomain_store:delete_all_childs(SrvId, Id);
+
+cmd_delete_childs(_Data, _SrvId, _Id) ->
+    {ok, 0}.
 
 
 %% @doc
@@ -126,11 +149,10 @@ cmd_update(Type, Data, #{srv_id:=SrvId}=State) ->
 
 
 %% @doc
-cmd_enable(Type, Data, #{srv_id:=SrvId}=State) ->
-    Enabled = maps:get(enable, Data, true),
+cmd_enable(Type, #{enable:=Enable}=Data, #{srv_id:=SrvId}=State) ->
     case getid(Type, Data, State) of
         {ok, Id} ->
-            case nkdomain:enable(SrvId, Id, Enabled) of
+            case nkdomain:enable(SrvId, Id, Enable) of
                 ok ->
                     {ok, #{}, State};
                 {error, Error} ->
@@ -139,6 +161,30 @@ cmd_enable(Type, Data, #{srv_id:=SrvId}=State) ->
         Error ->
             Error
     end.
+
+
+%% @doc
+cmd_wait_for_save(Type, Data, #{srv_id:=SrvId}=State) ->
+    Time = maps:get(time, Data, 5000),
+    case getid(Type, Data, State) of
+        {ok, Id} ->
+            case nkdomain_obj_lib:find(SrvId, Id) of
+                #obj_id_ext{pid=Pid} when is_pid(Pid) ->
+                    case nkdomain_obj:wait_for_save(Pid, Time) of
+                        ok ->
+                            {ok, #{}, State};
+                        {error, Error} ->
+                            {error, Error, State}
+                    end;
+                #obj_session{} ->
+                    {error, object_not_loaded, State};
+                {error, Error} ->
+                    {error, Error, State}
+            end;
+        Error ->
+            Error
+    end.
+
 
 
 %% @doc
@@ -179,3 +225,16 @@ add_id(Type, Id, State) ->
     ObjIds2 = ObjIds1#{Type => Id},
     ?ADD_TO_API_SESSION(nkdomain_obj_ids, ObjIds2, State).
 
+
+%%%% @doc Performs 'wait_for_save'
+%%wait_for_save(Pid, #{wait_for_save:=Time}, Reply, State) ->
+%%    case nkdomain_obj:wait_save(Pid, Time) of
+%%        ok ->
+%%            {ok, Reply, State};
+%%        {error, Error} ->
+%%            {error, Error, State}
+%%    end;
+%%
+%%wait_for_save(_Pid, _Data, Reply, State) ->
+%%    {ok, Reply, State}.
+%%

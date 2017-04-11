@@ -69,11 +69,8 @@ cmd('', find_all_childs, Data, #{srv_id:=SrvId}=State) ->
     Search = nkdomain_domain_obj:find_all_childs(SrvId, Id, Data),
     nkdomain_api_util:search(Search, State);
 
-cmd('', Cmd, Data, State) ->
-    nkdomain_api_util:cmd_common(?DOMAIN_DOMAIN, Cmd, Data, State);
-
-cmd(_Sub, _Cmd, _Data, State) ->
-    {error, not_implemented, State}.
+cmd(Sub, Cmd, Data, State) ->
+    nkdomain_api_util:cmd_common(Sub, Cmd, Data, ?DOMAIN_DOMAIN, State).
 
 
 %% ===================================================================

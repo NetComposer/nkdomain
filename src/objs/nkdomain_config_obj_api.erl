@@ -32,7 +32,7 @@
 
 %% @doc
 cmd('', create, Data, #{srv_id:=SrvId}=State) ->
-    #{subtype:=SubType, parent:=Parent, config:=Config} = Data,
+    #{subtype:=SubType, parent:=Parent, ?DOMAIN_CONFIG_ATOM:=Config} = Data,
     Name = maps:get(obj_name, Data, <<>>),
     case nkdomain_config_obj:create(SrvId, SubType, Parent, Name, Config) of
         {ok, ObjId, Path, _Pid} ->
@@ -55,8 +55,5 @@ cmd('', find, Data, #{srv_id:=SrvId}=State) ->
             {error, Error, State}
     end;
 
-cmd('', Cmd, Data, State) ->
-    nkdomain_api_util:cmd_common(?DOMAIN_CONFIG, Cmd, Data, State);
-
-cmd(_Sub, _Cmd, _Data, State) ->
-    {error, not_implemented, State}.
+cmd(Sub, Cmd, Data, State) ->
+    nkdomain_api_util:cmd_common(Sub, Cmd, Data, ?DOMAIN_CONFIG, State).

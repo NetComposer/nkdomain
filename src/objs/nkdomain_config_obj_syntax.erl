@@ -18,21 +18,46 @@
 %%
 %% -------------------------------------------------------------------
 
-%% @doc Session User Object API
--module(nkdomain_session_obj_api).
+%% @doc Config Object Syntax
+
+-module(nkdomain_config_obj_syntax).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([cmd/4]).
+-export([api/3]).
 
 -include("nkdomain.hrl").
 
+
+
 %% ===================================================================
-%% API
+%% Syntax
 %% ===================================================================
+
 
 %% @doc
-cmd('', Cmd, Data, State) when Cmd==get; Cmd==delete ->
-    nkdomain_api_util:cmd_common(?DOMAIN_SESSION, Cmd, Data, State);
+api('', create, Syntax) ->
+    Syntax2 = Syntax#{
+        obj_name => binary,
+        subtype => binary,
+        parent => binary,
+        ?DOMAIN_CONFIG_ATOM => map,
+        wait_for_save => boolean
+    },
+    nklib_syntax:add_mandatory([subtype, parent, config], Syntax2);
 
-cmd(_Sub, _Cmd, _Data, State) ->
-    {error, not_implemented, State}.
+api('', update, Syntax) ->
+    Syntax2 = Syntax#{
+        id => binary,
+        ?DOMAIN_CONFIG_ATOM => map
+    },
+    nklib_syntax:add_mandatory([id, config], Syntax2);
+
+api('', find, Syntax) ->
+    Syntax2 = Syntax#{
+        parent => binary,
+        subtype => binary
+    },
+    nklib_syntax:add_mandatory([parent, subtype], Syntax2);
+
+api(Sub, Cmd, Syntax) ->
+    nkdomain_api_util:syntax_common(Sub, Cmd, Syntax).
