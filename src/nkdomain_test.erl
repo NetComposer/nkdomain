@@ -151,7 +151,7 @@ test_session(Pid) ->
     % Object has active childs, we cannot delete it
     {error,
         {<<"object_has_childs">>,<<"Object has childs">>}} =
-        cmd(Pid, user, delete, #{id=>UId, reason=>wont_work}),
+        cmd(Pid, user, delete, #{id=>UId}),
 
     % Get info about the session
     {ok, #{

@@ -21,10 +21,6 @@
 
 %% @doc Basic Obj behaviour
 %% One of this objects is started for each object, distributed in the cluster
-%%
-%% Object stop:
-%% - parent stops
-%% - all of my childs and usages stop
 
 -module(nkdomain_obj).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').

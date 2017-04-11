@@ -141,7 +141,7 @@ object_check_active(SrvId, ObjId) ->
         #obj_id_ext{pid=Pid} when is_pid(Pid) ->
             true;
         not_found ->
-            lager:notice("Removing active object ~s", [ObjId]),
+            lager:notice("NkDOMAIN: removing stalle active object ~s", [ObjId]),
             nkdomain:archive(SrvId, ObjId, object_clean_process),
             false
     end.
