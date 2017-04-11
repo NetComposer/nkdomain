@@ -38,8 +38,7 @@ api('', login, Syntax) ->
         id => binary,
         password => binary,
         domain => binary,
-        meta => map,
-        wait_for_save => boolean
+        meta => map
     },
     nklib_syntax:add_mandatory([id], Syntax2);
 

@@ -87,6 +87,8 @@ start() ->
 
 %% @doc
 stop() ->
+    nkdomain_obj:unload_all(),
+    timer:sleep(1000),
     nkservice:stop(root).
 
 

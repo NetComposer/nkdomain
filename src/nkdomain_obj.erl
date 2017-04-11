@@ -331,6 +331,7 @@ init({SrvId, Obj, Meta}) ->
             maps:get(enabled, Obj, true)
     end,
     IgnoreMeta = [register, enabled, parent_id, parent_pid],
+    IsCreated = maps:get(is_created, Meta, false),
     Session = #obj_session{
         obj_id = ObjId,
         module = Module,
@@ -343,8 +344,9 @@ init({SrvId, Obj, Meta}) ->
         status = init,
         meta = maps:without(IgnoreMeta, Meta),
         data = #{},
-        is_dirty = maps:get(is_created, Meta, false),
+        is_dirty = IsCreated,
         is_enabled = Enabled,
+        is_created = IsCreated,
         links = nklib_links:new(),
         childs = #{},
         started = nklib_util:m_timestamp()
@@ -390,7 +392,11 @@ handle_call(nkdomain_get_childs, _From, #state{session=#obj_session{childs=Child
     reply({ok, Childs}, State);
 
 handle_call({nkdomain_update, Map}, _From, State) ->
-    case do_update(Map, State) of
+    #state{session=#obj_session{obj=Obj}=Session} = State,
+    Time = nklib_util:m_timestamp(),
+    Obj2 = ?ADD_TO_OBJ(updated_time, Time, Obj),
+    State2 = State#state{session=Session#obj_session{obj=Obj2}},
+    case do_update(Map, State2) of
         {ok, State2} ->
             reply(ok, State2);
         {error, Error, State2} ->

@@ -24,7 +24,7 @@
 -behavior(nkdomain_obj).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([create/4, login/3, send_push/6]).
+-export([create/4, login/3, send_push/3]).
 -export([object_get_info/0, object_mapping/0, object_syntax/1,
          object_api_syntax/3, object_api_allow/4, object_api_cmd/4,
          object_sync_op/2, object_async_op/2]).
@@ -101,14 +101,14 @@ login(SrvId, Login, Opts) ->
 
 
 %% @doc 
--spec send_push(nkservice:id(), nkdomain:id(), nkdomain:type(), nkdomain:obj_id(),
-                nkdomain:obj_id(), map()) ->
+-spec send_push(nkservice:id(), nkdomain:id(), nkservice_events:event()) ->
     ok | {error, term()}.
 
-send_push(Srv, Id, Type, ObjId, MsgId, Msg) ->
+send_push(Srv, Id, Event) ->
+    lager:error("SEND USER PUSH"),
     case nkdomain_obj_lib:load(Srv, Id, #{}) of
         #obj_id_ext{pid=Pid} ->
-            nkdomain_obj:async_op(Pid, {?MODULE, send_push, Type, ObjId, MsgId, Msg});
+            nkdomain_obj:async_op(Pid, {?MODULE, send_push, Event});
         {error, Error} ->
             {error, Error}
     end.
@@ -197,8 +197,8 @@ object_sync_op(_Op, _Session) ->
 
 
 %% @private
-object_async_op({?MODULE, send_push, Type, ObjId, MsgId, Msg}, Session) ->
-    ?LLOG(notice, "sending push (~s:~s): ~p (~s)", [Type, ObjId, Msg, MsgId], Session),
+object_async_op({?MODULE, send_push, Event}, Session) ->
+    ?LLOG(notice, "sending push: ~p", [Event], Session),
     {noreply, Session};
 
 object_async_op(_Op, _Session) ->

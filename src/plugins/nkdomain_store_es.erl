@@ -497,7 +497,7 @@ delete_obj_all_childs(SrvId, Path, Opts) ->
     case query_filters(#{childs_of=>Path}, Opts) of
         {ok, Query} ->
             Opts2 = Opts#{fields=>[<<"path">>], sort=>[#{<<"path">> => #{order=>desc}}]},
-            Fun = fun(#{<<"obj_id">>:=ObjId, <<"path">>:=ObjPath}, Acc) ->
+            Fun = fun(#{<<"obj_id">>:=ObjId}, Acc) ->
                 case nkdomain_store:delete(SrvId, ObjId) of
                     ok ->
                         {ok, Acc+1};

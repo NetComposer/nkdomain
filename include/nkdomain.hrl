@@ -41,6 +41,7 @@
     srv_id :: nkservice:id(),
     is_dirty :: boolean(),
     is_enabled :: boolean(),
+    is_created :: boolean(),
     status :: nkdomain_obj:status(),
     meta :: map(),                      % Object load metadata
     data :: term(),                     % Type-specific metadata

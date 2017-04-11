@@ -31,7 +31,7 @@
          object_check_active/3,
          object_sync_op/3, object_async_op/2,
          object_status/2, object_all_links_down/1,
-         object_session_msg/4, object_send_push/5]).
+         object_session_event/2, object_member_event/3]).
 -export([object_init/1, object_terminate/2, object_event/2, object_reg_event/3,
          object_reg_down/3, object_start/1, object_stop/2,
          object_handle_call/3, object_handle_cast/2, object_handle_info/2]).
@@ -59,7 +59,6 @@
 -type obj_id() :: nkdomain:obj_id().
 -type type() :: nkdomain:type().
 -type path() :: nkdomain:path().
--type session_msg() :: nkdomain:session_msg().
 
 
 
@@ -109,6 +108,8 @@ object_mapping() ->
         subtype => #{type => keyword},
         created_by => #{type => keyword},
         created_time => #{type => date},
+        updated_by => #{type => keyword},
+        updated_time => #{type => date},
         enabled => #{type => boolean},
         active => #{type => boolean},
         expires_time => #{type => date},
@@ -138,6 +139,8 @@ object_syntax(load) ->
         subtype => binary,
         created_by => binary,
         created_time => integer,
+        updated_by => binary,
+        updated_time => integer,
         parent_id => binary,
         enabled => boolean,
         active => boolean,                    % Must be loaded
@@ -303,9 +306,6 @@ object_unparse(#obj_session{srv_id=SrvId, type=Type, module=Module, obj=Obj}) ->
     end.
 
 
-
-
-
 %% ===================================================================
 %% Object-related callbacks
 %% ===================================================================
@@ -419,22 +419,20 @@ object_all_links_down(Session) ->
 
 
 %% @doc Implemented by sessions to process messages
--spec object_session_msg(nklib:link(), nkdomain:type(), nkdomain:obj_id(), session_msg()) ->
+-spec object_session_event(nklib:link(), nkservice_events:event()) ->
     ok | {error, term()}.
 
-object_session_msg(_Link, _Type, _ObjId, _Msg) ->
+object_session_event(_Link, _Event) ->
     {error, not_implemented}.
 
 
 %% @doc Implemented by push providers (like users)
--spec object_send_push(nkservice:id(), obj_id(), type(), obj_id(), session_msg()) ->
+-spec object_member_event(nkservice:id(), obj_id(), nkservice_events:event()) ->
     ok | {error, term()}.
 
-object_send_push(SrvId, UserObjId, Type, ObjId, {created, MsgId, Msg}) ->
-    nkdomain_user_obj:send_push(SrvId, UserObjId, Type, ObjId, MsgId, Msg);
+object_member_event(SrvId, UserObjId, Event) ->
+    nkdomain_user_obj:send_push(SrvId, UserObjId, Event).
 
-object_send_push(_SrvId, _UserObjId, _Type, _ObjId, _Msg) ->
-    ok.
 
 
 
@@ -551,47 +549,47 @@ object_handle_info(Msg, Session) ->
 -spec object_store_reload_types(nkservice:id()) ->
     ok | {error, term()}.
 
-object_store_reload_types(_SrvId) ->
-    {error, store_not_implemented}.
+object_store_reload_types(SrvId) ->
+    call_parent_store(SrvId, object_store_reload_types, []).
 
 
 %% @doc
 -spec object_store_read_raw(nkservice:id(), obj_id()) ->
     {ok, [map()]} | {error, term()}.
 
-object_store_read_raw(_SrvId, _ObjId) ->
-    {error, store_not_implemented}.
+object_store_read_raw(SrvId, ObjId) ->
+    call_parent_store(SrvId, object_store_read_raw, [ObjId]).
 
 
 %% @doc
 -spec object_store_save_raw(nkservice:id(), obj_id(), map()) ->
     {ok, Vsn::term()} | {error, term()}.
 
-object_store_save_raw(_SrvId, _ObjId, _Map) ->
-    {error, store_not_implemented}.
+object_store_save_raw(SrvId, ObjId, Map) ->
+    call_parent_store(SrvId, object_store_save_raw, [ObjId, Map]).
 
 
 %% @doc
 -spec object_store_delete_raw(nkservice:id(), obj_id()) ->
     ok | {error, object_has_chids|term()}.
 
-object_store_delete_raw(_SrvId, _ObjId) ->
-    {error, store_not_implemented}.
+object_store_delete_raw(SrvId, ObjId) ->
+    call_parent_store(SrvId, object_store_delete_raw, [ObjId]).
 
 
 %% @doc
 -spec object_store_find_obj(nkservice:id(), nkdomain:id()) ->
     {ok, type(), obj_id(), path()} | {error, term()}.
 
-object_store_find_obj(_SrvId, _Id) ->
-    {error, store_not_implemented}.
+object_store_find_obj(SrvId, Id) ->
+    call_parent_store(SrvId, object_store_find_obj, [Id]).
 
 
 %%%% @doc
 %%-spec object_store_find_obj_id(nkservice:id(), obj_id()) ->
 %%    {ok, type(), path()} | {error, term()}.
 %%
-%%object_store_find_obj_id(_SrvId, _ObjId) ->
+%%object_store_find_obj_id(_SrvId, ObjId) ->
 %%    {error, store_not_implemented}.
 %%
 %%
@@ -607,16 +605,16 @@ object_store_find_obj(_SrvId, _Id) ->
 -spec object_store_find_types(nkservice:id(), obj_id(), map()) ->
     {ok, Total::integer(), [{type(), integer()}]} | {error, term()}.
 
-object_store_find_types(_SrvId, _ObjId, _Spec) ->
-    {error, store_not_implemented}.
+object_store_find_types(SrvId, ObjId, Spec) ->
+    call_parent_store(SrvId, object_store_find_types, [ObjId, Spec]).
 
 
 %% @doc
 -spec object_store_find_all_types(nkservice:id(), path(), map()) ->
     {ok, Total::integer(), [{type(), integer()}]} | {error, term()}.
 
-object_store_find_all_types(_SrvId, _ObjId, _Spec) ->
-    {error, store_not_implemented}.
+object_store_find_all_types(SrvId, ObjId, Spec) ->
+    call_parent_store(SrvId, object_store_find_all_types, [ObjId, Spec]).
 
 
 %% @doc
@@ -624,8 +622,8 @@ object_store_find_all_types(_SrvId, _ObjId, _Spec) ->
     {ok, Total::integer(), [{type(), obj_id(), path()}]} |
     {error, term()}.
 
-object_store_find_childs(_SrvId, _ObjId, _Spec) ->
-    {error, store_not_implemented}.
+object_store_find_childs(SrvId, ObjId, Spec) ->
+    call_parent_store(SrvId, object_store_find_childs, [ObjId, Spec]).
 
 
 %% @doc
@@ -633,8 +631,8 @@ object_store_find_childs(_SrvId, _ObjId, _Spec) ->
     {ok, Total::integer(), [{type(), obj_id(), path()}]} |
     {error, term()}.
 
-object_store_find_all_childs(_SrvId, _Path, _Spec) ->
-    {error, store_not_implemented}.
+object_store_find_all_childs(SrvId, Path, Spec) ->
+    call_parent_store(SrvId, object_store_find_all_childs, [Path, Spec]).
 
 
 %% @doc
@@ -642,8 +640,8 @@ object_store_find_all_childs(_SrvId, _Path, _Spec) ->
     {ok, Total::integer(), [{type(), obj_id(), path()}]} |
     {error, term()}.
 
-object_store_find_alias(_SrvId, _Alias) ->
-    {error, store_not_implemented}.
+object_store_find_alias(SrvId, Alias) ->
+    call_parent_store(SrvId, object_store_find_alias, [Alias]).
 
 
 %% @doc
@@ -651,32 +649,32 @@ object_store_find_alias(_SrvId, _Alias) ->
     {ok, Total::integer(), [map()], map(), map()} |
     {error, term()}.
 
-object_store_find(_SrvId, _Spec) ->
-    {error, store_not_implemented}.
+object_store_find(SrvId, Spec) ->
+    call_parent_store(SrvId, object_store_find, [Spec]).
 
 
 %% @doc
 -spec object_store_archive_find(nkservice:id(), Spec::map()) ->
     {ok, integer(), [map()]} | {error, term()}.
 
-object_store_archive_find(_SrvId, _Spec) ->
-    {error, store_not_implemented}.
+object_store_archive_find(SrvId, Spec) ->
+    call_parent_store(SrvId, object_store_archive_find, [Spec]).
 
 
 %% @doc
 -spec object_store_archive_save_raw(nkservice:id(), obj_id(), map()) ->
     ok | {error, term()}.
 
-object_store_archive_save_raw(_SrvId, _ObjId, _Map) ->
-    {error, store_not_implemented}.
+object_store_archive_save_raw(SrvId, ObjId, Map) ->
+    call_parent_store(SrvId, object_store_archive_save_raw, [ObjId, Map]).
 
 
 %% @doc Must stop loaded objects
 -spec object_store_delete_all_childs(nkservice:id(), path(), Spec::map()) ->
     {ok, Total::integer()} | {error, term()}.
 
-object_store_delete_all_childs(_SrvId, _Path, _Spec) ->
-    {error, store_not_implemented}.
+object_store_delete_all_childs(SrvId, Path, Spec) ->
+    call_parent_store(SrvId, object_store_delete_all_childs, [Path, Spec]).
 
 
 %% @doc Called to perform a cleanup of the store (expired objects, etc.)
@@ -684,8 +682,8 @@ object_store_delete_all_childs(_SrvId, _Path, _Spec) ->
 -spec object_store_clean(nkservice:id()) ->
     ok.
 
-object_store_clean(_SrvId) ->
-    {error, store_not_implemented}.
+object_store_clean(SrvId) ->
+    call_parent_store(SrvId, object_store_clean, []).
 
 
 %% ===================================================================
@@ -849,6 +847,12 @@ call_module(Fun, Args, #obj_session{module=Module}=Session) ->
     end.
 
 
+%% @private
+call_parent_store(root, _Fun, _Args) ->
+    {error, store_not_implemented};
 
-
+call_parent_store(SrvId, Fun, Args) ->
+    FatherService = SrvId:domain_parent_service(),
+    false = FatherService == SrvId,
+    apply(FatherService, Fun, [FatherService|Args]).
 

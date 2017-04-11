@@ -200,7 +200,7 @@ start_dom_childs(SrvId, ObjId, Path) ->
         {ok, _N, List} ->
             lists:foreach(
                 fun({?DOMAIN_DOMAIN, ChildId, ChildPath}) ->
-                    lager:notice("Domain ~s starting child ~s", [Path, ChildPath]),
+                    lager:info("Domain ~s starting child domain ~s", [Path, ChildPath]),
                     nkdomain:load(SrvId, ChildId, #{}) end,
                 List);
         {error, Error} ->
