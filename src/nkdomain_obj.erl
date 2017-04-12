@@ -397,8 +397,8 @@ handle_call({nkdomain_update, Map}, _From, State) ->
     Obj2 = ?ADD_TO_OBJ(updated_time, Time, Obj),
     State2 = State#state{session=Session#obj_session{obj=Obj2}},
     case do_update(Map, State2) of
-        {ok, State2} ->
-            reply(ok, State2);
+        {ok, State3} ->
+            reply(ok, State3);
         {error, Error, State2} ->
             reply({error, Error}, State2)
     end;
@@ -413,18 +413,22 @@ handle_call(nkdomain_delete, From, State) ->
             reply({error, Error}, State2)
     end;
 
-handle_call({nkdomain_enable, Enable}, _From, #state{session=#obj_session{obj=Obj}}=State) ->
+handle_call({nkdomain_enable, Enable}, From, #state{session=#obj_session{obj=Obj}}=State) ->
     case maps:get(enabled, Obj, true) of
         Enable ->
             reply(ok, State);
         _ ->
             case do_update(#{enabled=>Enable}, State) of
                 {ok, State2} ->
-                    reply(ok, do_enabled(Enable, State2));
+                    gen_server:reply(From, ok),
+                    do_enabled(Enable, State2);
                 {error, Error, State2} ->
                     reply({error, Error}, State2)
             end
     end;
+
+handle_call({nkdomain_sync_op, _Op}, _From, #state{session=#obj_session{is_enabled=false}}=State) ->
+    reply({error, object_is_disabled}, State);
 
 handle_call({nkdomain_sync_op, Op}, From, State) ->
     case handle(object_sync_op, [Op, From], State) of
@@ -532,6 +536,10 @@ handle_cast({nkdomain_add_timelog, Data}, State) ->
 handle_cast(nkdomain_save, State) ->
     noreply(do_save(State));
 
+handle_cast({nkdomain_async_op, Op}, #state{session=#obj_session{is_enabled=false}}=State) ->
+    ?DEBUG("skipping async op '~p' on disabled object", [Op], State),
+    noreply(State);
+
 handle_cast({nkdomain_async_op, Op}, State) ->
     case handle(object_async_op, [Op], State) of
         {noreply, #state{}=State2} ->
@@ -546,7 +554,7 @@ handle_cast({nkdomain_async_op, Op}, State) ->
     end;
 
 handle_cast({nkdomain_parent_enabled, Enabled}, State) ->
-    noreply(do_enabled(Enabled, State));
+    do_enabled(Enabled, State);
 
 handle_cast({nkdomain_restart_timer, Time}, #state{timer=Timer}=State) ->
     nklib_util:cancel_timer(Timer),
@@ -571,15 +579,6 @@ handle_cast({nkdomain_unload, Error}, State) ->
 handle_cast(nkdomain_object_has_been_deleted, State) ->
     ?LLOG(info, "received 'object has been deleted'", [], State),
     do_stop(object_deleted, State);
-
-%%handle_cast({nkdomain_child_stopped, Pid}, State) ->
-%%    case do_rm_child(Pid, State) of
-%%        {true, State2} ->
-%%            ?LLOG(notice, "received child ~p stopped", [Pid], State2),
-%%            {noreply, State2};
-%%        false ->
-%%            {noreply, State}
-%%    end;
 
 handle_cast(Msg, State) ->
     nklib_gen_server:handle_cast(object_handle_cast, Msg, State, #state.srv_id, #state.session).
@@ -895,7 +894,7 @@ do_update(Update, #state{srv_id=SrvId, session=Session}=State) ->
 
 %% @private
 do_enabled(Enabled, #state{session=#obj_session{is_enabled=Enabled}}=State) ->
-    State;
+    noreply(State);
 
 do_enabled(false, State) ->
     do_set_enabled(false, State);
@@ -905,16 +904,21 @@ do_enabled(true, #state{session=#obj_session{obj=Obj}}=State) ->
         true ->
             do_set_enabled(true, State);
         false ->
-            State
+            noreply(State)
     end.
 
 
 %% @private
 do_set_enabled(Enabled, #state{session=Session}=State) ->
-    Session2 = Session#obj_session{is_enabled=Enabled},
-    {ok, State2} = handle(object_enabled, [], State#state{session=Session2}),
-    send_childs({nkdomain_parent_enabled, Enabled}, State),
-    do_event({enabled, Enabled}, State2).
+    State2 = State#state{session=Session#obj_session{is_enabled=Enabled}},
+    send_childs({nkdomain_parent_enabled, Enabled}, State2),
+    State3 = do_event({enabled, Enabled}, State2),
+    case handle(object_enabled, [Enabled], State3) of
+        {ok, State4} ->
+            noreply(State4);
+        {stop, Reason, State4} ->
+            do_stop(Reason, State4)
+    end.
 
 
 %% @private

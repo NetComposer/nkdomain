@@ -23,11 +23,12 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -export([plugin_deps/0, plugin_syntax/0, plugin_config/2]).
 -export([service_init/2, service_handle_cast/2, service_handle_info/2]).
--export([api_error/1, api_server_syntax/3, api_server_allow/2, api_server_cmd/2]).
+-export([api_error/1, api_server_syntax/3, api_server_allow/2, api_server_cmd/2,
+         api_server_reg_down/3]).
 -export([object_mapping/0, object_syntax/1, object_parse/4, object_unparse/1]).
 -export([object_load/2, object_save/1, object_delete/1, object_archive/2]).
 -export([object_child_created/2, object_child_loaded/2,
-         object_updated/2, object_enabled/1, object_deleted/1,
+         object_updated/2, object_enabled/2, object_deleted/1,
          object_check_active/3,
          object_sync_op/3, object_async_op/2,
          object_status/2, object_all_links_down/1,
@@ -80,10 +81,13 @@ api_error(object_clean_expire)              -> "Object cleaned (expired)";
 api_error(object_deleted) 		            -> "Object removed";
 api_error(object_has_childs) 		        -> "Object has childs";
 api_error(object_parent_conflict) 	        -> "Object has conflicting parent";
+api_error(object_is_disabled) 		        -> "Object is disabled";
 api_error(object_is_stopped) 		        -> "Object is stopped";
 api_error(object_not_found) 		        -> "Object not found";
+api_error(object_not_started) 		        -> "Object is not started";
 api_error(object_stopped) 		            -> "Object stopped";
 api_error(parent_stopped) 		            -> "Parent stopped";
+api_error(user_is_disabled) 		        -> "User is disabled";
 api_error(unknown_domain)                   -> "Domain is unknown";
 api_error(_)   		                        -> continue.
 
@@ -350,11 +354,11 @@ object_updated(Update, Session) ->
 
 
 %% @doc Called when an object is enabled or disabled
--spec object_enabled(session()) ->
-    {ok, session()}.
+-spec object_enabled(boolean(), session()) ->
+    {ok, session()} | {stop, Reason::term(), session()}.
 
-object_enabled(Session) ->
-    call_module(object_enabled, [], Session).
+object_enabled(Enabled, Session) ->
+    call_module(object_enabled, [Enabled], Session).
 
 
 %% @doc Called when an object is removed
@@ -738,6 +742,14 @@ api_server_cmd(_Req, _State) ->
     continue.
 
 
+%% @private
+api_server_reg_down({nkdomain_session_obj, _Pid}, _Reason, State) ->
+    {stop, normal, State};
+
+api_server_reg_down(_Link, _Reason, _State) ->
+    continue.
+
+
 %% ===================================================================
 %% Plugin callbacks
 %% ===================================================================
@@ -852,7 +864,6 @@ call_parent_store(root, _Fun, _Args) ->
     {error, store_not_implemented};
 
 call_parent_store(SrvId, Fun, Args) ->
-    FatherService = SrvId:domain_parent_service(),
-    false = FatherService == SrvId,
-    apply(FatherService, Fun, [FatherService|Args]).
+    ?LLOG(warning, "calling root store", []),
+    apply(root, Fun, [SrvId|Args]).
 

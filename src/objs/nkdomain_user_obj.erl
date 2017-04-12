@@ -27,7 +27,7 @@
 -export([create/4, login/3, send_push/3]).
 -export([object_get_info/0, object_mapping/0, object_syntax/1,
          object_api_syntax/3, object_api_allow/4, object_api_cmd/4,
-         object_sync_op/2, object_async_op/2]).
+         object_sync_op/3, object_async_op/2]).
 -export([user_pass/1]).
 
 -include("nkdomain.hrl").
@@ -192,7 +192,16 @@ object_api_cmd(Sub, Cmd, Data, State) ->
 
 
 %% @private
-object_sync_op(_Op, _Session) ->
+%% It will return 'object_is_disabled' for disabled users
+object_sync_op({?MODULE, check_pass, Pass}, _From, #obj_session{obj=Obj}=Session) ->
+    case Obj of
+        #{?DOMAIN_USER:=#{password:=Pass}} ->
+            {reply, {ok, true}, Session};
+        _ ->
+            {reply, {ok, false}, Session}
+    end;
+
+object_sync_op(_Op, _From, _Session) ->
     continue.
 
 
@@ -239,15 +248,7 @@ do_load(SrvId, Login, Opts) ->
 %% @private
 do_login(Pid, ObjId, #{password:=Pass}) ->
     {ok, Pass2} = user_pass(Pass),
-    Fun = fun(#obj_session{obj=Obj}) ->
-        case Obj of
-            #{?DOMAIN_USER:=#{password:=Pass2}} ->
-                {ok, true};
-            _ ->
-                {ok, false}
-        end
-    end,
-    case nkdomain_obj:apply(Pid, Fun) of
+    case nkdomain_obj:sync_op(Pid, {?MODULE, check_pass, Pass2}) of
         {ok, true} ->
             {ok, ObjId};
         {ok, false} ->
@@ -271,7 +272,6 @@ do_start_session(SrvId, UserId, Opts) ->
         {error, Error} ->
             {error, Error}
     end.
-
 
 
 %% @doc Generates a password from an user password or hash

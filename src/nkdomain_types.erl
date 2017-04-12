@@ -86,6 +86,9 @@ get_types() ->
 
 register(Module) ->
     #{type:=Type} = Module:object_get_info(),
+    Type2 = to_bin(Type),
+    % Ensure we have an atom with the same name (used in API processing)
+    _ = binary_to_atom(Type2, utf8),
     gen_server:call(?MODULE, {register_type, Module, to_bin(Type)}).
 
 
