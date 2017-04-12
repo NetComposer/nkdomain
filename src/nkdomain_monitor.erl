@@ -120,7 +120,7 @@ get_disabled(#obj_monitor{disabled=Disabled}) ->
     maps:to_list(Disabled).
 
 
-%% @doc Adds a new object, or, it not found, is added as 'disabled'
+%% @doc Adds a new object, or, if it not found, is added as 'disabled'
 -spec load_obj(nkobject:id(), obj(), monitor()) ->
     {enabled, nkdomain:obj_id(), pid(), monitor()} | {disabled, monitor()} | {error, Error}
     when Error :: member_already_present | term().
@@ -142,16 +142,21 @@ load_obj(Id, Obj, Monitor) ->
     {error, Error} when Error :: object_not_found | member_already_present | term().
 
 add_obj(Id, Obj, #obj_monitor{srv_id=SrvId, regtag=RegTag}=Monitor) ->
-    case nkdomain_obj_lib:load(SrvId, Id, #{register=>{RegTag, self()}}) of
-        #obj_id_ext{obj_id=ObjId, pid=Pid} ->
-            case do_add_enabled(ObjId, Obj, Pid, Monitor) of
-                {ok, Monitor2} ->
-                    {ok, ObjId, Pid, Monitor2};
+    case get_obj(Id, Monitor) of
+        {enabled, _, _}  ->
+            {error, object_already_exists};
+        _ ->
+            case nkdomain_obj_lib:load(SrvId, Id, #{register=>{RegTag, self()}}) of
+                #obj_id_ext{obj_id=ObjId, pid=Pid} ->
+                    case do_add_enabled(ObjId, Obj, Pid, Monitor) of
+                        {ok, Monitor2} ->
+                            {ok, ObjId, Pid, Monitor2};
+                        {error, Error} ->
+                            {error, Error}
+                    end;
                 {error, Error} ->
                     {error, Error}
-            end;
-        {error, Error} ->
-            {error, Error}
+            end
     end.
 
 
@@ -171,7 +176,7 @@ rm_obj(Id, #obj_monitor{srv_id=SrvId, objs=Objs}=Monitor) ->
                         {ok, _} ->
                             {ok, do_remove(ObjId, Monitor)};
                         error ->
-                            {error, member_not_found}
+                            {error, object_not_found}
                     end;
                 {error, Error} ->
                     {error, Error}

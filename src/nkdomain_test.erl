@@ -8,6 +8,11 @@
 -define(ADMIN_PASS, "1234").
 
 
+test() ->
+    ok = test1(),
+    ok = test2().
+
+
 test1() ->
     remove_data(),
     {ok, Pid, _} = login("admin", ?ADMIN_PASS),
