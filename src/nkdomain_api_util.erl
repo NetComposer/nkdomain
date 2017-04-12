@@ -59,7 +59,7 @@ syntax_common('', wait_for_save, Syntax) ->
     };
 
 syntax_common(_Sub, _Cmd, Syntax) ->
-    lager:error("unknown syntax: ~p, ~p", [_Sub, _Cmd]),
+    lager:info("~p: unknown syntax: ~p, ~p", [?MODULE, _Sub, _Cmd]),
     Syntax.
 
 

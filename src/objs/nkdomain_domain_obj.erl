@@ -28,7 +28,7 @@
          find_all_childs/2, find_all_childs/3, find_all_childs_type/3, find_all_childs_type/4]).
 -export([object_get_info/0, object_mapping/0, object_syntax/1,
          object_api_syntax/3, object_api_allow/4, object_api_cmd/4]).
--export([object_start/1, object_all_links_down/1]).
+-export([object_start/1]).
 
 -include("nkdomain.hrl").
 
@@ -148,7 +148,7 @@ find_all_childs_type(Srv, Id, Type, Spec) ->
 object_get_info() ->
     #{
         type => ?DOMAIN_DOMAIN,
-        min_first_time => -1             % Do not unload
+        permanent => true
     }.
 
 
@@ -181,11 +181,6 @@ object_api_cmd(Sub, Cmd, Data, State) ->
 object_start(#obj_session{srv_id=SrvId, obj_id=ObjId, path=Path}=Session) ->
     spawn(fun() -> start_dom_childs(SrvId, ObjId, Path) end),
     {ok, Session}.
-
-
-%% @private
-object_all_links_down(Session) ->
-    {keepalive, Session}.
 
 
 %% ===================================================================

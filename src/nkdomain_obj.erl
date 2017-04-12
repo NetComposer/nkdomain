@@ -27,7 +27,7 @@
 -behaviour(gen_server).
 
 -export([get_session/1, save/1, unload/2]).
--export([update/2, enable/2, delete/1, sync_op/2, async_op/2, apply/2]).
+-export([update/2, enable/2, get_name/1, delete/1, sync_op/2, async_op/2, apply/2]).
 -export([register/2, unregister/2, get_childs/1]).
 -export([wait_for_save/2]).
 -export([create_child/3, load_child/3, object_has_been_deleted/1]).
@@ -106,8 +106,8 @@
 -type object_info() ::
     #{
         type => nkdomain:type(),
-        min_started_time => integer(),      %% msecs
-        min_first_time => integer(),        %% msecs
+        permanent => boolean(),
+        min_first_time => integer(),                    %% msecs
         remove_after_stop => boolean(),
         dont_create_childs_on_disabled => boolean(),    %% Default false
         dont_update_on_disabled => boolean(),           %% Default false
@@ -190,6 +190,14 @@ enable(Id, Enabled) when is_boolean(Enabled)->
 
 update(Id, Map) ->
     do_call(Id, {nkdomain_update, Map}).
+
+
+%% @doc
+-spec get_name(id()) ->
+    {ok, Name::binary, Desc::binary()} | {error, term()}.
+
+get_name(Id) ->
+    do_call(Id, nkdomain_get_name).
 
 
 %% @doc
@@ -362,16 +370,17 @@ init({SrvId, Obj, Meta}) ->
         obj_info = Info
     },
     State2 = case Meta of
-         #{register:=Link} ->
+        #{register:=Link} ->
             links_add(Link, State1);
-         _ ->
-             case maps:get(min_first_time, Info, ?MIN_FIRST_TIME) of
-                 MinTime when MinTime > 0 ->
-                     erlang:send_after(MinTime, self(), nkdomain_check_childs);
-                 _ ->
-                     ok
-             end,
-             State1
+        _ ->
+            case maps:get(permanent, Info, false) of
+                true ->
+                    State1;
+                false ->
+                    Time = maps:get(min_first_time, Info, ?MIN_FIRST_TIME),
+                    Ref = erlang:send_after(Time, self(), nkdomain_check_childs),
+                    State1#state{timer = Ref}
+            end
     end,
     set_log(State2),
     nkservice_util:register_for_changes(SrvId),
@@ -438,6 +447,18 @@ handle_call({nkdomain_enable, Enable}, From, #state{session=#obj_session{obj=Obj
                     reply({error, Error}, State2)
             end
     end;
+
+handle_call(nkdomain_get_name, _From, #state{session=Session}=State) ->
+    #obj_session{type=Type, path=Path, obj=Obj} = Session,
+    Desc = maps:get(description, Obj, <<>>),
+    {ok, _, Name} = nkdomain_util:get_parts(Type, Path),
+    {reply, {ok, Name, Desc}, State};
+
+handle_call(nkdomain_get_time, _From, #state{timer=undefined}=State) ->
+    {reply, {ok, permanent}, State};
+
+handle_call(nkdomain_get_time, _From, #state{timer=Timer}=State) ->
+    {reply, {ok, erlang:read_timer(Timer)}, State};
 
 handle_call({nkdomain_sync_op, _Op}, _From, #state{session=#obj_session{is_enabled=false}}=State) ->
     reply({error, object_is_disabled}, State);
@@ -573,11 +594,6 @@ handle_cast({nkdomain_async_op, Op}, State) ->
 handle_cast({nkdomain_parent_enabled, Enabled}, State) ->
     do_enabled(Enabled, State);
 
-handle_cast({nkdomain_restart_timer, Time}, #state{timer=Timer}=State) ->
-    nklib_util:cancel_timer(Timer),
-    NewTimer = erlang:start_timer(Time, self(), nkdomain_session_timeout),
-    State#state{timer=NewTimer};
-
 handle_cast({nkdomain_send_info, Info, Meta}, State) ->
     noreply(do_event({info, Info, Meta}, State));
 
@@ -621,10 +637,6 @@ handle_info(nkdomain_check_childs, State) ->
 
 handle_info(nkdomain_destroy, State) ->
     {stop, normal, State};
-
-handle_info({timeout, Ref, nkdomain_session_timeout}, #state{timer=Ref}=State) ->
-    ?DEBUG("session timeout", [], State),
-    do_stop(nkdomain_session_timeout, State);
 
 handle_info({'DOWN', _Ref, process, Pid, _Reason}, #state{session=#obj_session{parent_pid=Pid}}=State) ->
     ?DEBUG("parent stopped", [], State),
@@ -966,15 +978,20 @@ do_status(Status, #state{session=#obj_session{status=OldStatus}=Session}=State) 
 do_check_links_down(#state{child_pids=Pids}=State) when map_size(Pids) > 0 ->
     noreply(State);
 
-do_check_links_down(State) ->
+do_check_links_down(#state{obj_info=Info}=State) ->
     case links_is_empty(State) of
         true ->
-            case handle(object_all_links_down, [], State) of
-                {keepalive, State2} ->
-                    noreply(State2);
-                {stop, Reason, State2} ->
-                    do_stop(Reason, State2)
-                end;
+            case maps:get(permanent, Info, false) of
+                true ->
+                    noreply(State);
+                false ->
+                    case handle(object_all_links_down, [], State) of
+                        {keepalive, State2} ->
+                            noreply(State2);
+                        {stop, Reason, State2} ->
+                            do_stop(Reason, State2)
+                    end
+            end;
         false ->
             noreply(State)
     end.

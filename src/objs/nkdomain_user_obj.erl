@@ -24,7 +24,7 @@
 -behavior(nkdomain_obj).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([create/4, login/3, send_push/3]).
+-export([create/4, login/3, get_name/2, send_push/3]).
 -export([object_get_info/0, object_mapping/0, object_syntax/1,
          object_api_syntax/3, object_api_allow/4, object_api_cmd/4,
          object_sync_op/3, object_async_op/2]).
@@ -98,6 +98,15 @@ login(SrvId, Login, Opts) ->
         {error, Error} ->
             {error, Error}
     end.
+
+
+%% @doc
+-spec get_name(nkservice:id(), nkdomain:id()) ->
+    {ok, map()} | {error, term()}.
+
+get_name(Srv, Id) ->
+    sync_op(Srv, Id, {?MODULE, get_name}).
+
 
 
 %% @doc 
@@ -201,6 +210,22 @@ object_sync_op({?MODULE, check_pass, Pass}, _From, #obj_session{obj=Obj}=Session
             {reply, {ok, false}, Session}
     end;
 
+object_sync_op({?MODULE, get_name}, _From, Session) ->
+    #obj_session{type=Type, path=Path, obj=Obj} = Session,
+    {ok, _, Name} = nkdomain_util:get_parts(Type, Path),
+    #{name:=UserName, surname:=UserSurName} = User = maps:get(?DOMAIN_USER, Obj),
+    Data = #{
+        name => Name,
+        description => maps:get(description, Obj, <<>>),
+        ?DOMAIN_USER => #{
+            name => UserName,
+            surname => UserSurName,
+            email => maps:get(email, User, <<>>),
+            icon_url => <<>>
+        }
+    },
+    {reply, {ok, Data}, Session};
+
 object_sync_op(_Op, _From, _Session) ->
     continue.
 
@@ -217,6 +242,11 @@ object_async_op(_Op, _Session) ->
 %% ===================================================================
 %% Internal
 %% ===================================================================
+
+%% @private
+sync_op(Srv, Id, Op) ->
+    nkdomain_obj_lib:sync_op(Srv, Id, ?DOMAIN_USER, Op, user_not_found).
+
 
 %% @private
 do_load(SrvId, Login, Opts) ->
