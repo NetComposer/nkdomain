@@ -10,19 +10,25 @@
 
 test1() ->
     remove_data(),
-    {ok, _SessId, Pid, _Reply} = login("admin", ?ADMIN_PASS),
+    {ok, Pid, _} = login("admin", ?ADMIN_PASS),
     ok = test_basic_1(Pid),
     ok = test_create_user(Pid),
-    ok = test_session(Pid),
+    ok = test_session1(Pid),
     ok = test_session2(Pid),
-    ok = test_delete(Pid),
+    %% test_session2 destroys the admin connection
+    {ok, Pid2, _} = login("admin", ?ADMIN_PASS),
+    ok = test_session3(Pid2),
+    ok = test_delete(Pid2),
     remove_data().
 
 test2() ->
     remove_data(),
-    {ok, _SessId, Pid, _Reply} = login("admin", ?ADMIN_PASS),
+    {ok, Pid, _} = login("admin", ?ADMIN_PASS),
     ok = test_basic_2(Pid),
     remove_data().
+
+
+
 
 
 %% Check for root domain and admin user
@@ -140,13 +146,13 @@ test_create_user(Pid) ->
     ok.
 
 
-test_session(Pid) ->
+test_session1(Pid) ->
     % Do login over tuser1, check the session is created and loaded
-    {ok, SessId, Pid2, _Reply} = login("/users/tuser1", pass2),
+    {ok, Pid2, SessId} = login("/users/tuser1", pass2),
     {ok, #{<<"type">>:=<<"user">>, <<"path">>:=<<"/users/tuser1">>, <<"obj_id">>:=UId}} = cmd(Pid2, user, get, #{}),
     {ok, #{<<"type">>:=<<"user">>, <<"path">>:=<<"/users/admin">>}} = cmd(Pid, user, get, #{}),
     {ok, <<"session">>, SessId, <<"/users/tuser1/sessions/", SessId/binary>>, SPid} = nkdomain:find(root, SessId),
-    true = is_pid(Pid),
+    true = is_pid(SPid),
 
     % Object has active childs, we cannot delete it
     {error,
@@ -194,7 +200,7 @@ test_session2(Pid) ->
     SessName = nkdomain_util:name(SessId),
     {SessId, SessPid} = maps:get(SessName, maps:get(<<"session">>, Childs)),
 
-    % If we kill the session, admin notices
+    % If we kill the session, admin notices and the web socket is closed
     exit(SessPid, kill),
     timer:sleep(100),
     {ok, Childs2} = nkdomain_obj:get_childs(<<"admin">>),
@@ -214,6 +220,31 @@ test_session2(Pid) ->
     timer:sleep(1100),
     {1, [#{<<"destroyed_code">>:=<<"object_clean_process">>}]} = find_archive(SessId),
     ok.
+
+
+%% Test disabling users and sessions
+test_session3(Admin) ->
+    % Do login over tuser1, check the session is created and loaded
+    {ok, Pid, SessId} = login("/users/tuser1", pass2),
+    {ok, <<"session">>, SessId, <<"/users/tuser1/sessions/", SessId/binary>>, SPid} = nkdomain:find(root, SessId),
+    true = is_pid(SPid),
+
+    {ok, #{<<"path">>:=<<"/users/tuser1">>}} = cmd(Pid, user, get, #{}),
+    {ok, #{}} = cmd(Pid, user, enable, #{enable=>false}),
+    timer:sleep(1500),
+    {error, object_not_found} = nkdomain:find(root, SessId),
+    {1, [#{<<"destroyed_code">>:=<<"user_is_disabled">>}]} = find_archive(SessId),
+    false = is_process_alive(Pid),
+    false = is_process_alive(SPid),
+    {error, {<<"object_is_disabled">>, _}} = login("/users/tuser1", pass2),
+
+    {ok, #{}} = cmd(Admin, user, enable, #{id=>"/users/tuser1", enable=>true}),
+    {ok, Pid3, _} = login("/users/tuser1", pass2),
+    nkapi_client:stop(Pid3),
+    timer:sleep(1500),
+    ok.
+
+
 
 
 test_delete(Pid) ->
@@ -408,7 +439,7 @@ remove_data() ->
             ok;
         _ ->
             %% lager:notice("Deleting all childs for /stest1"),
-            nkdomain_store_es:object_store_delete_all_childs(axft4mi, "/stest1", #{})
+            nkdomain_store_es:object_store_delete_all_childs(root, "/stest1", #{})
     end,
     case nkdomain:find(root, "/stest1") of
         {ok, <<"domain">>, S1Id_0, <<"/stest1">>, _} ->
@@ -431,7 +462,10 @@ login(User, Pass) ->
         password=> nklib_util:to_binary(Pass),
         meta => #{a=>nklib_util:to_binary(User)}
     },
-    {ok, _SessId, _Pid, _Reply} = nkapi_client:start(root, ?WS, Login, Fun, #{}).
+    case nkapi_client:start(root, ?WS, Login, Fun, #{}) of
+        {ok, SessId, Pid, _Reply} -> {ok, Pid, SessId};
+        {error, Error} -> {error, Error}
+    end.
 
 
 api_client_fun(#nkapi_req{class=event, data=Event}, UserData) ->

@@ -71,7 +71,6 @@ create(SrvId, Domain, Opts) ->
     case nkdomain_obj_lib:make_obj(SrvId, Domain, ?DOMAIN_SESSION, Make2) of
         {ok, Obj} ->
             CreateList = [
-%%                {remove_after_stop, true},
                 case Opts of
                     #{pid:=Pid1} -> {register, {?MODULE, Pid1}};
                     _ -> []

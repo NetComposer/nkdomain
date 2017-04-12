@@ -97,7 +97,6 @@
 
 
 %% ===================================================================
-%% Types
 %% ===================================================================
 
 
@@ -109,7 +108,10 @@
         type => nkdomain:type(),
         min_started_time => integer(),      %% msecs
         min_first_time => integer(),        %% msecs
-        remove_after_stop => boolean()
+        remove_after_stop => boolean(),
+        dont_create_childs_on_disabled => boolean(),    %% Default false
+        dont_update_on_disabled => boolean(),           %% Default false
+        dont_delete_on_disabled => boolean()            %% Default false
     }.
 
 -type session() :: #obj_session{}.
@@ -297,7 +299,8 @@ start(SrvId, Obj, Meta) ->
     timer :: reference(),
     child_pids = #{} :: #{pid() => {nkdomain:type(), nkdomain:name(), reference()}},
     timelog = [] :: [map()],
-    wait_save = [] :: [{pid(), term()}]
+    wait_save = [] :: [{pid(), term()}],
+    obj_info :: map()
 }).
 
 
@@ -351,16 +354,17 @@ init({SrvId, Obj, Meta}) ->
         childs = #{},
         started = nklib_util:m_timestamp()
     },
+    Info = Module:object_get_info(),
     State1 = #state{
         obj_id = ObjId,
         srv_id = SrvId,
-        session = Session
+        session = Session,
+        obj_info = Info
     },
     State2 = case Meta of
          #{register:=Link} ->
             links_add(Link, State1);
          _ ->
-             Info = Module:object_get_info(),
              case maps:get(min_first_time, Info, ?MIN_FIRST_TIME) of
                  MinTime when MinTime > 0 ->
                      erlang:send_after(MinTime, self(), nkdomain_check_childs);
@@ -391,6 +395,10 @@ handle_call(nkdomain_get_timelog, _From, #state{timelog=Log}=State) ->
 handle_call(nkdomain_get_childs, _From, #state{session=#obj_session{childs=Childs}}=State) ->
     reply({ok, Childs}, State);
 
+handle_call({nkdomain_update, _Map}, _From,
+    #state{session=#obj_session{is_enabled=false}, obj_info=#{dont_update_on_disabled:=true}}=State) ->
+    reply({error, object_is_disabled}, State);
+
 handle_call({nkdomain_update, Map}, _From, State) ->
     #state{session=#obj_session{obj=Obj}=Session} = State,
     Time = nklib_util:m_timestamp(),
@@ -402,6 +410,10 @@ handle_call({nkdomain_update, Map}, _From, State) ->
         {error, Error, State2} ->
             reply({error, Error}, State2)
     end;
+
+handle_call(nkdomain_delete, _From,
+    #state{session=#obj_session{is_enabled=false}, obj_info=#{dont_delete_on_disabled:=true}}=State) ->
+    reply({error, object_is_disabled}, State);
 
 handle_call(nkdomain_delete, From, State) ->
     case do_delete(State) of
@@ -470,6 +482,11 @@ handle_call({nkdomain_apply, Fun}, _From, #state{session=Session}=State) ->
             {{error, internal_error}, State}
     end,
     reply(Reply2, State2);
+
+
+handle_call({nkdomain_create_child, _Obj, _Meta}, _From,
+    #state{session=#obj_session{is_enabled=false}, obj_info=#{dont_create_childs_on_disabled:=true}}=State) ->
+    reply({error, object_is_disabled}, State);
 
 handle_call({nkdomain_create_child, Obj, Meta}, _From, State) ->
     #{path:=Path} = Obj,
@@ -744,8 +761,7 @@ do_delete(State) ->
 
 %% @private
 do_archive(Reason, State) ->
-    #state{srv_id=SrvId, session = #obj_session{obj=Obj, module=Module}} = State,
-    Info = Module:object_get_info(),
+    #state{srv_id=SrvId, session=#obj_session{obj=Obj}, obj_info=Info} = State,
     case maps:get(archive, Info, true) of
         true ->
             Obj2 = nkdomain_util:add_destroyed(SrvId, Reason, Obj),
@@ -769,15 +785,14 @@ do_stop(Reason, State) ->
 
 
 %% @private
-do_stop2(Reason, #state{srv_id=SrvId, stop_reason=false, timelog=Log}=State) ->
+do_stop2(Reason, #state{srv_id=SrvId, stop_reason=false, timelog=Log, obj_info=Info}=State) ->
     {ok, State2} = handle(object_stop, [Reason], State#state{stop_reason=Reason}),
     {Code, Txt} = nkapi_util:api_error(SrvId, Reason),
     State3 = do_add_timelog(#{msg=>stopped, code=>Code, reason=>Txt}, State2),
     State4 = do_save(State3),
     State5 = do_status({unloaded, Reason}, State4),
     State6 = do_event({record, lists:reverse(Log)}, State5),
-    #state{session = #obj_session{module=Module}} = State6,
-    case Module:object_get_info() of
+    case Info of
         #{remove_after_stop:=true} ->
             case do_delete(State6) of
                 {ok, DeleteState} ->

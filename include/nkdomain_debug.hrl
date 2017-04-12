@@ -34,9 +34,8 @@
             {type, Session#obj_session.type},
             {path, Session#obj_session.path}
         ],
-        "NkDOMAIN Obj ~s ~s (~s) " ++ Txt,
+        "NkDOMAIN Obj ~s (~s) " ++ Txt,
         [
-            Session#obj_session.type,
             Session#obj_session.path,
             Session#obj_session.obj_id | Args
         ]

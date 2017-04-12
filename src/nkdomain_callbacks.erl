@@ -81,6 +81,7 @@ api_error(object_clean_expire)              -> "Object cleaned (expired)";
 api_error(object_deleted) 		            -> "Object removed";
 api_error(object_has_childs) 		        -> "Object has childs";
 api_error(object_parent_conflict) 	        -> "Object has conflicting parent";
+api_error(object_is_already_loaded) -> "Object is already loaded";
 api_error(object_is_disabled) 		        -> "Object is disabled";
 api_error(object_is_stopped) 		        -> "Object is stopped";
 api_error(object_not_found) 		        -> "Object not found";
