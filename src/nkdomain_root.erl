@@ -41,7 +41,7 @@ create() ->
         description => <<"NetComposer">>,
         created_time => nklib_util:m_timestamp()
     },
-    nkdomain_store_es:object_store_save_raw(axft4mi, <<"root">>, Obj).
+    nkdomain_store_es:object_store_save_raw(root, <<"root">>, Obj).
 
 
 
