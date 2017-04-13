@@ -40,8 +40,7 @@ api('', create, Syntax) ->
         obj_name => binary,
         subtype => binary,
         parent => binary,
-        ?DOMAIN_CONFIG_ATOM => map,
-        wait_for_save => boolean
+        ?DOMAIN_CONFIG_ATOM => map
     },
     nklib_syntax:add_mandatory([subtype, parent, config], Syntax2);
 

@@ -37,8 +37,7 @@ api('', create, Syntax) ->
     Syntax2 = Syntax#{
         obj_name => binary,
         domain => binary,
-        description => binary,
-        wait_for_save => boolean
+        description => binary
     },
     nklib_syntax:add_mandatory([obj_name, description], Syntax2);
 

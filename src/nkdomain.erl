@@ -78,10 +78,7 @@
 }.
 
 -type create_opts() ::
-    load_opts() |
-    #{
-        wait_for_save => integer()
-    }.
+    load_opts().
 
 
 -type load_opts() ::

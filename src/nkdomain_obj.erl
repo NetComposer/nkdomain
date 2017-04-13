@@ -729,7 +729,7 @@ do_check_expire(#state{session=#obj_session{obj=Obj}}) ->
 
 %% @private
 do_load_child(Name, #{type:=Type, obj_id:=ObjId}=Obj, Meta, #state{srv_id=SrvId}=State) ->
-    Meta2 = maps:without([skip_path_check, wait_for_save], Meta),
+    Meta2 = maps:without([skip_path_check], Meta),
     case start(SrvId, Obj, Meta2) of
         {ok, ChildPid} ->
             State2 = do_add_child(Type, ObjId, Name, ChildPid, State),

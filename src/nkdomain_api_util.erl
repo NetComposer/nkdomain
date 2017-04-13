@@ -225,16 +225,3 @@ add_id(Type, Id, State) ->
     ObjIds2 = ObjIds1#{Type => Id},
     ?ADD_TO_API_SESSION(nkdomain_obj_ids, ObjIds2, State).
 
-
-%%%% @doc Performs 'wait_for_save'
-%%wait_for_save(Pid, #{wait_for_save:=Time}, Reply, State) ->
-%%    case nkdomain_obj:wait_save(Pid, Time) of
-%%        ok ->
-%%            {ok, Reply, State};
-%%        {error, Error} ->
-%%            {error, Error, State}
-%%    end;
-%%
-%%wait_for_save(_Pid, _Data, Reply, State) ->
-%%    {ok, Reply, State}.
-%%

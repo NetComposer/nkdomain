@@ -49,8 +49,7 @@
         active => boolean(),
         description => binary(),
         aliases => [binary()],
-        type_obj => map(),
-        wait_for_save => integer()
+        type_obj => map()
     }.
 
 
@@ -156,19 +155,13 @@ make_and_create(Srv, Parent, Type, Opts) ->
     case make_obj(Srv, Parent, Type, Opts) of
         {ok, Obj} ->
             %% lager:warning("Obj: ~p", [Obj]),
-            Meta1 = case maps:is_key(obj_id, Opts) orelse maps:is_key(name, Opts) of
+            Meta = case maps:is_key(obj_id, Opts) orelse maps:is_key(name, Opts) of
                 true ->
                     #{};
                 false ->
                     #{skip_path_check=>true}
             end,
-            Meta2 = case maps:find(wait_for_save, Opts) of
-                {ok, Time} when is_integer(Time), Time > 1 ->
-                    Meta1#{wait_for_save=>Time};
-                error ->
-                    Meta1
-            end,
-            case create(Srv, Obj, Meta2) of
+            case create(Srv, Obj, Meta) of
                 #obj_id_ext{type=Type, obj_id=ObjId, path=Path, pid=Pid} ->
                     {ok, ObjId, Path, Pid};
                 {error, Error} ->
@@ -205,17 +198,7 @@ do_create(#obj_id_ext{srv_id=SrvId}=Ext, #{parent_id:=ParentId}=Obj, Meta) ->
         #obj_id_ext{pid=ParentPid} ->
             case nkdomain_obj:create_child(ParentPid, Obj, Meta) of
                 {ok, ObjPid} ->
-                    case Meta of
-                        #{wait_for_save:=Time} ->
-                            case nkdomain_obj:wait_for_save(ObjPid, Time) of
-                                ok ->
-                                    Ext#obj_id_ext{pid=ObjPid};
-                                {error, Error} ->
-                                    {error, Error}
-                            end;
-                        _ ->
-                            Ext#obj_id_ext{pid=ObjPid}
-                    end;
+                    Ext#obj_id_ext{pid=ObjPid};
                 {error, Error} ->
                     {error, Error}
             end;
