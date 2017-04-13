@@ -356,17 +356,27 @@ async_op(Srv, Id, Type, Msg, NotFound) ->
 
 
 find_loaded(IdOrPath) when is_binary(IdOrPath) ->
-    case nklib_proc:values({nkdomain_obj, IdOrPath}) of
-        [{{Type, Path}, Pid}] ->
+    case nkdomain_reg:find(IdOrPath) of
+        {ok, {Type, path, Path}, Pid} ->
             #obj_id_ext{type=Type, obj_id=IdOrPath, path=Path, pid=Pid};
-        [] ->
-            case nklib_proc:values({nkdomain_obj, path, IdOrPath}) of
-                [{{Type, ObjId}, Pid}] ->
-                    #obj_id_ext{type=Type, obj_id=ObjId, path=IdOrPath, pid=Pid};
-                [] ->
-                    not_found
-            end
+        {ok, {Type, obj_id, ObjId}, Pid} ->
+            #obj_id_ext{type=Type, obj_id=ObjId, path=IdOrPath, pid=Pid};
+        _ ->
+            not_found
     end;
+
+%%find_loaded(IdOrPath) when is_binary(IdOrPath) ->
+%%    case nklib_proc:values({nkdomain_obj, IdOrPath}) of
+%%        [{{Type, Path}, Pid}] ->
+%%            #obj_id_ext{type=Type, obj_id=IdOrPath, path=Path, pid=Pid};
+%%        [] ->
+%%            case nklib_proc:values({nkdomain_obj, path, IdOrPath}) of
+%%                [{{Type, ObjId}, Pid}] ->
+%%                    #obj_id_ext{type=Type, obj_id=ObjId, path=IdOrPath, pid=Pid};
+%%                [] ->
+%%                    not_found
+%%            end
+%%    end;
 
 find_loaded(ObjId) ->
     find_loaded(nklib_util:to_binary(ObjId)).

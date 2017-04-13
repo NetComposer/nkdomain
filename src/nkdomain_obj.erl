@@ -320,9 +320,13 @@ init({SrvId, Obj, Meta}) ->
     #{obj_id:=ObjId, type:=Type, path:=Path, parent_id:=ParentId} = Obj,
     Module = nkdomain_types:get_module(Type),
     false = Module==undefined,
-    true = nklib_proc:reg({?MODULE, ObjId}, {Type, Path}),
-    true = nklib_proc:reg({?MODULE, path, Path}, {Type, ObjId}),
+%%    true = nklib_proc:reg({?MODULE, ObjId}, {Type, Path}),
+%%    true = nklib_proc:reg({?MODULE, path, Path}, {Type, ObjId}),
     nklib_proc:put(?MODULE, {Type, ObjId, Path}),
+
+    ok = nkdomain_reg:reg(ObjId, {Type, path, Path}),
+    ok = nkdomain_reg:reg(Path, {Type, obj_id, ObjId}),
+
     {ParentId, ParentPid} = case Meta of
         #{parent_id:=ParentId0, parent_pid:=ParentPid0} ->
             monitor(process, ParentPid0),

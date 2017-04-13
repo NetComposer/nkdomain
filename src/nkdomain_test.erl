@@ -10,7 +10,8 @@
 
 test() ->
     ok = test1(),
-    ok = test2().
+    ok = test2(),
+    lager:notice("Domain test ok!").
 
 
 test1() ->
