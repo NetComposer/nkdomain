@@ -324,8 +324,7 @@ init({SrvId, Obj, Meta}) ->
 %%    true = nklib_proc:reg({?MODULE, path, Path}, {Type, ObjId}),
     nklib_proc:put(?MODULE, {Type, ObjId, Path}),
 
-    ok = nkdomain_reg:reg(ObjId, {Type, path, Path}),
-    ok = nkdomain_reg:reg(Path, {Type, obj_id, ObjId}),
+    ok = nkdomain_obj_lib:reg(Type, ObjId, Path),
 
     {ParentId, ParentPid} = case Meta of
         #{parent_id:=ParentId0, parent_pid:=ParentPid0} ->

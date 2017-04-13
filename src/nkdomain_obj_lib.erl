@@ -28,7 +28,7 @@
 -export([find/2, load/3, create/3]).
 -export([make_obj/4, make_and_create/4]).
 -export([unload/4, sync_op/5, async_op/5]).
--export([find_loaded/1, call/2, call/3, cast/2, info/2]).
+-export([reg/3, find_loaded/1, call/2, call/3, cast/2, info/2]).
 
 -include("nkdomain.hrl").
 
@@ -57,6 +57,10 @@
 %% ===================================================================
 %% Public
 %% ===================================================================
+
+
+
+
 
 
 
@@ -203,7 +207,7 @@ do_create(#obj_id_ext{srv_id=SrvId}=Ext, #{parent_id:=ParentId}=Obj, Meta) ->
                 {ok, ObjPid} ->
                     case Meta of
                         #{wait_for_save:=Time} ->
-                            case nkdomain_obj:wait_save(ObjPid, Time) of
+                            case nkdomain_obj:wait_for_save(ObjPid, Time) of
                                 ok ->
                                     Ext#obj_id_ext{pid=ObjPid};
                                 {error, Error} ->
@@ -355,8 +359,19 @@ async_op(Srv, Id, Type, Msg, NotFound) ->
 %% ===================================================================
 
 
+%% @private
+reg(Type, ObjId, Path) ->
+    case nkdist_reg:reg(proc, nkdomain, ObjId, #{meta=>{Type, path, Path}}) of
+        ok ->
+            nkdist_reg:reg(reg, nkdomain, Path, #{meta=>{Type, obj_id, ObjId}});
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
+%% @private
 find_loaded(IdOrPath) when is_binary(IdOrPath) ->
-    case nkdomain_reg:find(IdOrPath) of
+    case nkdist_reg:find(nkdomain, IdOrPath) of
         {ok, {Type, path, Path}, Pid} ->
             #obj_id_ext{type=Type, obj_id=IdOrPath, path=Path, pid=Pid};
         {ok, {Type, obj_id, ObjId}, Pid} ->
