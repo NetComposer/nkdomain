@@ -128,7 +128,6 @@
 -type start_meta() ::
     #{
         parent_id => nkdomain:obj_id(),     % Mandatory
-        parent_pid => pid(),                % Mandatory
         enabled => boolean(),
         register => nklib:link(),
         is_created => boolean()
@@ -326,12 +325,12 @@ init({SrvId, Obj, Meta}) ->
 
     ok = nkdomain_obj_lib:reg(Type, ObjId, Path),
 
-    {ParentId, ParentPid} = case Meta of
-        #{parent_id:=ParentId0, parent_pid:=ParentPid0} ->
-            monitor(process, ParentPid0),
-            {ParentId0, ParentPid0};
-        _ when Type == ?DOMAIN_DOMAIN andalso ObjId == <<"root">> ->
-            {<<>>, undefined}
+    case ParentId of
+        <<>> when Type == ?DOMAIN_DOMAIN andalso ObjId == <<"root">> ->
+            ok;
+        _ ->
+            % We will receive nkdist_reg messages
+            ok = nkdomain_obj_lib:link_parent(ParentId, ObjId)
     end,
     Enabled = case maps:find(enabled, Meta) of
         {ok, true} ->
@@ -344,7 +343,7 @@ init({SrvId, Obj, Meta}) ->
         error ->
             maps:get(enabled, Obj, true)
     end,
-    IgnoreMeta = [register, enabled, parent_id, parent_pid],
+    IgnoreMeta = [register, enabled, parent_id],
     IsCreated = maps:get(is_created, Meta, false),
     Session = #obj_session{
         obj_id = ObjId,
@@ -352,7 +351,6 @@ init({SrvId, Obj, Meta}) ->
         path = Path,
         type = Type,
         parent_id = ParentId,
-        parent_pid = ParentPid,
         obj = Obj,
         srv_id = SrvId,
         status = init,
@@ -641,8 +639,12 @@ handle_info(nkdomain_check_childs, State) ->
 handle_info(nkdomain_destroy, State) ->
     {stop, normal, State};
 
-handle_info({'DOWN', _Ref, process, Pid, _Reason}, #state{session=#obj_session{parent_pid=Pid}}=State) ->
-    ?DEBUG("parent stopped", [], State),
+handle_info({nkdist_reg, {new_link, {nkdomain_parent, ParentId}}},
+            #state{session=#obj_session{parent_id=ParentId}}=State) ->
+    {noreply, State};
+
+handle_info({nkdist_reg, {link_down, {nkdomain_parent, ParentId}}},
+    #state{session=#obj_session{parent_id=ParentId}}=State) ->
     do_stop(parent_stopped, State);
 
 handle_info({'DOWN', Ref, process, Pid, Reason}=Msg, State) ->

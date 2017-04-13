@@ -29,6 +29,7 @@
 -export([make_obj/4, make_and_create/4]).
 -export([unload/4, sync_op/5, async_op/5]).
 -export([reg/3, find_loaded/1, call/2, call/3, cast/2, info/2]).
+-export([link_parent/2]).
 
 -include("nkdomain.hrl").
 
@@ -350,6 +351,14 @@ reg(Type, ObjId, Path) ->
         {error, Error} ->
             {error, Error}
     end.
+
+
+%% @private Links a child to its parent
+%% If the parent dies, child will receive {link_down, {nkdomain_parent, ParentId}}
+%% If child dies, parent will receive {link_down, {nkdomain_child, ChildId}}
+link_parent(ParentId, ChildId) ->
+    ok = nkdist_reg:link_from(nkdomain, ParentId, ChildId, {nkdomain_parent, ParentId}),
+    ok = nkdist_reg:link_to(nkdomain, ParentId, {nkdomain_child, ChildId}).
 
 
 %% @private

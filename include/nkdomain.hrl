@@ -36,7 +36,6 @@
     path :: nkdomain:path(),
     module :: module(),
     parent_id :: nkdomain:obj_id(),
-    parent_pid :: pid(),
     obj :: nkdomain:obj(),
     srv_id :: nkservice:id(),
     is_dirty :: boolean(),
