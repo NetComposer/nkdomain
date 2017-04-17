@@ -35,6 +35,7 @@
     obj_id :: nkdomain:obj_id(),
     path :: nkdomain:path(),
     module :: module(),
+    name :: nkdomain:name(),
     parent_id :: nkdomain:obj_id(),
     obj :: nkdomain:obj(),
     srv_id :: nkservice:id(),
@@ -45,7 +46,8 @@
     meta :: map(),                      % Object load metadata
     data :: term(),                     % Type-specific metadata
     started :: nklib_util:m_timestamp(),
-    childs :: #{nkdomain:type() => #{nkdomain:name() => {nkdomain:obj_id(), pid()}}},
+%%    childs :: #{nkdomain:type() => #{nkdomain:name() => {nkdomain:obj_id(), pid()}}},
+    childs2 :: #{nkdomain:type() => #{nkdomain:name() => nkdomain:obj_id()}},
     links :: nklib_links:links()
 }).
 

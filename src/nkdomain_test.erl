@@ -204,7 +204,7 @@ test_session2(Pid) ->
     {ok, <<"session">>, SessId, Path, SessPid} = nkdomain:find(root, SessId),
     {ok, Childs} = nkdomain_obj:get_childs(<<"admin">>),
     SessName = nkdomain_util:name(SessId),
-    {SessId, SessPid} = maps:get(SessName, maps:get(<<"session">>, Childs)),
+    SessId = maps:get(SessName, maps:get(<<"session">>, Childs)),
 
     % If we kill the session, admin notices and the web socket is closed
     exit(SessPid, kill),
@@ -212,7 +212,7 @@ test_session2(Pid) ->
     {ok, Childs2} = nkdomain_obj:get_childs(<<"admin">>),
 
     Sessions = maps:get(<<"session">>, Childs2, #{}),
-    error = maps:find(SessName, Sessions),
+    false = maps:is_key(SessName, Sessions),
     {ok, <<"session">>, SessId, Path, undefined} = nkdomain:find(root, SessId),
 
     % Object has not active childs, but the child is still found on disk

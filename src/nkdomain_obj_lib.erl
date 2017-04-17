@@ -28,8 +28,8 @@
 -export([find/2, load/3, create/3]).
 -export([make_obj/4, make_and_create/4]).
 -export([unload/4, sync_op/5, async_op/5]).
--export([reg/3, find_loaded/1, call/2, call/3, cast/2, info/2]).
--export([link_parent/2]).
+-export([get_node/1, reserve/1, unreserve/1, register/3, link_to_parent/4]).
+-export([find_loaded/1, call/2, call/3, cast/2, info/2]).
 
 -include("nkdomain.hrl").
 
@@ -247,45 +247,37 @@ load(Srv, IdOrPath, Meta) ->
                     ok
             end,
             ObjIdExt;
-        #obj_id_ext{}=ObjIdExt ->
-            do_load2(ObjIdExt, Meta);
+        #obj_id_ext{srv_id=SrvId, obj_id = <<"root">>, path = <<"/">>}=ObjIdExt ->
+            case nkdomain_obj:start(SrvId, <<"root">>, load, Meta) of
+                {ok, Pid} ->
+                    ObjIdExt#obj_id_ext{pid=Pid};
+                {error, Error} ->
+                    {error, Error}
+            end;
+        #obj_id_ext{type=Type, path=Path}=ObjIdExt ->
+            {ok, Base, _Name} = nkdomain_util:get_parts(Type, Path),
+            do_load(ObjIdExt, Base, Meta);
         {error, Error} ->
             {error, Error}
     end.
 
-
 %% @private
-do_load2(#obj_id_ext{srv_id=SrvId, type=Type, obj_id=ObjId, path=Path}=ObjIdExt, Meta) ->
-    case SrvId:object_load(SrvId, ObjId) of
-        {ok, #{type:=Type, obj_id:=ObjId, path:=Path}=Obj} ->
-            do_load3(ObjIdExt, Obj, Meta);
-        {error, Error} ->
-            {error, Error}
-    end.
-
-
-%% @private
-do_load3(#obj_id_ext{type = ?DOMAIN_DOMAIN, path = <<"/">>, obj_id = <<"root">>}=ObjIdExt, Obj, Meta) ->
-    #obj_id_ext{srv_id=SrvId} = ObjIdExt,
-    {ok, Pid} = nkdomain_obj:start(SrvId, Obj, Meta),
-    ObjIdExt#obj_id_ext{pid=Pid};
-
-do_load3(#obj_id_ext{srv_id=SrvId}=ObjIdExt, #{parent_id:=ParentId}=Obj, Meta) ->
+do_load(#obj_id_ext{srv_id=SrvId}=ObjIdExt, BasePath,  Meta) ->
     LoadPath = maps:get(load_path, Meta, []),
-    case lists:member(ParentId, LoadPath) of
+    case lists:member(BasePath, LoadPath) of
         true ->
             {error, object_parent_conflict};
         false ->
-            case load(SrvId, ParentId, #{load_path=>[ParentId|LoadPath]}) of
-                #obj_id_ext{obj_id=ParentId, pid=ParentPid} when is_pid(ParentPid) ->
-                    case nkdomain_obj:load_child(ParentPid, Obj, Meta) of
+            case load(SrvId, BasePath, #{load_path=>[BasePath|LoadPath]}) of
+                #obj_id_ext{pid=ParentPid} when is_pid(ParentPid) ->
+                    case nkdomain_obj:load_child(ParentPid, ObjIdExt, Meta) of
                         {ok, ObjPid} ->
                             ObjIdExt#obj_id_ext{pid=ObjPid};
                         {error, Error} ->
                             {error, Error}
                     end;
                 {error, object_not_found} ->
-                    {error, {could_not_load_parent, ParentId}};
+                    {error, {could_not_load_parent, BasePath}};
                 {error, Error} ->
                     {error, Error}
             end
@@ -342,23 +334,57 @@ async_op(Srv, Id, Type, Msg, NotFound) ->
 %% Private
 %% ===================================================================
 
+%% @private
+get_node(ObjId) ->
+    case nkdist:get_vnode(nkdomain, ObjId, #{}) of
+        {ok, Node, _Idx} ->
+            {ok, Node};
+        {error, Error} ->
+            {error, Error}
+    end.
+
 
 %% @private
-reg(Type, ObjId, Path) ->
-    case nkdist_reg:reg(proc, nkdomain, ObjId, #{meta=>{Type, path, Path}}) of
+reserve(ObjId) ->
+    reserve(ObjId, 5).
+
+
+%% @private
+reserve(_ObjId, 0) ->
+    {error, could_not_reserve};
+
+reserve(ObjId, Tries) ->
+    case nkdist_reg:reserve(nkdomain, ObjId) of
         ok ->
-            nkdist_reg:reg(reg, nkdomain, Path, #{meta=>{Type, obj_id, ObjId}});
+            ok;
+        {error, _} ->
+            lager:info("NkDOMAIN: Could not reserve ~s, retrying", [ObjId]),
+            timer:sleep(1000),
+            reserve(ObjId, Tries-1)
+    end.
+
+
+%% @private
+unreserve(ObjId) ->
+    nkdist_reg:unreserve(nkdomain, ObjId).
+
+
+%% @private
+register(Type, ObjId, Path) ->
+    case nkdist_reg:register(proc, nkdomain, ObjId, #{sync=>true, meta=>{Type, path, Path}}) of
+        ok ->
+            nkdist_reg:register(reg, nkdomain, Path, #{sync=>true, meta=>{Type, obj_id, ObjId}});
         {error, Error} ->
             {error, Error}
     end.
 
 
 %% @private Links a child to its parent
-%% If the parent dies, child will receive {link_down, {nkdomain_parent, ParentId}}
-%% If child dies, parent will receive {link_down, {nkdomain_child, ChildId}}
-link_parent(ParentId, ChildId) ->
-    ok = nkdist_reg:link_from(nkdomain, ParentId, ChildId, {nkdomain_parent, ParentId}),
-    ok = nkdist_reg:link_to(nkdomain, ParentId, {nkdomain_child, ChildId}).
+link_to_parent(Parent, Type, Name, ChildId) ->
+    % Parent will receive {received_link, {nkdomain_child, ChildId}} (does nothing)
+    % If parent dies, child receives {sent_link_down, {nkdomain_child, ChildId}}
+    % Id child dies, parent receives {received_link_down, {nkdomain_child, ChildId}}
+    ok = nkdist_reg:link(nkdomain, Parent, {nkdomain_child, Type, Name, ChildId}).
 
 
 %% @private
@@ -371,19 +397,6 @@ find_loaded(IdOrPath) when is_binary(IdOrPath) ->
         _ ->
             not_found
     end;
-
-%%find_loaded(IdOrPath) when is_binary(IdOrPath) ->
-%%    case nklib_proc:values({nkdomain_obj, IdOrPath}) of
-%%        [{{Type, Path}, Pid}] ->
-%%            #obj_id_ext{type=Type, obj_id=IdOrPath, path=Path, pid=Pid};
-%%        [] ->
-%%            case nklib_proc:values({nkdomain_obj, path, IdOrPath}) of
-%%                [{{Type, ObjId}, Pid}] ->
-%%                    #obj_id_ext{type=Type, obj_id=ObjId, path=IdOrPath, pid=Pid};
-%%                [] ->
-%%                    not_found
-%%            end
-%%    end;
 
 find_loaded(ObjId) ->
     find_loaded(nklib_util:to_binary(ObjId)).
@@ -399,9 +412,23 @@ call(Pid, Msg, Timeout) when is_pid(Pid) ->
     nkservice_util:call(Pid, Msg, Timeout);
 
 call(Id, Msg, Timeout) ->
+    call(Id, Msg, Timeout, 5).
+
+
+%% @private
+call(_Id, _Msg, _Timeout, 0) ->
+    {error, process_not_found};
+
+call(Id, Msg, Timeout, Tries) ->
     case find_loaded(Id) of
         #obj_id_ext{pid=Pid} when is_pid(Pid) ->
-            call(Pid, Msg, Timeout);
+            case nkservice_util:call(Pid, Msg, Timeout) of
+                {error, process_not_found} ->
+                    timer:sleep(250),
+                    call(Id, Msg, Timeout, Tries-1);
+                Other ->
+                    Other
+            end;
         not_found ->
             {error, obj_not_found}
     end.
