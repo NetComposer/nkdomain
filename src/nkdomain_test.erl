@@ -396,13 +396,16 @@ test_basic_2(Pid) ->
     {ok, #{<<"_is_enabled">>:=false, <<"enabled">>:=false}} = cmd(Pid, domain, get, #{id=>"/stest1/stest2"}),
     {ok, #{<<"_is_enabled">>:=false}} = cmd(Pid, domain, get, #{id=>"/stest1/stest2/users/u1"}),
 
-    % We unload everything, we loading, every enabled status remains
     true = is_loaded("/stest1"),
     true = is_loaded("/stest1/users/u1"),
     true = is_loaded("/stest1/stest2"),
     true = is_loaded("/stest1/stest2/users/u1"),
-    nkdomain_obj:unload("/stest1", normal),
 
+    % We unload everything. We need to unload childs before or they will restart father
+    nkdomain_obj:unload("/stest1/stest2/users/u1", normal),
+    nkdomain_obj:unload("/stest1/stest2", normal),
+    nkdomain_obj:unload("/stest1/users/u1", normal),
+    nkdomain_obj:unload("/stest1", normal),
     timer:sleep(100),
     false = is_loaded("/stest1"),
     false = is_loaded("/stest1/users/u1"),

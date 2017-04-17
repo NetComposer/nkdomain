@@ -31,7 +31,7 @@
 -export([register/2, unregister/2, get_childs/1]).
 -export([wait_for_save/2]).
 -export([create_child/3, load_child/3, object_has_been_deleted/1]).
--export([start/4, do_start/4]).
+-export([start/2]).
 -export([init/1, terminate/2, code_change/3, handle_call/3,  handle_cast/2, handle_info/2]).
 -export([get_all/0, unload_all/0]).
 -export_type([event/0, status/0]).
@@ -128,10 +128,9 @@
 
 -type start_meta() ::
     #{
-        parent_id => nkdomain:obj_id(),     % Mandatory
         enabled => boolean(),
         register => nklib:link(),
-        is_created => boolean()
+        obj => nkdomain:obj()
     }.
 
 -type status() ::
@@ -263,8 +262,8 @@ create_child(Id, Obj, Meta) ->
 
 
 %% @private
-load_child(Id, ObjExtId, Meta) ->
-    do_call(Id, {nkdomain_load_child, ObjExtId, Meta}).
+load_child(Id, ObjIdExt, Meta) ->
+    do_call(Id, {nkdomain_load_child, ObjIdExt, Meta}).
 
 
 %% @private
@@ -289,29 +288,21 @@ unload_all() ->
 
 
 %% @private
--spec start(nkservice:id(), nkdomain:obj_id(), nkdomain:obj()|load, start_meta()) ->
+-spec start(#obj_id_ext{}, start_meta()) ->
     {ok, pid()} | {error, term()}.
 
-start(SrvId, ObjId, Obj, Meta) ->
+start(#obj_id_ext{obj_id=ObjId}=ObjIdExt, Meta) ->
     case nkdomain_obj_lib:get_node(ObjId) of
+        {ok, Node} when Node == node() ->
+            case gen_server:start(?MODULE, {ObjIdExt, Meta}, []) of
+                {ok, Pid} -> {ok, Pid};
+                {error, {already_registered, Pid}} -> {ok, Pid}
+            end;
         {ok, Node} ->
-            rpc:call(Node, ?MODULE, do_start, [SrvId, ObjId, Obj, Meta]);
-        {error, Error} ->
-            {error, Error}
-    end.
-
-
-%% @private
-do_start(SrvId, ObjId, Obj, Meta) ->
-    case nkdomain_obj_lib:reserve(ObjId) of
-        ok ->
-            case gen_server:start(?MODULE, {SrvId, ObjId, Obj, Meta}, []) of
-                {ok, Pid} ->
-                    nkdomain_obj_lib:unreserve(ObjId),
-                    {ok, Pid};
-                {error, Error} ->
-                    nkdomain_obj_lib:unreserve(ObjId),
-                    {error, Error}
+            case rpc:call(Node, gen_server, start, [?MODULE, {ObjIdExt, Meta}]) of
+                {ok, Pid} -> {ok, Pid};
+                {error, {already_registered, Pid}} -> {ok, Pid};
+                {error, Error} -> {error, Error}
             end;
         {error, Error} ->
             {error, Error}
@@ -339,20 +330,24 @@ do_start(SrvId, ObjId, Obj, Meta) ->
 -spec init(term()) ->
     {ok, #state{}} | {error, term()}.
 
-init({SrvId, ObjId, load, Meta}) ->
-    case SrvId:object_load(SrvId, ObjId) of
-        {ok, #{obj_id:=ObjId}=Obj} ->
-            init({SrvId, ObjId, Obj, Meta});
+init({ObjIdExt, Meta}) ->
+    case nkdomain_obj_lib:register(ObjIdExt) of
+        ok ->
+            do_init(ObjIdExt, Meta);
+        {error, {pid_conflict, Pid}} ->
+            lager:error("Already registered!"),
+            {stop, {already_registered, Pid}};
         {error, Error} ->
             {stop, Error}
-    end;
+    end.
 
-init({SrvId, ObjId, Obj, Meta}) ->
-    #{obj_id:=ObjId, type:=Type, path:=Path} = Obj,
+
+%% @private
+do_init(ObjIdExt, Meta) ->
+    #obj_id_ext{srv_id=SrvId, obj_id=ObjId, type=Type, path=Path} = ObjIdExt,
+    nklib_proc:put(?MODULE, {Type, ObjId, Path}),
     Module = nkdomain_types:get_module(Type),
     false = Module==undefined,
-    nklib_proc:put(?MODULE, {Type, ObjId, Path}),
-    ok = nkdomain_obj_lib:register(Type, ObjId, Path),
     {Name, ParentId} = case Path of
         <<"/">> when Type == ?DOMAIN_DOMAIN andalso ObjId == <<"root">> ->
             {<<>>, <<>>};
@@ -363,19 +358,20 @@ init({SrvId, ObjId, Obj, Meta}) ->
             ok = nkdomain_obj_lib:link_to_parent(Base, Type, Name0, ObjId),
             {Name0, ParentId0}
     end,
+    {Obj, IsCreated} = case Meta of
+        #{obj:=Obj0} ->
+            {Obj0, true};
+        _ ->
+            gen_server:cast(self(), nkdomain_do_load),
+            {#{}, false}
+    end,
     Enabled = case maps:find(enabled, Meta) of
-        {ok, true} ->
-            case maps:get(enabled, Obj, true) of
-                true -> true;
-                false -> false
-            end;
         {ok, false} ->
             false;
-        error ->
+        _ ->
             maps:get(enabled, Obj, true)
     end,
-    IgnoreMeta = [register, enabled, parent_id],
-    IsCreated = maps:get(is_created, Meta, false),
+    IgnoreMeta = [enabled, obj, register],
     Session = #obj_session{
         obj_id = ObjId,
         module = Module,
@@ -392,7 +388,7 @@ init({SrvId, ObjId, Obj, Meta}) ->
         is_enabled = Enabled,
         is_created = IsCreated,
         links = nklib_links:new(),
-        childs2 = #{},
+        childs = #{},
         started = nklib_util:m_timestamp()
     },
     Info = Module:object_get_info(),
@@ -417,7 +413,7 @@ init({SrvId, ObjId, Obj, Meta}) ->
     end,
     set_log(State2),
     nkservice_util:register_for_changes(SrvId),
-    ?LLOG(info, "loaded (~p)", [self()], State2),
+    ?DEBUG("loaded (~p)", [self()], State2),
     gen_server:cast(self(), nkdomain_do_start),
     {ok, State3} = handle(object_init, [], State2),
     {ok, State3}.
@@ -434,7 +430,7 @@ handle_call(nkdomain_get_session, _From, #state{session=Session}=State) ->
 handle_call(nkdomain_get_timelog, _From, #state{timelog=Log}=State) ->
     reply({ok, Log}, State);
 
-handle_call(nkdomain_get_childs, _From, #state{session=#obj_session{childs2=Childs}}=State) ->
+handle_call(nkdomain_get_childs, _From, #state{session=#obj_session{childs=Childs}}=State) ->
     reply({ok, Childs}, State);
 
 handle_call({nkdomain_update, _Map}, _From,
@@ -542,19 +538,20 @@ handle_call({nkdomain_create_child, _Obj, _Meta}, _From,
     #state{session=#obj_session{is_enabled=false}, obj_info=#{dont_create_childs_on_disabled:=true}}=State) ->
     reply({error, object_is_disabled}, State);
 
-handle_call({nkdomain_create_child, Obj, Meta}, _From, State) ->
+handle_call({nkdomain_create_child, Obj, Meta}, _From, #state{srv_id=SrvId}=State) ->
     #{type:=Type, obj_id:=ObjId, path:=Path} = Obj,
+    ObjIdExt = #obj_id_ext{srv_id=SrvId, type=Type, obj_id=ObjId, path=Path},
     ?DEBUG("creating child ~s", [Path], State),
     Skip = maps:get(skip_path_check, Meta, false),
-    case do_check_child(Type, Path, State) of
+    case do_check_child(ObjIdExt, State) of
         ok when Skip ->
             {ok, State2} = handle(object_child_created, [Obj], State),
-            do_load_child(ObjId, Obj, Meta#{is_created=>true}, State2);
+            do_load_child(ObjIdExt, Meta#{obj=>Obj}, State2);
         ok ->
             case do_check_create_path(Path, State) of
                 ok ->
                     {ok, State2} = handle(object_child_created, [Obj], State),
-                    do_load_child(ObjId, Obj, Meta#{is_created=>true}, State2);
+                    do_load_child(ObjIdExt, Meta#{obj=>Obj}, State2);
                 {error, Error} ->
                     reply({error, Error}, State)
             end;
@@ -564,14 +561,14 @@ handle_call({nkdomain_create_child, Obj, Meta}, _From, State) ->
             reply({error, Error}, State)
     end;
 
-handle_call({nkdomain_load_child, ObjExtId, Meta}, _From, State) ->
-    #obj_id_ext{obj_id=ObjId, type=Type, path=Path} = ObjExtId,
+handle_call({nkdomain_load_child, ObjIdExt, Meta}, _From, State) ->
+    #obj_id_ext{path=Path} = ObjIdExt,
     ?DEBUG("loading child ~s", [Path], State),
     % Check name is not present and has correct base path
-    case do_check_child(Type, Path, State) of
+    case do_check_child(ObjIdExt, State) of
         ok ->
             #state{session=#obj_session{is_enabled=Enabled}} = State,
-            do_load_child(ObjId, load, Meta#{enabled=>Enabled}, State);
+            do_load_child(ObjIdExt, Meta#{enabled=>Enabled}, State);
         {error, Error} ->
             reply({error, Error}, State)
     end;
@@ -593,6 +590,22 @@ handle_call(Msg, From, State) ->
 %% @private
 -spec handle_cast(term(), #state{}) ->
     {noreply, #state{}} | {stop, term(), #state{}}.
+
+handle_cast(nkdomain_do_load, #state{srv_id=SrvId, obj_id=ObjId, session=Session}=State) ->
+    case SrvId:object_load(SrvId, ObjId) of
+        {ok, Obj} ->
+            #obj_session{is_enabled=Enabled} = Session,
+            Enabled2 = case Enabled of
+                false ->
+                    false;
+                true ->
+                    maps:get(enabled, Obj, true)
+            end,
+            Session2 = Session#obj_session{obj=Obj, is_enabled=Enabled2},
+            noreply(State#state{session=Session2});
+        {error, Error} ->
+            do_stop({obj_load_error, Error}, State)
+    end;
 
 handle_cast(nkdomain_do_start, State) ->
     {ok, State2} = handle(object_start, [], State),
@@ -691,27 +704,10 @@ handle_info(nkdomain_find_parent, #state{session=Session}=State) ->
     end,
     {noreply, State};
 
-handle_info({nkdist, {received_link, {nkdomain_child, Type, Name, ChildId}}}, State) ->
-    ?LLOG(notice, "child ~s:~s registered with us", [Type, Name], State),
-    ?DEBUG("child ~s:~s registered with us", [Type, Name], State),
-    State2 = do_add_child(Type, ChildId, Name, State),
-    {noreply, State2};
+handle_info({nkdist, NkDistMsg}, State) ->
+    do_nkdist(NkDistMsg, State);
 
-handle_info({nkdist, {received_link_down, {nkdomain_child, Type, Name, _ChildId}}}, State) ->
-    ?LLOG(notice, "child ~s:~s has stopped", [Type, Name], State),
-    ?DEBUG("child ~s:~s has stopped", [Type, Name], State),
-    State2 = do_rm_child(Type, Name, State),
-    {noreply, State2};
-
-handle_info({nkdist, {sent_link_down, {nkdomain_child, _Type, _Name, ObjId}}}, #state{obj_id=ObjId}=State) ->
-    ?LLOG(notice, "parent stopped!", [], State),
-    self() ! nkdomain_find_parent,
-    do_enabled(false, State);
-
-handle_info({nkdist, {vnode_pid, _Pid}}, State) ->
-    {noreply, State};
-
-handle_info({'DOWN', Ref, process, Pid, Reason}=Msg, State) ->
+handle_info({'DOWN', Ref, process, _Pid, Reason}=Msg, State) ->
     case links_down(Ref, State) of
         {ok, Link, State2} ->
             case handle(object_reg_down, [Link, Reason], State2) of
@@ -789,14 +785,15 @@ do_check_expire(#state{session=#obj_session{obj=Obj}}) ->
 
 
 %% @private
-do_load_child(ObjId, Obj, Meta, #state{srv_id=SrvId}=State) ->
+do_load_child(ObjIdExt, Meta, State) ->
     Meta2 = maps:without([skip_path_check], Meta),
-    case start(SrvId, ObjId, Obj, Meta2) of
+    case start(ObjIdExt, Meta2) of
         {ok, ChildPid} ->
             % Wait for registration event
             reply({ok, ChildPid}, State);
         {error, Error} ->
-            ?LLOG(notice, "could not start child ~s: ~p", [ObjId, Error], State),
+            #obj_id_ext{path=Path} = ObjIdExt,
+            ?LLOG(notice, "could not start child ~s: ~p", [Path, Error], State),
             reply({error, could_not_start_child}, State)
     end.
 
@@ -819,7 +816,7 @@ do_save(#state{wait_save=Wait}=State) ->
 
 
 %% @private
-do_delete(#state{session=#obj_session{childs2=Childs}}=State) when map_size(Childs)==0 ->
+do_delete(#state{session=#obj_session{childs=Childs}}=State) when map_size(Childs)==0 ->
     case handle(object_delete, [], State) of
         {ok, State2} ->
             ?DEBUG("object deleted", [], State2),
@@ -897,8 +894,8 @@ do_check_create_path(ObjPath, #state{srv_id=SrvId}=State) ->
 
 
 %% @private Checks has correct path and is not already present
-do_check_child(Type, Path, #state{session=Session}=State) ->
-    #obj_session{path=Base, childs2=Childs} = Session,
+do_check_child(#obj_id_ext{type=Type, path=Path}, #state{session=Session}=State) ->
+    #obj_session{path=Base, childs=Childs} = Session,
     case nkdomain_util:get_parts(Type, Path) of
         {ok, Base, Name} ->
             TypeChilds = maps:get(Type, Childs, #{}),
@@ -919,17 +916,17 @@ do_check_child(Type, Path, #state{session=Session}=State) ->
 
 %% @private
 do_add_child(Type, ObjId, Name, #state{session=Session}=State) ->
-    #obj_session{childs2=Childs} = Session,
+    #obj_session{childs=Childs} = Session,
     TypeChilds1 = maps:get(Type, Childs, #{}),
     TypeChilds2 = TypeChilds1#{Name => ObjId},
     Childs2 = Childs#{Type => TypeChilds2},
-    Session2 = Session#obj_session{childs2=Childs2},
+    Session2 = Session#obj_session{childs=Childs2},
     State#state{session=Session2}.
 
 
 %% @private
 do_rm_child(Type, Name, #state{session=Session}=State) ->
-    #obj_session{childs2=Childs} = Session,
+    #obj_session{childs=Childs} = Session,
     TypeChilds1 = maps:get(Type, Childs),
     TypeChilds2 = maps:remove(Name, TypeChilds1),
     Childs2 = case map_size(TypeChilds2) of
@@ -938,7 +935,7 @@ do_rm_child(Type, Name, #state{session=Session}=State) ->
         _ ->
             Childs#{Type => TypeChilds2}
     end,
-    Session2 = Session#obj_session{childs2=Childs2},
+    Session2 = Session#obj_session{childs=Childs2},
     State#state{session=Session2}.
 
 
@@ -991,18 +988,24 @@ do_enabled2(Enabled, #state{session=Session}=State) ->
 
 
 %% @private
-do_event(Event, State) ->
+do_event(Event, #state{session=#obj_session{link_events=Links}}=State) ->
     ?DEBUG("sending 'event': ~p", [Event], State),
     State2 = links_fold(
         fun(Link, AccState) ->
-            {ok, AccState2} =
-                handle(object_reg_event, [Link, Event], AccState),
+            {ok, AccState2} = handle(object_reg_event, [Link, Event], AccState),
             AccState2
         end,
         State,
         State),
-    {ok, State3} = handle(object_event, [Event], State2),
-    State3.
+    State3 = lists:foldl(
+        fun(Tag, AccState) ->
+            {ok, AccState2} = handle(object_reg_event, [Tag, Event], AccState),
+            AccState2
+        end,
+        State2,
+        Links),
+    {ok, State4} = handle(object_event, [Event], State3),
+    State4.
 
 
 %% @private
@@ -1017,26 +1020,83 @@ do_status(Status, #state{session=#obj_session{status=OldStatus}=Session}=State) 
 
 
 %% @private
-do_check_links_down(#state{session=#obj_session{childs2=Childs}}=State) when map_size(Childs) > 0 ->
+do_check_links_down(#state{obj_info=#{permanent:=true}}=State) ->
     noreply(State);
 
-do_check_links_down(#state{obj_info=Info}=State) ->
+do_check_links_down(#state{session=#obj_session{childs=Childs}}=State) when map_size(Childs) > 0 ->
+    noreply(State);
+
+do_check_links_down(State) ->
     case links_is_empty(State) of
         true ->
-            case maps:get(permanent, Info, false) of
-                true ->
-                    noreply(State);
-                false ->
+            #state{session=#obj_session{link_usages=Usages}} = State,
+            case maps:size(Usages) of
+                0 ->
                     case handle(object_all_links_down, [], State) of
                         {keepalive, State2} ->
                             noreply(State2);
                         {stop, Reason, State2} ->
                             do_stop(Reason, State2)
-                    end
+                    end;
+                _ ->
+                    noreply(State)
             end;
         false ->
             noreply(State)
     end.
+
+
+%% @private
+do_nkdist({received_link, {nkdomain_child, Type, Name, ChildId}}, State) ->
+    ?DEBUG("child ~s:~s registered with us", [Type, Name], State),
+    #state{session=#obj_session{is_enabled=Enabled}} = State,
+    nkdomain_obj_lib:cast(ChildId, {nkdomain_parent_enabled, Enabled}),
+    State2 = do_add_child(Type, ChildId, Name, State),
+    {noreply, State2};
+
+do_nkdist({received_link_down, {nkdomain_child, Type, Name, _ChildId}}, State) ->
+    ?DEBUG("child ~s:~s has stopped", [Type, Name], State),
+    State2 = do_rm_child(Type, Name, State),
+    {noreply, State2};
+
+do_nkdist({sent_link_down, {nkdomain_child, _Type, _Name, ObjId}}, #state{obj_id=ObjId}=State) ->
+    ?LLOG(notice, "parent stopped!", [], State),
+    self() ! nkdomain_find_parent,
+    do_enabled(false, State);
+
+do_nkdist({received_link, {usage, Tag}}, #state{session=Session}=State) ->
+    ?DEBUG("new received usage link: ~p", [Tag], State),
+    #obj_session{link_usages=Links} = Session,
+    Session2 = Session#obj_session{link_usages=Links#{Tag => ok}},
+    {noreply, State#state{session=Session2}};
+
+do_nkdist({received_link_down, {usage, Tag}}, #state{session=Session}=State) ->
+    ?DEBUG("usage link down: ~p", [Tag], State),
+    #obj_session{link_usages=Links} = Session,
+    Session2 = Session#obj_session{link_usages=maps:remove(Tag, Links)},
+    {noreply, State#state{session=Session2}};
+
+do_nkdist({received_link, {events, Tag}}, #state{session=Session}=State) ->
+    ?DEBUG("new events link: ~p", [Tag], State),
+    #obj_session{link_events=Links} = Session,
+    Session2 = Session#obj_session{link_events=nklib_util:store_value(Tag, Links)},
+    {noreply, State#state{session=Session2}};
+
+do_nkdist({received_link_down, {events, Tag}}, #state{session=Session}=State) ->
+    ?DEBUG("events link down: ~p", [Tag], State),
+    #obj_session{link_events=Links} = Session,
+    Session2 = Session#obj_session{link_events=Links--[Tag]},
+    {noreply, State#state{session=Session2}};
+
+do_nkdist({vnode_pid, _Pid}, State) ->
+    {noreply, State};
+
+do_nkdist(Msg, State) ->
+    ?LLOG(warning, "unexpected NkDIST msg: ~p", [Msg], State),
+    {noreply, State}.
+
+
+
 
 
 %% ===================================================================
@@ -1066,7 +1126,7 @@ handle(Fun, Args, State) ->
 
 
 %% @private
-send_childs(Msg, #state{session=#obj_session{childs2=Childs}}) ->
+send_childs(Msg, #state{session=#obj_session{childs=Childs}}) ->
     lists:foreach(
         fun({_Type, ChildNames}) ->
             lists:foreach(

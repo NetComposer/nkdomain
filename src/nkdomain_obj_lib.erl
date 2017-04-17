@@ -27,8 +27,8 @@
 
 -export([find/2, load/3, create/3]).
 -export([make_obj/4, make_and_create/4]).
--export([unload/4, sync_op/5, async_op/5]).
--export([get_node/1, reserve/1, unreserve/1, register/3, link_to_parent/4]).
+-export([unload/4, sync_op/5, async_op/5, link_usage/2, link_events/2]).
+-export([get_node/1, register/1, link_to_parent/4]).
 -export([find_loaded/1, call/2, call/3, cast/2, info/2]).
 
 -include("nkdomain.hrl").
@@ -57,11 +57,6 @@
 %% ===================================================================
 %% Public
 %% ===================================================================
-
-
-
-
-
 
 
 %% @doc Adds type, obj_id, parent_id, path, created_time
@@ -247,8 +242,8 @@ load(Srv, IdOrPath, Meta) ->
                     ok
             end,
             ObjIdExt;
-        #obj_id_ext{srv_id=SrvId, obj_id = <<"root">>, path = <<"/">>}=ObjIdExt ->
-            case nkdomain_obj:start(SrvId, <<"root">>, load, Meta) of
+        #obj_id_ext{obj_id = <<"root">>, path = <<"/">>}=ObjIdExt ->
+            case nkdomain_obj:start(ObjIdExt, Meta) of
                 {ok, Pid} ->
                     ObjIdExt#obj_id_ext{pid=Pid};
                 {error, Error} ->
@@ -325,7 +320,11 @@ async_op(Srv, Id, Type, Msg, NotFound) ->
             {error, Error}
     end.
 
+link_usage(Id, Tag) ->
+    nkdist_reg:link(nkdomain, to_bin(Id), {usage, Tag}).
 
+link_events(Id, Tag) ->
+    nkdist_reg:link(nkdomain, to_bin(Id), {events, Tag}).
 
 
 
@@ -344,33 +343,34 @@ get_node(ObjId) ->
     end.
 
 
-%% @private
-reserve(ObjId) ->
-    reserve(ObjId, 5).
+%%%% @private
+%%reserve(ObjId) ->
+%%    reserve(ObjId, 5).
+%%
+%%
+%%%% @private
+%%reserve(_ObjId, 0) ->
+%%    {error, could_not_reserve};
+%%
+%%reserve(ObjId, Tries) ->
+%%    case nkdist_reg:reserve(nkdomain, ObjId) of
+%%        ok ->
+%%            ok;
+%%        {error, _} ->
+%%            lager:info("NkDOMAIN: Could not reserve ~s, retrying", [ObjId]),
+%%            timer:sleep(1000),
+%%            reserve(ObjId, Tries-1)
+%%    end.
+%%
+%%
+%%%% @private
+%%unreserve(ObjId) ->
+%%    lager:error("UNReserved ~p (~p)", [ObjId, self()]),
+%%    nkdist_reg:unreserve(nkdomain, ObjId).
 
 
 %% @private
-reserve(_ObjId, 0) ->
-    {error, could_not_reserve};
-
-reserve(ObjId, Tries) ->
-    case nkdist_reg:reserve(nkdomain, ObjId) of
-        ok ->
-            ok;
-        {error, _} ->
-            lager:info("NkDOMAIN: Could not reserve ~s, retrying", [ObjId]),
-            timer:sleep(1000),
-            reserve(ObjId, Tries-1)
-    end.
-
-
-%% @private
-unreserve(ObjId) ->
-    nkdist_reg:unreserve(nkdomain, ObjId).
-
-
-%% @private
-register(Type, ObjId, Path) ->
+register(#obj_id_ext{type=Type, obj_id=ObjId, path=Path}) ->
     case nkdist_reg:register(proc, nkdomain, ObjId, #{sync=>true, meta=>{Type, path, Path}}) of
         ok ->
             nkdist_reg:register(reg, nkdomain, Path, #{sync=>true, meta=>{Type, obj_id, ObjId}});
