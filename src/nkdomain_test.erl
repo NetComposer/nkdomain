@@ -207,6 +207,13 @@ test_session2(Pid) ->
     SessId = maps:get(SessName, maps:get(<<"session">>, Childs)),
 
     % If we kill the session, admin notices and the web socket is closed
+    % We link with admin so that it is not unloaded after stopping its childs
+    spawn_link(
+        fun() ->
+            ok = nkdomain_obj:link(<<"admin">>, usage, self(), dont_stop),
+            timer:sleep(10000)
+        end),
+    timer:sleep(50),
     exit(SessPid, kill),
     timer:sleep(100),
     {ok, Childs2} = nkdomain_obj:get_childs(<<"admin">>),
@@ -232,7 +239,7 @@ test_session2(Pid) ->
 test_session3(Admin) ->
     % Do login over tuser1, check the session is created and loaded
     {ok, Pid, SessId} = login("/users/tuser1", pass2),
-    {ok, <<"session">>, SessId, <<"/users/tuser1/sessions/", SessId/binary>>, SPid} = nkdomain:find(root, SessId),
+    {ok, <<"session">>, SessId, <<"/users/tuser1/sessions/", _/binary>>, SPid} = nkdomain:find(root, SessId),
     true = is_pid(SPid),
 
     {ok, #{<<"path">>:=<<"/users/tuser1">>}} = cmd(Pid, user, get, #{}),

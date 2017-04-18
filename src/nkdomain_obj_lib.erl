@@ -27,7 +27,7 @@
 
 -export([find/2, load/3, create/3]).
 -export([make_obj/4, make_and_create/4]).
--export([unload/4, sync_op/5, async_op/5, link_to_obj/4]).
+-export([unload/4, sync_op/5, async_op/5, link_to_obj/4, unlink_to_obj/4]).
 -export([get_node/1, register/3, register/4, link_to_parent/4]).
 -export([find_loaded/1, call/2, call/3, cast/2, info/2]).
 
@@ -423,6 +423,22 @@ link_to_obj(Type, OrigId, DestPid, Tag) ->
         not_found ->
             {error, destination_not_found}
     end.
+
+
+%% @private Removes a previous link
+%% Destination will receive {removed_link, {Type, Tag}}
+
+unlink_to_obj(Type, OrigPid, DestPid, Tag) when is_pid(OrigPid) ->
+    nkdist_reg:unlink_pid(OrigPid, DestPid, {Type, Tag});
+
+unlink_to_obj(Type, OrigId, DestPid, Tag) ->
+    case find_loaded(OrigId) of
+        #obj_id_ext{pid=OrigPid} ->
+            unlink_to_obj(Type, OrigPid, DestPid, Tag);
+        not_found ->
+            {error, destination_not_found}
+    end.
+
 
 
 %% @private

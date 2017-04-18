@@ -27,8 +27,8 @@
 -behaviour(gen_server).
 
 -export([get_session/1, save/1, unload/2]).
--export([update/2, enable/2, get_name/1, delete/1, sync_op/2, async_op/2, apply/2]).
--export([register/2, unregister/2, link/4, get_childs/1]).
+-export([update/2, enable/2, get_name/1, delete/1, sync_op/2, async_op/2, is_enabled/1, apply/2]).
+-export([register/2, unregister/2, link/4, unlink/4, get_childs/1]).
 -export([wait_for_save/2]).
 -export([create_child/3, load_child/3, object_has_been_deleted/1]).
 -export([start/2]).
@@ -241,10 +241,26 @@ unregister(Id, Link) ->
 
 
 %% @doc
+link(Pid, Type, ObjOrPid, Tag) when is_pid(Pid) andalso (Type==usage orelse Type==event) ->
+    nkdomain_obj_lib:link_to_obj(Type, ObjOrPid, Pid, Tag);
+
 link(Id, Type, ObjOrPid, Tag) when Type==usage; Type==event ->
     case nkdomain_obj_lib:find_loaded(Id) of
         #obj_id_ext{pid=Pid} ->
-            nkdomain_obj_lib:link_to_obj(Type, ObjOrPid, Pid, Tag);
+            link(Pid, Type, ObjOrPid, Tag);
+        not_found ->
+            {error, object_not_found}
+    end.
+
+
+%% @doc
+unlink(Pid, Type, ObjOrPid, Tag) when is_pid(Pid) andalso (Type==usage orelse Type==event) ->
+    nkdomain_obj_lib:unlink_to_obj(Type, ObjOrPid, Pid, Tag);
+
+unlink(Id, Type, ObjOrPid, Tag) when Type==usage; Type==event ->
+    case nkdomain_obj_lib:find_loaded(Id) of
+        #obj_id_ext{pid=Pid} ->
+            unlink(Pid, Type, ObjOrPid, Tag);
         not_found ->
             {error, object_not_found}
     end.
@@ -265,6 +281,14 @@ get_childs(Id) ->
 
 wait_for_save(Id, Time) ->
     do_call(Id, nkdomain_wait_for_save, Time).
+
+
+% @doc
+-spec is_enabled(id()) ->
+    {ok, boolean()} | {error, term()}.
+
+is_enabled(Id) ->
+    do_call(Id, nkdomain_is_enabled).
 
 
 %% @private
@@ -396,7 +420,7 @@ do_init(ObjIdExt, Meta) ->
         _ ->
             maps:get(enabled, Obj, true)
     end,
-    IgnoreMeta = [enabled, obj, register],
+    IgnoreMeta = [enabled, obj, event_link, usage_link],
     Session = #obj_session{
         obj_id = ObjId,
         module = Module,
@@ -528,6 +552,9 @@ handle_call(nkdomain_get_name, _From, #state{session=Session}=State) ->
     {ok, _, Name} = nkdomain_util:get_parts(Type, Path),
     reply({ok, Name, Desc}, State);
 
+handle_call(nkdomain_is_enabled, _From, #state{session=#obj_session{is_enabled=Enabled}}=State) ->
+    reply({ok, Enabled}, State);
+
 handle_call(nkdomain_get_time, _From, State) ->
     reply({ok, get_timer(State)}, State);
 
@@ -657,7 +684,8 @@ handle_cast(nkdomain_do_start, State) ->
     case do_check_expire(State2) of
         false ->
             State3 = do_status(init, State2),
-            noreply(do_event(loaded, do_save(State3)));
+            State4 = do_save(State3),
+            noreply(do_event(loaded, State4));
         true ->
             do_stop(object_expired, State2)
     end;
@@ -757,20 +785,8 @@ handle_info(nkdomain_find_parent, #state{session=Session}=State) ->
     end,
     noreply(State);
 
-handle_info({nkdist, {vnode_pid, _Pid}}, State) ->
-    noreply(State);
-
-handle_info({nkdist, {must_move, Node}}, State) ->
-    do_must_move(Node, State);
-
-handle_info({nkdist, {received_link, Link}}, State) ->
-    do_received_link(Link, State);
-
-handle_info({nkdist, {received_link_down, Link}}, State) ->
-    do_received_link_down(Link, State);
-
-handle_info({nkdist, {sent_link_down, Link}}, State) ->
-    do_sent_link_down(Link, State);
+handle_info({nkdist, Msg}, State) ->
+    do_nkdist(Msg, State);
 
 handle_info({'DOWN', Ref, process, _Pid, Reason}=Msg, State) ->
     case links_down(Ref, State) of
@@ -1116,70 +1132,62 @@ do_check_links_down(State) ->
 
 
 %% @private
-do_received_link({nkdomain_child, Type, Name, ChildId}, State) ->
+do_nkdist({received_link, {nkdomain_child, Type, Name, ChildId}}, State) ->
     ?DEBUG("child ~s:~s registered with us", [Type, Name], State),
-    #state{session=#obj_session{is_enabled=Enabled}} = State,
+    #state{session = #obj_session{is_enabled = Enabled}} = State,
     nkdomain_obj_lib:cast(ChildId, {nkdomain_parent_enabled, Enabled}),
     State2 = do_add_child(Type, ChildId, Name, State),
     noreply(State2);
 
-do_received_link({usage, Tag}, State) ->
-    ?DEBUG("new received usage link: ~p", [Tag], State),
-    noreply(add_link(usage, Tag, State));
-
-do_received_link({event, Tag}, State) ->
-    ?DEBUG("new receibed event link: ~p", [Tag], State),
-    noreply(add_link(event, Tag, State));
-
-do_received_link(Link, State) ->
-    ?LLOG(notice, "unexpected received link: ~p", [Link], State),
-    noreply(State).
-
-
-%% @private
-do_received_link_down({nkdomain_child, Type, Name, _ChildId}, State) ->
+do_nkdist({received_link_down, {nkdomain_child, Type, Name, _ChildId}}, State) ->
     ?DEBUG("child ~s:~s has stopped", [Type, Name], State),
     State2 = do_rm_child(Type, Name, State),
     do_check_links_down(State2);
 
-do_received_link_down({usage, Tag}, State) ->
+do_nkdist({received_link, {usage, Tag}}, State) ->
+    ?DEBUG("new received usage link: ~p", [Tag], State),
+    noreply(add_link(usage, Tag, State));
+
+do_nkdist({received_link_down, {usage, Tag}}, State) ->
     ?DEBUG("usage link down: ~p", [Tag], State),
     State2 = remove_link(usage, Tag, State),
     do_check_links_down(State2);
 
-do_received_link_down({event, Tag}, State) ->
+do_nkdist({received_link, {event, Tag}}, State) ->
+    ?DEBUG("new received event link: ~p", [Tag], State),
+    noreply(add_link(event, Tag, State));
+
+do_nkdist({received_link_down, {event, Tag}}, State) ->
     ?DEBUG("event link down: ~p", [Tag], State),
     noreply(remove_link(event, Tag, State));
 
-do_received_link_down(Link, State) ->
-    ?LLOG(notice, "unexpected received link down: ~p", [Link], State),
-    noreply(State).
+do_nkdist({removed_link, Link}, State) ->
+    do_nkdist({received_link_down, Link}, State);
 
-
-%% @private
-do_sent_link_down({nkdomain_child, _Type, _Name, ObjId}, #state{obj_id=ObjId}=State) ->
+do_nkdist({sent_link_down, {nkdomain_child, _Type, _Name, ObjId}}, #state{obj_id = ObjId} = State) ->
     ?LLOG(notice, "parent stopped!", [], State),
     self() ! nkdomain_find_parent,
     do_enabled(false, State);
 
-do_sent_link_down(Link, State) ->
-    ?LLOG(notice, "unexpected sent link down: ~p", [Link], State),
-    noreply(State).
-
-
-%% @private
-do_must_move(Node, #state{timer=Timer, session=Session}=State) ->
+do_nkdist({must_move, Node}, #state{timer = Timer, session = Session} = State) ->
     Time = get_timer(State),
     nklib_util:cancel_timer(Timer),
     case rpc:call(Node, gen_server, start, [?MODULE, {State, Time, self()}, []]) of
         {ok, NewPid} ->
             ?LLOG(info, "starting move to ~p (~p -> ~p)", [Node, self(), NewPid], State),
             erlang:send_after(?MOVE_WAIT_TIME, self(), nkdomain_move_completed),
-            noreply(State#state{moved_to=NewPid, session=Session#obj_session{obj=#{}}});
+            noreply(State#state{moved_to = NewPid, session = Session#obj_session{obj = #{}}});
         {error, Error} ->
             ?LLOG(warning, "could not move process to ~p: ~p", [Node, Error], State),
             noreply(State)
-    end.
+    end;
+
+do_nkdist({vnode_pid, _Pid}, State) ->
+    noreply(State);
+
+do_nkdist(Msg, State) ->
+    ?LLOG(notice, "unexpected NkDIST event: ~p", [Msg], State),
+    noreply(State).
 
 
 %% ===================================================================
@@ -1291,7 +1299,7 @@ remove_link(usage, Link, #state{session=Session}=State) ->
 remove_link(event, Link, #state{session=Session}=State) ->
     #obj_session{link_events=Links} = Session,
     Session2 = Session#obj_session{link_events=Links--[Link]},
-    noreply(State#state{session=Session2}).
+    State#state{session=Session2}.
 
 
 
