@@ -22,7 +22,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([syntax_common/3, cmd_common/5]).
--export([search/2, getid/3, add_id/3]).
+-export([search/2, get_id/3, get_id/4, add_id/3, get_domain/1]).
 
 -include("nkdomain.hrl").
 -include_lib("nkapi/include/nkapi.hrl").
@@ -87,7 +87,7 @@ cmd_common(_Sub, _Cmd, _Data, _Type, State) ->
 
 %% @doc
 cmd_get(Type, Data, #{srv_id:=SrvId}=State) ->
-    case getid(Type, Data, State) of
+    case get_id(Type, Data, State) of
         {ok, Id} ->
             case nkdomain_obj_lib:load(SrvId, Id, #{}) of
                 #obj_id_ext{pid=Pid} ->
@@ -107,7 +107,7 @@ cmd_get(Type, Data, #{srv_id:=SrvId}=State) ->
 
 %% @doc
 cmd_delete(Type, Data, #{srv_id:=SrvId}=State) ->
-    case getid(Type, Data, State) of
+    case get_id(Type, Data, State) of
         {ok, Id} ->
             case cmd_delete_childs(Data, SrvId, Id) of
                 {ok, Num} ->
@@ -135,7 +135,7 @@ cmd_delete_childs(_Data, _SrvId, _Id) ->
 
 %% @doc
 cmd_update(Type, Data, #{srv_id:=SrvId}=State) ->
-    case getid(Type, Data, State) of
+    case get_id(Type, Data, State) of
         {ok, Id} ->
             case nkdomain:update(SrvId, Id, Data) of
                 ok ->
@@ -150,7 +150,7 @@ cmd_update(Type, Data, #{srv_id:=SrvId}=State) ->
 
 %% @doc
 cmd_enable(Type, #{enable:=Enable}=Data, #{srv_id:=SrvId}=State) ->
-    case getid(Type, Data, State) of
+    case get_id(Type, Data, State) of
         {ok, Id} ->
             case nkdomain:enable(SrvId, Id, Enable) of
                 ok ->
@@ -166,7 +166,7 @@ cmd_enable(Type, #{enable:=Enable}=Data, #{srv_id:=SrvId}=State) ->
 %% @doc
 cmd_wait_for_save(Type, Data, #{srv_id:=SrvId}=State) ->
     Time = maps:get(time, Data, 5000),
-    case getid(Type, Data, State) of
+    case get_id(Type, Data, State) of
         {ok, Id} ->
             case nkdomain_obj_lib:find(SrvId, Id) of
                 #obj_id_ext{pid=Pid} when is_pid(Pid) ->
@@ -203,20 +203,27 @@ search({error, Error}, State) ->
 
 
 %% @doc
-getid(_Type, #{id:=Id}, _State) ->
-    {ok, Id};
+get_id(Type, Data, State) ->
+    get_id(Type, id, Data, State).
 
-getid(Type, _Data, #{nkdomain_obj_ids:=ObjIds}=State) ->
-    case maps:find(Type, ObjIds) of
+
+%% @doc
+get_id(Type, Field, Data, #{nkdomain_obj_ids:=ObjIds}=State) ->
+    case maps:find(Field, Data) of
         {ok, Id} ->
             {ok, Id};
         error ->
-            % lager:error("OI: ~s ~p", [Type, ObjIds]),
-            {error, missing_id, State}
-    end;
+            case maps:find(Type, ObjIds) of
+                {ok, Id} ->
+                    {ok, Id};
+                error ->
+                    % lager:error("OI: ~s ~p", [Type, ObjIds]),
+                    {error, {missing_field, Field}, State}
+            end
+    end.
 
-getid(_Type, _Data, State) ->
-    {error, missing_id, State}.
+
+
 
 
 %% @doc Adds 'logged in' information to the state
@@ -224,4 +231,14 @@ add_id(Type, Id, State) ->
     ObjIds1 = maps:get(nkdomain_obj_ids, State, #{}),
     ObjIds2 = ObjIds1#{Type => Id},
     ?ADD_TO_API_SESSION(nkdomain_obj_ids, ObjIds2, State).
+
+
+%% @private
+get_domain(#{srv_id:=SrvId}=State) ->
+    case nkdomain_util:get_service_domain(SrvId) of
+        undefined ->
+            {error, domain_unknown, State};
+        Domain ->
+            {ok, Domain}
+    end.
 

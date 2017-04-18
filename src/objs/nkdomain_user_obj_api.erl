@@ -63,7 +63,7 @@ cmd('', login, #{id:=User}=Data, #{srv_id:=SrvId}=State) ->
     end;
 
 %%cmd('', find_referred, #{id:=Id}=Data, #{srv_id:=SrvId}=State) ->
-%%    case nkdomain_api_util:getid(?DOMAIN_USER, Data, State) of
+%%    case nkdomain_api_util:get_id(?DOMAIN_USER, Data, State) of
 %%        {ok, Id} ->
 %%            Search = nkdomain_user_obj:find_referred(SrvId, Id, Data),
 %%            nkdomain_api_util:search(Search, State);

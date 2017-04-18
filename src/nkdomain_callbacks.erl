@@ -69,6 +69,7 @@
 
 %% @doc
 api_error({could_not_load_parent, Id})      -> {"Object could not load parent '~s'", [Id]};
+api_error(domain_unknown)                   -> "Unknown domain";
 api_error(invalid_object_id)                -> "Invalid object id";
 api_error(invalid_object_type)              -> "Invalid object type";
 api_error(invalid_object_path)              -> "Invalid object path";
@@ -89,7 +90,7 @@ api_error(object_not_started) 		        -> "Object is not started";
 api_error(object_stopped) 		            -> "Object stopped";
 api_error(parent_stopped) 		            -> "Parent stopped";
 api_error(user_is_disabled) 		        -> "User is disabled";
-api_error(unknown_domain)                   -> "Domain is unknown";
+api_error(user_unknown)                     -> "Unknown user";
 api_error(_)   		                        -> continue.
 
 
@@ -733,7 +734,7 @@ api_server_cmd(#nkapi_req{module=Module}=Req, State) when Module/=undefined ->
     end,
     case Domain of
         undefined ->
-            {error, unknown_domain, State};
+            {error, domain_unknown, State};
         _ ->
             State2 = ?ADD_TO_API_SESSION(domain, Domain, State),
             nklib_util:apply(Module, object_api_cmd, [Sub, Cmd, Data, State2])
@@ -772,7 +773,7 @@ plugin_config(#{domain:=_}=Config, _Service) ->
     {ok, Config};
 
 plugin_config(_Config, _Service) ->
-    {error, unknown_domain}.
+    {error, domain_unknown}.
 
 
 %% @private
