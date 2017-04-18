@@ -163,7 +163,7 @@ load_domains([], _Opts, Map) ->
     {ok, Map};
 
 load_domains([{Domain, Data}|Rest], Opts, Map) ->
-    Res = case nkdomain_obj2:load(domain, Domain, Data, Opts) of
+    Res = case nkdomain_orig_obj:load(domain, Domain, Data, Opts) of
         {loaded, _} -> loaded;
         not_modified -> not_modified;
         removed -> removed;

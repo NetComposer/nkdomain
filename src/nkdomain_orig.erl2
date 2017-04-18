@@ -19,7 +19,7 @@
 %% -------------------------------------------------------------------
 
 %% @doc NkDomain main module
--module(nkdomain2).
+-module(nkdomain_orig).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([load_file/1, load/2, export/1, get_aliases/1, get_pid/1, get_obj/1, remove/1]).
@@ -116,7 +116,7 @@ load(Data, Opts) ->
     {ok, map()} | {error, term()} .
 
 export(DomainId) ->
-    nkdomain_obj2:export(domain, DomainId).
+    nkdomain_orig_obj:export(domain, DomainId).
 
 
 %% @doc Finds all pointing objects for an alias
@@ -124,7 +124,7 @@ export(DomainId) ->
     [user_obj_id()].
 
 get_aliases(Alias) ->
-    case nkdomain_obj2:get_obj(alias, Alias) of
+    case nkdomain_orig_obj:get_obj(alias, Alias) of
         {ok, #{aliases:=Aliases}} -> Aliases;
         {error, _} -> []
     end.
@@ -150,7 +150,7 @@ get_pid(UserObjId) ->
 get_obj(UserObjId) ->
     case resolve(UserObjId) of
         {ok, {Class, ObjId, _Pid}} ->
-            case nkdomain_obj2:get_obj(Class, ObjId) of
+            case nkdomain_orig_obj:get_obj(Class, ObjId) of
                 {ok, Obj} ->
                     {ok, Class, ObjId, Obj};
                 {error, Error} ->
@@ -169,7 +169,7 @@ get_obj(UserObjId) ->
 remove(UserObjId) ->
     case resolve(UserObjId) of
         {ok, {Class, ObjId, _Pid}} ->
-            nkdomain_obj2:remove_obj(Class, ObjId);
+            nkdomain_orig_obj:remove_obj(Class, ObjId);
         {error, Error} ->
             {error, Error}
     end.

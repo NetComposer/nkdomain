@@ -54,9 +54,9 @@ load() ->
         <<"domainA">> := not_modified,
         <<"proy1.domainA">> := not_modified
     } = Res1,
-    {ok, #{updated:=RootUp1}} = nkdomain_obj2:get_meta(domain, root),
-    {ok, #{updated:=DomAUp1}} = nkdomain_obj2:get_meta(domain, "domainA"),
-    {ok, #{updated:=Proy1Up1}} = nkdomain_obj2:get_meta(domain, "proy1.domainA"),
+    {ok, #{updated:=RootUp1}} = nkdomain_orig_obj:get_meta(domain, root),
+    {ok, #{updated:=DomAUp1}} = nkdomain_orig_obj:get_meta(domain, "domainA"),
+    {ok, #{updated:=Proy1Up1}} = nkdomain_orig_obj:get_meta(domain, "proy1.domainA"),
 
     YamlData2 = 
         re:replace(YamlData1, "desc: Domain A", "desc: Domain 'A'", [{return, binary}]),
@@ -66,21 +66,21 @@ load() ->
         <<"domainA">> := loaded,
         <<"proy1.domainA">> := not_modified
     } = Res2,
-    {ok, #{updated:=RootUp1}} = nkdomain_obj2:get_meta(domain, root),
-    {ok, #{updated:=DomAUp2}} = nkdomain_obj2:get_meta(domain, "domainA"),
-    {ok, #{updated:=Proy1Up1}} = nkdomain_obj2:get_meta(domain, "proy1.domainA"),
+    {ok, #{updated:=RootUp1}} = nkdomain_orig_obj:get_meta(domain, root),
+    {ok, #{updated:=DomAUp2}} = nkdomain_orig_obj:get_meta(domain, "domainA"),
+    {ok, #{updated:=Proy1Up1}} = nkdomain_orig_obj:get_meta(domain, "proy1.domainA"),
     true = DomAUp2 > DomAUp1,
 
     {ok, Exp1} = nkdomain:export(<<"root">>),
     Json1 = nklib_json:encode_pretty(#{<<"root">>=>Exp1}),
 
     {ok, #{<<"root">> := not_modified}} = nkdomain_load:load(json, Json1, #{}),
-    {ok, #{updated:=RootUp2}} = nkdomain_obj2:get_meta(domain, root),
+    {ok, #{updated:=RootUp2}} = nkdomain_orig_obj:get_meta(domain, root),
 
     Json2 = re:replace(Json1, "\"status\": \"ready\"", "\"status\": \"standby\"", 
                        [{return, binary}]),
     {ok, #{<<"root">> := loaded}} = nkdomain_load:load(json, Json2, #{}),
-    {ok, #{updated:=RootUp3}} = nkdomain_obj2:get_meta(domain, root),
+    {ok, #{updated:=RootUp3}} = nkdomain_orig_obj:get_meta(domain, root),
     true = RootUp3 > RootUp2,
 
     [
@@ -128,7 +128,7 @@ load() ->
 
 
 data() ->
-	{ok, Root1} = nkdomain_obj2:get_obj(domain, "root"),
+	{ok, Root1} = nkdomain_orig_obj:get_obj(domain, "root"),
     #{
         desc := <<"Root Object">>,
         alias := [],
@@ -146,7 +146,7 @@ data() ->
             <<"role1">> := [<<"user:root1@root">>]}
     } = Root1,
 
-    {ok, User1} = nkdomain_obj2:get_obj(user, <<"admin@root">>),
+    {ok, User1} = nkdomain_orig_obj:get_obj(user, <<"admin@root">>),
     #{
         alias := [<<"admin@nekso.net">>],
         name := <<"Global">>,
@@ -157,15 +157,15 @@ data() ->
     } = User1,
     [<<"user:root1@root">>, <<"user:root2@root">>] = 
         nkdomain:get_aliases(<<"shared@shared.com">>),
-    {ok, User1Pid} = nkdomain_obj2:get_pid(user, <<"admin@root">>),
+    {ok, User1Pid} = nkdomain_orig_obj:get_pid(user, <<"admin@root">>),
     User1Pid ! timeout,
     timer:sleep(50),
     false = is_process_alive(User1Pid),
     [<<"user:root1@root">>, <<"user:root2@root">>] = 
         nkdomain:get_aliases(<<"shared@shared.com">>),
-    {ok, User1Pid_2} = nkdomain_obj2:get_pid(user, <<"root1@root">>),
+    {ok, User1Pid_2} = nkdomain_orig_obj:get_pid(user, <<"root1@root">>),
     false = User1Pid == User1Pid_2,
-    {ok, User1} = nkdomain_obj2:get_obj(user, <<"admin@root">>),
+    {ok, User1} = nkdomain_orig_obj:get_obj(user, <<"admin@root">>),
 
     [<<"domainA">>, <<"proy1.domainA">>, <<"root">>] = lists:sort(nkdomain_util:get_all(domain)),
 
@@ -227,17 +227,17 @@ data() ->
         lists:sort(nkdomain_util:get_all(alias)),
 
     {ok, #{groups := #{<<"admins">>:=_, <<"all">>:=_}}} = 
-        nkdomain_obj2:get_obj(group, "people@root"),
+        nkdomain_orig_obj:get_obj(group, "people@root"),
 
     {ok,
         #{
             roles := #{<<"member">>:=[<<"user:admin@domainA">>,<<"user:admin@root">>]}
     }} = 
-        nkdomain_obj2:get_obj(group, "admins.people@root"),
+        nkdomain_orig_obj:get_obj(group, "admins.people@root"),
 
-    {ok, #{}} = nkdomain_obj2:get_obj(group, "b@proy1.domainA"),
-    {error, not_found} = nkdomain_obj2:get_obj(group, "c@proy1.domainA"),
-    {error, not_found} = nkdomain_obj2:get_obj(group, "b@proy2.domainA"),
+    {ok, #{}} = nkdomain_orig_obj:get_obj(group, "b@proy1.domainA"),
+    {error, not_found} = nkdomain_orig_obj:get_obj(group, "c@proy1.domainA"),
+    {error, not_found} = nkdomain_orig_obj:get_obj(group, "b@proy2.domainA"),
     ok.
 
 
@@ -251,15 +251,15 @@ update() ->
     _ = do_update(root, 
         [{users, [{user_t1, [{alias, ["user_t1@domain.com", "shared@shared.com"]}]}]}]),
     {ok, #{alias:=[<<"shared@shared.com">>, <<"user_t1@domain.com">>]}} = 
-        nkdomain_obj2:get_obj(user, "user_t1@root"),
+        nkdomain_orig_obj:get_obj(user, "user_t1@root"),
 
     [<<"user:root1@root">>,<<"user:root2@root">>,<<"user:user_t1@root">>] = 
         nkdomain:get_aliases("shared@shared.com"),
 
-    {ok, #{meta:=<<"core;id=group1">>}} = nkdomain_obj2:get_obj(nodeset, <<"group1@root">>),
+    {ok, #{meta:=<<"core;id=group1">>}} = nkdomain_orig_obj:get_obj(nodeset, <<"group1@root">>),
     _ = do_update(root, #{nodesets=>#{group3=>#{meta=>"meta3"}}}, #{}),
-    {ok, #{meta:=<<"meta3">>}} = nkdomain_obj2:get_obj(nodeset, <<"group3@root">>),
-    {error, not_found} = nkdomain_obj2:get_obj(nodeset, <<"group4@root">>),
+    {ok, #{meta:=<<"meta3">>}} = nkdomain_orig_obj:get_obj(nodeset, <<"group3@root">>),
+    {error, not_found} = nkdomain_orig_obj:get_obj(nodeset, <<"group4@root">>),
     [<<"group1@domainA">>, <<"group1@root">>, 
      <<"group2@root">>, <<"group3@root">>] = lists:sort(nkdomain_util:get_all(nodeset)),
 
@@ -267,21 +267,21 @@ update() ->
     {error, {syntax_error, <<"root.users.user_t1.remove">>}} = 
         do_update(root, #{users=>#{user_t1=>#{alias=>"alias", remove=>true}}}),
     loaded = do_update(root, #{users=>#{user_t1=>#{remove=>true}}}),
-    {error, not_found} = nkdomain_obj2:get_obj(user, "user_t1@root"),
+    {error, not_found} = nkdomain_orig_obj:get_obj(user, "user_t1@root"),
     % The alias will be removed after a timeout
-    {ok, #{aliases:=[]}} = nkdomain_obj2:get_obj(alias, "user_t1@domain.com"),
+    {ok, #{aliases:=[]}} = nkdomain_orig_obj:get_obj(alias, "user_t1@domain.com"),
     [<<"user:root1@root">>,<<"user:root2@root">>] = 
         nkdomain:get_aliases("shared@shared.com"),
 
-    {ok, #{}} = nkdomain_obj2:get_obj(group, "people@root"),
-    {ok, #{}} = nkdomain_obj2:get_obj(group, "admins.people@root"),
-    {ok, #{}} = nkdomain_obj2:get_obj(group, "all.people@root"),
+    {ok, #{}} = nkdomain_orig_obj:get_obj(group, "people@root"),
+    {ok, #{}} = nkdomain_orig_obj:get_obj(group, "admins.people@root"),
+    {ok, #{}} = nkdomain_orig_obj:get_obj(group, "all.people@root"),
     loaded = do_update("root", #{groups=>#{people=>#{remove=>true}}}),
-    {error, not_found} = nkdomain_obj2:get_obj(group, "people@root"),
-    {error, not_found} = nkdomain_obj2:get_obj(group, "admins.people@root"),
-    {error, not_found} = nkdomain_obj2:get_obj(group, "all.people@root"),
+    {error, not_found} = nkdomain_orig_obj:get_obj(group, "people@root"),
+    {error, not_found} = nkdomain_orig_obj:get_obj(group, "admins.people@root"),
+    {error, not_found} = nkdomain_orig_obj:get_obj(group, "all.people@root"),
     {ok, #{groups:=#{<<"nodes">>:=_, <<"zones">>:=_}}} = 
-        nkdomain_obj2:get_obj(domain, "root"),
+        nkdomain_orig_obj:get_obj(domain, "root"),
     [
         <<"a.zones@root">>,
         <<"a1.a.zones@root">>,
@@ -297,7 +297,7 @@ update() ->
     ] = 
         lists:sort(nkdomain_util:get_all(group)),
 
-    ok = nkdomain_obj2:remove_obj(domain, root),
+    ok = nkdomain_orig_obj:remove_obj(domain, root),
     [<<"domainA">>, <<"proy1.domainA">>] = 
         lists:sort(nkdomain_util:get_all(domain)),
     [<<"a@proy1.domainA">>,<<"b@proy1.domainA">>] =
@@ -334,7 +334,7 @@ update() ->
     [<<"admin@domain_a.com">>,<<"domain_a.com">>] = 
         lists:sort(nkdomain_util:get_all(alias)),
 
-    ok = nkdomain_obj2:remove_obj(domain, domainA),
+    ok = nkdomain_orig_obj:remove_obj(domain, domainA),
     [] = nkdomain_util:get_all(domain),
     [] = nkdomain_util:get_all(group),
     [] = nkdomain_util:get_all(nodeset),
@@ -368,7 +368,7 @@ do_update(Dom, Data, Opts) ->
 refresh_aliases() ->
     lists:foreach(
         fun(AliasId) ->
-            {ok, Pid} = nkdomain_obj2:get_pid(alias, AliasId),
+            {ok, Pid} = nkdomain_orig_obj:get_pid(alias, AliasId),
             Pid ! timeout
         end,
         nkdomain_util:get_all(alias)),

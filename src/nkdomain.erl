@@ -83,7 +83,8 @@
 
 -type load_opts() ::
     #{
-        register => nklib:link(),
+        link_usage => nkdomain:obj_id(),
+        event_usage => nkdomain:obj_id(),
         enabled => boolean()                        % Start disabled if false
     }.
 

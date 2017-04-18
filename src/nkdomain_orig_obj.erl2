@@ -23,7 +23,7 @@
 %% One of this objects is started for each object, distributed in the cluster
 %%
 
--module(nkdomain_obj2).
+-module(nkdomain_orig_obj).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 %%-behaviour(nkdist_proc).
 -behaviour(gen_server).
