@@ -46,7 +46,7 @@ cmd('', login, #{id:=User}=Data, #{srv_id:=SrvId}=State) ->
     LoginMeta2 = LoginMeta1#{
         password => maps:get(password, Data, <<>>),
         login_meta => maps:get(meta, Data, #{}),
-        session_pid => self()
+        api_server_pid => self()
     },
     case nkdomain_user_obj:login(SrvId, User, LoginMeta2) of
         {ok, UserId, SessId, LoginMeta3} ->

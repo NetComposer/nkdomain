@@ -47,7 +47,7 @@
         password => binary(),
         session_id => binary(),
         session_type => module(),
-        session_pid => pid(),
+        api_server_pid => pid(),
         local => binary(),
         remote => binary(),
         login_meta => map()
@@ -82,7 +82,7 @@ create(Srv, Parent, Name, Data) ->
     {error, user_not_found|term()}.
 
 login(SrvId, Login, Opts) ->
-    case do_load(SrvId, Login, Opts) of
+    case do_load(SrvId, Login) of
         {ok, ObjId, UserPid} ->
             case do_login(UserPid, ObjId, Opts) of
                 {ok, UserObjId} ->
@@ -106,7 +106,6 @@ login(SrvId, Login, Opts) ->
 
 get_name(Srv, Id) ->
     sync_op(Srv, Id, {?MODULE, get_name}).
-
 
 
 %% @doc 
@@ -249,9 +248,9 @@ sync_op(Srv, Id, Op) ->
 
 
 %% @private
-do_load(SrvId, Login, Opts) ->
-    LoadOpts = maps:with([register], Opts),
-    case nkdomain_obj_lib:load(SrvId, Login, LoadOpts) of
+do_load(SrvId, Login) ->
+%%    LoadOpts = maps:with([register], Opts),
+    case nkdomain_obj_lib:load(SrvId, Login, #{}) of
         #obj_id_ext{type = ?DOMAIN_USER, obj_id=ObjId, pid=Pid} ->
             {ok, ObjId, Pid};
         _ ->
@@ -263,7 +262,7 @@ do_load(SrvId, Login, Opts) ->
                         false ->
                             ok
                     end,
-                    case nkdomain_obj_lib:load(SrvId, ObjId, LoadOpts) of
+                    case nkdomain_obj_lib:load(SrvId, ObjId, #{}) of
                         #obj_id_ext{type = ?DOMAIN_USER, obj_id=ObjId, pid=Pid} ->
                             {ok, ObjId, Pid};
                         _ ->
@@ -293,9 +292,8 @@ do_login(_Pid, _ObjId, _Opts) ->
 
 %% @private
 do_start_session(SrvId, UserId, Opts) ->
-    Pid = maps:get(session_pid, Opts),
-    Opts1 = maps:with([session_id, local, remote], Opts),
-    Opts2 = Opts1#{referred_id=>UserId, pid=>Pid},
+    Opts1 = maps:with([session_id, api_server_pid, local, remote], Opts),
+    Opts2 = Opts1#{referred_id=>UserId},
     case nkdomain_session_obj:create(SrvId, UserId, Opts2) of
         {ok, ObjId, _Pid} ->
             {ok, ObjId};

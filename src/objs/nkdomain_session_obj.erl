@@ -41,7 +41,7 @@
     #{
         session_id => binary(),
         referred_id => binary(),
-        pid => pid(),
+        api_server_pid => pid(),
         local => binary(),
         remote => binary()
     }.
@@ -65,31 +65,24 @@ create(SrvId, Domain, Opts) ->
             #{referred_id:=ReferId} -> {referred_id, ReferId};
             _ -> []
         end,
-        {type_obj, maps:with([local, remote], Opts)}
+        {type_obj, maps:with([local, remote], Opts)},
+        case Opts of
+            #{api_server_pid:=Pid1} -> {usage_link, {Pid1, nkdomain_session_api}};
+            _ -> []
+        end
     ],
     Make2 = maps:from_list(lists:flatten(Make1)),
-    case nkdomain_obj_lib:make_obj(SrvId, Domain, ?DOMAIN_SESSION, Make2) of
-        {ok, Obj} ->
-            CreateList = [
-                case Opts of
-                    #{pid:=Pid1} -> {register, {?MODULE, Pid1}};
-                    _ -> []
-                end
-            ],
-            Create = maps:from_list(lists:flatten(CreateList)),
-            case nkdomain_obj_lib:create(SrvId, Obj, Create) of
-                #obj_id_ext{type = ?DOMAIN_SESSION, obj_id=ObjId, pid=ObjPid} ->
-                    case Opts of
-                        #{pid:=Pid2} ->
-                            %% api_server_reg_down will capture failures
-                            ok = nkapi_server:register(Pid2, {?MODULE, ObjPid});
-                        _ ->
-                            ok
-                    end,
-                    {ok, ObjId, ObjPid};
-                {error, Error} ->
-                    {error, Error}
-            end;
+    case nkdomain_obj_lib:make_and_create(SrvId, Domain, ?DOMAIN_SESSION, Make2) of
+        {ok, ObjId, _Path, ObjPid} ->
+            case Opts of
+                #{api_server_pid:=Pid2} ->
+                    %% api_server_reg_down will capture failures
+                    %% TODO if the session is moved, it will fail
+                    ok = nkapi_server:register(Pid2, {?MODULE, ObjPid});
+                _ ->
+                    ok
+            end,
+            {ok, ObjId, ObjPid};
         {error, Error} ->
             {error, Error}
     end.

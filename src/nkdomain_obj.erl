@@ -28,7 +28,7 @@
 
 -export([get_session/1, save/1, unload/2]).
 -export([update/2, enable/2, get_name/1, delete/1, sync_op/2, async_op/2, apply/2]).
--export([register/2, unregister/2, get_childs/1]).
+-export([register/2, unregister/2, link/4, get_childs/1]).
 -export([wait_for_save/2]).
 -export([create_child/3, load_child/3, object_has_been_deleted/1]).
 -export([start/2]).
@@ -64,6 +64,7 @@
 
 -include("nkdomain.hrl").
 -compile({no_auto_import, [register/2]}).
+
 
 %% ===================================================================
 %% Callbacks definitions
@@ -239,6 +240,16 @@ unregister(Id, Link) ->
     do_cast(Id, {nkdomain_unregister, Link}).
 
 
+%% @doc
+link(Id, Type, ObjOrPid, Tag) when Type==usage; Type==event ->
+    case nkdomain_obj_lib:find_loaded(Id) of
+        #obj_id_ext{pid=Pid} ->
+            nkdomain_obj_lib:link_to_obj(Type, ObjOrPid, Pid, Tag);
+        not_found ->
+            {error, object_not_found}
+    end.
+
+
 % @doc
 -spec get_childs(id()) ->
     {ok, [{nkdomain:type(), nkdomain:obj_id(), nkdomain:name(), pid()}]} |
@@ -341,6 +352,7 @@ init({#state{srv_id=SrvId, session=Session}=State, Time, OldPid}) ->
     #obj_session{type=Type, obj_id=ObjId, path=Path} = Session,
     case nkdomain_obj_lib:register(Type, ObjId, Path, OldPid) of
         ok ->
+            nklib_proc:put(?MODULE, {Type, ObjId, Path}),
             Timer = case Time of
                 permanent ->
                     undefined;
@@ -423,6 +435,21 @@ do_init(ObjIdExt, Meta) ->
                     Ref = erlang:send_after(Time, self(), nkdomain_timer),
                     State1#state{timer=Ref}
             end
+    end,
+    case Meta of
+        #{usage_link:={Id1, Tag1}} ->
+            % We will receive {received_link, Tag}
+            % If they die, we receive {received_link_down, Tag}
+            % If we die, they receive {sent_link_down, Tag}
+            ok = nkdomain_obj_lib:link_to_obj(usage, Id1, self(), Tag1);
+        _ ->
+            ok
+    end,
+    case Meta of
+        #{event_link:={Id2, Tag2}} ->
+            ok = nkdomain_obj_lib:link_to_obj(event, Id2, self(), Tag2);
+        _ ->
+            ok
     end,
     set_log(State2),
     nkservice_util:register_for_changes(SrvId),
@@ -1096,17 +1123,13 @@ do_received_link({nkdomain_child, Type, Name, ChildId}, State) ->
     State2 = do_add_child(Type, ChildId, Name, State),
     noreply(State2);
 
-do_received_link({usage, Tag}, #state{session=Session}=State) ->
+do_received_link({usage, Tag}, State) ->
     ?DEBUG("new received usage link: ~p", [Tag], State),
-    #obj_session{link_usages=Links} = Session,
-    Session2 = Session#obj_session{link_usages=Links#{Tag => ok}},
-    noreply(State#state{session=Session2});
+    noreply(add_link(usage, Tag, State));
 
-do_received_link({events, Tag}, #state{session=Session}=State) ->
-    ?DEBUG("new events link: ~p", [Tag], State),
-    #obj_session{link_events=Links} = Session,
-    Session2 = Session#obj_session{link_events=nklib_util:store_value(Tag, Links)},
-    noreply(State#state{session=Session2});
+do_received_link({event, Tag}, State) ->
+    ?DEBUG("new receibed event link: ~p", [Tag], State),
+    noreply(add_link(event, Tag, State));
 
 do_received_link(Link, State) ->
     ?LLOG(notice, "unexpected received link: ~p", [Link], State),
@@ -1117,19 +1140,16 @@ do_received_link(Link, State) ->
 do_received_link_down({nkdomain_child, Type, Name, _ChildId}, State) ->
     ?DEBUG("child ~s:~s has stopped", [Type, Name], State),
     State2 = do_rm_child(Type, Name, State),
-    noreply(State2);
+    do_check_links_down(State2);
 
-do_received_link_down({usage, Tag}, #state{session=Session}=State) ->
+do_received_link_down({usage, Tag}, State) ->
     ?DEBUG("usage link down: ~p", [Tag], State),
-    #obj_session{link_usages=Links} = Session,
-    Session2 = Session#obj_session{link_usages=maps:remove(Tag, Links)},
-    noreply(State#state{session=Session2});
+    State2 = remove_link(usage, Tag, State),
+    do_check_links_down(State2);
 
-do_received_link_down({events, Tag}, #state{session=Session}=State) ->
-    ?DEBUG("events link down: ~p", [Tag], State),
-    #obj_session{link_events=Links} = Session,
-    Session2 = Session#obj_session{link_events=Links--[Tag]},
-    noreply(State#state{session=Session2});
+do_received_link_down({event, Tag}, State) ->
+    ?DEBUG("event link down: ~p", [Tag], State),
+    noreply(remove_link(event, Tag, State));
 
 do_received_link_down(Link, State) ->
     ?LLOG(notice, "unexpected received link down: ~p", [Link], State),
@@ -1247,6 +1267,32 @@ links_down(Mon, #state{session=#obj_session{links=Links}=Session}=State) ->
 %% @private
 links_fold(Fun, Acc, #state{session=#obj_session{links=Links}}) ->
     nklib_links:fold(Fun, Acc, Links).
+
+
+
+%% @private
+add_link(usage, Link, #state{session=Session}=State) ->
+    #obj_session{link_usages=Links} = Session,
+    Session2 = Session#obj_session{link_usages=Links#{Link => ok}},
+    State#state{session=Session2};
+
+add_link(event, Link, #state{session=Session}=State) ->
+    #obj_session{link_events=Links} = Session,
+    Session2 = Session#obj_session{link_events=nklib_util:store_value(Link, Links)},
+    State#state{session=Session2}.
+
+
+%% @private
+remove_link(usage, Link, #state{session=Session}=State) ->
+    #obj_session{link_usages=Links} = Session,
+    Session2 = Session#obj_session{link_usages=maps:remove(Link, Links)},
+    State#state{session=Session2};
+
+remove_link(event, Link, #state{session=Session}=State) ->
+    #obj_session{link_events=Links} = Session,
+    Session2 = Session#obj_session{link_events=Links--[Link]},
+    noreply(State#state{session=Session2}).
+
 
 
 %% @private

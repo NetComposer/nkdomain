@@ -27,7 +27,7 @@
 
 -export([find/2, load/3, create/3]).
 -export([make_obj/4, make_and_create/4]).
--export([unload/4, sync_op/5, async_op/5, link_usage/2, link_events/2]).
+-export([unload/4, sync_op/5, async_op/5, link_to_obj/4]).
 -export([get_node/1, register/3, register/4, link_to_parent/4]).
 -export([find_loaded/1, call/2, call/3, cast/2, info/2]).
 
@@ -154,13 +154,14 @@ make_and_create(Srv, Parent, Type, Opts) ->
     case make_obj(Srv, Parent, Type, Opts) of
         {ok, Obj} ->
             %% lager:warning("Obj: ~p", [Obj]),
-            Meta = case maps:is_key(obj_id, Opts) orelse maps:is_key(name, Opts) of
+            CreateMeta1 = maps:with([usage_link, event_link], Opts),
+            CreateMeta2 = case maps:is_key(obj_id, Opts) orelse maps:is_key(name, Opts) of
                 true ->
-                    #{};
+                    CreateMeta1;
                 false ->
-                    #{skip_path_check=>true}
+                    CreateMeta1#{skip_path_check=>true}
             end,
-            case create(Srv, Obj, Meta) of
+            case create(Srv, Obj, CreateMeta2) of
                 #obj_id_ext{type=Type, obj_id=ObjId, path=Path, pid=Pid} ->
                     {ok, ObjId, Path, Pid};
                 {error, Error} ->
@@ -233,7 +234,7 @@ find(Srv, IdOrPath) ->
 
 %% @doc Finds an objects's pid or loads it from storage
 -spec load(nkservice:id(), nkdomain:obj_id()|nkdomain:path(), nkdomain:load_opts()) ->
-    #obj_id_ext{} | {error, obj_not_found|term()}.
+    #obj_id_ext{} | {error, object_not_found|term()}.
 
 load(Srv, IdOrPath, Meta) ->
     case find(Srv, IdOrPath) of
@@ -242,6 +243,18 @@ load(Srv, IdOrPath, Meta) ->
                 #{register:=Link} ->
                     nkdomain_obj:register(Pid, Link);
                 _ ->
+                    ok
+            end,
+            case maps:find(usage_link, Meta) of
+                {ok, {Id1, Tag1}} ->
+                    ok = nkdomain_obj:link(Pid, usage, Id1, Tag1);
+                error ->
+                    ok
+            end,
+            case maps:find(event_link, Meta) of
+                {ok, {Id2, Tag2}} ->
+                    ok = nkdomain_obj:link(Pid, event, Id2, Tag2);
+                error ->
                     ok
             end,
             ObjIdExt;
@@ -258,6 +271,7 @@ load(Srv, IdOrPath, Meta) ->
         {error, Error} ->
             {error, Error}
     end.
+
 
 %% @private
 do_load(#obj_id_ext{srv_id=SrvId}=ObjIdExt, BasePath,  Meta) ->
@@ -322,14 +336,6 @@ async_op(Srv, Id, Type, Msg, NotFound) ->
         {error, Error} ->
             {error, Error}
     end.
-
-link_usage(Id, Tag) ->
-    nkdist_reg:link(nkdomain, to_bin(Id), {usage, Tag}).
-
-link_events(Id, Tag) ->
-    nkdist_reg:link(nkdomain, to_bin(Id), {events, Tag}).
-
-
 
 
 %% ===================================================================
@@ -402,6 +408,23 @@ link_to_parent(Parent, Type, Name, ChildId) ->
     ok = nkdist_reg:link(nkdomain, Parent, {nkdomain_child, Type, Name, ChildId}).
 
 
+%% @private Links a child to its parent
+%% Destination will receive {received_link, {Type, Tag}}
+%% On failure, orig receive {sent_link_down, {Type, Tag}},
+%% destination receives {received_link_down, {Type, Tag}}
+
+link_to_obj(Type, OrigPid, DestPid, Tag) when is_pid(OrigPid) ->
+    nkdist_reg:link_pid(OrigPid, DestPid, {Type, Tag});
+
+link_to_obj(Type, OrigId, DestPid, Tag) ->
+    case find_loaded(OrigId) of
+        #obj_id_ext{pid=OrigPid} ->
+            link_to_obj(Type, OrigPid, DestPid, Tag);
+        not_found ->
+            {error, destination_not_found}
+    end.
+
+
 %% @private
 find_loaded(IdOrPath) when is_binary(IdOrPath) ->
     case nkdist_reg:find(nkdomain, IdOrPath) of
@@ -445,7 +468,7 @@ call(Id, Msg, Timeout, Tries) ->
                     Other
             end;
         not_found ->
-            {error, obj_not_found}
+            {error, object_not_found}
     end.
 
 
@@ -458,7 +481,7 @@ cast(Id, Msg) ->
         #obj_id_ext{pid=Pid} when is_pid(Pid) ->
             cast(Pid, Msg);
         not_found ->
-            {error, obj_not_found}
+            {error, object_not_found}
     end.
 
 
@@ -471,7 +494,7 @@ info(Id, Msg) ->
         #obj_id_ext{pid=Pid} when is_pid(Pid) ->
             info(Pid, Msg);
         not_found ->
-            {error, obj_not_found}
+            {error, object_not_found}
     end.
 
 

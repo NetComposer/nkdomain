@@ -157,7 +157,7 @@ test_session1(Pid) ->
     {ok, Pid2, SessId} = login("/users/tuser1", pass2),
     {ok, #{<<"type">>:=<<"user">>, <<"path">>:=<<"/users/tuser1">>, <<"obj_id">>:=UId}} = cmd(Pid2, user, get, #{}),
     {ok, #{<<"type">>:=<<"user">>, <<"path">>:=<<"/users/admin">>}} = cmd(Pid, user, get, #{}),
-    {ok, <<"session">>, SessId, <<"/users/tuser1/sessions/", SessId/binary>>, SPid} = nkdomain:find(root, SessId),
+    {ok, <<"session">>, SessId, <<"/users/tuser1/sessions/", _/binary>>, SPid} = nkdomain:find(root, SessId),
     true = is_pid(SPid),
 
     % Object has active childs, we cannot delete it
@@ -172,7 +172,7 @@ test_session1(Pid) ->
         <<"parent_id">> := UId,
         <<"active">> := true,
         <<"created_time">> := _,
-        <<"path">> := <<"/users/tuser1/sessions/", SessId/binary>>,
+        <<"path">> := <<"/users/tuser1/sessions/", _/binary>>,
         <<"referred_id">> := UId,
         <<"session">> := #{
             <<"local">> := <<"ws:0.0.0.0:9202">>,
@@ -203,7 +203,7 @@ test_session2(Pid) ->
     {ok, #{<<"obj_id">>:=SessId}} = cmd(Pid, session, get, #{}),
     {ok, <<"session">>, SessId, Path, SessPid} = nkdomain:find(root, SessId),
     {ok, Childs} = nkdomain_obj:get_childs(<<"admin">>),
-    SessName = nkdomain_util:name(SessId),
+    {ok, _Base, SessName} = nkdomain_util:get_parts(<<"session">>, Path),
     SessId = maps:get(SessName, maps:get(<<"session">>, Childs)),
 
     % If we kill the session, admin notices and the web socket is closed

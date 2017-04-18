@@ -83,9 +83,9 @@
 
 -type load_opts() ::
     #{
-        link_usage => nkdomain:obj_id(),
-        event_usage => nkdomain:obj_id(),
-        enabled => boolean()                        % Start disabled if false
+        usage_link => {nkdomain:id() | pid(), nkdist_reg:tag()},    % Id or pid will receive {sent_link_down, Tag}
+        event_link => {nkdomain:id() | pid(), nkdist_reg:tag()},
+        enabled => boolean()                                        % Start disabled if false
     }.
 
 
@@ -141,7 +141,7 @@ load(IdOrPath) ->
 %% @doc Finds an objects's pid or loads it from storage
 -spec load(nkservice:id(), obj_id()|path()) ->
     {ok, type(), obj_id(), path(), pid()} |
-    {error, obj_not_found|term()}.
+    {error, object_not_found|term()}.
 
 load(Srv, IdOrPath) ->
     load(Srv, IdOrPath, #{}).
@@ -150,7 +150,7 @@ load(Srv, IdOrPath) ->
 %% @doc Finds an objects's pid or loads it from storage
 -spec load(nkservice:id(), obj_id()|path(), load_opts()) ->
     {ok, type(), obj_id(), path(), pid()} |
-    {error, obj_not_found|term()}.
+    {error, object_not_found|term()}.
 
 load(Srv, IdOrPath, Meta) ->
     case nkdomain_obj_lib:load(Srv, IdOrPath, Meta) of
