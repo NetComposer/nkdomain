@@ -28,7 +28,7 @@
 -export([find/2, load/3, create/3]).
 -export([make_obj/4, make_and_create/4]).
 -export([unload/4, sync_op/5, async_op/5, link_usage/2, link_events/2]).
--export([get_node/1, register/1, link_to_parent/4]).
+-export([get_node/1, register/3, register/4, link_to_parent/4]).
 -export([find_loaded/1, call/2, call/3, cast/2, info/2]).
 
 -include("nkdomain.hrl").
@@ -67,20 +67,23 @@ make_obj(Srv, Parent, Type, Opts) ->
     case find(Srv, Parent) of
         #obj_id_ext{obj_id=ParentId, path=ParentPath} ->
             Type2 = to_bin(Type),
+            UUID = nklib_util:luid(),
             ObjId = case Opts of
                 #{obj_id:=ObjId0} ->
                     to_bin(ObjId0);
                 _ ->
-                    <<Type2/binary, $-, (nklib_util:luid())/binary>>
+                    <<Type2/binary, $-, UUID/binary>>
             end,
             Name1 = case Opts of
                 #{name:=Name0} ->
                     case to_bin(Name0) of
-                        <<>> -> ObjId;
-                        Name0bin -> nkdomain_util:name(Name0bin)
+                        <<>> ->
+                            binary:part(UUID, 0, 7);
+                        Name0bin ->
+                            nkdomain_util:name(Name0bin)
                     end;
                 _ ->
-                    ObjId
+                    binary:part(UUID, 0, 7)
             end,
             Name2 = case Type2 of
                 ?DOMAIN_DOMAIN ->
@@ -370,13 +373,25 @@ get_node(ObjId) ->
 
 
 %% @private
-register(#obj_id_ext{type=Type, obj_id=ObjId, path=Path}) ->
-    case nkdist_reg:register(proc, nkdomain, ObjId, #{sync=>true, meta=>{Type, path, Path}}) of
+register(Type, ObjId, Path) ->
+    do_register(Type, ObjId, Path, #{sync=>true}).
+
+
+%% @private
+register(Type, ObjId, Path, Pid) ->
+    do_register(Type, ObjId, Path, #{sync=>true, replace_pid=>Pid}).
+
+
+%% @private
+do_register(Type, ObjId, Path, Opts) ->
+    case nkdist_reg:register(proc, nkdomain, ObjId, Opts#{meta=>{Type, path, Path}}) of
         ok ->
-            nkdist_reg:register(reg, nkdomain, Path, #{sync=>true, meta=>{Type, obj_id, ObjId}});
+            nkdist_reg:register(reg, nkdomain, Path, Opts#{meta=>{Type, obj_id, ObjId}});
         {error, Error} ->
             {error, Error}
     end.
+
+
 
 
 %% @private Links a child to its parent
