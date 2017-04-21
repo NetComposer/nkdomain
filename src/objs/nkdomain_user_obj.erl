@@ -122,25 +122,6 @@ send_push(Srv, Id, Event) ->
     end.
 
 
-
-
-
-
-
-%%%% @doc
-%%%% TODO: change
-%%find_referred(Srv, Id, Spec) ->
-%%    case nkdomain_obj_lib:find(Srv, Id) of
-%%        #obj_id_ext{srv_id=SrvId, obj_id=ObjId} ->
-%%            SrvId:object_store_find_referred(SrvId, ObjId, Spec);
-%%        {error, Error} ->
-%%            {error, Error}
-%%    end.
-
-
-
-
-
 %% ===================================================================
 %% nkdomain_obj behaviour
 %% ===================================================================
@@ -249,7 +230,6 @@ sync_op(Srv, Id, Op) ->
 
 %% @private
 do_load(SrvId, Login) ->
-%%    LoadOpts = maps:with([register], Opts),
     case nkdomain_obj_lib:load(SrvId, Login, #{}) of
         #obj_id_ext{type = ?DOMAIN_USER, obj_id=ObjId, pid=Pid} ->
             {ok, ObjId, Pid};
@@ -292,8 +272,7 @@ do_login(_Pid, _ObjId, _Opts) ->
 
 %% @private
 do_start_session(SrvId, UserId, Opts) ->
-    Opts1 = maps:with([session_id, api_server_pid, local, remote], Opts),
-    Opts2 = Opts1#{referred_id=>UserId},
+    Opts2 = maps:with([session_id, api_server_pid, local, remote], Opts),
     case nkdomain_session_obj:create(SrvId, UserId, Opts2) of
         {ok, ObjId, _Pid} ->
             {ok, ObjId};

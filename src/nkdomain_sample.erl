@@ -19,6 +19,13 @@ login(User, Pass) ->
     {ok, _SessId, _Pid, _Reply} = nkapi_client:start(root, ?WS, Login, Fun, #{}).
 
 
+event_get_subs() ->
+    cmd(event, get_subscriptions, #{}).
+
+event_subs(Map) ->
+    cmd(event, subscribe, Map).
+
+
 user_get() ->
     cmd(user, get, #{}).
 

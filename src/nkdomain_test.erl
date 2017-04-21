@@ -173,7 +173,7 @@ test_session1(Pid) ->
         <<"active">> := true,
         <<"created_time">> := _,
         <<"path">> := <<"/users/tuser1/sessions/", _/binary>>,
-        <<"referred_id">> := UId,
+        <<"created_id">> := UId,
         <<"session">> := #{
             <<"local">> := <<"ws:0.0.0.0:9202">>,
             <<"remote">> := <<"ws:127.0.0.1:", _/binary>>

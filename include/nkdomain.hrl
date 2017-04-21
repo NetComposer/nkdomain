@@ -47,7 +47,6 @@
     data :: term(),                     % Type-specific metadata
     started :: nklib_util:m_timestamp(),
     childs :: #{nkdomain:type() => #{nkdomain:name() => nkdomain:obj_id()}},
-    links :: nklib_links:links(),
     link_usages = #{} :: #{term() => ok},
     link_events = [] :: [term()]
 
