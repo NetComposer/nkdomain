@@ -86,6 +86,7 @@ api_error(object_stopped) 		            -> "Object stopped";
 api_error(parent_stopped) 		            -> "Parent stopped";
 api_error(session_already_present)          -> "Session is already present";
 api_error(session_not_found)                -> "Session not found";
+api_error(session_is_disabled)              -> "Session is disabled";
 api_error(user_is_disabled) 		        -> "User is disabled";
 api_error(user_unknown)                     -> "Unknown user";
 api_error(_)   		                        -> continue.

@@ -173,7 +173,7 @@ test_session1(Pid) ->
         <<"active">> := true,
         <<"created_time">> := _,
         <<"path">> := <<"/users/tuser1/sessions/", _/binary>>,
-        <<"created_id">> := UId,
+        <<"created_by">> := UId,
         <<"session">> := #{
             <<"local">> := <<"ws:0.0.0.0:9202">>,
             <<"remote">> := <<"ws:127.0.0.1:", _/binary>>
@@ -246,7 +246,7 @@ test_session3(Admin) ->
     {ok, #{}} = cmd(Pid, user, enable, #{enable=>false}),
     timer:sleep(1500),
     {error, object_not_found} = nkdomain:find(root, SessId),
-    {1, [#{<<"destroyed_code">>:=<<"user_is_disabled">>}]} = find_archive(SessId),
+    {1, [#{<<"destroyed_code">>:=<<"session_is_disabled">>}]} = find_archive(SessId),
     false = is_process_alive(Pid),
     false = is_process_alive(SPid),
     {error, {<<"object_is_disabled">>, _}} = login("/users/tuser1", pass2),

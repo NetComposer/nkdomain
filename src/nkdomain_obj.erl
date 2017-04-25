@@ -237,7 +237,7 @@ send_info(Id, Info, Body) when is_map(Body) ->
 
 
 %% @doc
--spec send_event(id(), nkservice_events:type(), nkservice_events:body()) ->
+-spec send_event(id(),  nkevents:type(),  nkevents:body()) ->
     ok | {error, term()}.
 
 send_event(Id, Type, Body) when is_map(Body) ->
@@ -770,10 +770,6 @@ handle_info(nkdomain_move_completed, State) ->
     ?DEBUG("move completed", [], State),
     {stop, normal, State};
 
-handle_info(Msg, #state{moved_to=Pid}=State) when is_pid(Pid) ->
-    Pid ! Msg,
-    noreply(State);
-
 handle_info({nkservice_updated, _SrvId}, State) ->
     noreply(set_log(State));
 
@@ -1068,7 +1064,7 @@ do_enabled(true, #state{session=#obj_session{obj=Obj}}=State) ->
 do_enabled2(Enabled, #state{session=Session}=State) ->
     State2 = State#state{session=Session#obj_session{is_enabled=Enabled}},
     send_childs({nkdomain_parent_enabled, Enabled}, State2),
-    {ok, do_event({enabled, Enabled}, State2)}.
+    noreply(do_event({enabled, Enabled}, State2)).
 
 
 %% @private

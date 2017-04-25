@@ -33,7 +33,7 @@
 -export([send_event/3, send_event/4]).
 
 -include("nkdomain.hrl").
--include_lib("nkservice/include/nkservice.hrl").
+-include_lib("nkevent/include/nkevent.hrl").
 -define(DEF_SYNC_CALL, 5000).
 
 
@@ -502,7 +502,7 @@ send_event(EvType, Body, #obj_session{obj_id=ObjId}=Session) ->
 
 %% @private
 send_event(EvType, ObjId, Body, #obj_session{srv_id=SrvId, type=Type}=Session) ->
-    Event = #event{
+    Event = #nkevent{
         srv_id = SrvId,
         class = <<"domain">>,
         subclass = Type,
@@ -512,19 +512,19 @@ send_event(EvType, ObjId, Body, #obj_session{srv_id=SrvId, type=Type}=Session) -
     },
     lager:info("Domain EVENT sent to listeners: ~p", [Event]),
     send_direct_event(Event, Session),
-    nkservice_events:send(Event),
+    nkevent:send(Event),
     {ok, Session}.
 
 
 %% @private
-send_direct_event(#event{type=Type, body=Body}=Event, #obj_session{meta=Meta}) ->
+send_direct_event(#nkevent{type=Type, body=Body}=Event, #obj_session{meta=Meta}) ->
     case Meta of
         #{session_events:=Events, session_id:=ConnId} ->
             case lists:member(Type, Events) of
                 true ->
                     Event2 = case Meta of
                         #{session_events_body:=Body2} ->
-                            Event#event{body=maps:merge(Body, Body2)};
+                            Event#nkevent{body=maps:merge(Body, Body2)};
                         _ ->
                             Event
                     end,

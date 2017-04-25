@@ -50,7 +50,7 @@
         api_server_pid => pid(),
         local => binary(),
         remote => binary(),
-        login_meta => map()
+        login_meta => map()         % Meta coming from API meta field
     }.
 
 
@@ -109,7 +109,7 @@ get_name(Srv, Id) ->
 
 
 %% @doc 
--spec send_push(nkservice:id(), nkdomain:id(), nkservice_events:event()) ->
+-spec send_push(nkservice:id(), nkdomain:id(), nkevent:event()) ->
     ok | {error, term()}.
 
 send_push(Srv, Id, Event) ->
