@@ -210,13 +210,14 @@ object_sync_op({?MODULE, check_pass, Pass}, _From, #obj_session{obj=Obj}=Session
     end;
 
 object_sync_op({?MODULE, get_name}, _From, Session) ->
-    #obj_session{type=Type, path=Path, obj=Obj} = Session,
+    #obj_session{type=Type, path=Path, obj=Obj, obj_id=ObjId} = Session,
     {ok, _, Name} = nkdomain_util:get_parts(Type, Path),
     #{name:=UserName, surname:=UserSurName} = User = maps:get(?DOMAIN_USER, Obj),
     Data = #{
         name => Name,
         description => maps:get(description, Obj, <<>>),
         ?DOMAIN_USER => #{
+            obj_id => ObjId,
             name => UserName,
             surname => UserSurName,
             email => maps:get(email, User, <<>>),
