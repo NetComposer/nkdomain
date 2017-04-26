@@ -9,6 +9,7 @@
         nkdist,
         nkrole,
         nkservice,
+        nkevent,
         nkapi
     ]},
     {env, [

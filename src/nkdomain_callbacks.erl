@@ -26,15 +26,10 @@
 -export([api_error/1, api_server_syntax/3, api_server_allow/2, api_server_cmd/2,
          api_server_reg_down/3]).
 -export([object_mapping/0, object_syntax/1, object_parse/4, object_unparse/1]).
--export([object_load/2, object_save/1, object_delete/1, object_archive/2]).
--export([object_child_created/2, object_child_loaded/2,
-         object_updated/2, object_enabled/2, object_deleted/1,
-         object_check_active/3,
-         object_sync_op/3, object_async_op/2,
-         object_status/2, object_all_links_down/1,
-         object_session_event/2, object_member_event/3]).
--export([object_init/1, object_terminate/2, object_event/2, object_reg_event/3,
-         object_reg_down/3, object_start/1, object_stop/2,
+-export([object_load/2, object_get_session/1, object_save/1, object_delete/1, object_archive/1]).
+-export([object_check_active/3]).
+-export([object_init/1, object_terminate/2, object_start/1, object_stop/2,
+         object_event/2, object_reg_event/3, object_sync_op/3, object_async_op/2,
          object_handle_call/3, object_handle_cast/2, object_handle_info/2]).
 -export([object_store_reload_types/1, object_store_read_raw/2, object_store_save_raw/3,
          object_store_delete_raw/2,
@@ -82,13 +77,16 @@ api_error(object_clean_expire)              -> "Object cleaned (expired)";
 api_error(object_deleted) 		            -> "Object removed";
 api_error(object_has_childs) 		        -> "Object has childs";
 api_error(object_parent_conflict) 	        -> "Object has conflicting parent";
-api_error(object_is_already_loaded) -> "Object is already loaded";
+api_error(object_is_already_loaded)         -> "Object is already loaded";
 api_error(object_is_disabled) 		        -> "Object is disabled";
 api_error(object_is_stopped) 		        -> "Object is stopped";
 api_error(object_not_found) 		        -> "Object not found";
 api_error(object_not_started) 		        -> "Object is not started";
 api_error(object_stopped) 		            -> "Object stopped";
 api_error(parent_stopped) 		            -> "Parent stopped";
+api_error(session_already_present)          -> "Session is already present";
+api_error(session_not_found)                -> "Session not found";
+api_error(session_is_disabled)              -> "Session is disabled";
 api_error(user_is_disabled) 		        -> "User is disabled";
 api_error(user_unknown)                     -> "Unknown user";
 api_error(_)   		                        -> continue.
@@ -203,6 +201,14 @@ object_load(SrvId, ObjId) ->
     end.
 
 
+%% @doc
+-spec object_get_session(session()) ->
+    {ok, session()}.
+
+object_get_session(Session) ->
+    {ok, _Session2} = call_module(object_restore, [], Session).
+
+
 %% @doc Called to save the object to disk
 -spec object_save(session()) ->
     {ok, session()} | {error, term(), session()}.
@@ -211,11 +217,16 @@ object_save(#obj_session{is_dirty=false}=Session) ->
     {ok, Session};
 
 object_save(#obj_session{srv_id=SrvId, obj_id=ObjId}=Session) ->
-    {ok, Session2} = call_module(object_save, [], Session),
-    Map = SrvId:object_unparse(Session2),
-    case nkdomain_store:save(SrvId, ObjId, Map) of
-        {ok, _Vsn} ->
-            {ok, Session2#obj_session{is_dirty=false}};
+    {ok, Session2} = call_module(object_restore, [], Session),
+    case call_module(object_save, [], Session2) of
+        {ok, Session3} ->
+            Map = SrvId:object_unparse(Session3),
+            case nkdomain_store:save(SrvId, ObjId, Map) of
+                {ok, _Vsn} ->
+                    {ok, Session3#obj_session{is_dirty=false}};
+                {error, Error} ->
+                    {error, Error, Session3}
+            end;
         {error, Error} ->
             {error, Error, Session2}
     end.
@@ -226,25 +237,37 @@ object_save(#obj_session{srv_id=SrvId, obj_id=ObjId}=Session) ->
     {ok, session()} | {error, term(), session()}.
 
 object_delete(#obj_session{srv_id=SrvId, obj_id=ObjId}=Session) ->
-    case nkdomain_store:delete(SrvId, ObjId) of
-        ok ->
-            {ok, Session};
+    case call_module(object_delete, [], Session) of
+        {ok, Session2} ->
+            case nkdomain_store:delete(SrvId, ObjId) of
+                ok ->
+                    {ok, Session2};
+                {error, Error} ->
+                    {error, Error, Session2}
+            end;
         {error, Error} ->
             {error, Error, Session}
     end.
 
 
+
 %% @doc Called to save the archived version to disk
--spec object_archive(nkdomain:obj(), session()) ->
+-spec object_archive(session()) ->
     {ok, session()} | {error, term(), session()}.
 
-object_archive(Obj, #obj_session{srv_id=SrvId, obj_id=ObjId}=Session) ->
-    Map = SrvId:object_unparse(Session#obj_session{obj=Obj}),
-    case nkdomain_store:archive(SrvId, ObjId, Map) of
-        ok ->
-            {ok, Session};
+object_archive(#obj_session{srv_id=SrvId, obj_id=ObjId, obj=Obj}=Session) ->
+    {ok, Session2} = call_module(object_restore, [], Session),
+    case call_module(object_archive, [], Session2) of
+        {ok, Session3} ->
+            Map = SrvId:object_unparse(Session3#obj_session{obj=Obj}),
+            case nkdomain_store:archive(SrvId, ObjId, Map) of
+                ok ->
+                    {ok, Session3};
+                {error, Error} ->
+                    {error, Error, Session3}
+            end;
         {error, Error} ->
-            {error, Error, Session}
+            {error, Error, Session2}
     end.
 
 
@@ -312,26 +335,6 @@ object_unparse(#obj_session{srv_id=SrvId, type=Type, module=Module, obj=Obj}) ->
     end.
 
 
-%% ===================================================================
-%% Object-related callbacks
-%% ===================================================================
-
-%% @doc Called when the parent creates a child
--spec object_child_created(nkdomain:obj(), session()) ->
-    {ok, session()}.
-
-object_child_created(Obj, Session) ->
-    call_module(object_child_created, [Obj], Session).
-
-
-%% @doc Called when the parent loads a child
--spec object_child_loaded(nkdomain:obj(), session()) ->
-    {ok, session()}.
-
-object_child_loaded(Obj, Session) ->
-    call_module(object_child_loaded, [Obj], Session).
-
-
 %% @doc Called if an active object is detected on storage
 %% If 'true' is returned, the object is ok
 %% If 'false' is returned, it only means that the object has been processed
@@ -347,104 +350,10 @@ object_check_active(SrvId, Type, ObjId) ->
     end.
 
 
-%% @doc Called when an object is modified
--spec object_updated(map(), session()) ->
-    {ok, session()}.
-
-object_updated(Update, Session) ->
-    call_module(object_updated, [Update], Session).
-
-
-%% @doc Called when an object is enabled or disabled
--spec object_enabled(boolean(), session()) ->
-    {ok, session()} | {stop, Reason::term(), session()}.
-
-object_enabled(Enabled, Session) ->
-    call_module(object_enabled, [Enabled], Session).
-
-
-%% @doc Called when an object is removed
--spec object_deleted(session()) ->
-    {ok, session()}.
-
-object_deleted(Session) ->
-    call_module(object_deleted, [], Session).
-
-
-%% @doc
--spec object_sync_op(term(), {pid(), reference()}, session()) ->
-    {reply, Reply::term(), session} | {reply_and_save, Reply::term(), session} |
-    {noreply, session()} | {noreply_and_save, session} |
-    {stop, Reason::term(), Reply::term(), session()} |
-    {stop, Reason::term(), session()} |
-    continue().
-
-object_sync_op(Op, From, Session) ->
-    case call_module(object_sync_op, [Op, From], Session) of
-        {ok, _Session} ->
-            continue;
-        Other ->
-            Other
-    end.
-
-
-%% @doc
--spec object_async_op(term(), session()) ->
-    {noreply, session()} | {noreply_and_save, session} |
-    {stop, Reason::term(), session()} |
-    continue().
-
-object_async_op(Op, Session) ->
-    case call_module(object_async_op, [Op], Session) of
-        {ok, _Session} ->
-            continue;
-        Other ->
-            Other
-    end.
-
-
-%% @doc
--spec object_status(term(), session()) ->
-    {ok, session()}.
-
-object_status(Status, Session) ->
-    call_module(object_status, [Status], Session).
-
-
-%% @doc
--spec object_all_links_down(session()) ->
-    {keepalive, session()} | {stop, nkservice:error(), session()}.
-
-object_all_links_down(Session) ->
-    case call_module(object_all_links_down, [], Session) of
-        {ok, Session2} ->
-            {stop, no_usages, Session2};
-        Other ->
-            Other
-    end.
-
-
-%% @doc Implemented by sessions to process messages
--spec object_session_event(nklib:link(), nkservice_events:event()) ->
-    ok | {error, term()}.
-
-object_session_event(_Link, _Event) ->
-    {error, not_implemented}.
-
-
-%% @doc Implemented by push providers (like users)
--spec object_member_event(nkservice:id(), obj_id(), nkservice_events:event()) ->
-    ok | {error, term()}.
-
-object_member_event(SrvId, UserObjId, Event) ->
-    nkdomain_user_obj:send_push(SrvId, UserObjId, Event).
-
-
-
-
 %% ===================================================================
-%% Low level object
+%% Object-process related callbacks
 %% ===================================================================
+
 
 %% @doc Called when a new session starts
 -spec object_init(session()) ->
@@ -483,7 +392,22 @@ object_stop(Reason, Session) ->
     {ok, session()} | continue().
 
 object_event(Event, Session) ->
-    call_module(object_event, [Event], Session).
+    % The object module can use this callback to detect core events or its own events
+    {ok, Session2} = call_module(object_event, [Event], Session),
+    % Use this callback to generate the right external Event
+    case call_module(object_send_event, [Event], Session) of
+        {ok, Session2} ->
+            case nkdomain_api_util:event(Event, Session2) of
+                {ok, Session3} ->
+                    {ok, Session3};
+                {event, Type, Body, Session3} ->
+                    nkdomain_obj_lib:send_event(Type, Body, Session3)
+            end;
+        {event, Type, Body, Session2} ->
+            nkdomain_obj_lib:send_event(Type, Body, Session2);
+        {ignore, Session2} ->
+            {ok, Session2}
+    end.
 
 
 %% @doc Called when an event is sent, for each registered process to the session
@@ -494,12 +418,36 @@ object_reg_event(Link, Event, Session) ->
     call_module(object_reg_event, [Link, Event], Session).
 
 
-%% @doc Called when a registered process fails
--spec object_reg_down(nklib:link(), term(), session()) ->
-    {ok, session()} | {stop, Reason::term(), session()} | continue().
+%% @doc
+-spec object_sync_op(term(), {pid(), reference()}, session()) ->
+    {reply, Reply::term(), session} | {reply_and_save, Reply::term(), session} |
+    {noreply, session()} | {noreply_and_save, session} |
+    {stop, Reason::term(), Reply::term(), session()} |
+    {stop, Reason::term(), session()} |
+    continue().
 
-object_reg_down(Link, Reason, Session) ->
-    call_module(object_reg_down, [Link, Reason], Session).
+object_sync_op(Op, From, Session) ->
+    case call_module(object_sync_op, [Op, From], Session) of
+        {ok, _Session} ->
+            continue;
+        Other ->
+            Other
+    end.
+
+
+%% @doc
+-spec object_async_op(term(), session()) ->
+    {noreply, session()} | {noreply_and_save, session} |
+    {stop, Reason::term(), session()} |
+    continue().
+
+object_async_op(Op, Session) ->
+    case call_module(object_async_op, [Op], Session) of
+        {ok, _Session} ->
+            continue;
+        Other ->
+            Other
+    end.
 
 
 %% @doc
@@ -717,6 +665,9 @@ api_server_syntax(Syntax, #nkapi_req{class=Type, subclass=Sub, cmd=Cmd}=Req, Sta
 api_server_allow(#nkapi_req{module=Module}=Req, State) when Module/=undefined ->
     #nkapi_req{subclass=Sub, cmd=Cmd, data=Data} = Req,
     nklib_util:apply(Module, object_api_allow, [Sub, Cmd, Data, State]);
+
+api_server_allow(#nkapi_req{class=event}, State) ->
+    {true, State};
 
 api_server_allow(_Req, _State) ->
     continue.

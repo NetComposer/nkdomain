@@ -30,9 +30,10 @@
 -export([unload/4, sync_op/5, async_op/5, link_to_obj/4, unlink_to_obj/4]).
 -export([get_node/1, register/3, register/4, link_to_parent/4]).
 -export([find_loaded/1, call/2, call/3, cast/2, info/2]).
+-export([send_event/3, send_event/4]).
 
 -include("nkdomain.hrl").
-
+-include_lib("nkevent/include/nkevent.hrl").
 -define(DEF_SYNC_CALL, 5000).
 
 
@@ -46,6 +47,7 @@
         obj_id => binary(),
         name => binary(),
         parent => binary(),
+        created_by => binary(),
         referred_id => nkdomain:obj_id(),
         active => boolean(),
         description => binary(),
@@ -95,55 +97,36 @@ make_obj(Srv, Parent, Type, Opts) ->
                 <<"/">> -> <<>>;
                 _ -> ParentPath
             end,
-            Obj = [
+            Obj1 = [
                 {obj_id, ObjId},
                 {type, Type2},
                 {parent_id, ParentId},
                 {path, <<BasePath/binary, $/, Name2/binary>>},
-                {created_time, nklib_util:m_timestamp()},
-                case Opts of
-                    #{referred_id:=ReferredId} ->
-                        {referred_id, ReferredId};
-                    _ ->
-                        []
-                end,
-                case Opts of
-                    #{description:=Description} ->
-                        {description, Description};
-                    _ ->
-                        []
-                end,
-                case Opts of
-                    #{subtype:=SubType} ->
-                        {subtype, SubType};
-                    _ ->
-                        []
-                end,
-                case Opts of
-                    #{aliases:=Aliases} ->
-                        {aliases, Aliases};
-                    _ ->
-                        []
-                end,
-                case Opts of
-                    #{active:=true} ->
-                        {active, true};
-                    _ ->
-                        []
-                end,
-                case Opts of
-                    #{type_obj:=TypeObj} ->
-                        {Type, TypeObj};
-                    _ ->
-                        []
-                end
+                {created_time, nklib_util:m_timestamp()}
             ],
-            {ok, maps:from_list(lists:flatten(Obj))};
+            Obj2 = do_make_obj(maps:to_list(Opts), Type, Obj1),
+            {ok, maps:from_list(Obj2)};
         {error, object_not_found} ->
             {error, {could_not_load_parent, Parent}};
         {error, Error} ->
             {error, Error}
     end.
+
+
+%% @private
+do_make_obj([], _Type, Acc) ->
+    Acc;
+
+do_make_obj([{Key, Val}|Rest], Type, Acc) ->
+    case Key of
+        _ when Key==created_by; Key==referred_id; Key==description; Key==aliases; Key==active ->
+            do_make_obj(Rest, Type, [{Key, Val}|Acc]);
+        type_obj ->
+            do_make_obj(Rest, Type, [{Type, Val}|Acc]);
+        _ ->
+            do_make_obj(Rest, Type, Acc)
+    end.
+
 
 
 %% @doc
@@ -153,7 +136,7 @@ make_obj(Srv, Parent, Type, Opts) ->
 make_and_create(Srv, Parent, Type, Opts) ->
     case make_obj(Srv, Parent, Type, Opts) of
         {ok, Obj} ->
-            %% lager:warning("Obj: ~p", [Obj]),
+            % lager:warning("Obj: ~p", [Obj]),
             CreateMeta1 = maps:with([usage_link, event_link], Opts),
             CreateMeta2 = case maps:is_key(obj_id, Opts) orelse maps:is_key(name, Opts) of
                 true ->
@@ -398,8 +381,6 @@ do_register(Type, ObjId, Path, Opts) ->
     end.
 
 
-
-
 %% @private Links a child to its parent
 link_to_parent(Parent, Type, Name, ChildId) ->
     % Parent will receive {received_link, {nkdomain_child, ChildId}} (does nothing)
@@ -511,6 +492,48 @@ info(Id, Msg) ->
             info(Pid, Msg);
         not_found ->
             {error, object_not_found}
+    end.
+
+
+%% @private
+send_event(EvType, Body, #obj_session{obj_id=ObjId}=Session) ->
+    send_event(EvType, ObjId, Body, Session).
+
+
+%% @private
+send_event(EvType, ObjId, Body, #obj_session{srv_id=SrvId, type=Type}=Session) ->
+    Event = #nkevent{
+        srv_id = SrvId,
+        class = <<"domain">>,
+        subclass = Type,
+        type = nklib_util:to_binary(EvType),
+        obj_id = ObjId,
+        body = Body
+    },
+    lager:info("Domain EVENT sent to listeners: ~p", [Event]),
+    send_direct_event(Event, Session),
+    nkevent:send(Event),
+    {ok, Session}.
+
+
+%% @private
+send_direct_event(#nkevent{type=Type, body=Body}=Event, #obj_session{meta=Meta}) ->
+    case Meta of
+        #{session_events:=Events, session_id:=ConnId} ->
+            case lists:member(Type, Events) of
+                true ->
+                    Event2 = case Meta of
+                        #{session_events_body:=Body2} ->
+                            Event#nkevent{body=maps:merge(Body, Body2)};
+                        _ ->
+                            Event
+                    end,
+                    nkapi_server:event(ConnId, Event2);
+                false ->
+                    ok
+            end;
+        _ ->
+            ok
     end.
 
 

@@ -27,7 +27,7 @@
 -export([create/3]).
 -export([object_get_info/0, object_mapping/0, object_syntax/1,
          object_api_syntax/3, object_api_allow/4, object_api_cmd/4,
-         object_enabled/2]).
+         object_event/2]).
 -export([object_check_active/2]).
 
 -include("nkdomain.hrl").
@@ -40,7 +40,6 @@
 -type create_opts() ::
     #{
         session_id => binary(),
-        referred_id => binary(),
         api_server_pid => pid(),
         local => binary(),
         remote => binary()
@@ -54,15 +53,12 @@
 -spec create(nkservice:id(), nkdomain:obj_id(), create_opts()) ->
     {ok, SessId::nkdomain:obj_id(), pid()} | {error, term()}.
 
-create(SrvId, Domain, Opts) ->
+create(SrvId, UserId, Opts) ->
     Make1 = [
         {active, true},
+        {created_by, UserId},
         case Opts of
             #{session_id:=SessId} -> {obj_id, SessId};
-            _ -> []
-        end,
-        case Opts of
-            #{referred_id:=ReferId} -> {referred_id, ReferId};
             _ -> []
         end,
         {type_obj, maps:with([local, remote], Opts)},
@@ -72,11 +68,12 @@ create(SrvId, Domain, Opts) ->
         end
     ],
     Make2 = maps:from_list(lists:flatten(Make1)),
-    case nkdomain_obj_lib:make_and_create(SrvId, Domain, ?DOMAIN_SESSION, Make2) of
+    case nkdomain_obj_lib:make_and_create(SrvId, UserId, ?DOMAIN_SESSION, Make2) of
         {ok, ObjId, _Path, ObjPid} ->
             case Opts of
                 #{api_server_pid:=Pid2} ->
-                    %% api_server_reg_down will capture failures
+                    % Register to keep the user awake
+                    ok = nkdomain_obj:link(UserId, usage, ObjPid, ?MODULE),
                     %% TODO if the session is moved, it will fail
                     ok = nkapi_server:register(Pid2, {?MODULE, ObjPid});
                 _ ->
@@ -117,6 +114,16 @@ object_syntax(_Mode) ->
 
 
 %% @private
+object_event({enabled, false}, Session) ->
+    nkdomain_obj:unload(self(), session_is_disabled),
+    {ok, Session};
+
+object_event(_Event, Session) ->
+    {ok, Session}.
+
+
+
+%% @private
 object_api_syntax(Sub, Cmd, Syntax) ->
     nkdomain_session_obj_syntax:api(Sub, Cmd, Syntax).
 
@@ -129,14 +136,6 @@ object_api_allow(_Sub, _Cmd, _Data, State) ->
 %% @private
 object_api_cmd(Sub, Cmd, Data, State) ->
     nkdomain_session_obj_api:cmd(Sub, Cmd, Data, State).
-
-
-%% @private
-object_enabled(false, State) ->
-    {stop, user_is_disabled, State};
-
-object_enabled(true, State) ->
-    {ok, State}.
 
 
 
