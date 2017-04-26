@@ -18,19 +18,46 @@
 %%
 %% -------------------------------------------------------------------
 
-%% @doc User Object Syntax
-
--module(nkdomain_session_obj_syntax).
+-module(nkdomain_obj_syntax).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([api/3]).
+-export([syntax/3]).
+
+-include("nkdomain.hrl").
 
 
 
 %% ===================================================================
-%% Syntax
+%% Public
 %% ===================================================================
 
+%% @doc
+syntax('', get, Syntax) ->
+    Syntax#{
+        id => binary
+    };
 
-api(Sub, Cmd, Syntax) ->
-    nkdomain_obj_syntax:syntax(Sub, Cmd, Syntax).
+syntax('', enable, Syntax) ->
+    Syntax2 = Syntax#{
+        id => binary,
+        enable => boolean
+    },
+    nklib_syntax:add_mandatory([enable], Syntax2);
+
+syntax('', delete, Syntax) ->
+    Syntax#{
+        id => binary,
+        delete_childs => boolean
+    };
+
+syntax('', wait_for_save, Syntax) ->
+    Syntax#{
+        id => binary,
+        time => {integer, {1, none}}
+    };
+
+syntax(_Sub, _Cmd, Syntax) ->
+    lager:info("~p: unknown syntax: ~p, ~p", [?MODULE, _Sub, _Cmd]),
+    Syntax.
+
+

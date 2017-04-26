@@ -32,4 +32,4 @@
 
 %% @doc
 cmd(Sub, Cmd, Data, State) ->
-    nkdomain_api_util:cmd_common(Sub, Cmd, Data, ?DOMAIN_SESSION, State).
+    nkdomain_obj_api:api(Sub, Cmd, Data, ?DOMAIN_SESSION, State).

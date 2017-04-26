@@ -72,4 +72,4 @@ cmd('', login, #{id:=User}=Data, #{srv_id:=SrvId}=State) ->
 %%    end;
 
 cmd(Sub, Cmd, Data, State) ->
-    nkdomain_api_util:cmd_common(Sub, Cmd, Data, ?DOMAIN_USER, State).
+    nkdomain_obj_api:api(Sub, Cmd, Data, ?DOMAIN_USER, State).

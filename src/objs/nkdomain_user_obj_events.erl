@@ -18,19 +18,29 @@
 %%
 %% -------------------------------------------------------------------
 
-%% @doc User Object Syntax
+%% @doc User Object
 
--module(nkdomain_session_obj_syntax).
+-module(nkdomain_user_obj_events).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([api/3]).
+-export([event/2]).
 
+-include("nkdomain.hrl").
 
 
 %% ===================================================================
-%% Syntax
+%% Public
 %% ===================================================================
 
 
-api(Sub, Cmd, Syntax) ->
-    nkdomain_obj_syntax:syntax(Sub, Cmd, Syntax).
+%% @private
+event({login, SessId, Meta}, Session) ->
+    {event, login, #{session_id=>SessId, meta=>Meta}, Session};
+
+event(_Event, Session) ->
+    {ok, Session}.
+
+
+
+
+
