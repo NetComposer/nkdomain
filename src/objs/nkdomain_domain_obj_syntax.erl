@@ -67,7 +67,7 @@ api('', find_all_childs, Syntax) ->
     api('', find_childs, Syntax);
 
 api(Sub, Cmd, Syntax) ->
-    nkdomain_api_util:syntax_common(Sub, Cmd, Syntax).
+    nkdomain_obj_syntax:syntax(Sub, Cmd, Syntax).
 
 
 %% ===================================================================

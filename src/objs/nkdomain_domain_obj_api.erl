@@ -70,7 +70,7 @@ cmd('', find_all_childs, Data, #{srv_id:=SrvId}=State) ->
     nkdomain_api_util:search(Search, State);
 
 cmd(Sub, Cmd, Data, State) ->
-    nkdomain_api_util:cmd_common(Sub, Cmd, Data, ?DOMAIN_DOMAIN, State).
+    nkdomain_obj_api:api(Sub, Cmd, Data, ?DOMAIN_DOMAIN, State).
 
 
 %% ===================================================================

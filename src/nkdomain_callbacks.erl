@@ -397,11 +397,13 @@ object_event(Event, Session) ->
     % Use this callback to generate the right external Event
     case call_module(object_send_event, [Event], Session) of
         {ok, Session2} ->
-            case nkdomain_api_util:event(Event, Session2) of
+            case nkdomain_obj_events:event(Event, Session2) of
                 {ok, Session3} ->
                     {ok, Session3};
                 {event, Type, Body, Session3} ->
-                    nkdomain_obj_lib:send_event(Type, Body, Session3)
+                    nkdomain_obj_lib:send_event(Type, Body, Session3);
+                {event, Type, ObjId, Body, Session3} ->
+                    nkdomain_obj_lib:send_event(Type, ObjId, Body, Session3)
             end;
         {event, Type, Body, Session2} ->
             nkdomain_obj_lib:send_event(Type, Body, Session2);

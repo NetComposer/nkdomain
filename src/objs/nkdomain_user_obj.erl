@@ -26,9 +26,10 @@
 
 -export([create/4, login/3, get_name/2, send_push/3]).
 -export([object_get_info/0, object_mapping/0, object_syntax/1,
-         object_api_syntax/3, object_api_allow/4, object_api_cmd/4,
+         object_api_syntax/3, object_api_allow/4, object_api_cmd/4, object_send_event/2,
          object_sync_op/3, object_async_op/2]).
 -export([user_pass/1]).
+-export_type([events/0]).
 
 -include("nkdomain.hrl").
 -include("nkdomain_debug.hrl").
@@ -40,6 +41,9 @@
 %% ===================================================================
 %% Types
 %% ===================================================================
+
+-type events() ::
+    {login, SessId::binary(), Meta::map()}.
 
 
 -type login_opts() ::
@@ -88,6 +92,8 @@ login(SrvId, Login, Opts) ->
                 {ok, UserObjId} ->
                     case do_start_session(SrvId, UserObjId, Opts) of
                         {ok, SessId} ->
+                            Meta = maps:get(login_meta, Opts, #{}),
+                            send_login_event(UserPid, SessId, Meta),
                             {ok, UserObjId, SessId, #{}};
                         {error, Error} ->
                             {error, Error}
@@ -176,6 +182,11 @@ object_api_allow(_Sub, _Cmd, _Data, State) ->
 
 
 %% @private
+object_send_event(Event, Session) ->
+    nkdomain_user_obj_events:event(Event, Session).
+
+
+%% @private
 object_api_cmd(Sub, Cmd, Data, State) ->
     nkdomain_user_obj_api:cmd(Sub, Cmd, Data, State).
 
@@ -211,10 +222,9 @@ object_sync_op(_Op, _From, _Session) ->
     continue.
 
 
-%% @private
-object_async_op({?MODULE, send_push, Event}, Session) ->
-    ?LLOG(notice, "sending push: ~p", [Event], Session),
-    {noreply, Session};
+%%object_async_op({?MODULE, send_push, Event}, Session) ->
+%%    ?LLOG(notice, "sending push: ~p", [Event], Session),
+%%    {noreply, Session};
 
 object_async_op(_Op, _Session) ->
     continue.
@@ -280,6 +290,11 @@ do_start_session(SrvId, UserId, Opts) ->
         {error, Error} ->
             {error, Error}
     end.
+
+
+%% @private
+send_login_event(Pid, SessId, Meta) ->
+    nkdomain_obj:send_event(Pid, {login, SessId, Meta}).
 
 
 %% @doc Generates a password from an user password or hash

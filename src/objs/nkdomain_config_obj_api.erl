@@ -56,4 +56,4 @@ cmd('', find, Data, #{srv_id:=SrvId}=State) ->
     end;
 
 cmd(Sub, Cmd, Data, State) ->
-    nkdomain_api_util:cmd_common(Sub, Cmd, Data, ?DOMAIN_CONFIG, State).
+    nkdomain_obj_api:api(Sub, Cmd, Data, ?DOMAIN_CONFIG, State).

@@ -28,7 +28,7 @@
 
 -export([get_session/1, save/1, unload/2]).
 -export([update/2, enable/2, get_name/1, delete/1, sync_op/2, async_op/2, is_enabled/1, apply/2]).
--export([register/2, unregister/2, link/4, unlink/4, send_info/3, send_event/3, get_childs/1]).
+-export([register/2, unregister/2, link/4, unlink/4, send_info/3, send_event/2, get_childs/1]).
 -export([wait_for_save/2]).
 -export([create_child/3, load_child/3, object_has_been_deleted/1]).
 -export([start/2]).
@@ -237,11 +237,11 @@ send_info(Id, Info, Body) when is_map(Body) ->
 
 
 %% @doc
--spec send_event(id(),  nkevents:type(),  nkevents:body()) ->
+-spec send_event(id(),  term()) ->
     ok | {error, term()}.
 
-send_event(Id, Type, Body) when is_map(Body) ->
-    do_cast(Id, {nkdomain_send_event, Type, Body}).
+send_event(Id, Event) ->
+    do_cast(Id, {nkdomain_send_event, Event}).
 
 
 % @doc
@@ -746,8 +746,8 @@ handle_cast({nkdomain_parent_enabled, Enabled}, State) ->
 handle_cast({nkdomain_send_info, Info, Meta}, State) ->
     noreply(do_event({info, Info, Meta}, State));
 
-handle_cast({nkdomain_send_event, Event, Body}, State) ->
-    noreply(do_event({event, Event, Body}, State));
+handle_cast({nkdomain_send_event, Event}, State) ->
+    noreply(do_event(Event, State));
 
 handle_cast({nkdomain_unload, Error}, State) ->
     ?DEBUG("received unload: ~p", [Error], State),
