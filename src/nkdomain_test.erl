@@ -485,7 +485,7 @@ login(User, Pass) ->
 
 
 api_client_fun(#nkapi_req{class=event, data=Event}, UserData) ->
-    lager:notice("CLIENT event ~p", [lager:pr(Event, nkservice_events)]),
+    lager:notice("CLIENT event ~p", [lager:pr(Event, nkevent)]),
     {ok, UserData};
 
 api_client_fun(_Req, UserData) ->

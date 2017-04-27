@@ -74,5 +74,7 @@
 -define(DOMAIN_CONFIG, <<"config">>).
 -define(DOMAIN_CONFIG_ATOM, 'config').
 
+-define(DOMAIN_EVENT_CLASS, <<"domain">>).
+
 -endif.
 

@@ -22,7 +22,7 @@
 %% @doc Basic Obj utilities
 -module(nkdomain_obj_util).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
--export([event/2]).
+-export([event/2, status/2]).
 
 -include("nkdomain.hrl").
 
@@ -45,3 +45,14 @@ do_event([], Event, #obj_session{srv_id=SrvId}=Session) ->
 do_event([Link|Rest], Event, #obj_session{srv_id=SrvId}=Session) ->
     {ok, Session2} = SrvId:object_reg_event(Link, Event, Session),
     do_event(Rest, Event,  Session2).
+
+
+%% @doc
+status(Status, #obj_session{status=Status}=Session) ->
+    Session;
+
+status(Status, Session) ->
+    Session2 = Session#obj_session{status=Status},
+    event({status, Status}, Session2).
+
+

@@ -120,12 +120,15 @@ object_mapping() ->
         destroyed_time => #{type => date},
         destroyed_code => #{type => keyword},
         destroyed_reason => #{type => keyword},
+        name => #{
+            type => text,
+            fields => #{keyword => #{type=>keyword}}
+        },
         description => #{
             type => text,
             fields => #{keyword => #{type=>keyword}}
         },
         aliases => #{type => keyword},
-%%        pid => #{type => keyword},
         icon_id => #{type => keyword}
     }.
 
@@ -152,9 +155,9 @@ object_syntax(load) ->
         destroyed_time => integer,
         destroyed_code => binary,
         destroyed_reason => binary,
+        name => binary,
         description => binary,
         aliases => {list, binary},
-%%        pid => pid,
         icon_id => binary,
         '_store_vsn' => any,
         '__mandatory' => [type, obj_id, parent_id, path, created_time],
@@ -164,6 +167,7 @@ object_syntax(load) ->
 object_syntax(update) ->
     #{
         enabled => boolean,
+        name => binary,
         description => binary,
         aliases => {list, binary},
         icon_id => binary,
@@ -407,6 +411,8 @@ object_event(Event, Session) ->
             end;
         {event, Type, Body, Session2} ->
             nkdomain_obj_lib:send_event(Type, Body, Session2);
+        {event, Type, ObjId, Body, Session2} ->
+            nkdomain_obj_lib:send_event(Type, ObjId, Body, Session2);
         {ignore, Session2} ->
             {ok, Session2}
     end.

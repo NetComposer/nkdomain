@@ -118,6 +118,9 @@ domain_find_all_childs() ->
 domain_find_all_childs(Id) ->
     cmd(domain, find_all_childs, #{id=>Id, sort=>[type, path]}).
 
+domain_find_all_childs(Id, Spec) ->
+    cmd(domain, find_all_childs, Spec#{id=>Id}).
+
 domain_count_all_childs() ->
     cmd(domain, find_all_childs, #{size=>0}).
 
@@ -152,7 +155,7 @@ config_find(SubType, Parent) ->
 
 
 api_client_fun(#nkapi_req{class=event, data=Event}, UserData) ->
-    lager:notice("CLIENT event ~p", [lager:pr(Event, nkservice_events)]),
+    lager:warning("CLIENT event ~p", [lager:pr(Event, nkevent)]),
     {ok, UserData};
 
 api_client_fun(_Req, UserData) ->

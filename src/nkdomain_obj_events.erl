@@ -42,6 +42,12 @@
 
 
 %% @private
+event(created, Session) ->
+    {event, created, #{}, Session};
+
+event(loaded, Session) ->
+    {event, loaded, #{}, Session};
+
 event({status, Status}, Session) when is_atom(Status); is_binary(Status) ->
     {event, updated_status, #{status=>Status}, Session};
 
@@ -76,6 +82,11 @@ event({child_loaded, Type, ObjId}, Session) ->
 
 event({child_unloaded, Type, ObjId}, Session) ->
     {event, object_child_unloaded, #{type=>Type, obj_id=>ObjId}, Session};
+
+event({unloaded, Reason}, Session) ->
+    #obj_session{srv_id=SrvId} = Session,
+    {Code, Txt} = nkapi_util:api_error(SrvId, Reason),
+    {event, unloaded, #{code=>Code, reason=>Txt}, Session};
 
 event(_Event, Session) ->
     {ok, Session}.

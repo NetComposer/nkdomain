@@ -121,6 +121,8 @@
 -type info() :: atom().
 
 -type event() ::
+    created |
+    loaded |
     {status, status()} |
     saved |
     {updated, map()} |
@@ -129,7 +131,9 @@
     {child_created, nkdomain:type(), nkdomain:obj_id()} |
     {child_loaded, nkdomain:type(), nkdomain:obj_id()} |
     {child_unloaded, nkdomain:type(), nkdomain:obj_id()} |
-    {info, info(), map()}.
+    {info, info(), map()} |
+    {unloaded, nkservice:error()}.
+
 
 -type status() ::
     loaded |
@@ -706,11 +710,11 @@ handle_cast(nkdomain_do_start, State) ->
         false ->
             State3 = case State2 of
                 #state{session=#obj_session{is_created=true}} ->
-                    do_event(created, State);
+                    do_event(created, State2);
                 _ ->
                     State2
             end,
-            State4 = do_status(loaded, State3),
+            State4 = do_event(loaded, State3),
             State5 = do_save(State4),
             noreply(State5);
         true ->
@@ -949,7 +953,7 @@ do_stop2(Reason, #state{srv_id=SrvId, stop_reason=false, timelog=Log, obj_info=I
     {Code, Txt} = nkapi_util:api_error(SrvId, Reason),
     State3 = do_add_timelog(#{msg=>stopped, code=>Code, reason=>Txt}, State2),
     State4 = do_save(State3),
-    State5 = do_status({unloaded, Reason}, State4),
+    State5 = do_event({unloaded, Reason}, State4),
     State6 = do_event({record, lists:reverse(Log)}, State5),
     case Info of
         #{remove_after_stop:=true} ->
@@ -1072,16 +1076,6 @@ do_event(Event, #state{session=Session}=State) ->
     ?DEBUG("sending 'event': ~p", [Event], State),
     Session2 = nkdomain_obj_util:event(Event, Session),
     State#state{session=Session2}.
-
-
-%% @private
-do_status(Status, #state{session=#obj_session{status=Status}}=State) ->
-    State;
-
-do_status(Status, #state{session=#obj_session{status=OldStatus}=Session}=State) ->
-    ?DEBUG("status ~p -> ~p", [OldStatus, Status], State),
-    State2 = State#state{session=Session#obj_session{status=Status}},
-    do_event({status, Status}, State2).
 
 
 %% @private
