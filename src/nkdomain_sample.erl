@@ -39,7 +39,8 @@ user_create(Domain, Name, Surname, Email) ->
         user => #{
             name => to_bin(Name),
             surname => to_bin(Surname),
-            email => to_bin(Email)
+            email => to_bin(Email),
+            password => <<"1234">>
         }
     },
     case cmd(user, create, Data) of

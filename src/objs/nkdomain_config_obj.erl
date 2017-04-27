@@ -49,9 +49,9 @@
 
 create(Srv, SubType, Parent, Name, Config) ->
     Opts = #{
+        obj_name => Name,
         type_obj => Config,
-        subtype => SubType,
-        name => Name
+        subtype => SubType
     },
     nkdomain_obj_lib:make_and_create(Srv, Parent, ?DOMAIN_CONFIG, Opts).
 

@@ -48,6 +48,7 @@
 
 create(Srv, Parent, Name, Desc) ->
     Opts = #{
+        obj_name => Name,
         name => Name,
         description => Desc
     },

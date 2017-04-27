@@ -69,7 +69,7 @@
 
 create(Srv, Parent, Name, Data) ->
     Opts = #{
-        name => Name,
+        obj_name => Name,
         type_obj => Data,
         aliases =>
             case Data of

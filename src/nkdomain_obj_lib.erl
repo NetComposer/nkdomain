@@ -45,6 +45,7 @@
 -type make_opts() ::
     #{
         obj_id => binary(),
+        obj_name => binary(),
         name => binary(),
         parent => binary(),
         created_by => binary(),
@@ -77,7 +78,7 @@ make_obj(Srv, Parent, Type, Opts) ->
                     <<Type2/binary, $-, UUID/binary>>
             end,
             Name1 = case Opts of
-                #{name:=Name0} ->
+                #{obj_name:=Name0} ->
                     case to_bin(Name0) of
                         <<>> ->
                             binary:part(UUID, 0, 7);
@@ -119,7 +120,8 @@ do_make_obj([], _Type, Acc) ->
 
 do_make_obj([{Key, Val}|Rest], Type, Acc) ->
     case Key of
-        _ when Key==created_by; Key==referred_id; Key==description; Key==aliases; Key==active ->
+        _ when Key==created_by; Key==referred_id; Key==description; Key==aliases; Key==active;
+               Key==name ->
             do_make_obj(Rest, Type, [{Key, Val}|Acc]);
         type_obj ->
             do_make_obj(Rest, Type, [{Type, Val}|Acc]);
