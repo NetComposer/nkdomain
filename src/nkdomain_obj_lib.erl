@@ -121,7 +121,7 @@ do_make_obj([], _Type, Acc) ->
 do_make_obj([{Key, Val}|Rest], Type, Acc) ->
     case Key of
         _ when Key==created_by; Key==referred_id; Key==description; Key==aliases; Key==active;
-               Key==name ->
+               Key==name; Key==subtype ->
             do_make_obj(Rest, Type, [{Key, Val}|Acc]);
         type_obj ->
             do_make_obj(Rest, Type, [{Type, Val}|Acc]);
