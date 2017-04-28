@@ -43,7 +43,7 @@ cmd('', create, Data, State) ->
 
 cmd('', find_types, Data, #{srv_id:=SrvId}=State) ->
     Id = get_domain(Data, SrvId),
-    case nkdomain_domain_obj:find_types(SrvId, Id) of
+    case nkdomain_domain_obj:find_types(SrvId, Id, Data) of
         {ok, Total, List} ->
             {ok, #{total=>Total, data=>maps:from_list(List)}, State};
         {error, Error} ->
@@ -52,7 +52,7 @@ cmd('', find_types, Data, #{srv_id:=SrvId}=State) ->
 
 cmd('', find_all_types, Data, #{srv_id:=SrvId}=State) ->
     Id = get_domain(Data, SrvId),
-    case nkdomain_domain_obj:find_all_types(SrvId, Id) of
+    case nkdomain_domain_obj:find_all_types(SrvId, Id, Data) of
         {ok, Total, List} ->
             {ok, #{total=>Total, data=>maps:from_list(List)}, State};
         {error, Error} ->

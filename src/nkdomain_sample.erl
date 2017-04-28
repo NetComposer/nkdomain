@@ -119,29 +119,41 @@ domain_update(Id, Desc, Aliases) ->
     cmd(domain, update, Data).
 
 
+domain_find_types() ->
+    cmd(domain, find_types, #{}).
+
 domain_find_types(Id) ->
     cmd(domain, find_types, #{id=>Id}).
 
+domain_find_types(Id, Spec) ->
+    cmd(domain, find_types, Spec#{id=>Id}).
 
 domain_find_all_types() ->
     cmd(domain, find_all_types, #{}).
 
+domain_find_all_types(Id) ->
+    cmd(domain, find_all_types, #{id=>Id}).
+
+domain_find_all_types(Id, Spec) ->
+    cmd(domain, find_all_types, Spec#{id=>Id}).
+
+domain_find_childs() ->
+    cmd(domain, find_childs, #{}).
 
 domain_find_childs(Id) ->
     cmd(domain, find_childs, #{id=>Id}).
 
+domain_find_childs(Id, Spec) ->
+    cmd(domain, find_childs, Spec#{id=>Id}).
 
 domain_find_all_childs() ->
-    cmd(domain, find_all_childs, #{sort=>[type, path]}).
+    cmd(domain, find_all_childs, #{}).
 
 domain_find_all_childs(Id) ->
-    cmd(domain, find_all_childs, #{id=>Id, sort=>[type, path]}).
+    cmd(domain, find_all_childs, #{id=>Id}).
 
 domain_find_all_childs(Id, Spec) ->
     cmd(domain, find_all_childs, Spec#{id=>Id}).
-
-domain_count_all_childs() ->
-    cmd(domain, find_all_childs, #{size=>0}).
 
 
 domain_find_all_users() ->

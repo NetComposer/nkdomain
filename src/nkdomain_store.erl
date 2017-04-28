@@ -41,9 +41,21 @@
 
 -include("nkdomain.hrl").
 
+
+%% ===================================================================
+%% Types
+%% ===================================================================
+
+
+-type search_spec() ::
+    nkelastic_search:search_spec().
+
+
+
 %% ===================================================================
 %% Public
 %% ===================================================================
+
 
 
 %% @doc Tries to save an object, or it is stored to be saved later
@@ -141,6 +153,9 @@ delete_all_childs_type(Srv, Id, Type) ->
 
 
 %% @doc
+-spec find(nkservice:id(), search_spec()) ->
+    ok.
+
 find(Srv, Spec) ->
     case nkservice_srv:get_srv_id(Srv) of
         {ok, SrvId} ->

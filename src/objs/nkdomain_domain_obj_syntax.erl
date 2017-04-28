@@ -47,24 +47,32 @@ api('', update, Syntax) ->
         description => binary
     };
 
+%% Sample (see nkelastic_search.erl)
+%% #{
+%%      from => 1,
+%%      size => 10,
+%%      sort => ["field1", "desc:field2"],
+%%      fields => ["field1", "field2"],
+%%      filters => #{
+%%          field1 => ">text",
+%%          field2 => "!text"
+%%      }
+%% }
+
 api('', find_types, Syntax) ->
-    Syntax#{
+    Syntax2 = Syntax#{
         id => binary
-    };
+    },
+    nkdomain_obj_util:search_syntax(Syntax2);
 
 api('', find_all_types, Syntax) ->
     api('', find_types, Syntax);
 
 api('', find_childs, Syntax) ->
-    Search = nkelastic_search:syntax(),
-    Syntax2 = Syntax#{
-        id => binary,
-        type => binary
-    },
-    maps:merge(Syntax2, Search);
+    api('', find_types, Syntax);
 
 api('', find_all_childs, Syntax) ->
-    api('', find_childs, Syntax);
+    api('', find_types, Syntax);
 
 api(Sub, Cmd, Syntax) ->
     nkdomain_obj_syntax:syntax(Sub, Cmd, Syntax).

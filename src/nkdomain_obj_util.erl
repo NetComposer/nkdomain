@@ -22,7 +22,7 @@
 %% @doc Basic Obj utilities
 -module(nkdomain_obj_util).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
--export([event/2, status/2]).
+-export([event/2, status/2, search_syntax/1]).
 
 -include("nkdomain.hrl").
 
@@ -56,3 +56,12 @@ status(Status, Session) ->
     event({status, Status}, Session2).
 
 
+%% @doc
+search_syntax(Base) ->
+    Base#{
+        from => {integer, 0, none},
+        size => {integer, 0, none},
+        sort => {list, binary},
+        fields => {list, binary},
+        filters => map
+    }.

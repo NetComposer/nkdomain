@@ -8,6 +8,9 @@
 -define(ADMIN_PASS, "1234").
 
 
+
+
+
 test() ->
     ok = test1(),
     ok = test2(),
@@ -455,7 +458,7 @@ remove_data() ->
             ok;
         _ ->
             %% lager:notice("Deleting all childs for /stest1"),
-            nkdomain_store_es:object_store_delete_all_childs(root, "/stest1", #{})
+            nkdomain_store:delete_all_childs(root, "/stest1")
     end,
     case nkdomain:find(root, "/stest1") of
         {ok, <<"domain">>, S1Id_0, <<"/stest1">>, _} ->
@@ -467,7 +470,11 @@ remove_data() ->
 
 
 find_archive(Id) ->
-    {ok, N, Data, _} = nkdomain_store:find_archive(root, #{filters=>#{id=>Id}, fields=><<"_all">>}),
+    Filter = case nkdomain_util:is_path(Id) of
+        {true, Path} -> #{path => Path};
+        false -> #{obj_id => Id}
+    end,
+    {ok, N, Data, _} = nkdomain_store:find_archive(root, #{filters=>Filter}),
     {N, Data}.
 
 

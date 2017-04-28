@@ -24,8 +24,7 @@
 -behavior(nkdomain_obj).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([create/4, find_types/2, find_all_types/2, find_childs/2, find_childs/3, find_childs_type/4,
-         find_all_childs/2, find_all_childs/3, find_all_childs_type/3, find_all_childs_type/4]).
+-export([create/4, find_types/3, find_all_types/3, find_childs/3, find_all_childs/3]).
 -export([object_get_info/0, object_mapping/0, object_syntax/1,
          object_api_syntax/3, object_api_allow/4, object_api_cmd/4]).
 -export([object_start/1]).
@@ -56,28 +55,23 @@ create(Srv, Parent, Name, Desc) ->
 
 
 %% @doc
-find_types(Srv, Id) ->
+find_types(Srv, Id, Spec) ->
     case nkdomain_obj_lib:find(Srv, Id) of
         #obj_id_ext{srv_id=SrvId, obj_id=ObjId} ->
-            SrvId:object_store_find_types(SrvId, ObjId, #{});
+            SrvId:object_store_find_types(SrvId, ObjId, Spec);
         {error, Error} ->
             {error, Error}
     end.
 
 
 %% @doc
-find_all_types(Srv, Id) ->
+find_all_types(Srv, Id, Spec) ->
     case nkdomain_obj_lib:find(Srv, Id) of
         #obj_id_ext{srv_id=SrvId, path=Path} ->
-            SrvId:object_store_find_all_types(SrvId, Path, #{});
+            SrvId:object_store_find_all_types(SrvId, Path, Spec);
         {error, Error} ->
             {error, Error}
     end.
-
-
-%% @doc
-find_childs(Srv, Id) ->
-    find_childs(Srv, Id, #{}).
 
 
 %% @doc
@@ -91,52 +85,13 @@ find_childs(Srv, Id, Spec) ->
 
 
 %% @doc
-find_childs_type(Srv, Id, Type, Spec) ->
-    Filters1 = maps:get(filters, Spec, #{}),
-    Filters2 = Filters1#{type=>Type},
-    Spec2 = Spec#{filters=>Filters2},
-    case nkdomain_obj_lib:find(Srv, Id) of
-        #obj_id_ext{srv_id=SrvId, obj_id=ObjId} ->
-            SrvId:object_store_find_childs(SrvId, ObjId, Spec2);
-        {error, Error} ->
-            {error, Error}
-    end.
-
-
-%% @doc
-find_all_childs(Srv, Id) ->
-    find_all_childs(Srv, Id, #{}).
-
-
-%% @doc
 find_all_childs(Srv, Id, Spec) ->
-    Filters1 = maps:get(filters, Spec, #{}),
-    Filters2 = case Spec of
-        #{type:=Type} ->
-            Filters1#{type=>Type};
-        _ ->
-            Filters1
-    end,
-    Spec2 = Spec#{filters=>Filters2},
     case nkdomain_obj_lib:find(Srv, Id) of
         #obj_id_ext{srv_id=SrvId, path=Path} ->
-            SrvId:object_store_find_all_childs(SrvId, Path, Spec2);
+            SrvId:object_store_find_all_childs(SrvId, Path, Spec);
         {error, Error} ->
             {error, Error}
     end.
-
-
-%% @doc
-find_all_childs_type(Srv, Id, Type) ->
-    find_all_childs_type(Srv, Id, Type, #{}).
-
-
-%% @doc
-find_all_childs_type(Srv, Id, Type, Spec) ->
-    find_all_childs(Srv, Id, Spec#{type=>Type}).
-
-
-
 
 
 
@@ -190,7 +145,7 @@ object_start(#obj_session{srv_id=SrvId, obj_id=ObjId, path=Path}=Session) ->
 
 %% @private
 start_dom_childs(SrvId, ObjId, Path) ->
-    case find_childs_type(SrvId, ObjId, ?DOMAIN_DOMAIN, #{}) of
+    case find_childs(SrvId, ObjId, #{filters=>#{type=>?DOMAIN_DOMAIN}}) of
         {ok, 0, []} ->
             ok;
         {ok, _N, List} ->

@@ -547,24 +547,8 @@ object_store_find_obj(SrvId, Id) ->
     call_parent_store(SrvId, object_store_find_obj, [Id]).
 
 
-%%%% @doc
-%%-spec object_store_find_obj_id(nkservice:id(), obj_id()) ->
-%%    {ok, type(), path()} | {error, term()}.
-%%
-%%object_store_find_obj_id(_SrvId, ObjId) ->
-%%    {error, store_not_implemented}.
-%%
-%%
-%%%% @doc
-%%-spec object_store_find_path(nkservice:id(), path()) ->
-%%    {ok, type(), obj_id()} | {error, term()}.
-%%
-%%object_store_find_path(_SrvId, _Path) ->
-%%    {error, store_not_implemented}.
-
-
 %% @doc
--spec object_store_find_types(nkservice:id(), obj_id(), map()) ->
+-spec object_store_find_types(nkservice:id(), obj_id(), nkdomain_store:search_spec()) ->
     {ok, Total::integer(), [{type(), integer()}]} | {error, term()}.
 
 object_store_find_types(SrvId, ObjId, Spec) ->
@@ -572,7 +556,7 @@ object_store_find_types(SrvId, ObjId, Spec) ->
 
 
 %% @doc
--spec object_store_find_all_types(nkservice:id(), path(), map()) ->
+-spec object_store_find_all_types(nkservice:id(), path(), nkdomain_store:search_spec()) ->
     {ok, Total::integer(), [{type(), integer()}]} | {error, term()}.
 
 object_store_find_all_types(SrvId, ObjId, Spec) ->
@@ -580,7 +564,7 @@ object_store_find_all_types(SrvId, ObjId, Spec) ->
 
 
 %% @doc
--spec object_store_find_childs(nkservice:id(), obj_id(), Spec::map()) ->
+-spec object_store_find_childs(nkservice:id(), obj_id(), nkdomain_store:search_spec()) ->
     {ok, Total::integer(), [{type(), obj_id(), path()}]} |
     {error, term()}.
 
@@ -589,7 +573,7 @@ object_store_find_childs(SrvId, ObjId, Spec) ->
 
 
 %% @doc
--spec object_store_find_all_childs(nkservice:id(), path(), Spec::map()) ->
+-spec object_store_find_all_childs(nkservice:id(), path(), nkdomain_store:search_spec()) ->
     {ok, Total::integer(), [{type(), obj_id(), path()}]} |
     {error, term()}.
 
@@ -607,7 +591,7 @@ object_store_find_alias(SrvId, Alias) ->
 
 
 %% @doc
--spec object_store_find(nkservice:id(), map()) ->
+-spec object_store_find(nkservice:id(), nkdomain_store:search_spec()) ->
     {ok, Total::integer(), [map()], map(), map()} |
     {error, term()}.
 
@@ -616,7 +600,7 @@ object_store_find(SrvId, Spec) ->
 
 
 %% @doc
--spec object_store_archive_find(nkservice:id(), Spec::map()) ->
+-spec object_store_archive_find(nkservice:id(), nkdomain_store:search_spec()) ->
     {ok, integer(), [map()]} | {error, term()}.
 
 object_store_archive_find(SrvId, Spec) ->
@@ -632,7 +616,7 @@ object_store_archive_save_raw(SrvId, ObjId, Map) ->
 
 
 %% @doc Must stop loaded objects
--spec object_store_delete_all_childs(nkservice:id(), path(), Spec::map()) ->
+-spec object_store_delete_all_childs(nkservice:id(), path(), nkdomain_store:search_spec()) ->
     {ok, Total::integer()} | {error, term()}.
 
 object_store_delete_all_childs(SrvId, Path, Spec) ->
