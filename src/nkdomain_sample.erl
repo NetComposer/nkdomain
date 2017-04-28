@@ -119,6 +119,24 @@ domain_update(Id, Desc, Aliases) ->
     cmd(domain, update, Data).
 
 
+domain_find() ->
+    cmd(domain, find, #{}).
+
+domain_find(Id) ->
+    cmd(domain, find, #{id=>Id}).
+
+domain_find(Id, Spec) ->
+    cmd(domain, find, Spec#{id=>Id}).
+
+domain_find_all() ->
+    cmd(domain, find_all, #{}).
+
+domain_find_all(Id) ->
+    cmd(domain, find_all, #{id=>Id}).
+
+domain_find_all(Id, Spec) ->
+    cmd(domain, find_all, Spec#{id=>Id}).
+
 domain_find_types() ->
     cmd(domain, find_types, #{}).
 

@@ -56,23 +56,30 @@ api('', update, Syntax) ->
 %%      filters => #{
 %%          field1 => ">text",
 %%          field2 => "!text"
-%%      }
+%%      },
+%%      simple_query => "message"
 %% }
 
-api('', find_types, Syntax) ->
+api('', find, Syntax) ->
     Syntax2 = Syntax#{
         id => binary
     },
     nkdomain_obj_util:search_syntax(Syntax2);
 
+api('', find_all, Syntax) ->
+    api('', find, Syntax);
+
+api('', find_types, Syntax) ->
+    api('', find, Syntax);
+
 api('', find_all_types, Syntax) ->
-    api('', find_types, Syntax);
+    api('', find, Syntax);
 
 api('', find_childs, Syntax) ->
-    api('', find_types, Syntax);
+    api('', find, Syntax);
 
 api('', find_all_childs, Syntax) ->
-    api('', find_types, Syntax);
+    api('', find, Syntax);
 
 api(Sub, Cmd, Syntax) ->
     nkdomain_obj_syntax:syntax(Sub, Cmd, Syntax).

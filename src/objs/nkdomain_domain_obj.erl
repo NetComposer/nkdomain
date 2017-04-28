@@ -24,7 +24,7 @@
 -behavior(nkdomain_obj).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([create/4, find_types/3, find_all_types/3, find_childs/3, find_all_childs/3]).
+-export([create/4, find/3, find_all/3, find_types/3, find_all_types/3, find_childs/3, find_all_childs/3]).
 -export([object_get_info/0, object_mapping/0, object_syntax/1,
          object_api_syntax/3, object_api_allow/4, object_api_cmd/4]).
 -export([object_start/1]).
@@ -52,6 +52,32 @@ create(Srv, Parent, Name, Desc) ->
         description => Desc
     },
     nkdomain_obj_lib:make_and_create(Srv, Parent, ?DOMAIN_DOMAIN, Opts).
+
+
+%% @doc
+find(Srv, Id, Spec) ->
+    case nkdomain_obj_lib:find(Srv, Id) of
+        #obj_id_ext{srv_id=SrvId, obj_id=ObjId} ->
+            Filters1 = maps:get(filters, Spec, #{}),
+            Filters2 = Filters1#{parent_id=>ObjId},
+            Spec2 = maps:remove(id, Spec#{filters=>Filters2}),
+            SrvId:object_store_find(SrvId, Spec2);
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
+%% @doc
+find_all(Srv, Id, Spec) ->
+    case nkdomain_obj_lib:find(Srv, Id) of
+        #obj_id_ext{srv_id=SrvId, path=Path} ->
+            Filters1 = maps:get(filters, Spec, #{}),
+            Filters2 = Filters1#{path=><<"childs_of:", Path/binary>>},
+            Spec2 = maps:remove(id, Spec#{filters=>Filters2}),
+            SrvId:object_store_find(SrvId, Spec2);
+        {error, Error} ->
+            {error, Error}
+    end.
 
 
 %% @doc

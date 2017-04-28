@@ -41,6 +41,24 @@ cmd('', create, Data, State) ->
             {error, Error, State}
     end;
 
+cmd('', find, Data, #{srv_id:=SrvId}=State) ->
+    Id = get_domain(Data, SrvId),
+    case nkdomain_domain_obj:find(SrvId, Id, Data) of
+        {ok, Total, List, _Meta} ->
+            {ok, #{total=>Total, data=>List}, State};
+        {error, Error} ->
+            {error, Error, State}
+    end;
+
+cmd('', find_all, Data, #{srv_id:=SrvId}=State) ->
+    Id = get_domain(Data, SrvId),
+    case nkdomain_domain_obj:find_all(SrvId, Id, Data) of
+        {ok, Total, List, _Meta} ->
+            {ok, #{total=>Total, data=>List}, State};
+        {error, Error} ->
+            {error, Error, State}
+    end;
+
 cmd('', find_types, Data, #{srv_id:=SrvId}=State) ->
     Id = get_domain(Data, SrvId),
     case nkdomain_domain_obj:find_types(SrvId, Id, Data) of

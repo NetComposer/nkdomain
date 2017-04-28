@@ -63,5 +63,6 @@ search_syntax(Base) ->
         size => {integer, 0, none},
         sort => {list, binary},
         fields => {list, binary},
-        filters => map
+        filters => map,
+        simple_query => binary
     }.
