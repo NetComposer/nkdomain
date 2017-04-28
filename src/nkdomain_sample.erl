@@ -22,8 +22,8 @@ login(User, Pass) ->
 event_get_subs() ->
     cmd(event, get_subscriptions, #{}).
 
-event_subs(Map) ->
-    cmd(event, subscribe, Map).
+event_subs(ObjType, EvType, ObjId) ->
+    cmd(event, subscribe, #{class=>domain, subclass=>ObjType, type=>EvType, obj_id=>ObjId}).
 
 
 user_get() ->
