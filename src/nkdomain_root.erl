@@ -41,14 +41,14 @@ create() ->
         description => <<"NetComposer">>,
         created_time => nklib_util:m_timestamp()
     },
-    nkdomain_store_es:object_store_save_raw(root, <<"root">>, Obj).
+    nkdomain_store_es:save_obj(root, Obj).
 
 
 
 %% @doc Starts the root service
 start() ->
     Spec1 = #{
-        plugins => [nkdomain, nkapi, nkchat, nkdomain_store_es],
+        plugins => [nkdomain, nkapi, nkchat, nkdomain_store_es, nkmail_smtp_client],
         domain => <<"root">>,
         domain_elastic_url => nkdomain_app:get(elastic_url),
         debug => [

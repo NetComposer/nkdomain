@@ -10,7 +10,8 @@
         nkrole,
         nkservice,
         nkevent,
-        nkapi
+        nkapi,
+        nkmail
     ]},
     {env, [
     ]}
