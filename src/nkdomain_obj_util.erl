@@ -64,5 +64,10 @@ search_syntax(Base) ->
         sort => {list, binary},
         fields => {list, binary},
         filters => map,
-        simple_query => binary
+        simple_query => binary,
+        simple_query_opts =>
+            #{
+                fields => {list, binary},
+                default_operator => {atom, ['OR', 'AND']}
+            }
     }.
