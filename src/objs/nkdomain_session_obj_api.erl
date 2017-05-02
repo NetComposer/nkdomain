@@ -31,5 +31,5 @@
 %% ===================================================================
 
 %% @doc
-cmd(Sub, Cmd, Data, State) ->
-    nkdomain_obj_api:api(Sub, Cmd, Data, ?DOMAIN_SESSION, State).
+cmd(Sub, Cmd, Req, State) ->
+    nkdomain_obj_api:api(Sub, Cmd, Req, ?DOMAIN_SESSION, State).

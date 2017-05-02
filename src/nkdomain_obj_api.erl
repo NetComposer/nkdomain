@@ -34,34 +34,7 @@
 
 
 %% @doc
-api('', Cmd, Data, Type, State) ->
-    case Cmd of
-        get ->
-            cmd_get(Type, Data, State);
-        enable ->
-            cmd_enable(Type, Data, State);
-        delete ->
-            cmd_delete(Type, Data, State);
-        wait_for_save ->
-            cmd_wait_for_save(Type, Data, State);
-        update ->
-            cmd_update(Type, Data, State);
-        _ ->
-            {error, not_implemented, State}
-    end;
-
-api(_Sub, _Cmd, _Data, _Type, State) ->
-    {error, not_implemented, State}.
-
-
-
-%% ===================================================================
-%% Private
-%% ===================================================================
-
-
-%% @doc
-cmd_get(Type, Data, #{srv_id:=SrvId}=State) ->
+api('', get, #nkapi_req{data=Data}, Type, #{srv_id:=SrvId}=State) ->
     case get_id(Type, Data, State) of
         {ok, Id} ->
             case nkdomain_obj_lib:load(SrvId, Id, #{}) of
@@ -77,11 +50,9 @@ cmd_get(Type, Data, #{srv_id:=SrvId}=State) ->
             end;
         Error ->
             Error
-    end.
+    end;
 
-
-%% @doc
-cmd_delete(Type, Data, #{srv_id:=SrvId}=State) ->
+api('', delete, #nkapi_req{data=Data}, Type, #{srv_id:=SrvId}=State) ->
     case get_id(Type, Data, State) of
         {ok, Id} ->
             case cmd_delete_childs(Data, SrvId, Id) of
@@ -97,19 +68,9 @@ cmd_delete(Type, Data, #{srv_id:=SrvId}=State) ->
             end;
         Error ->
             Error
-    end.
+    end;
 
-
-%% @private
-cmd_delete_childs(#{delete_childs:=true}, SrvId, Id) ->
-    nkdomain_store:delete_all_childs(SrvId, Id);
-
-cmd_delete_childs(_Data, _SrvId, _Id) ->
-    {ok, 0}.
-
-
-%% @doc
-cmd_update(Type, Data, #{srv_id:=SrvId}=State) ->
+api('', update, #nkapi_req{data=Data}, Type, #{srv_id:=SrvId}=State) ->
     case get_id(Type, Data, State) of
         {ok, Id} ->
             case nkdomain:update(SrvId, Id, Data) of
@@ -120,11 +81,9 @@ cmd_update(Type, Data, #{srv_id:=SrvId}=State) ->
             end;
         Error ->
             Error
-    end.
+    end;
 
-
-%% @doc
-cmd_enable(Type, #{enable:=Enable}=Data, #{srv_id:=SrvId}=State) ->
+api('', enable, #nkapi_req{data=#{enable:=Enable}=Data}, Type, #{srv_id:=SrvId}=State) ->
     case get_id(Type, Data, State) of
         {ok, Id} ->
             case nkdomain:enable(SrvId, Id, Enable) of
@@ -135,11 +94,9 @@ cmd_enable(Type, #{enable:=Enable}=Data, #{srv_id:=SrvId}=State) ->
             end;
         Error ->
             Error
-    end.
+    end;
 
-
-%% @doc
-cmd_wait_for_save(Type, Data, #{srv_id:=SrvId}=State) ->
+api('', wait_for_save, #nkapi_req{data=Data}, Type, #{srv_id:=SrvId}=State) ->
     Time = maps:get(time, Data, 5000),
     case get_id(Type, Data, State) of
         {ok, Id} ->
@@ -158,8 +115,47 @@ cmd_wait_for_save(Type, Data, #{srv_id:=SrvId}=State) ->
             end;
         Error ->
             Error
-    end.
+    end;
+
+api('', make_token, #nkapi_req{data=Data}, Type, #{srv_id:=SrvId}=State) ->
+    Mod = nkdomain_types:get_module(Type),
+    Info = Mod:object_get_info(),
+    DefTTL = maps:get(default_token_ttl, Info, ?DEF_TOKEN_TTL),
+    MaxTTL = maps:get(max_token_ttl, Info, ?MAX_TOKEN_TTL),
+    case maps:get(ttl, Data, DefTTL) of
+        TTL when TTL < MaxTTL ->
+            case get_id(Type, Data, State) of
+                {ok, Id} ->
+                    case nkdomain_token_obj:create(SrvId, Id, TTL, #{}) of
+                        {ok, ObjId, _Path, _Pid} ->
+                            {ok, #{obj_id=>ObjId, ttl=>TTL}, State};
+                        {error, Error} ->
+                            {error, Error, State}
+                    end;
+                Error ->
+                    Error
+            end;
+        _ ->
+            {error, invalid_token_ttl, State}
+    end;
+
+api(_Sub, _Cmd, _Req, _Type, State) ->
+    {error, not_implemented, State}.
+
+
+
+%% ===================================================================
+%% Private
+%% ===================================================================
 
 %% @doc
 get_id(Type, Data, State) ->
     nkdomain_api_util:get_id(Type, id, Data, State).
+
+%% @private
+cmd_delete_childs(#{delete_childs:=true}, SrvId, Id) ->
+    nkdomain_store:delete_all_childs(SrvId, Id);
+
+cmd_delete_childs(_Data, _SrvId, _Id) ->
+    {ok, 0}.
+

@@ -134,8 +134,8 @@ object_api_allow(_Sub, _Cmd, _Data, State) ->
 
 
 %% @private
-object_api_cmd(Sub, Cmd, Data, State) ->
-    nkdomain_session_obj_api:cmd(Sub, Cmd, Data, State).
+object_api_cmd(Sub, Cmd, Req, State) ->
+    nkdomain_session_obj_api:cmd(Sub, Cmd, Req, State).
 
 
 

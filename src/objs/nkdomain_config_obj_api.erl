@@ -25,13 +25,14 @@
 -export([cmd/4]).
 
 -include("nkdomain.hrl").
+-include_lib("nkapi/include/nkapi.hrl").
 
 %% ===================================================================
 %% API
 %% ===================================================================
 
 %% @doc
-cmd('', create, Data, #{srv_id:=SrvId}=State) ->
+cmd('', create, #nkapi_req{data=Data}, #{srv_id:=SrvId}=State) ->
     #{subtype:=SubType, parent:=Parent, ?DOMAIN_CONFIG_ATOM:=Config} = Data,
     Name = maps:get(obj_name, Data, <<>>),
     case nkdomain_config_obj:create(SrvId, SubType, Parent, Name, Config) of
@@ -41,7 +42,7 @@ cmd('', create, Data, #{srv_id:=SrvId}=State) ->
             {error, Error, State}
     end;
 
-cmd('', find, Data, #{srv_id:=SrvId}=State) ->
+cmd('', find, #nkapi_req{data=Data}, #{srv_id:=SrvId}=State) ->
     #{subtype:=SubType, parent:=Parent} = Data,
     case nkdomain_config_obj:find_configs(SrvId, SubType, Parent) of
         {ok, List} ->
@@ -55,5 +56,5 @@ cmd('', find, Data, #{srv_id:=SrvId}=State) ->
             {error, Error, State}
     end;
 
-cmd(Sub, Cmd, Data, State) ->
-    nkdomain_obj_api:api(Sub, Cmd, Data, ?DOMAIN_CONFIG, State).
+cmd(Sub, Cmd, Req, State) ->
+    nkdomain_obj_api:api(Sub, Cmd, Req, ?DOMAIN_CONFIG, State).

@@ -24,14 +24,17 @@
 
 -export([cmd/4]).
 
+
 -include("nkdomain.hrl").
+-include_lib("nkapi/include/nkapi.hrl").
+
 
 %% ===================================================================
 %% API
 %% ===================================================================
 
 %% @doc
-cmd('', create, Data, State) ->
+cmd('', create, #nkapi_req{data=Data}, State) ->
     #{obj_name:=Name, ?DOMAIN_USER_ATOM:=User} = Data,
     #{srv_id:=SrvId, domain:=Domain} = State,
     case nkdomain_user_obj:create(SrvId, Domain, Name, User) of
@@ -41,7 +44,7 @@ cmd('', create, Data, State) ->
             {error, Error, State}
     end;
 
-cmd('', login, #{id:=User}=Data, #{srv_id:=SrvId}=State) ->
+cmd('', login, #nkapi_req{data=#{id:=User}=Data}, #{srv_id:=SrvId}=State) ->
     LoginMeta1 = maps:with([session_type, session_id, local, remote], State),
     LoginMeta2 = LoginMeta1#{
         password => maps:get(password, Data, <<>>),
@@ -62,14 +65,5 @@ cmd('', login, #{id:=User}=Data, #{srv_id:=SrvId}=State) ->
             {error, Error, State}
     end;
 
-%%cmd('', find_referred, #{id:=Id}=Data, #{srv_id:=SrvId}=State) ->
-%%    case nkdomain_api_util:get_id(?DOMAIN_USER, Data, State) of
-%%        {ok, Id} ->
-%%            Search = nkdomain_user_obj:find_referred(SrvId, Id, Data),
-%%            nkdomain_api_util:search(Search, State);
-%%        Error ->
-%%            Error
-%%    end;
-
-cmd(Sub, Cmd, Data, State) ->
-    nkdomain_obj_api:api(Sub, Cmd, Data, ?DOMAIN_USER, State).
+cmd(Sub, Cmd, Req, State) ->
+    nkdomain_obj_api:api(Sub, Cmd, Req, ?DOMAIN_USER, State).
