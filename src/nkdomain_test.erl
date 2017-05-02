@@ -229,7 +229,7 @@ test_session2(Pid) ->
     {error, object_has_childs} = nkdomain_obj:delete(<<"admin">>),
 
     % If we force a clean of the database, the stale object is deleted and archived
-    {ok, #{active:=N}} = nkdomain_store:clean(root),
+    {ok, #{inactive:=N}} = nkdomain_store:clean(root),
     true = N >= 1,
     {error, object_not_found} = nkdomain:find(root, SessId),
     % Archive has a 1-second refresh time

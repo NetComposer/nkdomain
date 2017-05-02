@@ -25,6 +25,7 @@
 
 -export([start/0, start/1, start/2, stop/1]).
 -export([get/1, put/2, del/1]).
+-export([register_types/0]).
 
 -include("nkdomain.hrl").
 
@@ -113,7 +114,8 @@ register_types() ->
     ok = nkdomain_types:register(nkdomain_domain_obj),
     ok = nkdomain_types:register(nkdomain_user_obj),
     ok = nkdomain_types:register(nkdomain_session_obj),
-    ok = nkdomain_types:register(nkdomain_config_obj).
+    ok = nkdomain_types:register(nkdomain_config_obj),
+    ok = nkdomain_types:register(nkdomain_token_obj).
 
 
 %% @doc gets a configuration value

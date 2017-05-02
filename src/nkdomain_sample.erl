@@ -84,8 +84,10 @@ user_update(Id, Name, Password, Email) ->
     cmd(user, update, Data).
 
 
-user_find_referred(Id, Type) ->
-    cmd(user, find_referred, #{id=>Id, type=>Type}).
+user_make_token() ->
+    cmd(user, make_token, #{ttl=>1}).
+
+
 
 
 
@@ -197,93 +199,6 @@ config_delete(Id, Reason) ->
 
 config_find(SubType, Parent) ->
     cmd(config, find, #{parent=>Parent, subtype=>SubType}).
-
-
-
-mail_send() ->
-    Msg = #{
-        from => "My test <info.netcomposer@gmail.com>",
-        to => "My dest <carlosj.gf@gmail.com>, <listas1@maycar.net>",
-        subject => "sub2",
-        body => "msg2"
-    },
-    nkmail:send(root, info_gmail, Msg).
-
-
-mail_send2a() ->
-    Msg = #{
-        from => "My test <info.netcomposer@gmail.com>",
-        to => "My dest <carlosj.gf@gmail.com>, <listas1@maycar.net>",
-        subject => "sub3",
-        content_type => "text/html",
-        body => "This is <strong>msg3</strong> øÿ áñ"
-%%        body => "This is <strong>msg3</strong> øÿ áéíóúñ"
-    },
-    nkmail:send(root, info_gmail, Msg).
-
-
-mail_send2b() ->
-    Msg = #{
-        from => "My test <info.netcomposer@gmail.com>",
-        to => "My dest <carlosj.gf@gmail.com>, <listas1@maycar.net>",
-        subject => "sub3",
-        content_type => "text",
-        body => "This is <strong>msg3</strong> øÿ áéíóúñ"
-    },
-    nkmail:send(root, info_gmail, Msg).
-
-
-
-mail_send3() ->
-    {ok, F1} = file:read_file("/tmp/1.jpg"),
-    {ok, F2} = file:read_file("/tmp/1.pdf"),
-
-    Msg = #{
-        from => "My test <info.netcomposer@gmail.com>",
-        to => "My dest <carlosj.gf@gmail.com>, <listas1@maycar.net>",
-        subject => "sub3",
-        content_type => "text/html",
-%%        body => "This is <strong>msg3</strong> øÿ áñ"
-        body => "This is <strong>msg3</strong> øÿ áéíóúñ",
-        attachments => [
-            #{
-                name => "File1",
-                content_type => "image/jpeg",
-                body => F1
-            },
-            #{
-                name => "File2",
-                content_type => "application/pdf",
-                body => F2
-            }
-        ],
-        debug => true
-    },
-    nkmail:send(root, info_gmail, Msg).
-
-
-mail_send4() ->
-    Msg = #{
-        from => "My test <info.netcomposer@gmail.com>",
-        to => "My dest <carlosj.gf@gmail.com>, <listas1@maycar.net>",
-        subject => "sub3",
-        content_type => "text/html",
-%%        body => "This is <strong>msg3</strong> øÿ áñ"
-        body => "This is <strong>msg3</strong> øÿ áéíóúñ",
-        attachments => [
-            #{
-                name => "File1",
-                content_type => "image/jpeg",
-                body => <<1,2,3>>
-            },
-            #{
-                name => "File2",
-                content_type => "application/pdf",
-                body => <<1,2,3>>
-            }
-        ]
-    },
-    nkmail:send(root, info_gmail, Msg).
 
 
 

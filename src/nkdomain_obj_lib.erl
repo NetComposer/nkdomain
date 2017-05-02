@@ -49,6 +49,7 @@
         name => binary(),
         parent => binary(),
         created_by => binary(),
+        expires_time => nklib_util:m_timestamp(),
         referred_id => nkdomain:obj_id(),
         active => boolean(),
         description => binary(),
@@ -74,6 +75,8 @@ make_obj(Srv, Parent, Type, Opts) ->
             ObjId = case Opts of
                 #{obj_id:=ObjId0} ->
                     to_bin(ObjId0);
+                _ when Type2 == ?DOMAIN_TOKEN ->
+                    UUID;
                 _ ->
                     <<Type2/binary, $-, UUID/binary>>
             end,
@@ -121,7 +124,7 @@ do_make_obj([], _Type, Acc) ->
 do_make_obj([{Key, Val}|Rest], Type, Acc) ->
     case Key of
         _ when Key==created_by; Key==referred_id; Key==description; Key==aliases; Key==active;
-               Key==name; Key==subtype ->
+               Key==name; Key==subtype; Key==expires_time ->
             do_make_obj(Rest, Type, [{Key, Val}|Acc]);
         type_obj ->
             do_make_obj(Rest, Type, [{Type, Val}|Acc]);
@@ -138,7 +141,7 @@ do_make_obj([{Key, Val}|Rest], Type, Acc) ->
 make_and_create(Srv, Parent, Type, Opts) ->
     case make_obj(Srv, Parent, Type, Opts) of
         {ok, Obj} ->
-            % lager:warning("Obj: ~p", [Obj]),
+            %% lager:warning("Obj: ~p", [Obj]),
             CreateMeta1 = maps:with([usage_link, event_link], Opts),
             CreateMeta2 = case maps:is_key(obj_id, Opts) orelse maps:is_key(name, Opts) of
                 true ->

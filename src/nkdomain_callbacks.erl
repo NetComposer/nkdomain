@@ -27,7 +27,7 @@
          api_server_reg_down/3]).
 -export([object_mapping/0, object_syntax/1, object_parse/4, object_unparse/1]).
 -export([object_load/2, object_get_session/1, object_save/1, object_delete/1, object_archive/1]).
--export([object_check_active/3]).
+-export([object_check_active/3, object_do_expired/2]).
 -export([object_init/1, object_terminate/2, object_start/1, object_stop/2,
          object_event/2, object_reg_event/3, object_sync_op/3, object_async_op/2,
          object_handle_call/3, object_handle_cast/2, object_handle_info/2]).
@@ -69,12 +69,14 @@ api_error(invalid_object_id)                -> "Invalid object id";
 api_error(invalid_object_type)              -> "Invalid object type";
 api_error(invalid_object_path)              -> "Invalid object path";
 api_error({invalid_object_path, P})         -> {"Invalid object path '~s'", [P]};
+api_error(invalid_token_ttl)                -> "Invalid token TTL";
 api_error(member_already_present)           -> "Member is already present";
 api_error(member_not_found)                 -> "Member not found";
 api_error(object_already_exists)            -> "Object already exists";
 api_error(object_clean_process)             -> "Object cleaned (process stopped)";
 api_error(object_clean_expire)              -> "Object cleaned (expired)";
 api_error(object_deleted) 		            -> "Object removed";
+api_error(object_expired) 		            -> "Object expired";
 api_error(object_has_childs) 		        -> "Object has childs";
 api_error(object_parent_conflict) 	        -> "Object has conflicting parent";
 api_error(object_is_already_loaded)         -> "Object is already loaded";
@@ -83,7 +85,9 @@ api_error(object_is_stopped) 		        -> "Object is stopped";
 api_error(object_not_found) 		        -> "Object not found";
 api_error(object_not_started) 		        -> "Object is not started";
 api_error(object_stopped) 		            -> "Object stopped";
+api_error(parent_not_found) 		        -> "Parent not found";
 api_error(parent_stopped) 		            -> "Parent stopped";
+api_error(referred_not_found) 		        -> "Referred object not found";
 api_error(session_already_present)          -> "Session is already present";
 api_error(session_not_found)                -> "Session not found";
 api_error(session_is_disabled)              -> "Session is disabled";
@@ -352,6 +356,15 @@ object_check_active(SrvId, Type, ObjId) ->
         Other ->
             Other
     end.
+
+
+%% @doc Called if an object is over its expired time
+-spec object_do_expired(nkservice:id(), obj_id()) ->
+    any().
+
+object_do_expired(SrvId, ObjId) ->
+    lager:notice("NkDOMAIN: removing expired object ~s", [ObjId]),
+    nkdomain:archive(SrvId, ObjId, object_clean_expire).
 
 
 %% ===================================================================
@@ -661,6 +674,9 @@ api_server_allow(#nkapi_req{module=Module}=Req, State) when Module/=undefined ->
 api_server_allow(#nkapi_req{class=event}, State) ->
     {true, State};
 
+api_server_allow(#nkapi_req{class=mail}, State) ->
+    {true, State};
+
 api_server_allow(_Req, _State) ->
     continue.
 
@@ -680,7 +696,7 @@ api_server_cmd(#nkapi_req{module=Module}=Req, State) when Module/=undefined ->
             {error, domain_unknown, State};
         _ ->
             State2 = ?ADD_TO_API_SESSION(domain, Domain, State),
-            nklib_util:apply(Module, object_api_cmd, [Sub, Cmd, Data, State2])
+            nklib_util:apply(Module, object_api_cmd, [Sub, Cmd, Req, State2])
     end;
 
 api_server_cmd(_Req, _State) ->

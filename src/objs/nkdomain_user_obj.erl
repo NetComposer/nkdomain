@@ -187,8 +187,8 @@ object_send_event(Event, Session) ->
 
 
 %% @private
-object_api_cmd(Sub, Cmd, Data, State) ->
-    nkdomain_user_obj_api:cmd(Sub, Cmd, Data, State).
+object_api_cmd(Sub, Cmd, Req, State) ->
+    nkdomain_user_obj_api:cmd(Sub, Cmd, Req, State).
 
 
 %% @private

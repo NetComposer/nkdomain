@@ -113,7 +113,9 @@
         remove_after_stop => boolean(),
         dont_create_childs_on_disabled => boolean(),    %% Default false
         dont_update_on_disabled => boolean(),           %% Default false
-        dont_delete_on_disabled => boolean()            %% Default false
+        dont_delete_on_disabled => boolean(),           %% Default false
+        default_token_ttl => integer(),
+        max_token_ttl => integer()
     }.
 
 -type session() :: #obj_session{}.
@@ -474,9 +476,14 @@ do_init(ObjIdExt, Meta) ->
         true ->
             State1;
         false ->
-            Time = maps:get(min_first_time, Info, ?MIN_FIRST_TIME),
-            Ref = erlang:send_after(Time, self(), nkdomain_timer),
-            State1#state{timer=Ref}
+            case do_check_expire(State1) of
+                undefined ->
+                    Time = maps:get(min_first_time, Info, ?MIN_FIRST_TIME),
+                    Ref = erlang:send_after(Time, self(), nkdomain_timer),
+                    State1#state{timer=Ref};
+                _ ->
+                    State1
+            end
     end,
     case Meta of
         #{usage_link:={Id1, Tag1}} ->
@@ -707,7 +714,9 @@ handle_cast(nkdomain_do_load, #state{srv_id=SrvId, obj_id=ObjId, session=Session
 handle_cast(nkdomain_do_start, State) ->
     {ok, State2} = handle(object_start, [], State),
     case do_check_expire(State2) of
-        false ->
+        true ->
+            do_stop(object_expired, State2);
+        _ ->
             State3 = case State2 of
                 #state{session=#obj_session{is_created=true}} ->
                     do_event(created, State2);
@@ -716,9 +725,7 @@ handle_cast(nkdomain_do_start, State) ->
             end,
             State4 = do_event(loaded, State3),
             State5 = do_save(State4),
-            noreply(State5);
-        true ->
-            do_stop(object_expired, State2)
+            noreply(State5)
     end;
 
 handle_cast({nkdomain_add_timelog, Data}, State) ->
@@ -861,7 +868,7 @@ set_log(#state{srv_id=SrvId, session=#obj_session{type=Type}}=State) ->
 do_check_expire(#state{session=#obj_session{obj=Obj}}) ->
     case maps:get(expires_time, Obj, 0) of
         0 ->
-            false;
+            undefined;
         Expires ->
             case nklib_util:m_timestamp() of
                 Now when Now >= Expires ->

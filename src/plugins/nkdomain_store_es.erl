@@ -248,8 +248,17 @@ remove_index(SrvId) ->
 
 %% @private
 clean(SrvId) ->
-    Active = do_clean_active(SrvId),
-    {ok, #{active=>Active}}.
+    case do_clean_active(SrvId) of
+        {ok, Active} ->
+            case do_clean_expired(SrvId) of
+                {ok, Inactive} ->
+                    {ok, maps:merge(Active, Inactive)};
+                {error, Error} ->
+                    {error, Error}
+            end;
+        {error, Error} ->
+            {error, Error}
+        end.
 
 
 %% @private
@@ -267,7 +276,29 @@ do_clean_active(SrvId) ->
                 {ok, Acc}
         end
     end,
-    iterate(SrvId, Spec, Fun, 0).
+    case iterate(SrvId, Spec, Fun, 0) of
+        {ok, 0} -> {ok, #{}};
+        {ok, N} -> {ok, #{inactive=>N}};
+        {error, Error} -> {error, Error}
+    end.
+
+
+%% @private
+do_clean_expired(SrvId) ->
+    Time = nklib_util:m_timestamp() + 10000,
+    Spec = #{
+        filters => #{expires_time => <<"<", (to_bin(Time))/binary>>},
+        size => ?ES_ITER_SIZE
+    },
+    Fun = fun(#{<<"obj_id">>:=ObjId}, Acc) ->
+        SrvId:object_do_expired(SrvId, ObjId),
+        {ok, Acc+1}
+    end,
+    case iterate(SrvId, Spec, Fun, 0) of
+        {ok, 0} -> {ok, #{}};
+        {ok, N} -> {ok, #{expired=>N}};
+        {error, Error} -> {error, Error}
+    end.
 
 
 

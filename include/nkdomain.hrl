@@ -75,6 +75,8 @@
 -define(DOMAIN_CONFIG_ATOM, 'config').
 
 -define(DOMAIN_EVENT_CLASS, <<"domain">>).
+-define(DEF_TOKEN_TTL, 8*60*60).
+-define(MAX_TOKEN_TTL, 24*60*60).
 
 -endif.
 

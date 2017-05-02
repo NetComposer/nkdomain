@@ -33,8 +33,7 @@
 -export([object_store_archive_find/2, object_store_archive_save_raw/3, object_store_clean/1]).
 -export([elastic_get_indices/2, elastic_get_mappings/3, elastic_get_aliases/3,
          elastic_get_templates/2]).
-
--export([get_index/1, get_archive_index/1, get_templates/1]).
+-export([get_index/1, get_archive_index/1, get_mappings/2, get_templates/1]).
 
 
 -define(ES_INDEX, <<"nkobjects_v2">>).

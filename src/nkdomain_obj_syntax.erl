@@ -56,6 +56,11 @@ syntax('', wait_for_save, Syntax) ->
         time => {integer, {1, none}}
     };
 
+syntax('', make_token, Syntax) ->
+    Syntax#{
+        ttl => {integer, 1, none}
+    };
+
 syntax(_Sub, _Cmd, Syntax) ->
     lager:info("~p: unknown syntax: ~p, ~p", [?MODULE, _Sub, _Cmd]),
     Syntax.
