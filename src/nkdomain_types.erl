@@ -46,14 +46,17 @@
 
 
 %% @doc Finds a type's module
--spec get_module(nkdomain:type()) ->
+-spec get_module(nkdomain:type()|{nkdomain:type(), nkdomain:subtype()}) ->
     module() | undefined.
 
-get_module(Type) when is_binary(Type) ->
-    lookup({type, Type}, undefined);
+get_module({Type, SubType}) when is_binary(Type), is_binary(SubType) ->
+    lookup({type, {Type, SubType}}, undefined);
+
+get_module({Type, SubType}) ->
+    get_module({to_bin(Type), to_bin(SubType)});
 
 get_module(Type) ->
-    get_module(to_bin(Type)).
+    get_module({Type, <<>>}).
 
 
 %% @doc Gets all registered modules
@@ -66,10 +69,14 @@ get_modules() ->
 
 %% @doc Finds a module's type
 -spec get_type(module()) ->
-    nkdomain:type() | undefined.
+    nkdomain:type() | {nkdomain:type(), nkdomain:subtype()} | undefined.
 
 get_type(Module) ->
-    lookup({module, Module}, undefined).
+    case lookup({module, Module}, undefined) of
+        {Type, <<>>} -> Type;
+        {Type, SubType} -> {Type, SubType};
+        undefined -> undefined
+    end.
 
 
 %% @doc Gets all registered types
@@ -80,16 +87,18 @@ get_types() ->
     lookup(all_types, []).
 
 
-%% @doc Gets the obj module for a type
+%% @doc Gets the obj module for a type or subtype
 -spec register(module()) ->
     ok.
 
 register(Module) ->
-    #{type:=Type} = Module:object_get_info(),
+    #{type:=Type} = Info = Module:object_get_info(),
+    SubType = maps:get(subtype, Info, <<>>),
     Type2 = to_bin(Type),
-    % Ensure we have an atom with the same name (used in API processing)
+    SubType2 = to_bin(SubType),
     _ = binary_to_atom(Type2, utf8),
-    gen_server:call(?MODULE, {register_type, Module, to_bin(Type)}).
+    _ = binary_to_atom(SubType2, utf8),
+    gen_server:call(?MODULE, {register_type, Module, Type2, SubType2}).
 
 
 %% @doc
@@ -161,16 +170,15 @@ init([]) ->
     {noreply, #state{}} | {reply, term(), #state{}} |
     {stop, Reason::term(), #state{}} | {stop, Reason::term(), Reply::term(), #state{}}.
 
-handle_call({register_type, Module, Type}, _From, State) ->
+handle_call({register_type, Module, Type, SubType}, _From, State) ->
     AllModules1 = get_modules(),
     AllModules2 = lists:usort([Module|AllModules1]),
     AllTypes1 = get_types(),
-    AllTypes2 = lists:usort([Type|AllTypes1]),
-    ets:insert(?MODULE, [
-        {all_modules, AllModules2},
+    AllTypes2 = lists:usort([{Type, SubType}|AllTypes1]),
+    ets:insert(?MODULE, [{all_modules, AllModules2},
         {all_types, AllTypes2},
-        {{type, Type}, Module},
-        {{module, Module}, Type}]),
+        {{type, {Type, SubType}}, Module},
+        {{module, Module}, {Type, SubType}}]),
     {reply, ok, State};
 
 handle_call(Msg, _From, State) ->

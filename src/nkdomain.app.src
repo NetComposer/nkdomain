@@ -11,7 +11,8 @@
         nkservice,
         nkevent,
         nkapi,
-        nkmail
+        nkmail,
+        nkfile
     ]},
     {env, [
     ]}

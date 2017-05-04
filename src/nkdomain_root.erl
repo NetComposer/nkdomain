@@ -48,7 +48,8 @@ create() ->
 %% @doc Starts the root service
 start() ->
     Spec1 = #{
-        plugins => [nkdomain, nkapi, nkchat, nkdomain_store_es, nkmail_smtp_client],
+        plugins => [nkdomain, nkapi, nkchat, nkdomain_store_es,
+                    nkmail_smtp_client, nkfile_filesystem, nkfile_s3],
         domain => <<"root">>,
         domain_elastic_url => nkdomain_app:get(elastic_url),
         debug => [

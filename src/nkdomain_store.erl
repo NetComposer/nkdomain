@@ -144,7 +144,7 @@ delete_all_childs(Srv, Id) ->
 delete_all_childs_type(Srv, Id, Type) ->
     case nkdomain_obj_lib:find(Srv, Id) of
         #obj_id_ext{srv_id=SrvId, path=Path} ->
-            Opts = #{filters => #{type=>Type}},
+            Opts = #{filters => #{type=>nklib_util:to_binary(Type)}},
             SrvId:object_store_delete_all_childs(SrvId, Path, Opts);
         not_found ->
             {error, service_not_found}
@@ -159,6 +159,7 @@ delete_all_childs_type(Srv, Id, Type) ->
 find(Srv, Spec) ->
     case nkservice_srv:get_srv_id(Srv) of
         {ok, SrvId} ->
+
             SrvId:object_store_find(SrvId, Spec);
         not_found ->
             {error, service_not_found}
