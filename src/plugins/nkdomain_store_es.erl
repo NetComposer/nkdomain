@@ -285,7 +285,7 @@ do_clean_active(SrvId) ->
 
 %% @private
 do_clean_expired(SrvId) ->
-    Time = nklib_util:m_timestamp() + 10000,
+    Time = nkdomain_util:timestamp() + 10000,
     Spec = #{
         filters => #{expires_time => <<"<", (to_bin(Time))/binary>>},
         size => ?ES_ITER_SIZE

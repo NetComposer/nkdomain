@@ -312,7 +312,7 @@ add_op(SrvId, Op, ObjId, Obj, #state{operations=Operations, queue=Queue}=State) 
         operation = Op,
         obj_id = ObjId,
         obj = Obj,
-        expire = nklib_util:m_timestamp() + Time
+        expire = nkdomain_util:timestamp() + Time
     },
     List2 = case maps:is_key({SrvId, ObjId}, Operations) of
         false ->
@@ -352,7 +352,7 @@ do_save([], State) ->
     State;
 
 do_save([SrvId|Rest], #state{queue=Queue}=State) ->
-    case do_save_srv_id(SrvId, maps:get(SrvId, Queue), nklib_util:m_timestamp(), State) of
+    case do_save_srv_id(SrvId, maps:get(SrvId, Queue), nkdomain_util:timestamp(), State) of
         {ok, State2} ->
             Queue2 = maps:remove(SrvId, Queue),
             do_save(Rest, State2#state{queue=Queue2});

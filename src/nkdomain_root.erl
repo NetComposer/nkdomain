@@ -39,7 +39,7 @@ create() ->
         path => <<"/">>,
         parent_id => <<>>,
         description => <<"NetComposer">>,
-        created_time => nklib_util:m_timestamp()
+        created_time => nkdomain_util:timestamp()
     },
     nkdomain_store_es:save_obj(root, Obj).
 

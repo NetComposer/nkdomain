@@ -25,6 +25,7 @@
 -export([add_destroyed/3]).
 -export([get_service_domain/1]).
 -export([error_code/2]).
+-export([timestamp/0]).
 -export_type([error/0]).
 
 -type error() ::
@@ -189,10 +190,21 @@ add_destroyed(SrvId, Reason, Obj) ->
     Obj2 = maps:remove(active, Obj),
     ?ADD_TO_OBJ(
         #{
-            destroyed_time => nklib_util:m_timestamp(),
+            destroyed_time => nkdomain_util:timestamp(),
             destroyed_code => Code,
             destroyed_reason => Txt
         }, Obj2).
+
+
+%% @private
+%%timestamp() ->
+%%    R = 1494109379823,
+%%    (nklib_util:m_timestamp() -R + 1490000000000) div 1000 * 1000.
+
+%% @private
+timestamp() ->
+    nklib_util:m_timestamp().
+
 
 
 %% @private

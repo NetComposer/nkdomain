@@ -113,7 +113,7 @@ test_create_user(Pid) ->
             }
         } = U2} =
         cmd(Pid, user, get, #{id=>U2Id}),
-    true = nklib_util:m_timestamp() - CT < 500,
+    true = nkdomain_util:timestamp() - CT < 500,
     {ok, P2} = nkdomain_user_obj:user_pass("pass1"),
 
     % Find user by several ways
@@ -196,7 +196,7 @@ test_session1(Pid) ->
         <<"destroyed_time">>:= T1,
         <<"destroyed_code">> := _
     } = S2,
-    true = nklib_util:m_timestamp() - T1 < 5000,
+    true = nkdomain_util:timestamp() - T1 < 5000,
     ok.
 
 

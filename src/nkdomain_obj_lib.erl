@@ -106,7 +106,7 @@ make_obj(Srv, Parent, Type, Opts) ->
                 {type, Type2},
                 {parent_id, ParentId},
                 {path, <<BasePath/binary, $/, Name2/binary>>},
-                {created_time, nklib_util:m_timestamp()}
+                {created_time, nkdomain_util:timestamp()}
             ],
             Obj2 = do_make_obj(maps:to_list(Opts), Type, Obj1),
             {ok, maps:from_list(Obj2)};

@@ -58,7 +58,7 @@ create(Srv, Parent, SecsTTL, Data) when is_integer(SecsTTL), SecsTTL >= 1 ->
             Opts = #{
                 referred_id => ReferredId,
                 subtype => SubType,
-                expires_time => nklib_util:m_timestamp() + 1000*SecsTTL,
+                expires_time => nkdomain_util:timestamp() + 1000*SecsTTL,
                 type_obj => Data
             },
             nkdomain_obj_lib:make_and_create(Srv, Parent, ?DOMAIN_TOKEN, Opts);

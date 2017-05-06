@@ -463,7 +463,7 @@ do_init(ObjIdExt, Meta) ->
         is_enabled = Enabled,
         is_created = IsCreated,
         childs = #{},
-        started = nklib_util:m_timestamp()
+        started = nkdomain_util:timestamp()
     },
     Info = Module:object_get_info(),
     State1 = #state{
@@ -540,7 +540,7 @@ handle_call({nkdomain_update, _Map}, _From,
 
 handle_call({nkdomain_update, Map}, _From, State) ->
     #state{session=#obj_session{obj=Obj}=Session} = State,
-    Time = nklib_util:m_timestamp(),
+    Time = nkdomain_util:timestamp(),
     Obj2 = ?ADD_TO_OBJ(updated_time, Time, Obj),
     State2 = State#state{session=Session#obj_session{obj=Obj2}},
     case do_update(Map, State2) of
@@ -870,7 +870,7 @@ do_check_expire(#state{session=#obj_session{obj=Obj}}) ->
         0 ->
             undefined;
         Expires ->
-            case nklib_util:m_timestamp() of
+            case nkdomain_util:timestamp() of
                 Now when Now >= Expires ->
                     true;
                 Now ->
@@ -1197,7 +1197,7 @@ do_add_timelog(Msg, State) when is_atom(Msg); is_binary(Msg) ->
 
 do_add_timelog(#{msg:=_}=Data, #state{session=Session, timelog=Log}=State) ->
     #obj_session{started=Started} = Session,
-    Time = nklib_util:m_timestamp() - Started,
+    Time = nkdomain_util:timestamp() - Started,
     State#state{timelog=[Data#{time=>Time}|Log]}.
 
 
