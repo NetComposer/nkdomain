@@ -23,11 +23,14 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -behaviour(gen_server).
 
--export([get_module/1, get_modules/0, get_type/1, get_types/0, register/1]).
+-export([get_module/1, get_modules/0, get_submodule/2]).
+-export([get_type/1, get_types/0, get_subtype/1]).
+-export([register/1]).
 -export([make_syntax/3, make_syntax_fun/3]).
 -export([start_link/0]).
 -export([init/1, terminate/2, code_change/3, handle_call/3,
          handle_cast/2, handle_info/2]).
+-export_type([ets/0]).
 
 -define(LLOG(Type, Txt, Args),
     lager:Type("NkDOMAIN Types "++Txt, Args)).
@@ -46,17 +49,14 @@
 
 
 %% @doc Finds a type's module
--spec get_module(nkdomain:type()|{nkdomain:type(), nkdomain:subtype()}) ->
+-spec get_module(nkdomain:type()) ->
     module() | undefined.
 
-get_module({Type, SubType}) when is_binary(Type), is_binary(SubType) ->
-    lookup({type, {Type, SubType}}, undefined);
-
-get_module({Type, SubType}) ->
-    get_module({to_bin(Type), to_bin(SubType)});
+get_module(Type) when is_binary(Type) ->
+    lookup({type, Type}, undefined);
 
 get_module(Type) ->
-    get_module({Type, <<>>}).
+    get_module(to_bin(Type)).
 
 
 %% @doc Gets all registered modules
@@ -67,15 +67,25 @@ get_modules() ->
     lookup(all_modules, []).
 
 
+%% @doc Finds a subtype's module
+-spec get_submodule(nkdomain:type(), nkdomain:subtype()) ->
+    module() | undefined.
+
+get_submodule(Type, SubType) when is_binary(Type), is_binary(SubType) ->
+    lookup({subtype, Type, SubType}, undefined);
+
+get_submodule(Type, SubType) ->
+    get_submodule(to_bin(Type), to_bin(SubType)).
+
+
 %% @doc Finds a module's type
 -spec get_type(module()) ->
     nkdomain:type() | {nkdomain:type(), nkdomain:subtype()} | undefined.
 
 get_type(Module) ->
     case lookup({module, Module}, undefined) of
-        {Type, <<>>} -> Type;
-        {Type, SubType} -> {Type, SubType};
-        undefined -> undefined
+        Type when is_binary(Type) -> Type;
+        _ -> undefined
     end.
 
 
@@ -87,18 +97,34 @@ get_types() ->
     lookup(all_types, []).
 
 
+%% @doc Finds a module's type
+-spec get_subtype(module()) ->
+    nkdomain:type() | {nkdomain:type(), nkdomain:subtype()} | undefined.
+
+get_subtype(Module) ->
+    case lookup({module, Module}, undefined) of
+        {Type, SubType} -> {Type, SubType};
+        _ -> undefined
+    end.
+
+
 %% @doc Gets the obj module for a type or subtype
 -spec register(module()) ->
     ok.
 
 register(Module) ->
     #{type:=Type} = Info = Module:object_get_info(),
-    SubType = maps:get(subtype, Info, <<>>),
     Type2 = to_bin(Type),
-    SubType2 = to_bin(SubType),
+    % Ensure we have the corresponding atom loaded
     _ = binary_to_atom(Type2, utf8),
-    _ = binary_to_atom(SubType2, utf8),
-    gen_server:call(?MODULE, {register_type, Module, Type2, SubType2}).
+    case maps:find(subtype, Info) of
+        error ->
+            gen_server:call(?MODULE, {register_type, Type2, Module});
+        {ok, SubType} ->
+            SubType2 = to_bin(SubType),
+            _ = binary_to_atom(SubType2, utf8),
+            gen_server:call(?MODULE, {register_subtype, Type2, SubType2, Module})
+    end.
 
 
 %% @doc
@@ -124,7 +150,7 @@ make_syntax_fun(type, Type, #{meta:=#{module:=Module}}) ->
             error
     end;
 
-make_syntax_fun(path, Path, #{meta:=#{module:=Module}}) ->
+make_syntax_fun(path, Path, #{meta:=#{module:=Module}}) ->x
     Path2 = to_bin(Path),
     #{type:=Type} = Module:object_get_info(),
     case lists:reverse(binary:split(Path2, <<"/">>, [global])) of
@@ -151,6 +177,15 @@ make_syntax_fun(path, Path, #{meta:=#{module:=Module}}) ->
 start_link() ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
+-type ets() ::
+    {all_modules, [module()]} |
+    {all_types, [nkdomain:type()]} |
+    {{type, nkdomain:type()}, module()} |
+    {{subtype, nkdomain:type(), nkdomain:subtype()}, module()} |
+    {{module, module()}, nkdomain:type()} |
+    {{module, module()}, {nkdomain:type(), nkdomain:subtype()}}.
+
+
 
 -record(state, {
 }).
@@ -170,16 +205,26 @@ init([]) ->
     {noreply, #state{}} | {reply, term(), #state{}} |
     {stop, Reason::term(), #state{}} | {stop, Reason::term(), Reply::term(), #state{}}.
 
-handle_call({register_type, Module, Type, SubType}, _From, State) ->
+handle_call({register_type, Type, Module}, _From, State) ->
     AllModules1 = get_modules(),
     AllModules2 = lists:usort([Module|AllModules1]),
     AllTypes1 = get_types(),
-    AllTypes2 = lists:usort([{Type, SubType}|AllTypes1]),
-    ets:insert(?MODULE, [{all_modules, AllModules2},
+    AllTypes2 = lists:usort([Type|AllTypes1]),
+    ets:insert(?MODULE, [
+        {all_modules, AllModules2},
         {all_types, AllTypes2},
-        {{type, {Type, SubType}}, Module},
-        {{module, Module}, {Type, SubType}}]),
+        {{type, Type}, Module},
+        {{module, Module}, Type}
+    ]),
     {reply, ok, State};
+
+handle_call({register_subtype, Type, SubType, Module}, _From, State) ->
+    ets:insert(?MODULE, [
+        {{subtype, Type, SubType}, Module},
+        {{module, Module}, {Type, SubType}}
+    ]),
+    {reply, ok, State};
+
 
 handle_call(Msg, _From, State) ->
     lager:error("Module ~p received unexpected call ~p", [?MODULE, Msg]),
