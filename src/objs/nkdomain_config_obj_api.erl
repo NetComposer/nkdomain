@@ -33,7 +33,7 @@
 
 %% @doc
 cmd('', create, #nkapi_req{data=Data}, #{srv_id:=SrvId}=State) ->
-    #{subtype:=SubType, parent:=Parent, ?DOMAIN_CONFIG_ATOM:=Config} = Data,
+    #{subtype:=SubType, parent:=Parent, ?DOMAIN_CONFIG:=Config} = Data,
     Name = maps:get(obj_name, Data, <<>>),
     case nkdomain_config_obj:create(SrvId, SubType, Parent, Name, Config) of
         {ok, ObjId, Path, _Pid} ->

@@ -34,12 +34,12 @@
 
 %% @doc
 api('', create, Syntax) ->
-    Syntax2 = Syntax#{
+    Syntax#{
         obj_name => binary,
         domain => binary,
-        description => binary
-    },
-    nklib_syntax:add_mandatory([obj_name, description], Syntax2);
+        description => binary,
+        '__mandatory' => [obj_name, description]
+    };
 
 api('', update, Syntax) ->
     Syntax#{

@@ -36,27 +36,27 @@
 
 %% @doc
 api('', create, Syntax) ->
-    Syntax2 = Syntax#{
+    Syntax#{
         obj_name => binary,
         subtype => binary,
         parent => binary,
-        ?DOMAIN_CONFIG_ATOM => map
-    },
-    nklib_syntax:add_mandatory([subtype, parent, config], Syntax2);
+        ?DOMAIN_CONFIG => map,
+        '__mandatory' => [subtype, parent, ?DOMAIN_CONFIG]
+    };
 
 api('', update, Syntax) ->
-    Syntax2 = Syntax#{
+    Syntax#{
         id => binary,
-        ?DOMAIN_CONFIG_ATOM => map
-    },
-    nklib_syntax:add_mandatory([id, config], Syntax2);
+        ?DOMAIN_CONFIG => map,
+        '__mandatory' => [id, ?DOMAIN_CONFIG]
+    };
 
 api('', find, Syntax) ->
-    Syntax2 = Syntax#{
+    Syntax#{
         parent => binary,
-        subtype => binary
-    },
-    nklib_syntax:add_mandatory([parent, subtype], Syntax2);
+        subtype => binary,
+        '__mandatory' => [parent, subtype]
+    };
 
 api(Sub, Cmd, Syntax) ->
     nkdomain_obj_syntax:syntax(Sub, Cmd, Syntax).

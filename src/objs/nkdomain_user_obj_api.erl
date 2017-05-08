@@ -35,7 +35,7 @@
 
 %% @doc
 cmd('', create, #nkapi_req{data=Data}, State) ->
-    #{obj_name:=Name, ?DOMAIN_USER_ATOM:=User} = Data,
+    #{obj_name:=Name, ?DOMAIN_USER:=User} = Data,
     #{srv_id:=SrvId, domain:=Domain} = State,
     case nkdomain_user_obj:create(SrvId, Domain, Name, User) of
         {ok, ObjId, Path, _Pid} ->

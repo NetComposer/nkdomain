@@ -34,55 +34,45 @@
 
 %% @doc
 api('', login, Syntax) ->
-    Syntax2 = Syntax#{
+    Syntax#{
         id => binary,
         password => binary,
         domain => binary,
-        meta => map
-    },
-    nklib_syntax:add_mandatory([id], Syntax2);
+        meta => map,
+        '__mandatory' => [id]
+    };
 
 api('', get_token, Syntax) ->
-    Syntax2 = Syntax#{
+    Syntax#{
         id => binary,
         password => binary,
-        domain => binary
-    },
-    nklib_syntax:add_mandatory([id], Syntax2);
+        domain => binary,
+        '__mandatory' => [id]
+    };
 
 api('', create, Syntax) ->
-    Syntax2 = Syntax#{
+    Syntax#{
         obj_name => binary,
-        ?DOMAIN_USER_ATOM => #{
+        ?DOMAIN_USER => #{
             name => binary,
             surname => binary,
             password => binary,
-            email => email
+            email => email,
+            '__mandatory' => [name, surname]
         },
         domain => binary
-    },
-    nklib_syntax:add_mandatory([
-        obj_name,
-        <<?DOMAIN_USER/binary, ".name">>,
-        <<?DOMAIN_USER/binary, ".surname">>
-    ], Syntax2);
+    };
 
 api('', update, Syntax) ->
     Syntax#{
         id => binary,
-        ?DOMAIN_USER_ATOM => #{
+        ?DOMAIN_USER => #{
             name => binary,
             surname => binary,
             password => binary,
             email => email
         }
     };
-
-%%api('', find_referred, Syntax) ->
-%%    Syntax#{
-%%        id => binary,
-%%        type => binary
-%%    };
 
 api(Sub, Cmd, Syntax) ->
     nkdomain_obj_syntax:syntax(Sub, Cmd, Syntax).

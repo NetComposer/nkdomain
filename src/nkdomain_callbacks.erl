@@ -25,7 +25,7 @@
 -export([service_init/2, service_handle_cast/2, service_handle_info/2]).
 -export([api_error/1, api_server_syntax/3, api_server_allow/2, api_server_cmd/2,
          api_server_reg_down/3]).
--export([object_mapping/0, object_syntax/1, object_parse/4, object_unparse/1]).
+-export([object_mapping/0, object_syntax/1, object_parse/3, object_unparse/1]).
 -export([object_load/2, object_get_session/1, object_save/1, object_delete/1, object_archive/1]).
 -export([object_check_active/3, object_do_expired/2]).
 -export([object_init/1, object_terminate/2, object_start/1, object_stop/2,
@@ -69,6 +69,7 @@ api_error(invalid_object_id)                -> "Invalid object id";
 api_error(invalid_object_type)              -> "Invalid object type";
 api_error(invalid_object_path)              -> "Invalid object path";
 api_error({invalid_object_path, P})         -> {"Invalid object path '~s'", [P]};
+api_error({invalid_type, T})                -> {"Invalid type '~s'", [T]};
 api_error(invalid_token_ttl)                -> "Invalid token TTL";
 api_error(member_already_present)           -> "Member is already present";
 api_error(member_not_found)                 -> "Member not found";
@@ -164,8 +165,8 @@ object_syntax(load) ->
         aliases => {list, binary},
         icon_id => binary,
         '_store_vsn' => any,
-        '__mandatory' => [type, obj_id, parent_id, path, created_time],
-        id => ignore                                % Used in APIs
+        '__mandatory' => [type, obj_id, parent_id, path, created_time]
+        %id => ignore                                % Used in APIs
     };
 
 object_syntax(update) ->
@@ -174,8 +175,8 @@ object_syntax(update) ->
         name => binary,
         description => binary,
         aliases => {list, binary},
-        icon_id => binary,
-        id => ignore                                % Used in APIs
+        icon_id => binary
+        %id => ignore                                % Used in APIs
     }.
 
 
@@ -186,24 +187,14 @@ object_syntax(update) ->
 
 object_load(SrvId, ObjId) ->
     case SrvId:object_store_read_raw(SrvId, ObjId) of
-        {ok, #{<<"type">>:=Type}=Map} ->
-            case SrvId:object_parse(SrvId, load, Type, Map) of
+        {ok, Map} ->
+            case SrvId:object_parse(SrvId, load, Map) of
                 {ok, Obj} ->
                     {ok, Obj};
                 {error, Error} ->
                     ?LLOG(warning, "error parsing loaded object ~s: ~p\n~p", [ObjId, Error, Map]),
                     {error, object_load_error}
             end;
-        {ok, #{type:=Type}=Map} ->
-            case SrvId:object_parse(SrvId, load, Type, Map) of
-                {ok, Obj} ->
-                    {ok, Obj};
-                {error, Error} ->
-                    ?LLOG(warning, "error parsing loaded object ~s: ~p\n~p", [ObjId, Error, Map]),
-                    {error, object_load_error}
-            end;
-        {ok, _Map} ->
-            {error, invalid_object_type};
         {error, Error} ->
             {error, Error}
     end.
@@ -279,44 +270,78 @@ object_archive(#obj_session{srv_id=SrvId, obj_id=ObjId, obj=Obj}=Session) ->
     end.
 
 
+%%%% @doc Called to parse an object's syntax
+%%-spec object_parse(nkservice:id(), type(), load|update, map()) ->
+%%    {ok, nkdomain:obj()} | {error, term()}.
+%%
+%%object_parse(SrvId, Mode, Type, Map) ->
+%%    case nkdomain_types:get_module(Type) of
+%%        undefined ->
+%%            {error, {invalid_type, Type}};
+%%        Module ->
+%%            BaseSyn = SrvId:object_syntax(Mode),
+%%            BaseMand = maps:get('__mandatory', BaseSyn, []),
+%%            ModSyn = Module:object_syntax(Mode),
+%%            Mandatory = case is_map(ModSyn) of
+%%                true ->
+%%                    ModMand = [
+%%                        <<Type/binary, $., (nklib_util:to_binary(F))/binary>>
+%%                        || F <- maps:get('__mandatory', ModSyn, [])
+%%                    ],
+%%                    BaseMand ++ ModMand;
+%%                false ->
+%%                    BaseMand
+%%            end,
+%%            TypeAtom = binary_to_atom(Type, utf8),
+%%            Syntax = BaseSyn#{TypeAtom => ModSyn, '__mandatory'=>Mandatory},
+%%            Opts = #{
+%%                meta => #{module=>Module},
+%%                {binary_key, Type} => true
+%%            },
+%%            case nklib_syntax:parse(Map, Syntax, Opts) of
+%%                {ok, Obj2, []} ->
+%%                    {ok, Obj2};
+%%                {ok, Obj2, _Exp, Missing} ->
+%%                    ?LLOG(notice, "Object of type ~s has unknown fields: ~p", [Type, Missing]),
+%%                    {ok, Obj2};
+%%                {error, Error} ->
+%%                    {error, Error}
+%%            end
+%%    end.
+
+
 %% @doc Called to parse an object's syntax
--spec object_parse(nkservice:id(), type(), load|update, map()) ->
+-spec object_parse(nkservice:id(), load|update, map()) ->
     {ok, nkdomain:obj()} | {error, term()}.
 
-object_parse(SrvId, Mode, Type, Map) ->
+object_parse(SrvId, Mode, Map) ->
+    Type = case Map of
+        #{<<"type">>:=Type0} -> Type0;
+        #{type:=Type0} -> Type0;
+        _ -> <<>>
+    end,
+    BaseSyn = SrvId:object_syntax(Mode),
     case nkdomain_types:get_module(Type) of
         undefined ->
+            lager:error("NKLOG ~p ~p", [Mode, Map]),
             {error, {invalid_type, Type}};
         Module ->
-            BaseSyn = SrvId:object_syntax(Mode),
-            BaseMand = maps:get('__mandatory', BaseSyn, []),
             ModSyn = Module:object_syntax(Mode),
-            Mandatory = case is_map(ModSyn) of
-                true ->
-                    ModMand = [
-                        <<Type/binary, $., (nklib_util:to_binary(F))/binary>>
-                        || F <- maps:get('__mandatory', ModSyn, [])
-                    ],
-                    BaseMand ++ ModMand;
-                false ->
-                    BaseMand
-            end,
-            TypeAtom = binary_to_atom(Type, utf8),
-            Syntax = BaseSyn#{TypeAtom => ModSyn, '__mandatory'=>Mandatory},
-            Opts = #{
-                meta => #{module=>Module},
-                {binary_key, Type} => true
-            },
-            case nklib_syntax:parse(Map, Syntax, Opts) of
-                {ok, Obj2, _Exp, []} ->
-                    {ok, Obj2};
-                {ok, Obj2, _Exp, Missing} ->
-                    ?LLOG(notice, "Object of type ~s has unknown fields: ~p", [Type, Missing]),
+            Syntax = BaseSyn#{Type=>ModSyn},
+            case nklib_syntax:parse(Map, Syntax) of
+                {ok, Obj2, Unknown} ->
+                    case Unknown of
+                        [] ->
+                            ok;
+                        [Unk|_] ->
+                            ?LLOG(notice, "Object of type ~s has unknown fields: ~s", [Type, Unk])
+                    end,
                     {ok, Obj2};
                 {error, Error} ->
                     {error, Error}
             end
     end.
+
 
 
 %% @doc Called to serialize an object to disk

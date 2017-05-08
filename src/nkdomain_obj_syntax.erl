@@ -38,11 +38,11 @@ syntax('', get, Syntax) ->
     };
 
 syntax('', enable, Syntax) ->
-    Syntax2 = Syntax#{
+    Syntax#{
         id => binary,
-        enable => boolean
-    },
-    nklib_syntax:add_mandatory([enable], Syntax2);
+        enable => boolean,
+        '__mandatory' => [enable]
+    };
 
 syntax('', delete, Syntax) ->
     Syntax#{

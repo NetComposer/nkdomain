@@ -26,7 +26,6 @@
 -export([get_module/1, get_modules/0, get_submodule/2]).
 -export([get_type/1, get_types/0, get_subtype/1]).
 -export([register/1]).
--export([make_syntax/3, make_syntax_fun/3]).
 -export([start_link/0]).
 -export([init/1, terminate/2, code_change/3, handle_call/3,
          handle_cast/2, handle_info/2]).
@@ -127,45 +126,45 @@ register(Module) ->
     end.
 
 
-%% @doc
-make_syntax(Module, Mandatory, Base) ->
-    Fields = [binary_to_atom(list_to_binary([to_bin(Module), $., to_bin(F)]), utf8) || F <- Mandatory],
-    Mandatory2 = maps:get('__mandatory', Base, []),
-    Mandatory3 = Fields ++ Mandatory2,
-    Base#{
-        type => fun ?MODULE:make_syntax_fun/3,
-        path => fun ?MODULE:make_syntax_fun/3,
-        '__mandatory' => Mandatory3
-    }.
-
-
-%% @private
-make_syntax_fun(type, Type, #{meta:=#{module:=Module}}) ->
-    Type2 = to_bin(Type),
-    case Module:object_get_info() of
-        #{type:=Type2} ->
-            ok;
-        _ ->
-            ?LLOG(notice, "Invalid syntax type for module ~p (~s)", [Module, Type2]),
-            error
-    end;
-
-make_syntax_fun(path, Path, #{meta:=#{module:=Module}}) ->x
-    Path2 = to_bin(Path),
-    #{type:=Type} = Module:object_get_info(),
-    case lists:reverse(binary:split(Path2, <<"/">>, [global])) of
-        [_Name, Types|_] ->
-            case <<Type/binary, $s>> of
-                Types ->
-                    ok;
-                _ ->
-                    ?LLOG(notice, "Invalid syntax path for module ~p (~s)", [Module, Path]),
-                    error
-            end;
-        _ ->
-            ?LLOG(notice, "Invalid syntax path for module ~p (~s)", [Module, Path]),
-            error
-    end.
+%%%% @doc
+%%make_syntax(Module, Mandatory, Base) ->
+%%    Fields = [binary_to_atom(list_to_binary([to_bin(Module), $., to_bin(F)]), utf8) || F <- Mandatory],
+%%    Mandatory2 = maps:get('__mandatory', Base, []),
+%%    Mandatory3 = Fields ++ Mandatory2,
+%%    Base#{
+%%        type => fun ?MODULE:make_syntax_fun/3,
+%%        path => fun ?MODULE:make_syntax_fun/3,
+%%        '__mandatory' => Mandatory3
+%%    }.
+%%
+%%
+%%%% @private
+%%make_syntax_fun(type, Type, #{meta:=#{module:=Module}}) ->
+%%    Type2 = to_bin(Type),
+%%    case Module:object_get_info() of
+%%        #{type:=Type2} ->
+%%            ok;
+%%        _ ->
+%%            ?LLOG(notice, "Invalid syntax type for module ~p (~s)", [Module, Type2]),
+%%            error
+%%    end;
+%%
+%%make_syntax_fun(path, Path, #{meta:=#{module:=Module}}) ->
+%%    Path2 = to_bin(Path),
+%%    #{type:=Type} = Module:object_get_info(),
+%%    case lists:reverse(binary:split(Path2, <<"/">>, [global])) of
+%%        [_Name, Types|_] ->
+%%            case <<Type/binary, $s>> of
+%%                Types ->
+%%                    ok;
+%%                _ ->
+%%                    ?LLOG(notice, "Invalid syntax path for module ~p (~s)", [Module, Path]),
+%%                    error
+%%            end;
+%%        _ ->
+%%            ?LLOG(notice, "Invalid syntax path for module ~p (~s)", [Module, Path]),
+%%            error
+%%    end.
 
 
 

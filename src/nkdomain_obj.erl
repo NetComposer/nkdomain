@@ -1039,8 +1039,8 @@ do_rm_child(Type, Name, #state{session=Session}=State) ->
 
 %% @private
 do_update(Update, #state{srv_id=SrvId, session=Session}=State) ->
-    #obj_session{type=Type, obj=Obj}=Session,
-    case SrvId:object_parse(SrvId, update, Type, Update) of
+    #obj_session{obj=Obj, type=Type}=Session,
+    case SrvId:object_parse(SrvId, update, Update#{type=>Type}) of
         {ok, Update2} ->
             case ?ADD_TO_OBJ_DEEP(Update2, Obj) of
                 Obj ->

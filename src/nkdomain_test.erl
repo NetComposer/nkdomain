@@ -513,3 +513,20 @@ is_loaded(Id) ->
         #obj_id_ext{} -> true;
         _ -> false
     end.
+
+
+
+%% ===================================================================
+%% Parse
+%% ===================================================================
+
+p1() ->
+    Obj = #{
+        type => user,
+        obj_id => a,
+        path => "/",
+        parent_id => p1,
+        created_time => 0,
+        <<"user">> => #{name => n1}
+    },
+    nkdomain_callbacks:object_parse(root, load, Obj).

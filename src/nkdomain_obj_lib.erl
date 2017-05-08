@@ -164,11 +164,11 @@ make_and_create(Srv, Parent, Type, Opts) ->
 -spec create(nkservice:id(), map(), nkdomain:create_opts()) ->
     #obj_id_ext{} | {error, term()}.
 
-create(Srv, #{obj_id:=ObjId, type:=Type}=Obj, Meta) ->
+create(Srv, #{obj_id:=ObjId}=Obj, Meta) ->
     case nkservice_srv:get_srv_id(Srv) of
         {ok, SrvId} ->
-            case SrvId:object_parse(SrvId, load, Type, Obj) of
-                {ok, #{obj_id:=ObjId, path:=Path}=Obj2} ->
+            case SrvId:object_parse(SrvId, load, Obj) of
+                {ok, #{obj_id:=ObjId, path:=Path, type:=Type}=Obj2} ->
                     % We know type is valid here
                     Ext = #obj_id_ext{srv_id=SrvId, type=Type, obj_id=ObjId, path=Path},
                     do_create(Ext, Obj2, Meta);

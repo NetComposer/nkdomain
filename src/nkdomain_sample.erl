@@ -36,14 +36,13 @@ user_get() ->
 user_get(Id) ->
     cmd(user, get, #{id=>Id}).
 
-user_create(Domain, Name, Surname, Email) ->
+user_create(Domain, Name, Surname) ->
     Data = #{
         obj_name => to_bin(Name),
         domain => to_bin(Domain),
         user => #{
             name => to_bin(Name),
             surname => to_bin(Surname),
-            email => to_bin(Email),
             password => <<"1234">>
         }
     },
