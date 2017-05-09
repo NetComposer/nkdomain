@@ -69,9 +69,6 @@ get_id(Type, Field, Data, #{nkdomain_obj_ids:=ObjIds}=State) ->
     end.
 
 
-
-
-
 %% @doc Adds 'logged in' information to the state
 add_id(Type, Id, State) ->
     ObjIds1 = maps:get(nkdomain_obj_ids, State, #{}),
@@ -87,8 +84,6 @@ get_domain(#{srv_id:=SrvId}=State) ->
         Domain ->
             {ok, Domain}
     end.
-
-
 
 
 

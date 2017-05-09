@@ -109,7 +109,7 @@ object_syntax(_Mode) ->
 
 %% @private
 object_api_syntax(Sub, Cmd, Syntax) ->
-    nkdomain_config_obj_syntax:api(Sub, Cmd, Syntax).
+    nkdomain_obj_syntax:syntax(Sub, Cmd, ?DOMAIN_CONFIG, Syntax).
 
 
 %% @private
@@ -119,7 +119,7 @@ object_api_allow(_Sub, _Cmd, _Data, State) ->
 
 %% @private
 object_api_cmd(Sub, Cmd, Req, State) ->
-    nkdomain_config_obj_api:cmd(Sub, Cmd, Req, State).
+    nkdomain_obj_api:api(Sub, Cmd, Req, ?DOMAIN_CONFIG, State).
 
 
 

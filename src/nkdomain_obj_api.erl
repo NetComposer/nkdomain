@@ -34,6 +34,27 @@
 
 
 %% @doc
+api('', create, #nkapi_req{data=Data}, Type, #{srv_id:=SrvId}=State) ->
+    Module = nkdomain_types:get_module(Type),
+    case erlang:function_exported(Module, create, 4) of
+        true ->
+            Name = maps:get(obj_name, Data),
+            Config = maps:get(Type, Data),
+            case get_parent(Data, State) of
+                {ok, Parent} ->
+                    case Module:create(SrvId, Parent, Name, Config) of
+                        {ok, ObjId, _Path, _Pid} ->
+                            {ok, #{obj_id=>ObjId}, State};
+                        {error, Error} ->
+                            {error, Error, State}
+                    end;
+                Error ->
+                    Error
+            end;
+        false ->
+            {error, not_implemented, State}
+    end;
+
 api('', get, #nkapi_req{data=Data}, Type, #{srv_id:=SrvId}=State) ->
     case get_id(Type, Data, State) of
         {ok, Id} ->
@@ -175,6 +196,19 @@ api(_Sub, _Cmd, _Req, _Type, State) ->
 %% @doc
 get_id(Type, Data, State) ->
     nkdomain_api_util:get_id(Type, id, Data, State).
+
+
+%% @private
+get_parent(#{parent_id:=Parent}, _State) ->
+    {ok, Parent};
+
+get_parent(_, #{srv_id:=SrvId}=State) ->
+    case nkdomain_util:get_service_domain(SrvId) of
+        undefined ->
+            {error, parent_not_found, State};
+        Domain ->
+            {ok, Domain}
+    end.
 
 
 %% @private

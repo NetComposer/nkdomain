@@ -125,7 +125,7 @@ object_event(_Event, Session) ->
 
 %% @private
 object_api_syntax(Sub, Cmd, Syntax) ->
-    nkdomain_session_obj_syntax:api(Sub, Cmd, Syntax).
+    nkdomain_obj_syntax:syntax(Sub, Cmd, ?DOMAIN_SESSION, Syntax).
 
 
 %% @private
@@ -135,7 +135,7 @@ object_api_allow(_Sub, _Cmd, _Data, State) ->
 
 %% @private
 object_api_cmd(Sub, Cmd, Req, State) ->
-    nkdomain_session_obj_api:cmd(Sub, Cmd, Req, State).
+    nkdomain_obj_api:api(Sub, Cmd, Req, ?DOMAIN_SESSION, State).
 
 
 

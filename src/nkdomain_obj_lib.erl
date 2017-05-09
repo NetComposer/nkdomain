@@ -157,7 +157,7 @@ make_and_create(Srv, Parent, Type, Opts) ->
         {ok, Obj} ->
             %% lager:warning("Obj: ~p", [Obj]),
             CreateMeta1 = maps:with([usage_link, event_link], Opts),
-            CreateMeta2 = case maps:is_key(obj_id, Opts) orelse maps:is_key(name, Opts) of
+            CreateMeta2 = case maps:is_key(obj_id, Opts) orelse maps:is_key(obj_name, Opts) of
                 true ->
                     CreateMeta1;
                 false ->

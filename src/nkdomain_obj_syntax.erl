@@ -32,6 +32,21 @@
 %% ===================================================================
 
 %% @doc
+syntax('', create, Type, Syntax) ->
+    Syntax#{
+        obj_name => binary,
+        parent_id => binary,
+        Type => map,
+        '__mandatory' => [obj_name, Type]
+    };
+
+syntax('', update, Type, Syntax) ->
+    Syntax#{
+        id => binary,
+        Type => map,
+        '__mandatory' => [id, Type]
+    };
+
 syntax('', get, _Type, Syntax) ->
     Syntax#{
         id => binary

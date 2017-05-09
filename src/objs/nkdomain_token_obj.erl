@@ -96,8 +96,8 @@ object_syntax(_) ->
 
 
 %% @private
-object_api_syntax(_Sub, _Cmd, _Syntax) ->
-    continue.
+object_api_syntax(Sub, Cmd, Syntax) ->
+    nkdomain_obj_syntax:syntax(Sub, Cmd, ?DOMAIN_TOKEN, Syntax).
 
 
 %% @private
@@ -111,8 +111,8 @@ object_send_event(_Event, Session) ->
 
 
 %% @private
-object_api_cmd(_Sub, _Cmd, _Req, _State) ->
-    continue.
+object_api_cmd(Sub, Cmd, Req, State) ->
+    nkdomain_obj_api:api(Sub, Cmd, Req, ?DOMAIN_TOKEN, State).
 
 
 %% @private
