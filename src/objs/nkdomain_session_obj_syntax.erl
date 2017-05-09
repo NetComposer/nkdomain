@@ -25,6 +25,7 @@
 
 -export([api/3]).
 
+-include("nkdomain.hrl").
 
 
 %% ===================================================================
@@ -33,4 +34,4 @@
 
 
 api(Sub, Cmd, Syntax) ->
-    nkdomain_obj_syntax:syntax(Sub, Cmd, Syntax).
+    nkdomain_obj_syntax:syntax(Sub, Cmd, ?DOMAIN_SESSION, Syntax).

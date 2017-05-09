@@ -38,7 +38,7 @@
 api('', create, Syntax) ->
     Syntax#{
         obj_name => binary,
-        subtype => binary,
+        type => binary,
         parent => binary,
         ?DOMAIN_CONFIG => map,
         '__mandatory' => [subtype, parent, ?DOMAIN_CONFIG]
@@ -59,4 +59,4 @@ api('', find, Syntax) ->
     };
 
 api(Sub, Cmd, Syntax) ->
-    nkdomain_obj_syntax:syntax(Sub, Cmd, Syntax).
+    nkdomain_obj_syntax:syntax(Sub, Cmd, ?DOMAIN_CONFIG, Syntax).

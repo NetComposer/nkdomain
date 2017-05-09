@@ -21,7 +21,7 @@
 -module(nkdomain_obj_syntax).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([syntax/3]).
+-export([syntax/4]).
 
 -include("nkdomain.hrl").
 
@@ -32,42 +32,42 @@
 %% ===================================================================
 
 %% @doc
-syntax('', get, Syntax) ->
+syntax('', get, _Type, Syntax) ->
     Syntax#{
         id => binary
     };
 
-syntax('', enable, Syntax) ->
+syntax('', enable, _Type, Syntax) ->
     Syntax#{
         id => binary,
         enable => boolean,
         '__mandatory' => [enable]
     };
 
-syntax('', delete, Syntax) ->
+syntax('', delete, _Type, Syntax) ->
     Syntax#{
         id => binary,
         delete_childs => boolean
     };
 
-syntax('', find, Syntax) ->
+syntax('', find, _Type, Syntax) ->
     nkdomain_obj_util:search_syntax(Syntax);
 
-syntax('', find_all, Syntax) ->
-    syntax('', find, Syntax);
+syntax('', find_all, Type, Syntax) ->
+    syntax('', find, Type, Syntax);
 
-syntax('', wait_for_save, Syntax) ->
+syntax('', wait_for_save, _Type, Syntax) ->
     Syntax#{
         id => binary,
         time => {integer, {1, none}}
     };
 
-syntax('', make_token, Syntax) ->
+syntax('', make_token, _Type, Syntax) ->
     Syntax#{
         ttl => {integer, 1, none}
     };
 
-syntax(_Sub, _Cmd, Syntax) ->
+syntax(_Sub, _Cmd, _Type, Syntax) ->
     lager:info("~p: unknown syntax: ~p, ~p", [?MODULE, _Sub, _Cmd]),
     Syntax.
 

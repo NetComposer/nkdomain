@@ -25,7 +25,7 @@
 
 -export([api/3]).
 
-
+-include("nkdomain.hrl").
 
 %% ===================================================================
 %% Syntax
@@ -88,7 +88,7 @@ api('', find_all_childs, Syntax) ->
     api('', find, Syntax);
 
 api(Sub, Cmd, Syntax) ->
-    nkdomain_obj_syntax:syntax(Sub, Cmd, Syntax).
+    nkdomain_obj_syntax:syntax(Sub, Cmd, ?DOMAIN_DOMAIN, Syntax).
 
 
 %% ===================================================================

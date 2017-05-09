@@ -75,4 +75,4 @@ api('', update, Syntax) ->
     };
 
 api(Sub, Cmd, Syntax) ->
-    nkdomain_obj_syntax:syntax(Sub, Cmd, Syntax).
+    nkdomain_obj_syntax:syntax(Sub, Cmd, ?DOMAIN_USER, Syntax).
