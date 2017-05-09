@@ -103,7 +103,7 @@ object_mapping() ->
 
 
 %% @private
-object_syntax(Obj) ->
+object_syntax(_Mode) ->
     any.
 
 
