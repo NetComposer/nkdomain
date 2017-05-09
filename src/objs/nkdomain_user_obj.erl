@@ -25,7 +25,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([create/4, login/3, get_name/2, send_push/3]).
--export([object_get_info/0, object_mapping/0, object_syntax/1,
+-export([object_get_info/0, object_mapping/0, object_parse/3,
          object_api_syntax/3, object_api_allow/4, object_api_cmd/4, object_send_event/2,
          object_sync_op/3, object_async_op/2]).
 -export([user_pass/1]).
@@ -157,7 +157,7 @@ object_mapping() ->
 
 
 %% @private
-object_syntax(update) ->
+object_parse(_SrvId, update, _Obj) ->
     #{
         name => binary,
         surname => binary,
@@ -165,8 +165,8 @@ object_syntax(update) ->
         email => binary
     };
 
-object_syntax(load) ->
-    (object_syntax(update))#{
+object_parse(SrvId, load, Obj) ->
+    (object_parse(SrvId, update, Obj))#{
         '__mandatory' => [name, surname]
     }.
 

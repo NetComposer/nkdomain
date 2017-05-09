@@ -78,8 +78,8 @@
     map() | disabled.
 
 
--callback object_syntax(load|update) ->
-    nklib_syntax:syntax().
+-callback object_parse(nkservice:id(), load|update, Obj::map()) ->
+    {ok, nkdomain:obj()} | {error, term()} | nklib_syntax:syntax().
 
 
 -callback object_api_syntax(nkapi:subclass(), nkapi:cmd(), nklib_syntax:stntax()) ->
@@ -99,6 +99,7 @@
 
 
 %% ===================================================================
+%% Types
 %% ===================================================================
 
 
@@ -199,6 +200,7 @@ enable(Id, Enabled) when is_boolean(Enabled)->
     ok | {error, term()}.
 
 update(Id, Map) ->
+    lager:error("NKLOG UP ~p ~p", [Id, Map]),
     do_call(Id, {nkdomain_update, Map}).
 
 

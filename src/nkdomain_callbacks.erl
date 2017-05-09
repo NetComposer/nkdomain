@@ -271,46 +271,6 @@ object_archive(#obj_session{srv_id=SrvId, obj_id=ObjId, obj=Obj}=Session) ->
     end.
 
 
-%%%% @doc Called to parse an object's syntax
-%%-spec object_parse(nkservice:id(), type(), load|update, map()) ->
-%%    {ok, nkdomain:obj()} | {error, term()}.
-%%
-%%object_parse(SrvId, Mode, Type, Map) ->
-%%    case nkdomain_types:get_module(Type) of
-%%        undefined ->
-%%            {error, {invalid_type, Type}};
-%%        Module ->
-%%            BaseSyn = SrvId:object_syntax(Mode),
-%%            BaseMand = maps:get('__mandatory', BaseSyn, []),
-%%            ModSyn = Module:object_syntax(Mode),
-%%            Mandatory = case is_map(ModSyn) of
-%%                true ->
-%%                    ModMand = [
-%%                        <<Type/binary, $., (nklib_util:to_binary(F))/binary>>
-%%                        || F <- maps:get('__mandatory', ModSyn, [])
-%%                    ],
-%%                    BaseMand ++ ModMand;
-%%                false ->
-%%                    BaseMand
-%%            end,
-%%            TypeAtom = binary_to_atom(Type, utf8),
-%%            Syntax = BaseSyn#{TypeAtom => ModSyn, '__mandatory'=>Mandatory},
-%%            Opts = #{
-%%                meta => #{module=>Module},
-%%                {binary_key, Type} => true
-%%            },
-%%            case nklib_syntax:parse(Map, Syntax, Opts) of
-%%                {ok, Obj2, []} ->
-%%                    {ok, Obj2};
-%%                {ok, Obj2, _Exp, Missing} ->
-%%                    ?LLOG(notice, "Object of type ~s has unknown fields: ~p", [Type, Missing]),
-%%                    {ok, Obj2};
-%%                {error, Error} ->
-%%                    {error, Error}
-%%            end
-%%    end.
-
-
 %% @doc Called to parse an object's syntax
 -spec object_parse(nkservice:id(), load|update, map()) ->
     {ok, nkdomain:obj()} | {error, term()}.
@@ -321,24 +281,29 @@ object_parse(SrvId, Mode, Map) ->
         #{type:=Type0} -> Type0;
         _ -> <<>>
     end,
-    BaseSyn = SrvId:object_syntax(Mode),
     case nkdomain_types:get_module(Type) of
         undefined ->
             {error, {invalid_type, Type}};
         Module ->
-            ModSyn = Module:object_syntax(Mode),
-            Syntax = BaseSyn#{Type=>ModSyn},
-            case nklib_syntax:parse(Map, Syntax) of
-                {ok, Obj2, Unknown} ->
-                    case Unknown of
-                        [] ->
-                            ok;
-                        [Unk|_] ->
-                            ?LLOG(notice, "Object of type ~s has unknown fields: ~s", [Type, Unk])
-                    end,
+            case Module:object_parse(SrvId, Mode, Map) of
+                {ok, Obj2} ->
                     {ok, Obj2};
                 {error, Error} ->
-                    {error, Error}
+                    {error, Error};
+                Syntax ->
+                    BaseSyn = SrvId:object_syntax(Mode),
+                    case nklib_syntax:parse(Map, BaseSyn#{Type=>Syntax}) of
+                        {ok, Obj2, Unknown} ->
+                            case Unknown of
+                                [] ->
+                                    ok;
+                                [Unk|_] ->
+                                    ?LLOG(notice, "Object of type ~s has unknown fields: ~s", [Type, Unk])
+                            end,
+                            {ok, Obj2};
+                        {error, Error} ->
+                            {error, Error}
+                    end
             end
     end.
 

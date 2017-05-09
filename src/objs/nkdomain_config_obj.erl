@@ -25,7 +25,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([create/5, find_configs/3]).
--export([object_get_info/0, object_mapping/0, object_syntax/1,
+-export([object_get_info/0, object_mapping/0, object_parse/3,
          object_api_syntax/3, object_api_allow/4, object_api_cmd/4]).
 
 -include("nkdomain.hrl").
@@ -103,7 +103,7 @@ object_mapping() ->
 
 
 %% @private
-object_syntax(_Mode) ->
+object_parse(_SrvId, _Mode, _Obj) ->
     any.
 
 

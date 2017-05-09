@@ -43,6 +43,10 @@ syntax('', create, Type, Syntax) ->
 syntax('', update, Type, Syntax) ->
     Syntax#{
         id => binary,
+        name => binary,
+        description => binary,
+        aliases => {list, binary},
+        icon_id => binary,
         Type => map,
         '__mandatory' => [id, Type]
     };
