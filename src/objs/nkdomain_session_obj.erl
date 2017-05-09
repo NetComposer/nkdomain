@@ -51,7 +51,7 @@
 %% ===================================================================
 
 -spec create(nkservice:id(), nkdomain:obj_id(), create_opts()) ->
-    {ok, SessId::nkdomain:obj_id(), pid()} | {error, term()}.
+    {ok, nkdomain_obj_lib:make_and_create_reply(), pid()} | {error, term()}.
 
 create(SrvId, UserId, Opts) ->
     Make1 = [
@@ -69,17 +69,17 @@ create(SrvId, UserId, Opts) ->
     ],
     Make2 = maps:from_list(lists:flatten(Make1)),
     case nkdomain_obj_lib:make_and_create(SrvId, UserId, ?DOMAIN_SESSION, Make2) of
-        {ok, ObjId, _Path, ObjPid} ->
+        {ok, Reply, Pid} ->
             case Opts of
                 #{api_server_pid:=Pid2} ->
                     % Register to keep the user awake
-                    ok = nkdomain_obj:link(UserId, usage, ObjPid, ?MODULE),
+                    ok = nkdomain_obj:link(UserId, usage, Pid, ?MODULE),
                     %% TODO if the session is moved, it will fail
-                    ok = nkapi_server:register(Pid2, {?MODULE, ObjPid});
+                    ok = nkapi_server:register(Pid2, {?MODULE, Pid});
                 _ ->
                     ok
             end,
-            {ok, ObjId, ObjPid};
+            {ok, Reply, Pid};
         {error, Error} ->
             {error, Error}
     end.

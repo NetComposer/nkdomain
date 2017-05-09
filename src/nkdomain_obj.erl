@@ -79,7 +79,7 @@
 
 
 -callback object_parse(nkservice:id(), load|update, Obj::map()) ->
-    {ok, nkdomain:obj()} | {error, term()} | nklib_syntax:syntax().
+    {ok, nkdomain:obj()} | {error, term()} | nklib_syntax:syntax() | {type_obj, map()}.
 
 
 -callback object_api_syntax(nkapi:subclass(), nkapi:cmd(), nklib_syntax:stntax()) ->
@@ -197,10 +197,9 @@ enable(Id, Enabled) when is_boolean(Enabled)->
 
 %% @doc
 -spec update(id(), map()) ->
-    ok | {error, term()}.
+    {ok, UnknownFields::[binary()]} | {error, term()}.
 
 update(Id, Map) ->
-    lager:error("NKLOG UP ~p ~p", [Id, Map]),
     do_call(Id, {nkdomain_update, Map}).
 
 
@@ -541,13 +540,9 @@ handle_call({nkdomain_update, _Map}, _From,
     reply({error, object_is_disabled}, State);
 
 handle_call({nkdomain_update, Map}, _From, State) ->
-    #state{session=#obj_session{obj=Obj}=Session} = State,
-    Time = nkdomain_util:timestamp(),
-    Obj2 = ?ADD_TO_OBJ(updated_time, Time, Obj),
-    State2 = State#state{session=Session#obj_session{obj=Obj2}},
-    case do_update(Map, State2) of
-        {ok, State3} ->
-            reply(ok, State3);
+    case do_update(Map, State) of
+        {ok, UnknownFields, State2} ->
+            reply({ok, UnknownFields}, State2);
         {error, Error, State2} ->
             reply({error, Error}, State2)
     end;
@@ -572,7 +567,7 @@ handle_call({nkdomain_enable, Enable}, From, #state{session=#obj_session{obj=Obj
             reply(ok, State);
         _ ->
             case do_update(#{enabled=>Enable}, State) of
-                {ok, State2} ->
+                {ok, [], State2} ->
                     gen_server:reply(From, ok),
                     do_enabled(Enable, State2);
                 {error, Error, State2} ->
@@ -699,7 +694,13 @@ handle_cast(Msg, #state{moved_to=Pid}=State) when is_pid(Pid) ->
 
 handle_cast(nkdomain_do_load, #state{srv_id=SrvId, obj_id=ObjId, session=Session}=State) ->
     case SrvId:object_load(SrvId, ObjId) of
-        {ok, Obj} ->
+        {ok, Obj, UnknownFields} ->
+            case UnknownFields of
+                [] ->
+                    ok;
+                _ ->
+                    ?LLOG(notice, "Unknown fields loading object: ~p", [UnknownFields], State)
+            end,
             #obj_session{is_enabled=Enabled} = Session,
             Enabled2 = case Enabled of
                 false ->
@@ -1041,16 +1042,24 @@ do_rm_child(Type, Name, #state{session=Session}=State) ->
 
 %% @private
 do_update(Update, #state{srv_id=SrvId, session=Session}=State) ->
-    #obj_session{obj=Obj, type=Type}=Session,
-    case SrvId:object_parse(SrvId, update, Update#{type=>Type}) of
-        {ok, Update2} ->
-            case ?ADD_TO_OBJ_DEEP(Update2, Obj) of
+    #obj_session{obj=Obj, obj_id=_ObjId, path=_Path, type=Type}=Session,
+    Update2 = Update#{type=>Type},
+    case SrvId:object_parse(SrvId, update, Update2) of
+        {ok, Update3, _} ->
+            case ?ADD_TO_OBJ_DEEP(Update3, Obj) of
                 Obj ->
-                    {ok, State};
-                Obj2 ->
-                    Session2 = Session#obj_session{obj=Obj2, is_dirty=true},
-                    State2 = do_save(State#state{session=Session2}),
-                    {ok, do_event({updated, Update}, State2)}
+                    {ok, [], State};
+                Obj3 ->
+                    case SrvId:object_parse(SrvId, load, Obj3) of
+                        {ok, Obj4, UnknownFields} ->
+                            Time = nkdomain_util:timestamp(),
+                            Obj5 = ?ADD_TO_OBJ(updated_time, Time, Obj4),
+                            Session2 = Session#obj_session{obj=Obj5, is_dirty=true},
+                            State2 = do_save(State#state{session=Session2}),
+                            {ok, UnknownFields, do_event({updated, Update3}, State2)};
+                        {error, Error} ->
+                            {error, Error}
+                    end
             end;
         {error, Error} ->
             {error, Error, State}

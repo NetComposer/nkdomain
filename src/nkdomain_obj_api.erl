@@ -95,8 +95,10 @@ api('', update, #nkapi_req{data=Data}, Type, #{srv_id:=SrvId}=State) ->
     case get_id(Type, Data, State) of
         {ok, Id} ->
             case nkdomain:update(SrvId, Id, Data) of
-                ok ->
+                {ok, []} ->
                     {ok, #{}, State};
+                {ok, UnknownFields} ->
+                    {ok, #{unknown_fields=>UnknownFields}, State};
                 {error, Error} ->
                     {error, Error, State}
             end;
@@ -172,8 +174,8 @@ api('', make_token, #nkapi_req{data=Data}, Type, #{srv_id:=SrvId}=State) ->
             case get_id(Type, Data, State) of
                 {ok, Id} ->
                     case nkdomain_token_obj:create(SrvId, Id, TTL, #{}) of
-                        {ok, ObjId, _Path, _Pid} ->
-                            {ok, #{obj_id=>ObjId, ttl=>TTL}, State};
+                        {ok, Reply, _Pid} ->
+                            {ok, Reply#{ttl=>TTL}, State};
                         {error, Error} ->
                             {error, Error, State}
                     end;

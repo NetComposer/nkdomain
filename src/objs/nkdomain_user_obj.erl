@@ -63,9 +63,8 @@
 %% ===================================================================
 
 %% @doc
-%% Data must follow object's syntax
 -spec create(nkservice:id(), nkdomain:id(), nkdomain:name(), map()) ->
-    {ok, nkdomain:obj_id(), nkdomain:path(), pid()} | {error, term()}.
+    {ok, nkdomain_obj_lib:make_and_create_reply(), pid()} | {error, term()}.
 
 create(Srv, Parent, Name, Data) ->
     Opts = #{
@@ -285,7 +284,7 @@ do_login(_Pid, _ObjId, _Opts) ->
 do_start_session(SrvId, UserId, Opts) ->
     Opts2 = maps:with([session_id, api_server_pid, local, remote], Opts),
     case nkdomain_session_obj:create(SrvId, UserId, Opts2) of
-        {ok, ObjId, _Pid} ->
+        {ok, #{obj_id:=ObjId}, _Pid} ->
             {ok, ObjId};
         {error, Error} ->
             {error, Error}

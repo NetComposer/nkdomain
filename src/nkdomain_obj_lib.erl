@@ -31,6 +31,8 @@
 -export([get_node/1, register/3, register/4, link_to_parent/4]).
 -export([find_loaded/1, call/2, call/3, cast/2, info/2]).
 -export([send_event/3, send_event/4]).
+-export_type([make_and_create_reply/0]).
+
 
 -include("nkdomain.hrl").
 -include_lib("nkevent/include/nkevent.hrl").
@@ -55,6 +57,14 @@
         description => binary(),
         aliases => [binary()],
         type_obj => map()
+    }.
+
+
+-type make_and_create_reply() ::
+    #{
+        obj_id => nkdomain:obj_id(),
+        path => nkdomain:path(),
+        unknown_fields => [binary()]
     }.
 
 
@@ -150,7 +160,7 @@ do_make_obj([{Key, Val}|Rest], Type, Acc) ->
 
 %% @doc
 -spec make_and_create(nkservice:id(), nkdomain:id(), nkdomain:type(), make_opts()) ->
-    {ok, nkdomain:obj_id(), nkdomain:path(), pid()} | {error, term()}.
+    {ok, make_and_create_reply(), pid()} | {error, term()}.
 
 make_and_create(Srv, Parent, Type, Opts) ->
     case make_obj(Srv, Parent, Type, Opts) of
@@ -164,8 +174,10 @@ make_and_create(Srv, Parent, Type, Opts) ->
                     CreateMeta1#{skip_path_check=>true}
             end,
             case create(Srv, Obj, CreateMeta2) of
-                #obj_id_ext{type=Type, obj_id=ObjId, path=Path, pid=Pid} ->
-                    {ok, ObjId, Path, Pid};
+                {#obj_id_ext{type=Type, obj_id=ObjId, path=Path, pid=Pid}, []} ->
+                    {ok, #{obj_id=>ObjId, path=>Path}, Pid};
+                {#obj_id_ext{type=Type, obj_id=ObjId, path=Path, pid=Pid}, UnknownFields} ->
+                    {ok, #{obj_id=>ObjId, path=>Path, unknown_fields=>UnknownFields}, Pid};
                 {error, Error} ->
                     {error, Error}
             end;
@@ -176,16 +188,16 @@ make_and_create(Srv, Parent, Type, Opts) ->
 
 %% @doc Creates a new object
 -spec create(nkservice:id(), map(), nkdomain:create_opts()) ->
-    #obj_id_ext{} | {error, term()}.
+    {#obj_id_ext{}, UnknownFielfd::[binary()]} | {error, term()}.
 
 create(Srv, #{obj_id:=ObjId}=Obj, Meta) ->
     case nkservice_srv:get_srv_id(Srv) of
         {ok, SrvId} ->
             case SrvId:object_parse(SrvId, load, Obj) of
-                {ok, #{obj_id:=ObjId, path:=Path, type:=Type}=Obj2} ->
+                {ok, #{obj_id:=ObjId, path:=Path, type:=Type}=Obj2, UnknownFields} ->
                     % We know type is valid here
                     Ext = #obj_id_ext{srv_id=SrvId, type=Type, obj_id=ObjId, path=Path},
-                    do_create(Ext, Obj2, Meta);
+                    do_create(Ext, Obj2, Meta, UnknownFields);
                 {error, Error} ->
                     {error, Error}
             end;
@@ -195,12 +207,12 @@ create(Srv, #{obj_id:=ObjId}=Obj, Meta) ->
 
 
 %% @private
-do_create(#obj_id_ext{srv_id=SrvId}=Ext, #{parent_id:=ParentId}=Obj, Meta) ->
+do_create(#obj_id_ext{srv_id=SrvId}=Ext, #{parent_id:=ParentId}=Obj, Meta, UnknownFields) ->
     case load(SrvId, ParentId, #{}) of
         #obj_id_ext{pid=ParentPid} ->
             case nkdomain_obj:create_child(ParentPid, Obj, Meta) of
                 {ok, ObjPid} ->
-                    Ext#obj_id_ext{pid=ObjPid};
+                    {Ext#obj_id_ext{pid=ObjPid}, UnknownFields};
                 {error, Error} ->
                     {error, Error}
             end;

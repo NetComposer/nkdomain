@@ -190,8 +190,8 @@ object_load(SrvId, ObjId) ->
     case SrvId:object_store_read_raw(SrvId, ObjId) of
         {ok, Map} ->
             case SrvId:object_parse(SrvId, load, Map) of
-                {ok, Obj} ->
-                    {ok, Obj};
+                {ok, Obj, UnknownFields} ->
+                    {ok, Obj, UnknownFields};
                 {error, Error} ->
                     ?LLOG(warning, "error parsing loaded object ~s: ~p\n~p", [ObjId, Error, Map]),
                     {error, object_load_error}
@@ -273,7 +273,7 @@ object_archive(#obj_session{srv_id=SrvId, obj_id=ObjId, obj=Obj}=Session) ->
 
 %% @doc Called to parse an object's syntax
 -spec object_parse(nkservice:id(), load|update, map()) ->
-    {ok, nkdomain:obj()} | {error, term()}.
+    {ok, nkdomain:obj(), Unknown::[binary()]} | {error, term()}.
 
 object_parse(SrvId, Mode, Map) ->
     Type = case Map of
@@ -286,24 +286,21 @@ object_parse(SrvId, Mode, Map) ->
             {error, {invalid_type, Type}};
         Module ->
             case Module:object_parse(SrvId, Mode, Map) of
-                {ok, Obj2} ->
-                    {ok, Obj2};
+                {ok, Obj2, UnknownFields} ->
+                    {ok, Obj2, UnknownFields};
                 {error, Error} ->
                     {error, Error};
-                Syntax ->
+                {type_obj, TypeObj} ->
                     BaseSyn = SrvId:object_syntax(Mode),
-                    case nklib_syntax:parse(Map, BaseSyn#{Type=>Syntax}) of
-                        {ok, Obj2, Unknown} ->
-                            case Unknown of
-                                [] ->
-                                    ok;
-                                [Unk|_] ->
-                                    ?LLOG(notice, "Object of type ~s has unknown fields: ~s", [Type, Unk])
-                            end,
-                            {ok, Obj2};
+                    case nklib_syntax:parse(Map, BaseSyn#{Type=>ignore}) of
+                        {ok, Obj, UnknownFields} ->
+                            {ok, Obj#{Type=>TypeObj}, UnknownFields};
                         {error, Error} ->
                             {error, Error}
-                    end
+                    end;
+                Syntax ->
+                    BaseSyn = SrvId:object_syntax(Mode),
+                    nklib_syntax:parse(Map, BaseSyn#{Type=>Syntax})
             end
     end.
 
@@ -773,6 +770,22 @@ service_handle_info(_Msg, _State) ->
 %% ===================================================================
 %% Internal
 %% ===================================================================
+
+
+%%%% @private
+%%do_parse(Map, Syntaxis) ->
+%%    case nklib_syntax:parse(Map, Syntaxis) of
+%%        {ok, #{type:=Type}=Obj, Unknown} ->
+%%            case Unknown of
+%%                [] ->
+%%                    ok;
+%%                [Unk|_] ->
+%%                    ?LLOG(notice, "Object of type ~s has unknown fields: ~s", [Type, Unk])
+%%            end,
+%%            {ok, Obj};
+%%        {error, Error} ->
+%%            {error, Error}
+%%    end.
 
 
 %% @private

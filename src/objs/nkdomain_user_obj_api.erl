@@ -38,8 +38,8 @@ cmd('', create, #nkapi_req{data=Data}, State) ->
     #{obj_name:=Name, ?DOMAIN_USER:=User} = Data,
     #{srv_id:=SrvId, domain:=Domain} = State,
     case nkdomain_user_obj:create(SrvId, Domain, Name, User) of
-        {ok, ObjId, Path, _Pid} ->
-            {ok, #{obj_id=>ObjId, path=>Path}, State};
+        {ok, Reply, _Pid} ->
+            {ok, Reply, State};
         {error, Error} ->
             {error, Error, State}
     end;

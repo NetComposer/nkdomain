@@ -208,7 +208,7 @@ get(Srv, IdOrPath) ->
 
 create(Srv, Obj, Meta) ->
     case nkdomain_obj_lib:create(Srv, Obj, Meta) of
-        #obj_id_ext{type=Type, obj_id=ObjId, path=Path, pid=Pid} ->
+        {#obj_id_ext{type=Type, obj_id=ObjId, path=Path, pid=Pid}, _UnknownFields} ->
             {ok, Type, ObjId, Path, Pid};
         {error, Error} ->
             {error, Error}
@@ -231,7 +231,7 @@ enable(Srv, Id, Enable) ->
 
 %% @doc Updates an object
 -spec update(nkservice:id(), nkdomain:id(), nkservice:error()) ->
-    ok | {error, term()}.
+    {ok, UnknownFields::[binary()]} | {error, term()}.
 
 update(Srv, Id, Update) ->
     case nkdomain_obj_lib:load(Srv, Id, #{}) of
@@ -280,7 +280,7 @@ force_delete(Srv, Id) ->
 
 archive(SrvId, ObjId, Reason) ->
     case SrvId:object_load(SrvId, ObjId) of
-        {ok, Obj} ->
+        {ok, Obj, _UnknownFields} ->
             Obj2 = nkdomain_util:add_destroyed(SrvId, Reason, Obj),
             case nkdomain_store:archive(SrvId, ObjId, Obj2) of
                 ok ->

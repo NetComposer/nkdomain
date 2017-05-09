@@ -107,7 +107,7 @@ admin_create() ->
     case nkdomain_obj_lib:make_obj(root, <<"root">>, ?DOMAIN_USER, Opts) of
         {ok, Obj} ->
             case nkdomain_obj_lib:create(root, Obj, #{}) of
-                #obj_id_ext{type = ?DOMAIN_USER} ->
+                {#obj_id_ext{type = ?DOMAIN_USER}, []} ->
                     ok;
                 {error, Error} ->
                     {error, Error}

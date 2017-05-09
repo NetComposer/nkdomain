@@ -48,9 +48,8 @@
 %% ===================================================================
 
 %% @doc
-%% Data must follow object's syntax
 -spec create(nkservice:id(), nkdomain:id(), integer(), map()) ->
-    {ok, nkdomain:obj_id(), nkdomain:path(), pid()} | {error, term()}.
+    {ok, nkdomain_obj_lib:make_and_create_reply(), pid()} | {error, term()}.
 
 create(Srv, Parent, SecsTTL, Data) when is_integer(SecsTTL), SecsTTL >= 1 ->
     case nkdomain_obj_lib:load(Srv, Parent, #{}) of
