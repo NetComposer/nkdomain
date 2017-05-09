@@ -96,6 +96,30 @@ api('', enable, #nkapi_req{data=#{enable:=Enable}=Data}, Type, #{srv_id:=SrvId}=
             Error
     end;
 
+api('', find, #nkapi_req{data=Data}, Type, #{srv_id:=SrvId}=State) ->
+    Domain = nkdomain_util:get_service_domain(SrvId),
+    Filters1 = maps:get(filters, Data, #{}),
+    Filters2 = Filters1#{type=>Type},
+    Data2 = Data#{filters=>Filters2},
+    case nkdomain_domain_obj:find(SrvId, Domain, Data2) of
+        {ok, Total, List, _Meta} ->
+            {ok, #{total=>Total, data=>List}, State};
+        {error, Error} ->
+            {error, Error, State}
+    end;
+
+api('', find_all, #nkapi_req{data=Data}, Type, #{srv_id:=SrvId}=State) ->
+    Domain = nkdomain_util:get_service_domain(SrvId),
+    Filters1 = maps:get(filters, Data, #{}),
+    Filters2 = Filters1#{type=>Type},
+    Data2 = Data#{filters=>Filters2},
+    case nkdomain_domain_obj:find_all(SrvId, Domain, Data2) of
+        {ok, Total, List, _Meta} ->
+            {ok, #{total=>Total, data=>List}, State};
+        {error, Error} ->
+            {error, Error, State}
+    end;
+
 api('', wait_for_save, #nkapi_req{data=Data}, Type, #{srv_id:=SrvId}=State) ->
     Time = maps:get(time, Data, 5000),
     case get_id(Type, Data, State) of
@@ -151,6 +175,7 @@ api(_Sub, _Cmd, _Req, _Type, State) ->
 %% @doc
 get_id(Type, Data, State) ->
     nkdomain_api_util:get_id(Type, id, Data, State).
+
 
 %% @private
 cmd_delete_childs(#{delete_childs:=true}, SrvId, Id) ->

@@ -116,13 +116,14 @@ register(Module) ->
     Type2 = to_bin(Type),
     % Ensure we have the corresponding atom loaded
     _ = binary_to_atom(Type2, utf8),
+    Module2 = maps:get(module, Info, Module),
     case maps:find(subtype, Info) of
         error ->
-            gen_server:call(?MODULE, {register_type, Type2, Module});
+            gen_server:call(?MODULE, {register_type, Type2, Module2});
         {ok, SubType} ->
             SubType2 = to_bin(SubType),
             _ = binary_to_atom(SubType2, utf8),
-            gen_server:call(?MODULE, {register_subtype, Type2, SubType2, Module})
+            gen_server:call(?MODULE, {register_subtype, Type2, SubType2, Module2})
     end.
 
 

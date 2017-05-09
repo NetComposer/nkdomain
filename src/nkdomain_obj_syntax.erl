@@ -50,6 +50,12 @@ syntax('', delete, Syntax) ->
         delete_childs => boolean
     };
 
+syntax('', find, Syntax) ->
+    nkdomain_obj_util:search_syntax(Syntax);
+
+syntax('', find_all, Syntax) ->
+    syntax('', find, Syntax);
+
 syntax('', wait_for_save, Syntax) ->
     Syntax#{
         id => binary,
