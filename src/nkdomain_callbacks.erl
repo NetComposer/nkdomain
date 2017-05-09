@@ -699,7 +699,7 @@ api_server_allow(#nkapi_req{module=Module}=Req, State) when Module/=undefined ->
 api_server_allow(#nkapi_req{class=event}, State) ->
     {true, State};
 
-api_server_allow(#nkapi_req{class=mail}, State) ->
+api_server_allow(#nkapi_req{class=nkmail}, State) ->
     {true, State};
 
 api_server_allow(_Req, _State) ->
