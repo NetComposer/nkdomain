@@ -167,17 +167,16 @@ object_syntax(load) ->
         icon_id => binary,
         '_store_vsn' => any,
         '__mandatory' => [type, obj_id, parent_id, path, created_time]
-        %id => ignore                                % Used in APIs
     };
 
 object_syntax(update) ->
     #{
+        type => ignore,             % Do not count as unknown is updates
         enabled => boolean,
         name => binary,
         description => binary,
         aliases => {list, binary},
         icon_id => binary
-        %id => ignore                                % Used in APIs
     }.
 
 

@@ -36,13 +36,19 @@ syntax('', create, Type, Syntax) ->
     Syntax#{
         obj_name => binary,
         parent_id => binary,
+        enabled => boolean,
+        name => binary,
+        description => binary,
+        aliases => {list, binary},
+        icon_id => binary,
         Type => map,
-        '__mandatory' => [obj_name, Type]
+        '__mandatory' => [Type]
     };
 
 syntax('', update, Type, Syntax) ->
     Syntax#{
         id => binary,
+        enabled => boolean,
         name => binary,
         description => binary,
         aliases => {list, binary},

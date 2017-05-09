@@ -165,9 +165,8 @@ object_parse(_SrvId, update, _Obj) ->
     };
 
 object_parse(SrvId, load, Obj) ->
-    (object_parse(SrvId, update, Obj))#{
-        '__mandatory' => [name, surname]
-    }.
+    Base = object_parse(SrvId, update, Obj),
+    Base#{'__mandatory' => [name, surname]}.
 
 
 %% @private

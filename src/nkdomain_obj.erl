@@ -1045,13 +1045,13 @@ do_update(Update, #state{srv_id=SrvId, session=Session}=State) ->
     #obj_session{obj=Obj, obj_id=_ObjId, path=_Path, type=Type}=Session,
     Update2 = Update#{type=>Type},
     case SrvId:object_parse(SrvId, update, Update2) of
-        {ok, Update3, _} ->
+        {ok, Update3, UnknownFields} ->
             case ?ADD_TO_OBJ_DEEP(Update3, Obj) of
                 Obj ->
-                    {ok, [], State};
+                    {ok, UnknownFields, State};
                 Obj3 ->
                     case SrvId:object_parse(SrvId, load, Obj3) of
-                        {ok, Obj4, UnknownFields} ->
+                        {ok, Obj4, _} ->
                             Time = nkdomain_util:timestamp(),
                             Obj5 = ?ADD_TO_OBJ(updated_time, Time, Obj4),
                             Session2 = Session#obj_session{obj=Obj5, is_dirty=true},

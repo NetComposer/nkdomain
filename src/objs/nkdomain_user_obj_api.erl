@@ -34,15 +34,15 @@
 %% ===================================================================
 
 %% @doc
-cmd('', create, #nkapi_req{data=Data}, State) ->
-    #{obj_name:=Name, ?DOMAIN_USER:=User} = Data,
-    #{srv_id:=SrvId, domain:=Domain} = State,
-    case nkdomain_user_obj:create(SrvId, Domain, Name, User) of
-        {ok, Reply, _Pid} ->
-            {ok, Reply, State};
-        {error, Error} ->
-            {error, Error, State}
-    end;
+%%cmd('', create, #nkapi_req{data=Data}, State) ->
+%%    #{obj_name:=Name, ?DOMAIN_USER:=User} = Data,
+%%    #{srv_id:=SrvId, domain:=Domain} = State,
+%%    case nkdomain_user_obj:create(SrvId, Domain, Name, User) of
+%%        {ok, Reply, _Pid} ->
+%%            {ok, Reply, State};
+%%        {error, Error} ->
+%%            {error, Error, State}
+%%    end;
 
 cmd('', login, #nkapi_req{data=#{id:=User}=Data}, #{srv_id:=SrvId}=State) ->
     LoginMeta1 = maps:with([session_type, session_id, local, remote], State),

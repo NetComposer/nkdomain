@@ -38,13 +38,13 @@ api('', create, #nkapi_req{data=Data}, Type, #{srv_id:=SrvId}=State) ->
     Module = nkdomain_types:get_module(Type),
     case erlang:function_exported(Module, create, 4) of
         true ->
-            Name = maps:get(obj_name, Data),
+            Name = maps:get(obj_name, Data, <<>>),
             Config = maps:get(Type, Data),
             case get_parent(Data, State) of
                 {ok, Parent} ->
                     case Module:create(SrvId, Parent, Name, Config) of
-                        {ok, ObjId, _Path, _Pid} ->
-                            {ok, #{obj_id=>ObjId}, State};
+                        {ok, Reply, _Pid} ->
+                            {ok, Reply, State};
                         {error, Error} ->
                             {error, Error, State}
                     end;
@@ -94,7 +94,7 @@ api('', delete, #nkapi_req{data=Data}, Type, #{srv_id:=SrvId}=State) ->
 api('', update, #nkapi_req{data=Data}, Type, #{srv_id:=SrvId}=State) ->
     case get_id(Type, Data, State) of
         {ok, Id} ->
-            case nkdomain:update(SrvId, Id, Data) of
+            case nkdomain:update(SrvId, Id, maps:remove(id, Data)) of
                 {ok, []} ->
                     {ok, #{}, State};
                 {ok, UnknownFields} ->

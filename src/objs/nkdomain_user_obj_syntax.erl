@@ -50,29 +50,5 @@ api('', get_token, Syntax) ->
         '__mandatory' => [id]
     };
 
-api('', create, Syntax) ->
-    Syntax#{
-        obj_name => binary,
-        ?DOMAIN_USER => #{
-            name => binary,
-            surname => binary,
-            password => binary,
-            email => email,
-            '__mandatory' => [name, surname]
-        },
-        domain => binary
-    };
-
-api('', update, Syntax) ->
-    Syntax#{
-        id => binary,
-        ?DOMAIN_USER => #{
-            name => binary,
-            surname => binary,
-            password => binary,
-            email => email
-        }
-    };
-
 api(Sub, Cmd, Syntax) ->
     nkdomain_obj_syntax:syntax(Sub, Cmd, ?DOMAIN_USER, Syntax).
