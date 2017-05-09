@@ -65,6 +65,7 @@
 %% @doc
 api_error({could_not_load_parent, Id})      -> {"Object could not load parent '~s'", [Id]};
 api_error(domain_unknown)                   -> "Unknown domain";
+api_error({invalid_name, N})                -> {"Invalid name '~s'", [N]};
 api_error(invalid_object_id)                -> "Invalid object id";
 api_error(invalid_object_type)              -> "Invalid object type";
 api_error(invalid_object_path)              -> "Invalid object path";
@@ -323,7 +324,6 @@ object_parse(SrvId, Mode, Map) ->
     BaseSyn = SrvId:object_syntax(Mode),
     case nkdomain_types:get_module(Type) of
         undefined ->
-            lager:error("NKLOG ~p ~p", [Mode, Map]),
             {error, {invalid_type, Type}};
         Module ->
             ModSyn = Module:object_syntax(Mode),

@@ -80,40 +80,54 @@ make_obj(Srv, Parent, Type, Opts) ->
                 _ ->
                     <<Type2/binary, $-, UUID/binary>>
             end,
-            Name1 = case Opts of
-                #{obj_name:=Name0} ->
-                    case to_bin(Name0) of
-                        <<>> ->
-                            binary:part(UUID, 0, 7);
-                        Name0bin ->
-                            nkdomain_util:name(Name0bin)
-                    end;
-                _ ->
-                    binary:part(UUID, 0, 7)
-            end,
-            Name2 = case Type2 of
-                ?DOMAIN_DOMAIN ->
-                    Name1;
-                _ ->
-                    <<Type2/binary, "s/", Name1/binary>>
-            end,
-            BasePath = case ParentPath of
-                <<"/">> -> <<>>;
-                _ -> ParentPath
-            end,
-            Obj1 = [
-                {obj_id, ObjId},
-                {type, Type2},
-                {parent_id, ParentId},
-                {path, <<BasePath/binary, $/, Name2/binary>>},
-                {created_time, nkdomain_util:timestamp()}
-            ],
-            Obj2 = do_make_obj(maps:to_list(Opts), Type, Obj1),
-            {ok, maps:from_list(Obj2)};
+            case do_make_name(UUID, Opts) of
+                {ok, Name1} ->
+                    Name2 = case Type2 of
+                        ?DOMAIN_DOMAIN ->
+                            Name1;
+                        _ ->
+                            <<Type2/binary, "s/", Name1/binary>>
+                    end,
+                    BasePath = case ParentPath of
+                        <<"/">> -> <<>>;
+                        _ -> ParentPath
+                    end,
+                    Obj1 = [
+                        {obj_id, ObjId},
+                        {type, Type2},
+                        {parent_id, ParentId},
+                        {path, <<BasePath/binary, $/, Name2/binary>>},
+                        {created_time, nkdomain_util:timestamp()}
+                    ],
+                    Obj2 = do_make_obj(maps:to_list(Opts), Type, Obj1),
+                    {ok, maps:from_list(Obj2)};
+                {error, Error} ->
+                    {error, Error}
+            end;
         {error, object_not_found} ->
             {error, {could_not_load_parent, Parent}};
         {error, Error} ->
             {error, Error}
+    end.
+
+
+%% @private
+do_make_name(UUID, Opts) ->
+    case Opts of
+        #{obj_name:=Name1} ->
+            case to_bin(Name1) of
+                <<>> ->
+                    {ok, binary:part(UUID, 0, 7)};
+                Name2 ->
+                    case nkdomain_util:name(Name2) of
+                        Name2 ->
+                            {ok, Name2};
+                        _ ->
+                            {error, {invalid_name, Name2}}
+                    end
+            end;
+        _ ->
+            {ok, binary:part(UUID, 0, 7)}
     end.
 
 

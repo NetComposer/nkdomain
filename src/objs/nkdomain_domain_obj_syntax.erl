@@ -60,6 +60,12 @@ api('', update, Syntax) ->
 %%      simple_query => "message"
 %% }
 
+api('', check_name, Syntax) ->
+    Syntax#{
+        name => binary,
+        '__mandatory' => [name]
+    };
+
 api('', find, Syntax) ->
     Syntax2 = Syntax#{
         id => binary

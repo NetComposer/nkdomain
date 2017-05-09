@@ -104,7 +104,6 @@ object_mapping() ->
 
 %% @private
 object_syntax(Obj) ->
-    lager:error("OBJ: ~p", [Obj]),
     any.
 
 

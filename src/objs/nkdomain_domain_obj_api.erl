@@ -42,6 +42,9 @@ cmd('', create, #nkapi_req{data=Data}, State) ->
             {error, Error, State}
     end;
 
+cmd('', check_name, #nkapi_req{data=#{name:=Name}}, State) ->
+    {ok, #{name=>nkdomain_util:name(Name)}, State};
+
 cmd('', find, #nkapi_req{data=Data}, #{srv_id:=SrvId}=State) ->
     Id = get_domain(Data, SrvId),
     case nkdomain_domain_obj:find(SrvId, Id, Data) of

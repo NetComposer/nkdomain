@@ -126,7 +126,7 @@ class(Type) ->
 
 %% @private
 name(Name) ->
-    nklib_parse:normalize(Name, #{space=>$-, allowed=>[$-]}).
+    nklib_parse:normalize(Name, #{space=>$-, allowed=>[$-, $.]}).
 
 
 %% @doc Finds the domain for a service
