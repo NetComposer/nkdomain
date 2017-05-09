@@ -97,7 +97,7 @@ stop() ->
 admin_create() ->
     Opts = #{
         obj_id => <<"admin">>,
-        name => <<"admin">>,
+        obj_name => <<"admin">>,
         type_obj => #{
             name => <<"Admin">>,
             surname => <<"User">>,
