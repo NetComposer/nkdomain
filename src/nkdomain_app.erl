@@ -116,7 +116,7 @@ register_types() ->
     ok = nkdomain_types:register(nkdomain_session_obj),
     ok = nkdomain_types:register(nkdomain_config_obj),
     ok = nkdomain_types:register(nkdomain_token_obj),
-    ok = nkdomain_types:register(nkmail_mail_obj).
+    nkmail_app:register_types().
 
 
 %% @doc gets a configuration value
