@@ -21,7 +21,7 @@
 -module(nkdomain_api_util).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([search/2, get_id/3, get_id/4, add_id/3, get_domain/1]).
+-export([search/2, get_id/3, get_id/4, add_id/3, get_domain/2]).
 
 -include("nkdomain.hrl").
 -include_lib("nkapi/include/nkapi.hrl").
@@ -77,7 +77,10 @@ add_id(Type, Id, State) ->
 
 
 %% @private
-get_domain(#{srv_id:=SrvId}=State) ->
+get_domain(#{domain_id:=Domain}, _State) ->
+    {ok, Domain};
+
+get_domain(_Data, #{srv_id:=SrvId}=State) ->
     case nkdomain_util:get_service_domain(SrvId) of
         undefined ->
             {error, domain_unknown, State};
