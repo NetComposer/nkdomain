@@ -663,6 +663,9 @@ api_server_allow(#nkapi_req{class=event}, State) ->
 api_server_allow(#nkapi_req{class=nkmail}, State) ->
     {true, State};
 
+api_server_allow(#nkapi_req{class=nkadmin}, State) ->
+    {true, State};
+
 api_server_allow(_Req, _State) ->
     continue.
 
