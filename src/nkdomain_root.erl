@@ -95,23 +95,14 @@ stop() ->
 
 %% @doc
 admin_create() ->
-    Opts = #{
+    Obj = #{
         obj_id => <<"admin">>,
-        obj_name => <<"admin">>,
-        type_obj => #{
+        parent_id => <<"root">>,
+        type => ?DOMAIN_USER,
+        ?DOMAIN_USER => #{
             name => <<"Admin">>,
             surname => <<"User">>,
             password => "1234"
         }
     },
-    case nkdomain_obj_lib:make_obj(root, <<"root">>, ?DOMAIN_USER, Opts) of
-        {ok, Obj} ->
-            case nkdomain_obj_lib:create(root, Obj, #{}) of
-                {#obj_id_ext{type = ?DOMAIN_USER}, []} ->
-                    ok;
-                {error, Error} ->
-                    {error, Error}
-            end;
-        {error, Error} ->
-            {error, Error}
-    end.
+    nkdomain_obj_lib:make_and_create(root, <<"admin">>, Obj, #{}).

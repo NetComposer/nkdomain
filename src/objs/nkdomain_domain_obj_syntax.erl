@@ -31,22 +31,6 @@
 %% Syntax
 %% ===================================================================
 
-
-%% @doc
-api('', create, Syntax) ->
-    Syntax#{
-        obj_name => binary,
-        domain => binary,
-        description => binary,
-        '__mandatory' => [obj_name, description]
-    };
-
-api('', update, Syntax) ->
-    Syntax#{
-        id => binary,
-        description => binary
-    };
-
 %% Sample (see nkelastic_search.erl)
 %% #{
 %%      from => 1,

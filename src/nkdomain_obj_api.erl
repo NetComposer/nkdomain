@@ -34,15 +34,20 @@
 
 
 %% @doc
-api('', create, #nkapi_req{data=Data}, Type, #{srv_id:=SrvId}=State) ->
+api('', create, #nkapi_req{data=Data}, Type, #{srv_id:=SrvId, user_id:=UserId}=State) ->
     Module = nkdomain_types:get_module(Type),
-    case erlang:function_exported(Module, create, 4) of
+    case erlang:function_exported(Module, create, 3) of
         true ->
             Name = maps:get(obj_name, Data, <<>>),
-            Config = maps:get(Type, Data),
+            Data2 = Data#{
+                type => Type,
+                created_by => UserId
+            },
+            Data3 = maps:remove(obj_name, Data2),
             case get_parent(Data, State) of
                 {ok, Parent} ->
-                    case Module:create(SrvId, Parent, Name, Config) of
+                    Data4 = Data3#{parent_id=>Parent},
+                    case Module:create(SrvId, Name, Data4) of
                         {ok, Reply, _Pid} ->
                             {ok, Reply, State};
                         {error, Error} ->
@@ -91,7 +96,7 @@ api('', delete, #nkapi_req{data=Data}, Type, #{srv_id:=SrvId}=State) ->
             Error
     end;
 
-api('', update, #nkapi_req{data=Data}, Type, #{srv_id:=SrvId}=State) ->
+api('', update, #nkapi_req{data=Data}, Type, #{srv_id:=SrvId, user_id:=_UserId}=State) ->
     case get_id(Type, Data, State) of
         {ok, Id} ->
             case nkdomain:update(SrvId, Id, maps:remove(id, Data)) of

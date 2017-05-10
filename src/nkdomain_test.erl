@@ -281,15 +281,15 @@ test_basic_2(Pid) ->
 
     % Create /stest1 and check we cannot create it again
     {ok, #{<<"obj_id">>:=S1Id, <<"path">>:=<<"/stest1">>}} =
-        cmd(Pid, domain, create, #{obj_name=>stest1, description=><<"Test Sub1">>}),
+        cmd(Pid, domain, create, #{obj_name=>stest1, description=><<"Test Sub1">>, domain=>#{}}),
     {error,{<<"object_already_exists">>, _}} =
-        cmd(Pid, domain, create, #{obj_name=>stest1, description=><<"Test Sub1">>}),
+        cmd(Pid, domain, create, #{obj_name=>stest1, description=><<"Test Sub1">>, domain=>#{}}),
 
     % Create /stest1/stest2 and check we cannot create a child with missing father
     {ok, #{<<"obj_id">>:=S2Id, <<"path">>:=<<"/stest1/stest2">>}} =
-        cmd(Pid, domain, create, #{obj_name=>stest2, domain=>"/stest1", description=><<"Test Sub2">>}),
+        cmd(Pid, domain, create, #{obj_name=>stest2, parent_id=>"/stest1", description=><<"Test Sub2">>, domain=>#{}}),
     {error,{<<"could_not_load_parent">>, <<"Object could not load parent '/stest2'">>}} =
-        cmd(Pid, domain, create, #{obj_name=>stest2, domain=>"/stest2", description=><<"Test Sub2B">>}),
+        cmd(Pid, domain, create, #{obj_name=>stest2, parent_id=>"/stest2", description=><<"Test Sub2B">>, domain=>#{}}),
 
     % Check the created objects
     {ok,
@@ -333,14 +333,14 @@ test_basic_2(Pid) ->
     % Create /stest1/users/u1
     U1 = #{name=>n1, surname=>s1, email=>"u1@sub1"},
     {ok, #{<<"obj_id">>:=U1Id, <<"path">>:=<<"/stest1/users/u1">>}} =
-        cmd(Pid, user, create, #{domain=>S1Id, obj_name=>u1, user=>U1}),
+        cmd(Pid, user, create, #{parent_id=>S1Id, obj_name=>u1, user=>U1}),
     {error,{<<"object_already_exists">>, _}} =
-        cmd(Pid, user, create, #{domain=>S1Id, obj_name=>u1, user=>U1}),
+        cmd(Pid, user, create, #{parent_id=>S1Id, obj_name=>u1, user=>U1}),
 
     % Create /stest1/stest2/users/u1
     U2 = #{name=>n2, surname=>s2, email=>"n2@sub1.sub2"},
     {ok, #{<<"obj_id">>:=U2Id, <<"path">>:=<<"/stest1/stest2/users/u1">>}} =
-        cmd(Pid, user, create, #{domain=>S2Id, obj_name=>u1, user=>U2}),
+        cmd(Pid, user, create, #{parent_id=>S2Id, obj_name=>u1, user=>U2}),
     {ok, _} = cmd(Pid, user, wait_for_save, #{id=>U2Id}),
 
 

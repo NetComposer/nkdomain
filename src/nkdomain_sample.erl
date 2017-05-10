@@ -39,7 +39,7 @@ user_get(Id) ->
 user_create(Domain, Name, Surname) ->
     Data = #{
         obj_name => to_bin(Name),
-        domain => to_bin(Domain),
+        parent_id => to_bin(Domain),
         user => #{
             name => to_bin(Name),
             surname => to_bin(Surname),
@@ -54,7 +54,7 @@ user_create(Domain, Name, Surname) ->
 user_create(Domain, Name, Password, Surname, Email) ->
     Data = #{
         obj_name => to_bin(Name),
-        domain => to_bin(Domain),
+        parent_id => to_bin(Domain),
         user => #{
             name => to_bin(Name),
             password => to_bin(Password),
@@ -99,8 +99,9 @@ domain_get(Id) ->
 domain_create(Domain, Name, Desc) ->
     Data = #{
         obj_name => Name,
-        domain => Domain,
-        description => Desc
+        parent_id => Domain,
+        description => Desc,
+        domain => #{}
     },
     case cmd(domain, create, Data) of
         {ok, #{<<"obj_id">>:=ObjId}} -> {ok, ObjId};

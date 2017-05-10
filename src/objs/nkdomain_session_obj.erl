@@ -54,21 +54,26 @@
     {ok, nkdomain_obj_lib:make_and_create_reply(), pid()} | {error, term()}.
 
 create(SrvId, UserId, Opts) ->
-    Make1 = [
-        {active, true},
-        {created_by, UserId},
-        case Opts of
-            #{session_id:=SessId} -> {obj_id, SessId};
-            _ -> []
-        end,
-        {type_obj, maps:with([local, remote], Opts)},
-        case Opts of
-            #{api_server_pid:=Pid1} -> {usage_link, {Pid1, nkdomain_session_api}};
-            _ -> []
-        end
-    ],
-    Make2 = maps:from_list(lists:flatten(Make1)),
-    case nkdomain_obj_lib:make_and_create(SrvId, UserId, ?DOMAIN_SESSION, Make2) of
+    Obj1 = #{
+        type => ?DOMAIN_SESSION,
+        active => true,
+        created_by => UserId,
+        parent_id => UserId,
+        ?DOMAIN_SESSION => maps:with([local, remote], Opts)
+    },
+    Obj2 = case Opts of
+        #{session_id:=SessId} ->
+            Obj1#{obj_id => SessId};
+        _ ->
+            Obj1
+    end,
+    Opts2 = case Opts of
+        #{api_server_pid:=Pid1} ->
+            #{usage_link => {Pid1, nkdomain_session_api}};
+            _ ->
+                #{}
+    end,
+    case nkdomain_obj_lib:make_and_create(SrvId, <<>>, Obj2, Opts2) of
         {ok, Reply, Pid} ->
             case Opts of
                 #{api_server_pid:=Pid2} ->

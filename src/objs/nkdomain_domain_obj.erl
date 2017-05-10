@@ -24,7 +24,7 @@
 -behavior(nkdomain_obj).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([create/4, find/3, find_all/3, find_types/3, find_all_types/3, find_childs/3, find_all_childs/3]).
+-export([create/3, find/3, find_all/3, find_types/3, find_all_types/3, find_childs/3, find_all_childs/3]).
 -export([object_get_info/0, object_mapping/0, object_parse/3,
          object_api_syntax/3, object_api_allow/4, object_api_cmd/4]).
 -export([object_start/1]).
@@ -41,16 +41,11 @@
 
 
 %% @doc
--spec create(nkservice:id(), nkdomain:id(), nkdomain:name(), binary()) ->
+-spec create(nkservice:id(), nkdomain:name(), nkdomain:obj()) ->
     {ok, nkdomain_obj_lib:make_and_create_reply(), pid()} | {error, term()}.
 
-create(Srv, Parent, Name, Desc) ->
-    Opts = #{
-        obj_name => Name,
-        name => Name,
-        description => Desc
-    },
-    nkdomain_obj_lib:make_and_create(Srv, Parent, ?DOMAIN_DOMAIN, Opts).
+create(Srv, Name, Obj) ->
+    nkdomain_obj_lib:make_and_create(Srv, Name, Obj, #{}).
 
 
 %% @doc
@@ -140,7 +135,7 @@ object_mapping() ->
 
 %% @private
 object_parse(_SrvId, _Mode, _Obj) ->
-    any.
+    #{}.
 
 
 %% @private

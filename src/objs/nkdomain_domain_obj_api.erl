@@ -31,17 +31,6 @@
 %% API
 %% ===================================================================
 
-%% @doc
-cmd('', create, #nkapi_req{data=Data}, State) ->
-    #{obj_name:=Name, description:=Desc} = Data,
-    #{srv_id:=SrvId, domain:=Domain} = State,
-    case nkdomain_domain_obj:create(SrvId, Domain, Name, Desc) of
-        {ok, Reply, _Pid} ->
-            {ok, Reply, State};
-        {error, Error} ->
-            {error, Error, State}
-    end;
-
 cmd('', check_name, #nkapi_req{data=#{name:=Name}}, State) ->
     {ok, #{name=>nkdomain_util:name(Name)}, State};
 

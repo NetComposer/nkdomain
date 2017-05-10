@@ -54,13 +54,13 @@
 create(Srv, Parent, SecsTTL, Data) when is_integer(SecsTTL), SecsTTL >= 1 ->
     case nkdomain_obj_lib:load(Srv, Parent, #{}) of
         #obj_id_ext{obj_id=ReferredId, type=SubType} ->
-            Opts = #{
+            Obj = #{
                 referred_id => ReferredId,
                 subtype => SubType,
                 expires_time => nkdomain_util:timestamp() + 1000*SecsTTL,
-                type_obj => Data
+                ?DOMAIN_TOKEN => Data
             },
-            nkdomain_obj_lib:make_and_create(Srv, Parent, ?DOMAIN_TOKEN, Opts);
+            nkdomain_obj_lib:make_and_create(Srv, <<>>, Obj, #{});
         {error, object_not_found} ->
             {error, referred_not_found};
         {error, Error} ->

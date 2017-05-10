@@ -39,8 +39,6 @@
 %% They are then captured as showed before.
 
 
-
-
 %% @private
 event(created, Session) ->
     {event, created, #{}, Session};

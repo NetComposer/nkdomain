@@ -54,7 +54,7 @@ syntax('', update, Type, Syntax) ->
         aliases => {list, binary},
         icon_id => binary,
         Type => map,
-        '__mandatory' => [id, Type]
+        '__mandatory' => [id]
     };
 
 syntax('', get, _Type, Syntax) ->

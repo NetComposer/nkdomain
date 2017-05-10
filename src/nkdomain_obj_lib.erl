@@ -26,7 +26,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([find/2, load/3, create/3]).
--export([make_obj/4, make_and_create/4]).
+-export([make_obj/3, make_and_create/4]).
 -export([unload/4, sync_op/5, async_op/5, link_to_obj/4, unlink_to_obj/4]).
 -export([get_node/1, register/3, register/4, link_to_parent/4]).
 -export([find_loaded/1, call/2, call/3, cast/2, info/2]).
@@ -44,20 +44,20 @@
 %% ===================================================================
 
 
--type make_opts() ::
-    #{
-        obj_id => binary(),
-        obj_name => binary(),
-        name => binary(),
-        parent => binary(),
-        created_by => binary(),
-        expires_time => nklib_util:m_timestamp(),
-        referred_id => nkdomain:obj_id(),
-        active => boolean(),
-        description => binary(),
-        aliases => [binary()],
-        type_obj => map()
-    }.
+%%-type make_opts() ::
+%%    #{
+%%        obj_id => binary(),
+%%        obj_name => binary(),
+%%        name => binary(),
+%%        parent => binary(),
+%%        created_by => binary(),
+%%        expires_time => nklib_util:m_timestamp(),
+%%        referred_id => nkdomain:obj_id(),
+%%        active => boolean(),
+%%        description => binary(),
+%%        aliases => [binary()],
+%%        type_obj => map()
+%%    }.
 
 
 -type make_and_create_reply() ::
@@ -74,15 +74,16 @@
 
 
 %% @doc Adds type, obj_id, parent_id, path, created_time
--spec make_obj(nkservice:id(), nkdomain:obj_id(), nkdomain:type(), make_opts()) ->
+-spec make_obj(nkservice:id(), nkdomain:name(), nkdomain:obj()) ->
     {ok, nkdomain:obj()} | {error, term()}.
 
-make_obj(Srv, Parent, Type, Opts) ->
+make_obj(Srv, ObjName, Obj) ->
+    #{parent_id:=Parent, type:=Type} = Obj,
     case find(Srv, Parent) of
         #obj_id_ext{obj_id=ParentId, path=ParentPath} ->
             Type2 = to_bin(Type),
             UUID = nklib_util:luid(),
-            ObjId = case Opts of
+            ObjId = case Obj of
                 #{obj_id:=ObjId0} ->
                     to_bin(ObjId0);
                 _ when Type2 == ?DOMAIN_TOKEN ->
@@ -90,7 +91,7 @@ make_obj(Srv, Parent, Type, Opts) ->
                 _ ->
                     <<Type2/binary, $-, UUID/binary>>
             end,
-            case do_make_name(UUID, Opts) of
+            case do_make_name(UUID, ObjName) of
                 {ok, Name1} ->
                     Name2 = case Type2 of
                         ?DOMAIN_DOMAIN ->
@@ -102,15 +103,14 @@ make_obj(Srv, Parent, Type, Opts) ->
                         <<"/">> -> <<>>;
                         _ -> ParentPath
                     end,
-                    Obj1 = [
-                        {obj_id, ObjId},
-                        {type, Type2},
-                        {parent_id, ParentId},
-                        {path, <<BasePath/binary, $/, Name2/binary>>},
-                        {created_time, nkdomain_util:timestamp()}
-                    ],
-                    Obj2 = do_make_obj(maps:to_list(Opts), Type, Obj1),
-                    {ok, maps:from_list(Obj2)};
+                    Obj2 = Obj#{
+                        obj_id => ObjId,
+                        type => Type2,
+                        parent_id => ParentId,
+                        path => <<BasePath/binary, $/, Name2/binary>>,
+                        created_time => nkdomain_util:timestamp()
+                    },
+                    {ok, Obj2};
                 {error, Error} ->
                     {error, Error}
             end;
@@ -122,61 +122,54 @@ make_obj(Srv, Parent, Type, Opts) ->
 
 
 %% @private
-do_make_name(UUID, Opts) ->
-    case Opts of
-        #{obj_name:=Name1} ->
-            case to_bin(Name1) of
-                <<>> ->
-                    {ok, binary:part(UUID, 0, 7)};
-                Name2 ->
-                    case nkdomain_util:name(Name2) of
-                        Name2 ->
-                            {ok, Name2};
-                        _ ->
-                            {error, {invalid_name, Name2}}
-                    end
-            end;
+do_make_name(UUID, <<>>) ->
+    {ok, binary:part(UUID, 0, 7)};
+
+do_make_name(_UUID, Name) ->
+    case nkdomain_util:name(Name) of
+        Name ->
+            {ok, Name};
         _ ->
-            {ok, binary:part(UUID, 0, 7)}
+            {error, {invalid_name, Name}}
     end.
 
 
-%% @private
-do_make_obj([], _Type, Acc) ->
-    Acc;
-
-do_make_obj([{Key, Val}|Rest], Type, Acc) ->
-    case Key of
-        _ when Key==created_by; Key==referred_id; Key==description; Key==aliases; Key==active;
-               Key==name; Key==subtype; Key==expires_time ->
-            do_make_obj(Rest, Type, [{Key, Val}|Acc]);
-        type_obj ->
-            do_make_obj(Rest, Type, [{Type, Val}|Acc]);
-        _ ->
-            do_make_obj(Rest, Type, Acc)
-    end.
+%%%% @private
+%%do_make_obj([], _Type, Acc) ->
+%%    Acc;
+%%
+%%do_make_obj([{Key, Val}|Rest], Type, Acc) ->
+%%    case Key of
+%%        _ when Key==created_by; Key==referred_id; Key==description; Key==aliases; Key==active;
+%%               Key==name; Key==subtype; Key==expires_time ->
+%%            do_make_obj(Rest, Type, [{Key, Val}|Acc]);
+%%        type_obj ->
+%%            do_make_obj(Rest, Type, [{Type, Val}|Acc]);
+%%        _ ->
+%%            do_make_obj(Rest, Type, Acc)
+%%    end.
 
 
 
 %% @doc
--spec make_and_create(nkservice:id(), nkdomain:id(), nkdomain:type(), make_opts()) ->
+-spec make_and_create(nkservice:id(),nkdomain:name(), nkdomain:obj(), nkdomain:create_opts()) ->
     {ok, make_and_create_reply(), pid()} | {error, term()}.
 
-make_and_create(Srv, Parent, Type, Opts) ->
-    case make_obj(Srv, Parent, Type, Opts) of
-        {ok, Obj} ->
+make_and_create(Srv, ObjName, Obj, Opts) ->
+    case make_obj(Srv, ObjName, Obj) of
+        {ok, Obj2} ->
             %% lager:warning("Obj: ~p", [Obj]),
             CreateMeta1 = maps:with([usage_link, event_link], Opts),
-            CreateMeta2 = case maps:is_key(obj_id, Opts) orelse maps:is_key(obj_name, Opts) of
+            CreateMeta2 = case maps:is_key(obj_id, Obj) orelse ObjName /= <<>> of
                 true ->
                     CreateMeta1;
                 false ->
                     CreateMeta1#{skip_path_check=>true}
             end,
-            case create(Srv, Obj, CreateMeta2) of
-                {#obj_id_ext{type=Type, obj_id=ObjId, path=Path, pid=Pid}, []} ->
+            case create(Srv, Obj2, CreateMeta2) of
+                {#obj_id_ext{obj_id=ObjId, path=Path, pid=Pid}, []} ->
                     {ok, #{obj_id=>ObjId, path=>Path}, Pid};
-                {#obj_id_ext{type=Type, obj_id=ObjId, path=Path, pid=Pid}, UnknownFields} ->
+                {#obj_id_ext{obj_id=ObjId, path=Path, pid=Pid}, UnknownFields} ->
                     {ok, #{obj_id=>ObjId, path=>Path, unknown_fields=>UnknownFields}, Pid};
                 {error, Error} ->
                     {error, Error}
@@ -188,7 +181,7 @@ make_and_create(Srv, Parent, Type, Opts) ->
 
 %% @doc Creates a new object
 -spec create(nkservice:id(), map(), nkdomain:create_opts()) ->
-    {#obj_id_ext{}, UnknownFielfd::[binary()]} | {error, term()}.
+    {#obj_id_ext{}, UnknownFields::[binary()]} | {error, term()}.
 
 create(Srv, #{obj_id:=ObjId}=Obj, Meta) ->
     case nkservice_srv:get_srv_id(Srv) of
