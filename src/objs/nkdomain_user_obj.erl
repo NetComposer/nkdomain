@@ -69,6 +69,8 @@
 create(Srv, Name, Obj) ->
     #{?DOMAIN_USER:=User} = Obj,
     Obj2 = case User of
+        #{email:=Email} ->
+            Obj#{aliases=>Email};
         #{<<"email">>:=Email} ->
             Obj#{aliases=>Email};
         _ ->
