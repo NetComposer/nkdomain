@@ -205,7 +205,7 @@ update(Id, Map) ->
 
 %% @doc
 -spec get_name(id()) ->
-    {ok, Name::binary, Desc::binary()} | {error, term()}.
+    {ok, map()} | {error, term()}.
 
 get_name(Id) ->
     do_call(Id, nkdomain_get_name).
@@ -576,10 +576,8 @@ handle_call({nkdomain_enable, Enable}, From, #state{session=#obj_session{obj=Obj
     end;
 
 handle_call(nkdomain_get_name, _From, #state{session=Session}=State) ->
-    #obj_session{type=Type, path=Path, obj=Obj} = Session,
-    Desc = maps:get(description, Obj, <<>>),
-    {ok, _, Name} = nkdomain_util:get_parts(Type, Path),
-    reply({ok, Name, Desc}, State);
+    Reply = nkdomain_obj_util:get_name(Session),
+    reply({ok, Reply}, State);
 
 handle_call(nkdomain_is_enabled, _From, #state{session=#obj_session{is_enabled=Enabled}}=State) ->
     reply({ok, Enabled}, State);

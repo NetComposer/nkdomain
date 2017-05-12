@@ -66,7 +66,7 @@ test_basic_1(Pid) ->
     % Get root domain
     {ok,
         #{
-            <<"type">> := <<"domain">>,
+            <<"type">> := ?DOMAIN_DOMAIN,
             <<"obj_id">> := <<"root">>,
             <<"parent_id">> := <<>>,
             <<"path">> := <<"/">>,
@@ -294,7 +294,7 @@ test_basic_2(Pid) ->
     % Check the created objects
     {ok,
         #{
-            <<"type">> := <<"domain">>,
+            <<"type">> := ?DOMAIN_DOMAIN,
             <<"obj_id">> := S1Id,
             <<"path">> := <<"/stest1">>,
             <<"created_time">> := _CT1,
@@ -306,7 +306,7 @@ test_basic_2(Pid) ->
 
     {ok,
         #{
-            <<"type">> := <<"domain">>,
+            <<"type">> := ?DOMAIN_DOMAIN,
             <<"obj_id">> := S2Id,
             <<"path">> := <<"/stest1/stest2">>,
             <<"created_time">> := CT2,
@@ -321,7 +321,7 @@ test_basic_2(Pid) ->
     {ok, #{}} = cmd(Pid, domain, update, #{id=>S2Id, description=><<"Test-Sub2">>}),
     {ok,
         #{
-            <<"type">> := <<"domain">>,
+            <<"type">> := ?DOMAIN_DOMAIN,
             <<"obj_id">> := S2Id,
             <<"path">> := <<"/stest1/stest2">>,
             <<"created_time">> := CT2,
@@ -345,15 +345,15 @@ test_basic_2(Pid) ->
 
 
     % Find types and childs on /stest1
-    {ok, #{<<"data">> := #{<<"domain">> := 1,<<"user">> := 1},<<"total">> := 2}} =
+    {ok, #{<<"data">> := #{?DOMAIN_DOMAIN := 1,<<"user">> := 1},<<"total">> := 2}} =
         cmd(Pid, domain, find_types, #{id=><<"/stest1">>}),
-    {ok,#{<<"data">> := #{<<"domain">> := 1,<<"user">> := 2},<<"total">> := 3}} =
+    {ok,#{<<"data">> := #{?DOMAIN_DOMAIN := 1,<<"user">> := 2},<<"total">> := 3}} =
         cmd(Pid, domain, find_all_types, #{id=><<"/stest1">>}),
     {ok, #{<<"total">> := 2, <<"data">> := [
         #{
             <<"obj_id">> := S2Id,
             <<"path">> := <<"/stest1/stest2">>,
-            <<"type">> := <<"domain">>
+            <<"type">> := ?DOMAIN_DOMAIN
         },
         #{
             <<"obj_id">> := U1Id,
@@ -366,7 +366,7 @@ test_basic_2(Pid) ->
         #{
             <<"obj_id">> := S2Id,
             <<"path">> := <<"/stest1/stest2">>,
-            <<"type">> := <<"domain">>
+            <<"type">> := ?DOMAIN_DOMAIN
         },
         #{
             <<"obj_id">> := U2Id,
@@ -461,7 +461,7 @@ remove_data() ->
             nkdomain_store:delete_all_childs(root, "/stest1")
     end,
     case nkdomain:find(root, "/stest1") of
-        {ok, <<"domain">>, S1Id_0, <<"/stest1">>, _} ->
+        {ok, ?DOMAIN_DOMAIN, S1Id_0, <<"/stest1">>, _} ->
             %% lager:warning("/stest1 was already present"),
             ok = nkdomain_store:delete(root, S1Id_0);
         {error, object_not_found} ->

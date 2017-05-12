@@ -126,12 +126,7 @@ do_make_name(UUID, <<>>) ->
     {ok, binary:part(UUID, 0, 7)};
 
 do_make_name(_UUID, Name) ->
-    case nkdomain_util:name(Name) of
-        Name ->
-            {ok, Name};
-        _ ->
-            {error, {invalid_name, Name}}
-    end.
+    {ok, nkdomain_util:name(Name)}.
 
 
 %%%% @private
@@ -152,7 +147,7 @@ do_make_name(_UUID, Name) ->
 
 
 %% @doc
--spec make_and_create(nkservice:id(),nkdomain:name(), nkdomain:obj(), nkdomain:create_opts()) ->
+-spec make_and_create(nkservice:id(),nkdomain:name(), nkdomain:obj(), nkdomain:load_opts()) ->
     {ok, make_and_create_reply(), pid()} | {error, term()}.
 
 make_and_create(Srv, ObjName, Obj, Opts) ->
@@ -167,10 +162,12 @@ make_and_create(Srv, ObjName, Obj, Opts) ->
                     CreateMeta1#{skip_path_check=>true}
             end,
             case create(Srv, Obj2, CreateMeta2) of
-                {#obj_id_ext{obj_id=ObjId, path=Path, pid=Pid}, []} ->
-                    {ok, #{obj_id=>ObjId, path=>Path}, Pid};
-                {#obj_id_ext{obj_id=ObjId, path=Path, pid=Pid}, UnknownFields} ->
-                    {ok, #{obj_id=>ObjId, path=>Path, unknown_fields=>UnknownFields}, Pid};
+                {#obj_id_ext{obj_id=ObjId, path=Path, type=Type, pid=Pid}, []} ->
+                    {ok, _, ObjName2} = nkdomain_util:get_parts(Type, Path),
+                    {ok, #{obj_id=>ObjId, path=>Path, obj_name=>ObjName2}, Pid};
+                {#obj_id_ext{obj_id=ObjId, path=Path, type=Type, pid=Pid}, UnknownFields} ->
+                    {ok, _, ObjName2} = nkdomain_util:get_parts(Type, Path),
+                    {ok, #{obj_id=>ObjId, path=>Path, obj_name=>ObjName2, unknown_fields=>UnknownFields}, Pid};
                 {error, Error} ->
                     {error, Error}
             end;
@@ -180,7 +177,7 @@ make_and_create(Srv, ObjName, Obj, Opts) ->
 
 
 %% @doc Creates a new object
--spec create(nkservice:id(), map(), nkdomain:create_opts()) ->
+-spec create(nkservice:id(), map(), nkdomain:load_opts()) ->
     {#obj_id_ext{}, UnknownFields::[binary()]} | {error, term()}.
 
 create(Srv, #{obj_id:=ObjId}=Obj, Meta) ->
@@ -528,7 +525,7 @@ send_event(EvType, Body, #obj_session{obj_id=ObjId}=Session) ->
 send_event(EvType, ObjId, Body, #obj_session{srv_id=SrvId, type=Type}=Session) ->
     Event = #nkevent{
         srv_id = SrvId,
-        class = <<"domain">>,
+        class = ?DOMAIN_EVENT_CLASS,
         subclass = Type,
         type = nklib_util:to_binary(EvType),
         obj_id = ObjId,

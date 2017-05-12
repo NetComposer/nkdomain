@@ -22,7 +22,7 @@
 %% @doc Basic Obj utilities
 -module(nkdomain_obj_util).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
--export([event/2, status/2, search_syntax/1]).
+-export([event/2, status/2, search_syntax/1, get_name/1]).
 
 -include("nkdomain.hrl").
 
@@ -70,4 +70,16 @@ search_syntax(Base) ->
                 fields => {list, binary},
                 default_operator => {atom, ['OR', 'AND']}
             }
+    }.
+
+
+%% @doc
+get_name(#obj_session{type=Type, obj_id=ObjId, path=Path, obj=Obj}) ->
+    {ok, _, ObjName} = nkdomain_util:get_parts(Type, Path),
+    #{
+        obj_id => ObjId,
+        obj_name => ObjName,
+        name => maps:get(name, Obj, <<>>),
+        description => maps:get(description, Obj, <<>>),
+        icon_id => maps:get(icon_id, Obj, <<>>)
     }.

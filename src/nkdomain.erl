@@ -23,8 +23,10 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 
--export([find_loaded/1, find/1, find/2, load/1, load/2, load/3, create/3]).
--export([get/1, get/2, enable/3, update/3, delete/2, force_delete/2, archive/3]).
+-export([find_loaded/1, find/1, find/2, load/1, load/2, load/3]).
+-export([get/1, get/2, enable/2, enable/3, get_name/1, get_name/2]).
+-export([update/2, update/3, delete/1, delete/2]).
+-export([force_delete/2, archive/3]).
 -export_type([obj_id/0, name/0, obj/0, path/0, type/0, id/0, class/0, history/0, history_op/0]).
 -export_type([session_msg/0]).
 
@@ -77,14 +79,11 @@
     class() => map()
 }.
 
--type create_opts() ::
-    load_opts().
-
 
 -type load_opts() ::
     #{
-        usage_link => {nkdomain:id() | pid(), nkdist_reg:tag()},    % Id or pid will receive {sent_link_down, Tag}
-        event_link => {nkdomain:id() | pid(), nkdist_reg:tag()},
+        usage_link => {id() | pid(), nkdist_reg:tag()},    % Id or pid will receive {sent_link_down, Tag}
+        event_link => {id() | pid(), nkdist_reg:tag()},
         enabled => boolean()                                        % Start disabled if false
     }.
 
@@ -200,24 +199,16 @@ get(Srv, IdOrPath) ->
     end.
 
 
+%% @doc Enables/disabled an object
+-spec enable(id(), boolean()) ->
+    ok | {error, term()}.
 
-
-%% @doc Creates a new object
--spec create(nkservice:id(), map(), create_opts()) ->
-    {ok, type(), obj_id(), path(), pid()}.
-
-create(Srv, Obj, Meta) ->
-    case nkdomain_obj_lib:create(Srv, Obj, Meta) of
-        {#obj_id_ext{type=Type, obj_id=ObjId, path=Path, pid=Pid}, _UnknownFields} ->
-            {ok, Type, ObjId, Path, Pid};
-        {error, Error} ->
-            {error, Error}
-    end.
-
+enable(Id, Enable) ->
+    enable(root, Id, Enable).
 
 
 %% @doc Enables/disabled an object
--spec enable(nkservice:id(), nkdomain:id(), boolean()) ->
+-spec enable(nkservice:id(), id(), boolean()) ->
     ok | {error, term()}.
 
 enable(Srv, Id, Enable) ->
@@ -229,8 +220,37 @@ enable(Srv, Id, Enable) ->
     end.
 
 
+%% @doc
+-spec get_name(id()) ->
+    {ok, map()} | {error, term()}.
+
+get_name(Id) ->
+    get_name(root, Id).
+
+
+%% @doc
+-spec get_name(nkservice:id(), id()) ->
+    {ok, map()} | {error, term()}.
+
+get_name(Srv, Id) ->
+    case nkdomain_obj_lib:load(Srv, Id, #{}) of
+        #obj_id_ext{pid=Pid} ->
+            nkdomain_obj:get_name(Pid);
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
 %% @doc Updates an object
--spec update(nkservice:id(), nkdomain:id(), nkservice:error()) ->
+-spec update(id(), map()) ->
+    {ok, UnknownFields::[binary()]} | {error, term()}.
+
+update(Id, Update) ->
+    update(root, Id, Update).
+
+
+%% @doc Updates an object
+-spec update(nkservice:id(), id(), map()) ->
     {ok, UnknownFields::[binary()]} | {error, term()}.
 
 update(Srv, Id, Update) ->
@@ -242,9 +262,16 @@ update(Srv, Id, Update) ->
     end.
 
 
+%% @doc Remove an object
+-spec delete(id()) ->
+    ok | {error, term()}.
+
+delete(Id) ->
+    delete(root, Id).
+
 
 %% @doc Remove an object
--spec delete(nkservice:id(), nkdomain:id()) ->
+-spec delete(nkservice:id(), id()) ->
     ok | {error, term()}.
 
 delete(Srv, Id) ->
@@ -259,7 +286,7 @@ delete(Srv, Id) ->
 %% @doc Remove an object
 %% If the object can be loaded, it is sent a delete message
 %% If not, it is deleted from disk
--spec force_delete(nkservice:id(), nkdomain:id()) ->
+-spec force_delete(nkservice:id(), id()) ->
     ok | {error, term()}.
 
 force_delete(Srv, Id) ->
@@ -275,7 +302,7 @@ force_delete(Srv, Id) ->
 
 
 %% @doc Archives an object
--spec archive(nkservice:id(), nkdomain:obj_id(), nkservice:error()) ->
+-spec archive(nkservice:id(), obj_id(), nkservice:error()) ->
     ok | {error, term()}.
 
 archive(SrvId, ObjId, Reason) ->
