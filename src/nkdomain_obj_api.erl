@@ -66,8 +66,9 @@ api('', get, #nkapi_req{data=Data}, Type, #{srv_id:=SrvId}=State) ->
             case nkdomain_obj_lib:load(SrvId, Id, #{}) of
                 #obj_id_ext{pid=Pid} ->
                     case nkdomain_obj:get_session(Pid) of
-                        {ok, #obj_session{obj=Obj, is_enabled=Enabled}} ->
-                            {ok, Obj#{'_is_enabled'=>Enabled}, State};
+                        {ok, #obj_session{obj=Obj, is_enabled=Enabled, type=Type, path=Path}} ->
+                            {ok, _, ObjName} = nkdomain_util:get_parts(Type, Path),
+                            {ok, Obj#{obj_name=>ObjName, '_is_enabled'=>Enabled}, State};
                         {error, Error} ->
                             {error, Error, State}
                     end;
