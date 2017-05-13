@@ -113,11 +113,11 @@ domain_delete(Id) ->
     cmd(domain, delete, #{id=>to_bin(Id)}).
 
 
-domain_update(Id, Desc, Aliases) ->
+domain_update(Id, Name, Desc) ->
     Data = #{
         id => to_bin(Id),
-        description => Desc,
-        aliases => Aliases
+        name => Name,
+        description => Desc
     },
     cmd(domain, update, Data).
 

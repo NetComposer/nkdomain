@@ -28,6 +28,7 @@
 -export([object_get_info/0, object_mapping/0, object_parse/3,
          object_api_syntax/3, object_api_allow/4, object_api_cmd/4, object_send_event/2,
          object_sync_op/3, object_async_op/2]).
+-export([object_admin_tree/4]).
 
 -include("nkdomain.hrl").
 -include("nkdomain_debug.hrl").
@@ -123,6 +124,15 @@ object_sync_op(_Op, _From, _Session) ->
 %% @private
 object_async_op(_Op, _Session) ->
     continue.
+
+
+%% @doc
+object_admin_tree(sessions, Num, Data, Acc) ->
+    nkadmin_menu:add_tree_entry(menu_sessions_tokens, {menuBadge, Num}, Data, Acc);
+
+object_admin_tree(_Category, _Num, _Data, Acc) ->
+    Acc.
+
 
 
 %% ===================================================================

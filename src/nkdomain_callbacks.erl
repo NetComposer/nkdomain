@@ -25,6 +25,7 @@
 -export([service_init/2, service_handle_cast/2, service_handle_info/2]).
 -export([api_error/1, api_server_syntax/3, api_server_allow/2, api_server_cmd/2,
          api_server_reg_down/3]).
+-export([admin_menu_fill_category/3]).
 -export([object_mapping/0, object_syntax/1, object_parse/3, object_unparse/1]).
 -export([object_load/2, object_get_session/1, object_save/1, object_delete/1, object_archive/1]).
 -export([object_check_active/3, object_do_expired/2]).
@@ -701,12 +702,31 @@ api_server_reg_down(_Link, _Reason, _State) ->
 
 
 %% ===================================================================
+%% Admin
+%% ===================================================================
+
+admin_menu_fill_category(Category, Data, Acc) ->
+    #{types:=Types} = Data,
+    Acc2 = lists:foldl(
+        fun({Type, Number}, FunAcc) ->
+            case call_type(object_admin_tree, [Category, Number, Data, FunAcc], Type) of
+                ok -> FunAcc;
+                FunAcc2 when is_map(FunAcc2) -> FunAcc2
+            end
+        end,
+        Acc,
+        maps:to_list(Types)),
+    {continue, [Category, Data, Acc2]}.
+
+
+
+%% ===================================================================
 %% Plugin callbacks
 %% ===================================================================
 
 %% @private
 plugin_deps() ->
-    [nkelastic].
+    [nkelastic, nkadmin].
 
 
 %% @private
@@ -772,22 +792,6 @@ service_handle_info(_Msg, _State) ->
 %% ===================================================================
 %% Internal
 %% ===================================================================
-
-
-%%%% @private
-%%do_parse(Map, Syntaxis) ->
-%%    case nklib_syntax:parse(Map, Syntaxis) of
-%%        {ok, #{type:=Type}=Obj, Unknown} ->
-%%            case Unknown of
-%%                [] ->
-%%                    ok;
-%%                [Unk|_] ->
-%%                    ?LLOG(notice, "Object of type ~s has unknown fields: ~s", [Type, Unk])
-%%            end,
-%%            {ok, Obj};
-%%        {error, Error} ->
-%%            {error, Error}
-%%    end.
 
 
 %% @private

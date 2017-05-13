@@ -27,6 +27,7 @@
 -export([create/3, find_configs/3]).
 -export([object_get_info/0, object_mapping/0, object_parse/3,
          object_api_syntax/3, object_api_allow/4, object_api_cmd/4]).
+-export([object_admin_tree/4]).
 
 -include("nkdomain.hrl").
 
@@ -116,7 +117,12 @@ object_api_cmd(Sub, Cmd, Req, State) ->
     nkdomain_obj_api:api(Sub, Cmd, Req, ?DOMAIN_CONFIG, State).
 
 
+%% @doc
+object_admin_tree(resources, _Num, Data, Acc) ->
+    nkadmin_menu:add_tree_entry(menu_resources_configs, menuSimple, Data, Acc);
 
+object_admin_tree(_Category, _Num, _Data, Acc) ->
+    Acc.
 
 %% ===================================================================
 %% Internal
