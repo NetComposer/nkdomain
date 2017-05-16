@@ -407,12 +407,16 @@ object_event(Event, Session) ->
                 {event, Type, Body, Session3} ->
                     nkdomain_obj_lib:send_event(Type, Body, Session3);
                 {event, Type, ObjId, Body, Session3} ->
-                    nkdomain_obj_lib:send_event(Type, ObjId, Body, Session3)
+                    nkdomain_obj_lib:send_event(Type, ObjId, Body, Session3);
+                {event, Type, ObjId, Path, Body, Session3} ->
+                    nkdomain_obj_lib:send_event(Type, ObjId, Path, Body, Session3)
             end;
         {event, Type, Body, Session2} ->
             nkdomain_obj_lib:send_event(Type, Body, Session2);
-        {event, Type, ObjId, Body, Session2} ->
-            nkdomain_obj_lib:send_event(Type, ObjId, Body, Session2);
+        {event, Type, ObjId, Body, Session3} ->
+            nkdomain_obj_lib:send_event(Type, ObjId, Body, Session3);
+        {event, Type, ObjId, Path, Body, Session2} ->
+            nkdomain_obj_lib:send_event(Type, ObjId, Path, Body, Session2);
         {ignore, Session2} ->
             {ok, Session2}
     end.

@@ -30,7 +30,7 @@
 -export([unload/4, sync_op/5, async_op/5, link_to_obj/4, unlink_to_obj/4]).
 -export([get_node/1, register/3, register/4, link_to_parent/4]).
 -export([find_loaded/1, call/2, call/3, cast/2, info/2]).
--export([send_event/3, send_event/4]).
+-export([send_event/3, send_event/4, send_event/5]).
 -export_type([make_and_create_reply/0]).
 
 
@@ -517,18 +517,24 @@ info(Id, Msg) ->
 
 
 %% @private
-send_event(EvType, Body, #obj_session{obj_id=ObjId}=Session) ->
-    send_event(EvType, ObjId, Body, Session).
+send_event(EvType, Body, #obj_session{obj_id=ObjId, path=Path}=Session) ->
+    send_event(EvType, ObjId, Path, Body, Session).
 
 
 %% @private
-send_event(EvType, ObjId, Body, #obj_session{srv_id=SrvId, type=Type}=Session) ->
+send_event(EvType, ObjId, Body, #obj_session{path=Path}=Session) ->
+    send_event(EvType, ObjId, Path, Body, Session).
+
+
+%% @private
+send_event(EvType, ObjId, ObjPath, Body, #obj_session{srv_id=SrvId, type=Type}=Session) ->
     Event = #nkevent{
         srv_id = SrvId,
         class = ?DOMAIN_EVENT_CLASS,
         subclass = Type,
         type = nklib_util:to_binary(EvType),
         obj_id = ObjId,
+        domain = ObjPath,
         body = Body
     },
     lager:info("Domain EVENT sent to listeners: ~p", [Event]),
