@@ -67,6 +67,22 @@ user_create(Domain, Name, Password, Surname, Email) ->
         {error, Error} -> {error, Error}
     end.
 
+user_create(Domain, ObjName, Password, Name, Surname, Email) ->
+    Data = #{
+        obj_name => to_bin(ObjName),
+        parent_id => to_bin(Domain),
+        user => #{
+            name => to_bin(Name),
+            password => to_bin(Password),
+            surname => to_bin(Surname),
+            email => to_bin(Email)
+        }
+    },
+    case cmd(user, create, Data) of
+        {ok, #{<<"obj_id">>:=ObjId}} -> {ok, ObjId};
+        {error, Error} -> {error, Error}
+    end.
+
 user_delete(Id) ->
     cmd(user, delete, #{id=>to_bin(Id)}).
 
