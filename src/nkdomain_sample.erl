@@ -82,6 +82,15 @@ user_update(Id, Name, Password, Email) ->
     },
     cmd(user, update, Data).
 
+user_update(Id, Name) ->
+    Data = #{
+        id => to_bin(Id),
+        user => #{
+            name => to_bin(Name)
+        }
+    },
+    cmd(user, update, Data).
+
 
 user_make_token() ->
     cmd(user, make_token, #{ttl=>1}).

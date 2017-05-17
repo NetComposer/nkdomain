@@ -119,7 +119,7 @@ object_api_cmd(Sub, Cmd, Req, State) ->
 
 %% @doc
 object_admin_tree(resources, _Num, Data, Acc) ->
-    nkadmin_menu:add_tree_entry(menu_resources_configs, menuSimple, Data, Acc);
+    nkadmin_tree:add_tree_entry(menu_resources_configs, menuSimple, Data, Acc);
 
 object_admin_tree(_Category, _Num, _Data, Acc) ->
     Acc.
