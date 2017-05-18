@@ -709,18 +709,18 @@ api_server_reg_down(_Link, _Reason, _State) ->
 %% Admin
 %% ===================================================================
 
-admin_menu_fill_category(Category, Data, Acc) ->
-    #{types:=Types} = Data,
+admin_menu_fill_category(Category, Acc, State) ->
+    #{types:=Types} = State,
     Acc2 = lists:foldl(
         fun({Type, Number}, FunAcc) ->
-            case call_type(object_admin_tree, [Category, Number, Data, FunAcc], Type) of
+            case call_type(object_admin_tree, [Category, Number, State, FunAcc], Type) of
                 ok -> FunAcc;
                 FunAcc2 when is_map(FunAcc2) -> FunAcc2
             end
         end,
         Acc,
         maps:to_list(Types)),
-    {continue, [Category, Data, Acc2]}.
+    {continue, [Category, Acc2, State]}.
 
 
 
