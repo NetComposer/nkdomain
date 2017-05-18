@@ -55,13 +55,13 @@ event({status, {Status, Reason}}, Session) when is_atom(Status); is_binary(Statu
     {event, updated_status, #{status=>Code, reason=>Txt}, Session};
 
 event(saved, Session) ->
-    {event, object_saved, #{}, Session};
+    {event, saved, #{}, Session};
 
 event({updated, Update}, Session) ->
-    {event, object_updated, #{update=>Update}, Session};
+    {event, updated, #{update=>Update}, Session};
 
 event(deleted, Session) ->
-    {event, object_deleted, #{}, Session};
+    {event, deleted, #{}, Session};
 
 event({info, Info, Body}, Session) when is_map(Body) ->
     {event, object_info, Body#{info=>Info}, Session};
@@ -73,13 +73,13 @@ event({enabled, Enabled}, Session) ->
     {event, object_enabled, #{enabled=>Enabled}, Session};
 
 event({child_created, Type, ObjId}, Session) ->
-    {event, object_child_created, #{type=>Type, obj_id=>ObjId}, Session};
+    {event, child_created, #{type=>Type, obj_id=>ObjId}, Session};
 
 event({child_loaded, Type, ObjId}, Session) ->
-    {event, object_child_loaded, #{type=>Type, obj_id=>ObjId}, Session};
+    {event, child_loaded, #{type=>Type, obj_id=>ObjId}, Session};
 
 event({child_unloaded, Type, ObjId}, Session) ->
-    {event, object_child_unloaded, #{type=>Type, obj_id=>ObjId}, Session};
+    {event, child_unloaded, #{type=>Type, obj_id=>ObjId}, Session};
 
 event({unloaded, Reason}, Session) ->
     #obj_session{srv_id=SrvId} = Session,
