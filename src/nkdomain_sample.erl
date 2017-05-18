@@ -4,7 +4,8 @@
 -include_lib("nkapi/include/nkapi.hrl").
 -include_lib("nkmail/include/nkmail.hrl").
 
--define(WS, "ws://127.0.0.1:9202/api/ws").
+-define(WS, "ws://127.0.0.1:9301/api/ws").
+%%-define(WS, "wss://v1.netc.io/netcomp/v01/api/ws").
 
 
 login() ->
