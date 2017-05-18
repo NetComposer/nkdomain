@@ -114,7 +114,7 @@ get_name(Srv, Id) ->
     sync_op(Srv, Id, {?MODULE, get_name}).
 
 
-%% @doc 
+%% @doc
 -spec send_push(nkservice:id(), nkdomain:id(), nkevent:event()) ->
     ok | {error, term()}.
 
@@ -152,7 +152,10 @@ object_mapping() ->
             fields => #{keyword => #{type=>keyword}}
         },
         email => #{type => keyword},
-        password => #{type => keyword}
+        password => #{type => keyword},
+        avatar_t => #{type => binary, store => true},
+        phone_t => #{type => keyword},
+        address_t => #{type => text}
     }.
 
 
@@ -162,7 +165,10 @@ object_parse(_SrvId, update, _Obj) ->
         name => binary,
         surname => binary,
         password => fun ?MODULE:user_pass/1,
-        email => binary
+        email => binary,
+        avatar_t => binary,
+        phone_t => binary,
+        address_t => binary
     };
 
 object_parse(SrvId, load, Obj) ->

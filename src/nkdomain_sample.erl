@@ -52,20 +52,7 @@ user_create(Domain, Name, Surname) ->
     end.
 
 user_create(Domain, Name, Password, Surname, Email) ->
-    Data = #{
-        obj_name => to_bin(Name),
-        parent_id => to_bin(Domain),
-        user => #{
-            name => to_bin(Name),
-            password => to_bin(Password),
-            surname => to_bin(Surname),
-            email => to_bin(Email)
-        }
-    },
-    case cmd(user, create, Data) of
-        {ok, #{<<"obj_id">>:=ObjId}} -> {ok, ObjId};
-        {error, Error} -> {error, Error}
-    end.
+    user_create(Domain, Name, Password, Name, Surname, Email).
 
 user_create(Domain, ObjName, Password, Name, Surname, Email) ->
     Data = #{
@@ -82,6 +69,26 @@ user_create(Domain, ObjName, Password, Name, Surname, Email) ->
         {ok, #{<<"obj_id">>:=ObjId}} -> {ok, ObjId};
         {error, Error} -> {error, Error}
     end.
+
+user_create2(Domain, Name, Surname, Avatar, Phone, Address) ->
+    Data = #{
+        obj_name => to_bin(Name),
+        parent_id => to_bin(Domain),
+        user => #{
+            name => to_bin(Name),
+            surname => to_bin(Surname),
+            avatar_t => to_bin(Avatar),
+            phone_t => to_bin(Avatar),
+            address_t => to_bin(Avatar)
+        }
+    },
+    case cmd(user, create, Data) of
+        {ok, #{<<"obj_id">>:=ObjId}} -> {ok, ObjId};
+        {error, Error} -> {error, Error}
+    end.
+
+
+
 
 user_delete(Id) ->
     cmd(user, delete, #{id=>to_bin(Id)}).
@@ -260,22 +267,6 @@ cmd(Pid, Class, Cmd, Data) ->
 %% ===================================================================
 %% OBJECTS
 %% ===================================================================
-
-sub1_create() ->
-     nkdomain_domain_obj:create(root, "root", "sub1", "Sub 1").
-
-
-sub2_create() ->
-    nkdomain_domain_obj:create(root, "/sub1", "sub2", "Sub 2").
-
-
-user_create_root(Name, Email) ->
-    Data = #{name=>Name, surname=>"surname", email=>Email},
-    nkdomain_user_obj:create(root, <<"root">>, Name, Data).
-
-user_create_sub1(Name, Email) ->
-    Data = #{name=>Name, surname=>"surname", email=>Email},
-    nkdomain_user_obj:create(root, <<"/sub1">>, Name, Data).
 
 
 
