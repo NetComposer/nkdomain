@@ -28,7 +28,7 @@
 -export([object_get_info/0, object_mapping/0, object_parse/3,
          object_api_syntax/3, object_api_allow/4, object_api_cmd/4, object_send_event/2,
          object_sync_op/3, object_async_op/2]).
--export([object_admin_tree/4]).
+-export([object_admin_tree/3]).
 -export([user_pass/1]).
 -export_type([events/0]).
 
@@ -232,11 +232,12 @@ object_async_op(_Op, _Session) ->
 
 
 %% @doc
-object_admin_tree(resources, _Num, Data, Acc) ->
-    nkadmin_tree:add_tree_entry(menu_resources_users, menuSimple, Data, Acc);
+object_admin_tree(resources, List, State) ->
+    Item = nkadmin_util:menu_item(domain_tree_resources_users, menuSimple, State),
+    {ok, [Item|List]};
 
-object_admin_tree(_Category, _Num, _Data, Acc) ->
-    Acc.
+object_admin_tree(_Category, _List, _State) ->
+    ok.
 
 
 %% ===================================================================

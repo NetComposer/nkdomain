@@ -28,7 +28,7 @@
 -export([object_get_info/0, object_mapping/0, object_parse/3,
          object_api_syntax/3, object_api_allow/4, object_api_cmd/4,
          object_event/2]).
--export([object_admin_tree/4]).
+-export([object_admin_tree/3]).
 -export([object_check_active/2]).
 
 -include("nkdomain.hrl").
@@ -145,11 +145,14 @@ object_api_cmd(Sub, Cmd, Req, State) ->
 
 
 %% @doc
-object_admin_tree(sessions, Num, Data, Acc) ->
-    nkadmin_tree:add_tree_entry(menu_sessions_login, {menuBadge, Num}, Data, Acc);
+%% @doc
+object_admin_tree(sessions, List, #{types:=Types}=State) ->
+    Num = maps:get(?DOMAIN_SESSION, Types),
+    Item = nkadmin_util:menu_item(domain_tree_sessions_login, {menuBadge, Num}, State),
+    {ok, [Item|List]};
 
-object_admin_tree(_Category, _Num, _Data, Acc) ->
-    Acc.
+object_admin_tree(_Category, _Data, _State) ->
+    ok.
 
 
 

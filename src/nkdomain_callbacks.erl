@@ -25,7 +25,7 @@
 -export([service_init/2, service_handle_cast/2, service_handle_info/2]).
 -export([api_error/1, api_server_syntax/3, api_server_allow/2, api_server_cmd/2,
          api_server_reg_down/3]).
--export([admin_menu_fill_category/3]).
+-export([admin_tree_categories/2, admin_tree_get_category/2]).
 -export([object_mapping/0, object_syntax/1, object_parse/3, object_unparse/1]).
 -export([object_load/2, object_get_session/1, object_save/1, object_delete/1, object_archive/1]).
 -export([object_check_active/3, object_do_expired/2]).
@@ -97,6 +97,71 @@ api_error(session_is_disabled)              -> "Session is disabled";
 api_error(user_is_disabled) 		        -> "User is disabled";
 api_error(user_unknown)                     -> "Unknown user";
 api_error(_)   		                        -> continue.
+
+
+
+
+%% ===================================================================
+%% Admin
+%% ===================================================================
+
+
+%% @private
+admin_tree_categories(Map, State) ->
+    Data = #{
+        overview => 1000,
+        resources => 1100,
+        sessions => 1200,
+        networks => 1300,
+        services => 1400
+    },
+    {ok, maps:merge(Data, Map), State}.
+
+
+
+%% @doc
+admin_tree_get_category(overview, State) ->
+    Entries = [nkadmin_util:menu_item(domain_tree_overview_dashboard, menuSimple, State)],
+    Category = nkadmin_util:menu_item(domain_tree_overview, {menuCategory, Entries}, State),
+    {ok, Category, State};
+
+admin_tree_get_category(Category, State)
+        when Category==resources; Category==sessions; Category==networks; Category==services ->
+    #{types:=Types} = State,
+    case do_get_category_entries(Category, maps:to_list(Types), [], State) of
+        {ok, [], State2} ->
+            {ok, #{}, State2};
+        {ok, Entries, State2} ->
+            Id = case Category of
+                resources -> domain_tree_resources;
+                sessions -> domain_tree_sessions;
+                networks -> domain_tree_networks;
+                services -> domain_tree_services
+            end,
+            Data = nkadmin_util:menu_item(Id, {menuCategory, Entries}, State2),
+            {ok, Data, State2}
+    end;
+
+admin_tree_get_category(_Category, _State) ->
+    continue.
+
+
+%% @private
+do_get_category_entries(Category, [], List, State) ->
+    {ok, List, State};
+
+do_get_category_entries(Category, [{Type, _Num}|Rest], List, State) ->
+    case call_type(object_admin_tree, [Category, List, State], Type) of
+        ok ->
+            do_get_category_entries(Category, Rest, List, State);
+        {ok, List2} ->
+            do_get_category_entries(Category, Rest, List2, State);
+        {ok, List2, State2} ->
+            do_get_category_entries(Category, Rest, List2, State2)
+    end.
+
+
+
 
 
 %% ===================================================================
@@ -703,26 +768,6 @@ api_server_reg_down({nkdomain_session_obj, _Pid}, _Reason, State) ->
 
 api_server_reg_down(_Link, _Reason, _State) ->
     continue.
-
-
-%% ===================================================================
-%% Admin
-%% ===================================================================
-
-admin_menu_fill_category(Category, Acc, State) ->
-    #{types:=Types} = State,
-    Acc2 = lists:foldl(
-        fun({Type, Number}, FunAcc) ->
-            case call_type(object_admin_tree, [Category, Number, State, FunAcc], Type) of
-                ok -> FunAcc;
-                FunAcc2 when is_map(FunAcc2) -> FunAcc2
-            end
-        end,
-        Acc,
-        maps:to_list(Types)),
-    {continue, [Category, Acc2, State]}.
-
-
 
 %% ===================================================================
 %% Plugin callbacks

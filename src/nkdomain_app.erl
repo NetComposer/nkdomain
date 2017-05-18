@@ -85,6 +85,7 @@ start(_Type, _Args) ->
             %% ok = riak_core_ring_events:add_guarded_handler(nkdomain_ring_handler, []),
             {ok, Vsn} = application:get_key(nkdomain, vsn),
             lager:info("NkDOMAIN v~s has started.", [Vsn]),
+            nkdomain_i18n:reload(),
             register_types(),
             case get(start_root) of
                 true ->
