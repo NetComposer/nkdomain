@@ -324,7 +324,7 @@ object_parse(SrvId, Mode, Map) ->
                         {error, Error} ->
                             {error, Error}
                     end;
-                Syntax when is_map(Syntax) ->
+                Syntax when Syntax==any; is_map(Syntax) ->
                     BaseSyn = SrvId:object_syntax(Mode),
                     nklib_syntax:parse(Map, BaseSyn#{Type=>Syntax})
             end

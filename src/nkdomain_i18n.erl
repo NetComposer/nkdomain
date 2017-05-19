@@ -35,13 +35,10 @@ i18n() -> #{
         domain_tree_resources => "Resources",
         domain_tree_resources_users => "Users",
         domain_tree_resources_configs => "Configurations",
-        domain_tree_resources_chat_messages => "Chat Messages",
-        domain_tree_resources_chat_conversations => "Conversations",
 
         domain_tree_sessions => "Sessions",
         domain_tree_sessions_login => "Login",
         domain_tree_sessions_tokens => "Tokens",
-        domain_tree_sessions_chat_sessions => "Chat",
         domain_tree_sessions_admin => "Admin",
 
         domain_tree_networks => "Networks",
@@ -57,13 +54,12 @@ i18n() -> #{
         domain_tree_resources => "Recursos",
         domain_tree_resources_users => "Usuarios",
         domain_tree_resources_configs => "Configuraciones",
-        domain_tree_resources_chat_messages => "Mensajes de chat",
+        domain_tree_resources_messages => "Mensajes de chat",
         domain_tree_resources_chat_conversations => "Conversaciones",
 
         domain_tree_sessions => "Sesiones",
         domain_tree_sessions_login => "Login",
         domain_tree_sessions_tokens => "Tokens",
-        domain_tree_sessions_chat_sessions => "Chat",
         domain_tree_sessions_admin => "Admin",
 
         domain_tree_networks => "Redes",

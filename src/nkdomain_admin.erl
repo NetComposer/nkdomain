@@ -36,7 +36,7 @@
 -define(DOMAINS_ALL,    <<"domain_tree_overview_domains_all">>).
 -define(ALERTS,         <<"domain_tree_overview_alerts">>).
 -define(RESOURCES,      <<"domain_tree_resources">>).
--define(SESSIONS,       <<"domain_tree_session">>).
+-define(SESSIONS,       <<"domain_tree_sessions">>).
 -define(NETWORKS,       <<"domain_tree_networks">>).
 -define(SERVICES,       <<"domain_tree_services">>).
 
@@ -70,21 +70,8 @@ tree_get_category(overview, #{srv_id:=SrvId}=State) ->
 
 tree_get_category(Category, State)
     when Category==resources; Category==sessions; Category==networks; Category==services ->
-    #{types:=Types} = State,
-    case do_get_category_entries(Category, maps:to_list(Types), [], State) of
-        {ok, [], State2} ->
-            {ok, #{}, State2};
-        {ok, Entries, State2} ->
-            Id = case Category of
-                resources -> ?RESOURCES;
-                sessions -> ?SESSIONS;
-                networks -> ?NETWORKS;
-                services -> ?SERVICES
-            end,
-            Entries2 = [E || {E, _} <- lists:keysort(2, Entries)],
-            Data = nkadmin_util:menu_item(Id, {menuCategory, Entries2}, State2),
-            {ok, Data, State2}
-    end;
+    #{types:=Types1} = State,
+    get_category(Category, maps:keys(Types1), State);
 
 tree_get_category(_Category, _State) ->
     continue.
@@ -101,10 +88,24 @@ event(#nkevent{class = ?DOMAIN_EVENT_CLASS, subclass = ?DOMAIN_DOMAIN}=Event, Up
             continue
     end;
 
-event(Event, Updates, State) ->
-    lager:error("EV1: ~p", [Event]),
-    {continue, [Event, Updates, State]}.
+%% @doc
+event(#nkevent{class = ?DOMAIN_EVENT_CLASS, subclass=ObjType, type = <<"created">>}=Event, Updates, State) ->
+    #{types:=Types} = State,
+    case maps:is_key(ObjType, Types) of
+        true ->
+            continue;
+        false ->
+            Keys = maps:keys(Types),
+            case get_category(resources, [ObjType|Keys], State) of
+                {ok, Element, State2} when map_size(Element)==0 ->
+                    continue;
+                {ok, Element, State2} ->
+                    {continue, [Event, [Element|Updates], State2]}
+            end
+    end;
 
+event(Event, Updates, State) ->
+    {continue, [Event, Updates, State]}.
 
 
 %% @doc
@@ -167,21 +168,6 @@ get_domain_id(ObjId) ->
 
 
 %% @private
-do_get_category_entries(_Category, [], List, State) ->
-    {ok, List, State};
-
-do_get_category_entries(Category, [{Type, _Num}|Rest], List, State) ->
-    case nkdomain_obj_util:call_type(object_admin_tree, [Category, List, State], Type) of
-        ok ->
-            do_get_category_entries(Category, Rest, List, State);
-        {ok, List2} ->
-            do_get_category_entries(Category, Rest, List2, State);
-        {ok, List2, State2} ->
-            do_get_category_entries(Category, Rest, List2, State2)
-    end.
-
-
-%% @private
 event_domain(ObjId, <<"updated">>, _Body, Group, State) ->
     case maps:is_key(ObjId, Group) of
         true ->
@@ -208,3 +194,44 @@ event_domain(ObjId, <<"created">>, #{parent_id:=DomId}, Group, #{domain_id:=DomI
 
 event_domain(_ObjId, _Type, _Body, _Group, _State) ->
     continue.
+
+
+
+%% ===================================================================
+%% Categories
+%% ===================================================================
+
+get_category(Category, Types, State) ->
+    case do_get_category_entries(Category, Types, [], State) of
+        {ok, [], State2} ->
+            {ok, #{}, State2};
+        {ok, Entries, State2} ->
+            Id = case Category of
+                resources -> ?RESOURCES;
+                sessions -> ?SESSIONS;
+                networks -> ?NETWORKS;
+                services -> ?SERVICES
+            end,
+            Entries2 = [E || {E, _} <- lists:keysort(2, Entries)],
+            Data = nkadmin_util:menu_item(Id, {menuCategory, Entries2}, State2),
+            {ok, Data, State2}
+    end.
+
+
+%% @private
+do_get_category_entries(_Category, [], List, State) ->
+    {ok, List, State};
+
+do_get_category_entries(Category, [Type|Rest], List, State) ->
+    case nkdomain_obj_util:call_type(object_admin_tree, [Category, List, State], Type) of
+        ok ->
+            do_get_category_entries(Category, Rest, List, State);
+        {ok, List2} ->
+            do_get_category_entries(Category, Rest, List2, State);
+        {ok, List2, State2} ->
+            do_get_category_entries(Category, Rest, List2, State2)
+    end.
+
+
+
+
