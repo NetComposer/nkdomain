@@ -40,8 +40,8 @@
 
 
 %% @private
-event(created, Session) ->
-    {event, created, #{}, Session};
+event(created, #obj_session{parent_id=ParentId}=Session) ->
+    {event, created, #{parent_id=>ParentId}, Session};
 
 event(loaded, Session) ->
     {event, loaded, #{}, Session};

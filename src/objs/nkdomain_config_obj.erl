@@ -120,7 +120,7 @@ object_api_cmd(Sub, Cmd, Req, State) ->
 %% @doc
 object_admin_tree(resources, List, State) ->
     Item = nkadmin_util:menu_item(domain_tree_resources_configs, menuSimple, State),
-    {ok, [Item|List]};
+    {ok, [{Item, 900}|List]};
 
 object_admin_tree(_Category, _List, _State) ->
     ok.

@@ -25,7 +25,7 @@
 -export([service_init/2, service_handle_cast/2, service_handle_info/2]).
 -export([api_error/1, api_server_syntax/3, api_server_allow/2, api_server_cmd/2,
          api_server_reg_down/3]).
--export([admin_tree_categories/2, admin_tree_get_category/2]).
+-export([admin_tree_categories/2, admin_tree_get_category/2, admin_event/3, admin_element_action/4]).
 -export([object_mapping/0, object_syntax/1, object_parse/3, object_unparse/1]).
 -export([object_load/2, object_get_session/1, object_save/1, object_delete/1, object_archive/1]).
 -export([object_check_active/3, object_do_expired/2]).
@@ -107,61 +107,22 @@ api_error(_)   		                        -> continue.
 
 
 %% @private
-admin_tree_categories(Map, State) ->
-    Data = #{
-        overview => 1000,
-        resources => 1100,
-        sessions => 1200,
-        networks => 1300,
-        services => 1400
-    },
-    {ok, maps:merge(Data, Map), State}.
-
+admin_tree_categories(Data, State) ->
+    nkdomain_admin:tree_categories(Data, State).
 
 
 %% @doc
-admin_tree_get_category(overview, State) ->
-    Entries = [nkadmin_util:menu_item(domain_tree_overview_dashboard, menuSimple, State)],
-    Category = nkadmin_util:menu_item(domain_tree_overview, {menuCategory, Entries}, State),
-    {ok, Category, State};
-
-admin_tree_get_category(Category, State)
-        when Category==resources; Category==sessions; Category==networks; Category==services ->
-    #{types:=Types} = State,
-    case do_get_category_entries(Category, maps:to_list(Types), [], State) of
-        {ok, [], State2} ->
-            {ok, #{}, State2};
-        {ok, Entries, State2} ->
-            Id = case Category of
-                resources -> domain_tree_resources;
-                sessions -> domain_tree_sessions;
-                networks -> domain_tree_networks;
-                services -> domain_tree_services
-            end,
-            Data = nkadmin_util:menu_item(Id, {menuCategory, Entries}, State2),
-            {ok, Data, State2}
-    end;
-
-admin_tree_get_category(_Category, _State) ->
-    continue.
+admin_tree_get_category(Category, State) ->
+    nkdomain_admin:tree_get_category(Category, State).
 
 
-%% @private
-do_get_category_entries(Category, [], List, State) ->
-    {ok, List, State};
-
-do_get_category_entries(Category, [{Type, _Num}|Rest], List, State) ->
-    case call_type(object_admin_tree, [Category, List, State], Type) of
-        ok ->
-            do_get_category_entries(Category, Rest, List, State);
-        {ok, List2} ->
-            do_get_category_entries(Category, Rest, List2, State);
-        {ok, List2, State2} ->
-            do_get_category_entries(Category, Rest, List2, State2)
-    end.
+%% @doc
+admin_event(Event, Updates, State) ->
+    nkdomain_admin:event(Event, Updates, State).
 
 
-
+admin_element_action(ElementId, Action, Value, State) ->
+    nkdomain_admin:element_action(ElementId, Action, Value, State).
 
 
 %% ===================================================================
@@ -402,7 +363,7 @@ object_unparse(#obj_session{srv_id=SrvId, type=Type, module=Module, obj=Obj}) ->
     boolean().
 
 object_check_active(SrvId, Type, ObjId) ->
-    case call_type(object_check_active, [SrvId, ObjId], Type) of
+    case nkdomain_obj_util:call_type(object_check_active, [SrvId, ObjId], Type) of
         ok ->
             true;
         Other ->
@@ -841,26 +802,6 @@ service_handle_info(_Msg, _State) ->
 %% ===================================================================
 %% Internal
 %% ===================================================================
-
-
-%% @private
-call_type(Fun, Args, Type) ->
-    case nkdomain_types:get_module(Type) of
-        undefined ->
-            ok;
-        Module ->
-            case erlang:function_exported(Module, Fun, length(Args)) of
-                true ->
-                    case apply(Module, Fun, Args) of
-                        continue ->
-                            ok;
-                        Other ->
-                            Other
-                    end;
-                false ->
-                    ok
-            end
-    end.
 
 
 %% @private

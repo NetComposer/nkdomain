@@ -23,7 +23,7 @@
 -module(nkdomain_obj_util).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -export([event/2, status/2, search_syntax/1, get_name/1]).
-
+-export([call_type/3]).
 -include("nkdomain.hrl").
 
 
@@ -79,7 +79,29 @@ get_name(#obj_session{type=Type, obj_id=ObjId, path=Path, obj=Obj}) ->
     #{
         obj_id => ObjId,
         obj_name => ObjName,
-        name => maps:get(name, Obj, <<>>),
+        name => maps:get(name, Obj, ObjName),
         description => maps:get(description, Obj, <<>>),
         icon_id => maps:get(icon_id, Obj, <<>>)
     }.
+
+
+%% @private
+call_type(Fun, Args, Type) ->
+    case nkdomain_types:get_module(Type) of
+        undefined ->
+            ok;
+        Module ->
+            case erlang:function_exported(Module, Fun, length(Args)) of
+                true ->
+                    case apply(Module, Fun, Args) of
+                        continue ->
+                            ok;
+                        Other ->
+                            Other
+                    end;
+                false ->
+                    ok
+            end
+    end.
+
+

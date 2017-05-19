@@ -130,7 +130,7 @@ object_async_op(_Op, _Session) ->
 object_admin_tree(sessions, List, #{types:=Types}=State) ->
     Num = maps:get(?DOMAIN_TOKEN, Types),
     Item = nkadmin_util:menu_item(domain_tree_sessions_tokens, {menuBadge, Num}, State),
-    {ok, [Item|List]};
+    {ok, [{Item, 800}|List]};
 
 object_admin_tree(_Category, _Data, _State) ->
     ok.

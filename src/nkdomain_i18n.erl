@@ -28,6 +28,9 @@ i18n() -> #{
     en => #{
         domain_tree_overview => "Overview",
         domain_tree_overview_dashboard => "Dashboard",
+        domain_tree_overview_domains => "Domains & Groups",
+        domain_tree_overview_domains_all => "All Domains & Groups",
+        domain_tree_overview_alerts => "Alerts",
 
         domain_tree_resources => "Resources",
         domain_tree_resources_users => "Users",
@@ -47,6 +50,9 @@ i18n() -> #{
     es => #{
         domain_tree_overview => "General",
         domain_tree_overview_dashboard => <<"Información"/utf8>>,
+        domain_tree_overview_domains => "Dominios & Grupos",
+        domain_tree_overview_domains_all => "Todos los Dominios & Grupos",
+        domain_tree_overview_alerts => "Alertas",
 
         domain_tree_resources => "Recursos",
         domain_tree_resources_users => "Usuarios",
