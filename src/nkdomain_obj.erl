@@ -401,10 +401,12 @@ init({#obj_id_ext{type=Type, obj_id=ObjId, path=Path}=ObjIdExt, Meta}) ->
 
 % Moved object
 init({#state{srv_id=SrvId, session=Session}=State, Time, OldPid}) ->
-    #obj_session{type=Type, obj_id=ObjId, path=Path} = Session,
+    #obj_session{type=Type, obj_id=ObjId, path=Path, module=Module} = Session,
     case nkdomain_obj_lib:register(Type, ObjId, Path, OldPid) of
         ok ->
             nklib_proc:put(?MODULE, {Type, ObjId, Path}),
+            ObjIdExt = #obj_id_ext{srv_id=SrvId, obj_id=ObjId, path=Path, pid=self()},
+            ok = nkdomain_type:register(Module, ObjIdExt),
             Timer = case Time of
                 permanent ->
                     undefined;
@@ -423,8 +425,9 @@ init({#state{srv_id=SrvId, session=Session}=State, Time, OldPid}) ->
 do_init(ObjIdExt, Meta) ->
     #obj_id_ext{srv_id=SrvId, obj_id=ObjId, type=Type, path=Path} = ObjIdExt,
     nklib_proc:put(?MODULE, {Type, ObjId, Path}),
-    Module = nkdomain_types:get_module(Type),
+    Module = nkdomain_all_types:get_module(Type),
     false = Module==undefined,
+    ok = nkdomain_type:register(Module, ObjIdExt#obj_id_ext{pid=self()}),
     {Name, ParentId} = case Path of
         <<"/">> when Type == ?DOMAIN_DOMAIN andalso ObjId == <<"root">> ->
             {<<>>, <<>>};

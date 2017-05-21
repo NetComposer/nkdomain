@@ -307,7 +307,7 @@ object_parse(SrvId, Mode, Map) ->
         #{type:=Type0} -> Type0;
         _ -> <<>>
     end,
-    case nkdomain_types:get_module(Type) of
+    case nkdomain_all_types:get_module(Type) of
         undefined ->
             {error, {invalid_type, Type}};
         Module ->
@@ -668,7 +668,7 @@ object_store_clean(SrvId) ->
 
 %% @doc
 api_server_syntax(Syntax, #nkapi_req{class=Type, subclass=Sub, cmd=Cmd}=Req, State) ->
-    case nkdomain_types:get_module(Type) of
+    case nkdomain_all_types:get_module(Type) of
         undefined ->
             continue;
         Module ->

@@ -19,7 +19,7 @@
 %% -------------------------------------------------------------------
 %%
 
--module(nkdomain_types).
+-module(nkdomain_all_types).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -behaviour(gen_server).
 
@@ -185,9 +185,14 @@ start_link() ->
     {{module, module()}, nkdomain:type()} |
     {{module, module()}, {nkdomain:type(), nkdomain:subtype()}}.
 
+-record(type, {
 
+}).
 
 -record(state, {
+    types = #{} :: #{nkdomain:type() => #type{}}
+
+
 }).
 
 
@@ -205,7 +210,7 @@ init([]) ->
     {noreply, #state{}} | {reply, term(), #state{}} |
     {stop, Reason::term(), #state{}} | {stop, Reason::term(), Reply::term(), #state{}}.
 
-handle_call({register_type, Type, Module}, _From, State) ->
+handle_call({register_type, Type, Module}, _From, #state{types=Types}=State) ->
     AllModules1 = get_modules(),
     AllModules2 = lists:usort([Module|AllModules1]),
     AllTypes1 = get_types(),
@@ -216,7 +221,15 @@ handle_call({register_type, Type, Module}, _From, State) ->
         {{type, Type}, Module},
         {{module, Module}, Type}
     ]),
-    {reply, ok, State};
+    State2 = case maps:is_key(Type, Types) of
+        false ->
+            {ok, _} = nkdomain_types_sup:add_type(Module),
+            Types2 = Types#{Type=>Module},
+            State#state{types=Types2};
+        true ->
+            State
+    end,
+    {reply, ok, State2};
 
 handle_call({register_subtype, Type, SubType, Module}, _From, State) ->
     ets:insert(?MODULE, [

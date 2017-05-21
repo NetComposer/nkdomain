@@ -35,7 +35,7 @@
 
 %% @doc
 api('', create, #nkapi_req{data=Data}, Type, #{srv_id:=SrvId, user_id:=UserId}=State) ->
-    Module = nkdomain_types:get_module(Type),
+    Module = nkdomain_all_types:get_module(Type),
     case erlang:function_exported(Module, create, 3) of
         true ->
             Name = maps:get(obj_name, Data, <<>>),
@@ -171,7 +171,7 @@ api('', wait_for_save, #nkapi_req{data=Data}, Type, #{srv_id:=SrvId}=State) ->
     end;
 
 api('', make_token, #nkapi_req{data=Data}, Type, #{srv_id:=SrvId}=State) ->
-    Mod = nkdomain_types:get_module(Type),
+    Mod = nkdomain_all_types:get_module(Type),
     Info = Mod:object_get_info(),
     DefTTL = maps:get(default_token_ttl, Info, ?DEF_TOKEN_TTL),
     MaxTTL = maps:get(max_token_ttl, Info, ?MAX_TOKEN_TTL),

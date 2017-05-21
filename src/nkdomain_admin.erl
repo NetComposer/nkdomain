@@ -98,7 +98,7 @@ event(#nkevent{class = ?DOMAIN_EVENT_CLASS, subclass=ObjType, type = <<"created"
             Keys = maps:keys(Types),
             case get_category(resources, [ObjType|Keys], State) of
                 {ok, Element, State2} when map_size(Element)==0 ->
-                    continue;
+                    {continue, [Event, Updates, State2]};
                 {ok, Element, State2} ->
                     {continue, [Event, [Element|Updates], State2]}
             end

@@ -112,11 +112,11 @@ stop(_) ->
 
 %% @doc Register our types
 register_types() ->
-    ok = nkdomain_types:register(nkdomain_domain_obj),
-    ok = nkdomain_types:register(nkdomain_user_obj),
-    ok = nkdomain_types:register(nkdomain_session_obj),
-    ok = nkdomain_types:register(nkdomain_config_obj),
-    ok = nkdomain_types:register(nkdomain_token_obj),
+    ok = nkdomain_all_types:register(nkdomain_domain_obj),
+    ok = nkdomain_all_types:register(nkdomain_user_obj),
+    ok = nkdomain_all_types:register(nkdomain_session_obj),
+    ok = nkdomain_all_types:register(nkdomain_config_obj),
+    ok = nkdomain_all_types:register(nkdomain_token_obj),
     nkmail_app:register_types().
 
 

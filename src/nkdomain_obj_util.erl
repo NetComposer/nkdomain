@@ -87,7 +87,7 @@ get_name(#obj_session{type=Type, obj_id=ObjId, path=Path, obj=Obj}) ->
 
 %% @private
 call_type(Fun, Args, Type) ->
-    case nkdomain_types:get_module(Type) of
+    case nkdomain_all_types:get_module(Type) of
         undefined ->
             ok;
         Module ->

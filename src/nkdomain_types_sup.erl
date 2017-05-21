@@ -18,39 +18,23 @@
 %%
 %% -------------------------------------------------------------------
 
-%% @private Main supervisor
--module(nkdomain_sup).
+%% @private Main types supervisor
+-module(nkdomain_types_sup).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -behaviour(supervisor).
 
--export([init/1, start_link/0]).
+-export([add_type/1, init/1, start_link/0]).
 
--include("nkdomain.hrl").
+
+%% @doc
+add_type(Module) ->
+    {ok, _} = supervisor:start_child(?MODULE, [Module]).
 
 
 %% @private
 start_link() ->
-    ChildsSpec = [
-        {nkdomain_types_sup,
-            {nkdomain_types_sup, start_link, []},
-            permanent,
-            infinity,
-            supervisor,
-            [nkdomain_types_sup]},
-        {nkdomain_all_types,
-            {nkdomain_all_types, start_link, []},
-            permanent,
-            5000,
-            worker,
-            [nkdomain_all_types]},
-        {nkdomain_store,
-            {nkdomain_store, start_link, []},
-            permanent,
-            5000,
-            worker,
-            [nkdomain_store]}
-    ],
-    supervisor:start_link({local, ?MODULE}, ?MODULE, {{one_for_one, 10, 60}, ChildsSpec}).
+    Childs = [#{id=>type, start=>{nkdomain_type, start_link, []}}],
+    supervisor:start_link({local, ?MODULE}, ?MODULE, {{simple_one_for_one, 10, 60}, Childs}).
 
 
 %% @private
