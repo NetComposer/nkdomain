@@ -4,7 +4,7 @@
 -include("nkdomain.hrl").
 -include_lib("nkapi/include/nkapi.hrl").
 
--define(WS, "ws://127.0.0.1:9202/api/ws").
+-define(WS, "ws://127.0.0.1:9301/api/ws").
 -define(ADMIN_PASS, "1234").
 
 
@@ -74,8 +74,8 @@ test_basic_1(Pid) ->
             <<"description">> := _
         } = D1} =
         cmd(Pid, domain, get, #{}),
-    {ok, D1} = cmd(Pid, user, get, #{id=><<"root">>}),
-    {ok, D1} = cmd(Pid, user, get, #{id=><<"/">>}),
+    {ok, D1} = cmd(Pid, domain, get, #{id=><<"root">>}),
+    {ok, D1} = cmd(Pid, domain, get, #{id=><<"/">>}),
     ok.
 
 
@@ -178,7 +178,7 @@ test_session1(Pid) ->
         <<"path">> := <<"/users/tuser1/sessions/", _/binary>>,
         <<"created_by">> := UId,
         <<"session">> := #{
-            <<"local">> := <<"ws:0.0.0.0:9202">>,
+            <<"local">> := <<"ws:0.0.0.0:", _/binary>>,
             <<"remote">> := <<"ws:127.0.0.1:", _/binary>>
         }
     }} =
@@ -385,9 +385,9 @@ test_basic_2(Pid) ->
     {ok, #{<<"enabled">>:=false, <<"_is_enabled">>:=false}} = cmd(Pid, domain, get, #{id=>"/stest1"}),
     {ok, #{<<"_is_enabled">>:=false}=S2_E1} = cmd(Pid, domain, get, #{id=>"/stest1/stest2"}),
     false = maps:is_key(enabled, S2_E1),
-    {ok, #{<<"_is_enabled">>:=false}=S1_U1} = cmd(Pid, domain, get, #{id=>"/stest1/users/u1"}),
+    {ok, #{<<"_is_enabled">>:=false}=S1_U1} = cmd(Pid, user, get, #{id=>"/stest1/users/u1"}),
     false = maps:is_key(enabled, S1_U1),
-    {ok, #{<<"_is_enabled">>:=false}=S2_U1} = cmd(Pid, domain, get, #{id=>"/stest1/stest2/users/u1"}),
+    {ok, #{<<"_is_enabled">>:=false}=S2_U1} = cmd(Pid, user, get, #{id=>"/stest1/stest2/users/u1"}),
     false = maps:is_key(enabled, S2_U1),
 
     % This will not change the status (the stored status was already 'enabled')
@@ -402,9 +402,9 @@ test_basic_2(Pid) ->
     % When we activate again /stest1, /stest1/stest2 and childs remain disabled
     {ok, #{}} = cmd(Pid, domain, enable, #{id=><<"/stest1">>, enable=>true}),
     {ok, #{<<"enabled">>:=true, <<"_is_enabled">>:=true}} = cmd(Pid, domain, get, #{id=>"/stest1"}),
-    {ok, #{<<"_is_enabled">>:=true}} = cmd(Pid, domain, get, #{id=>"/stest1/users/u1"}),
+    {ok, #{<<"_is_enabled">>:=true}} = cmd(Pid, user, get, #{id=>"/stest1/users/u1"}),
     {ok, #{<<"_is_enabled">>:=false, <<"enabled">>:=false}} = cmd(Pid, domain, get, #{id=>"/stest1/stest2"}),
-    {ok, #{<<"_is_enabled">>:=false}} = cmd(Pid, domain, get, #{id=>"/stest1/stest2/users/u1"}),
+    {ok, #{<<"_is_enabled">>:=false}} = cmd(Pid, user, get, #{id=>"/stest1/stest2/users/u1"}),
 
     true = is_loaded("/stest1"),
     true = is_loaded("/stest1/users/u1"),
@@ -423,7 +423,7 @@ test_basic_2(Pid) ->
     false = is_loaded("/stest1/stest2/users/u1"),
 
     % This user will load everything on its branch
-    {ok, #{<<"_is_enabled">>:=false}} = cmd(Pid, domain, get, #{id=>"/stest1/stest2/users/u1"}),
+    {ok, #{<<"_is_enabled">>:=false}} = cmd(Pid, user, get, #{id=>"/stest1/stest2/users/u1"}),
     true = is_loaded("/stest1/stest2/users/u1"),
     true = is_loaded("/stest1/stest2"),
     true = is_loaded("/stest1"),
@@ -431,12 +431,12 @@ test_basic_2(Pid) ->
 
     {ok, #{<<"_is_enabled">>:=false, <<"enabled">>:=false}} = cmd(Pid, domain, get, #{id=>"/stest1/stest2"}),
     {ok, #{<<"enabled">>:=true, <<"_is_enabled">>:=true}} = cmd(Pid, domain, get, #{id=>"/stest1"}),
-    {ok, #{<<"_is_enabled">>:=true}} = cmd(Pid, domain, get, #{id=>"/stest1/users/u1"}),
+    {ok, #{<<"_is_enabled">>:=true}} = cmd(Pid, user, get, #{id=>"/stest1/users/u1"}),
 
     % We enable again /stest1/stest2
     {ok, #{}} = cmd(Pid, domain, enable, #{id=><<"/stest1/stest2">>, enable=>true}),
     {ok, #{<<"_is_enabled">>:=true, <<"enabled">>:=true}} = cmd(Pid, domain, get, #{id=>"/stest1/stest2"}),
-    {ok, #{<<"_is_enabled">>:=true}} = cmd(Pid, domain, get, #{id=>"/stest1/users/u1"}),
+    {ok, #{<<"_is_enabled">>:=true}} = cmd(Pid, user, get, #{id=>"/stest1/users/u1"}),
 
     ok.
 

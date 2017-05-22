@@ -69,6 +69,8 @@ api('', get, #nkapi_req{data=Data}, Type, #{srv_id:=SrvId}=State) ->
                         {ok, #obj_session{obj=Obj, is_enabled=Enabled, type=Type, path=Path}} ->
                             {ok, _, ObjName} = nkdomain_util:get_parts(Type, Path),
                             {ok, Obj#{obj_name=>ObjName, '_is_enabled'=>Enabled}, State};
+                        {ok, _} ->
+                            {error, invalid_object_type, State};
                         {error, Error} ->
                             {error, Error, State}
                     end;
