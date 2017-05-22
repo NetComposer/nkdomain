@@ -56,6 +56,8 @@ create(Srv, Parent, SecsTTL, Data) when is_integer(SecsTTL), SecsTTL >= 1 ->
     case nkdomain_obj_lib:load(Srv, Parent, #{}) of
         #obj_id_ext{obj_id=ReferredId, type=SubType} ->
             Obj = #{
+                parent_id => ReferredId,
+                type => ?DOMAIN_TOKEN,
                 referred_id => ReferredId,
                 subtype => SubType,
                 expires_time => nkdomain_util:timestamp() + 1000*SecsTTL,

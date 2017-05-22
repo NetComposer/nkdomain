@@ -82,10 +82,11 @@ tree_get_category(_Category, _State) ->
 event(#nkevent{class = ?DOMAIN_EVENT_CLASS, type = <<"counter_updated">>, obj_id=ObjId}=Event, Updates,
       #{domain_path:=ObjId}=State) ->
     #nkevent{subclass=ObjType, body=#{counter:=Counter}}=Event,
-    lager:error("NKLOG EVENT! ~p", [ObjType]),
-    #{session_types:=Types} = State,
+    % lager:error("NKLOG EVENT! ~p", [ObjType]),
+    #{types:=Types, session_types:=SessTypes} = State,
     Types2 = Types#{ObjType => Counter},
-    State2 = State#{session_types := Types2},
+    SessTypes2 = SessTypes#{ObjType => Counter},
+    State2 = State#{types:=Types2, session_types:=SessTypes2},
     case maps:is_key(ObjType, Types) of
         true ->
             case do_get_category_entries(sessions, [ObjType], [], State2) of

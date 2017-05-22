@@ -117,7 +117,7 @@ user_update(Id, Name) ->
 
 
 user_make_token() ->
-    cmd(user, make_token, #{ttl=>1}).
+    cmd(user, make_token, #{ttl=>30}).
 
 
 

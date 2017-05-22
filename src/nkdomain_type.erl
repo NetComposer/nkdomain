@@ -379,7 +379,7 @@ send_event(Domain, #state{type=Type}=State) ->
         domain = Domain,
         body = #{counter => Count}
     },
-    lager:error("NKLOG SEND EVENT ~p", [lager:pr(Event, ?MODULE)]),
+    % lager:error("NKLOG SEND EVENT ~p", [lager:pr(Event, ?MODULE)]),
     nkevent:send(Event).
 
 
