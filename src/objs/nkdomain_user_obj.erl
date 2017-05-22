@@ -235,12 +235,10 @@ object_async_op(_Op, _Session) ->
 
 
 %% @doc
-object_admin_tree(resources, List, State) ->
-    Item = nkadmin_util:menu_item(domain_tree_resources_users, menuSimple, State),
-    {ok, [{Item, 100}|List]};
+object_admin_tree(Category, List, State) ->
+    nkdomain_admin:add_tree_resource(Category, domain_tree_resources_users,
+                                     100, List, State).
 
-object_admin_tree(_Category, _List, _State) ->
-    ok.
 
 
 %% ===================================================================

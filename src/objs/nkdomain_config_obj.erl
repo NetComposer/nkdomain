@@ -117,13 +117,12 @@ object_api_cmd(Sub, Cmd, Req, State) ->
     nkdomain_obj_api:api(Sub, Cmd, Req, ?DOMAIN_CONFIG, State).
 
 
-%% @doc
-object_admin_tree(resources, List, State) ->
-    Item = nkadmin_util:menu_item(domain_tree_resources_configs, menuSimple, State),
-    {ok, [{Item, 900}|List]};
+%% @private
+object_admin_tree(Category, List, State) ->
+    nkdomain_admin:add_tree_resource(Category, domain_tree_resources_configs,
+                                     900, List, State).
 
-object_admin_tree(_Category, _List, _State) ->
-    ok.
+
 
 %% ===================================================================
 %% Internal

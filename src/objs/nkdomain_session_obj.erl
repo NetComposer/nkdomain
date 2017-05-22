@@ -145,14 +145,8 @@ object_api_cmd(Sub, Cmd, Req, State) ->
 
 
 %% @doc
-%% @doc
-object_admin_tree(sessions, List, #{types:=Types}=State) ->
-    Num = maps:get(?DOMAIN_SESSION, Types),
-    Item = nkadmin_util:menu_item(domain_tree_sessions_login, {menuBadge, Num}, State),
-    {ok, [{Item, 500}|List]};
-
-object_admin_tree(_Category, _Data, _State) ->
-    ok.
+object_admin_tree(Category, List, State) ->
+    nkdomain_admin:add_tree_session(Category, ?DOMAIN_SESSION, ?MODULE, domain_tree_sessions_login, 1000, List, State).
 
 
 

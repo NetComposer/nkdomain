@@ -22,6 +22,7 @@
 -module(nkdomain_admin).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -export([tree_categories/2, tree_get_category/2, event/3, element_action/4]).
+-export([add_tree_resource/5, add_tree_session/7]).
 
 -include("nkdomain.hrl").
 -include_lib("nkevent/include/nkevent.hrl").
@@ -78,6 +79,28 @@ tree_get_category(_Category, _State) ->
 
 
 %% @doc
+event(#nkevent{class = ?DOMAIN_EVENT_CLASS, type = <<"counter_updated">>, obj_id=ObjId}=Event, Updates,
+      #{domain_path:=ObjId}=State) ->
+    #nkevent{subclass=ObjType, body=#{counter:=Counter}}=Event,
+    lager:error("NKLOG EVENT! ~p", [ObjType]),
+    #{session_types:=Types} = State,
+    Types2 = Types#{ObjType => Counter},
+    State2 = State#{session_types := Types2},
+    case maps:is_key(ObjType, Types) of
+        true ->
+            case do_get_category_entries(sessions, [ObjType], [], State2) of
+                {ok, [], State3} ->
+                    {continue, [Event, Updates, State3]};
+                {ok, [{Data, _Weigth}], State3} ->
+                    lager:warning("NKLOG IS MEMBER: ~p", [Data]),
+                    {continue, [Event, [Data|Updates], State3]}
+            end;
+        false ->
+            lager:warning("NKLOG IS NOT MEMBER"),
+            {ok, Data, State3} = get_category(sessions, maps:keys(Types2), State2),
+            {continue, [Event, [Data|Updates], State3]}
+    end;
+
 event(#nkevent{class = ?DOMAIN_EVENT_CLASS, subclass = ?DOMAIN_DOMAIN}=Event, Updates, State) ->
     #nkevent{obj_id=ObjId, type=Type, body=Body} = Event,
     Group = nkadmin_util:get_group(?DOMAINS_ID, State),
@@ -88,8 +111,8 @@ event(#nkevent{class = ?DOMAIN_EVENT_CLASS, subclass = ?DOMAIN_DOMAIN}=Event, Up
             continue
     end;
 
-%% @doc
-event(#nkevent{class = ?DOMAIN_EVENT_CLASS, subclass=ObjType, type = <<"created">>}=Event, Updates, State) ->
+event(#nkevent{class = ?DOMAIN_EVENT_CLASS, type = <<"created">>}=Event, Updates, State) ->
+    #nkevent{subclass=ObjType} = Event,
     #{types:=Types} = State,
     case maps:is_key(ObjType, Types) of
         true ->
@@ -233,5 +256,34 @@ do_get_category_entries(Category, [Type|Rest], List, State) ->
     end.
 
 
+%% ===================================================================
+%% Util
+%% ===================================================================
+
+add_tree_resource(resources, Key, Weigth, List, State) ->
+    Item = nkadmin_util:menu_item(Key, menuSimple, State),
+    {ok, [{Item, Weigth}|List]};
+
+add_tree_resource(_Category, _Key, _Weigth, _List, _State) ->
+    ok.
 
 
+%% @doc
+add_tree_session(sessions, Type, Module, Key, Weight, List, #{domain_path:=Domain, session_types:=Types}=State) ->
+    Num = case maps:find(Type, Types) of
+        {ok, Num0} ->
+            Num0;
+        error ->
+            {ok, Num0} = nkdomain_type:get_global_counters(Module, Domain),
+            Num0
+    end,
+    case Num of
+        0 ->
+            ok;
+        _ ->
+            Item = nkadmin_util:menu_item(Key, {menuBadge, Num}, State),
+            {ok, [{Item, Weight}|List], State#{session_types:=Types#{Type=>Num}}}
+    end;
+
+add_tree_session(_Category, _Type, _Module, _Key, _Weigth, _List, _State) ->
+    ok.

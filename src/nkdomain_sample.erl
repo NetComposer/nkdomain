@@ -217,6 +217,9 @@ domain_find_all_users() ->
 session_get() ->
     cmd(session, get, #{}).
 
+session_delete() ->
+    cmd(session, delete, #{}).
+
 
 config_create(Sub, Parent, Config) ->
     cmd(config, create, #{subtype=>Sub, parent=>Parent, config=>Config}).

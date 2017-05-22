@@ -26,6 +26,7 @@
 -export([get_module/1, get_modules/0, get_submodule/2]).
 -export([get_type/1, get_types/0, get_subtype/1]).
 -export([register/1]).
+-export([get_counters/0, get_counters/1, get_global_counters/0, get_global_counters/1]).
 -export([start_link/0]).
 -export([init/1, terminate/2, code_change/3, handle_call/3,
          handle_cast/2, handle_info/2]).
@@ -127,46 +128,63 @@ register(Module) ->
     end.
 
 
-%%%% @doc
-%%make_syntax(Module, Mandatory, Base) ->
-%%    Fields = [binary_to_atom(list_to_binary([to_bin(Module), $., to_bin(F)]), utf8) || F <- Mandatory],
-%%    Mandatory2 = maps:get('__mandatory', Base, []),
-%%    Mandatory3 = Fields ++ Mandatory2,
-%%    Base#{
-%%        type => fun ?MODULE:make_syntax_fun/3,
-%%        path => fun ?MODULE:make_syntax_fun/3,
-%%        '__mandatory' => Mandatory3
-%%    }.
-%%
-%%
-%%%% @private
-%%make_syntax_fun(type, Type, #{meta:=#{module:=Module}}) ->
-%%    Type2 = to_bin(Type),
-%%    case Module:object_get_info() of
-%%        #{type:=Type2} ->
-%%            ok;
-%%        _ ->
-%%            ?LLOG(notice, "Invalid syntax type for module ~p (~s)", [Module, Type2]),
-%%            error
-%%    end;
-%%
-%%make_syntax_fun(path, Path, #{meta:=#{module:=Module}}) ->
-%%    Path2 = to_bin(Path),
-%%    #{type:=Type} = Module:object_get_info(),
-%%    case lists:reverse(binary:split(Path2, <<"/">>, [global])) of
-%%        [_Name, Types|_] ->
-%%            case <<Type/binary, $s>> of
-%%                Types ->
-%%                    ok;
-%%                _ ->
-%%                    ?LLOG(notice, "Invalid syntax path for module ~p (~s)", [Module, Path]),
-%%                    error
-%%            end;
-%%        _ ->
-%%            ?LLOG(notice, "Invalid syntax path for module ~p (~s)", [Module, Path]),
-%%            error
-%%    end.
+get_counters() ->
+    do_get_counters(false).
 
+get_counters(Domain) ->
+    do_get_counters(to_bin(Domain), false).
+
+
+get_global_counters() ->
+    do_get_counters(true).
+
+get_global_counters(Domain) ->
+    do_get_counters(to_bin(Domain), true).
+
+
+%% @private
+do_get_counters(Global) ->
+    Modules = get_modules(),
+    lists:foldl(
+        fun(Module, Acc) ->
+            {ok, Counters} = case Global of
+                true -> nkdomain_type:get_counters(Module);
+                false -> nkdomain_type:get_global_counters(Module)
+            end,
+            #{type:=Type} = Module:object_get_info(),
+            lists:foldl(
+                fun({Domain, Counter}, Acc2) ->
+                    DomainMap = maps:get(Domain, Acc2, #{}),
+                    OldCounter =  maps:get(Type, DomainMap, 0),
+                    Acc2#{Domain => DomainMap#{Type=>OldCounter+Counter}}
+                end,
+                Acc,
+                maps:to_list(Counters))
+        end,
+        #{},
+        Modules).
+
+
+%% @private
+do_get_counters(Domain, Global) ->
+    Modules = get_modules(),
+    lists:foldl(
+        fun(Module, Acc) ->
+            {ok, Counter} = case Global of
+                true -> nkdomain_type:get_counters(Module, Domain);
+                false -> nkdomain_type:get_global_counters(Module, Domain)
+            end,
+            case Counter of
+                0 ->
+                    Acc;
+                _ ->
+                    #{type:=Type} = Module:object_get_info(),
+                    OldCounter =  maps:get(Type, Acc, 0),
+                    Acc#{Type=>OldCounter+Counter}
+            end
+        end,
+        #{},
+        Modules).
 
 
 % ===================================================================
