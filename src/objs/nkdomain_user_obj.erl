@@ -214,7 +214,10 @@ object_sync_op({?MODULE, get_name}, _From, #obj_session{obj=Obj}=Session) ->
             name => UserName,
             surname => UserSurName,
             email => maps:get(email, User, <<>>),
-            icon_id => <<>>
+            icon_id => <<>>,
+            avatar_t => maps:get(avatar_t, User, <<>>),
+            phone_t => maps:get(phone_t, User, <<>>),
+            address_t => maps:get(address_t, User, <<>>)
         }
     },
     {reply, {ok, Data}, Session};
