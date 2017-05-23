@@ -26,6 +26,8 @@
 
 i18n() -> #{
     en => #{
+        logout => "Logout",
+
         domain_tree_overview => "Overview",
         domain_tree_overview_dashboard => "Dashboard",
         domain_tree_overview_domains => "Domains & Groups",
@@ -45,6 +47,8 @@ i18n() -> #{
         domain_tree_services => "Services"
     },
     es => #{
+        logout => "Salir",
+
         domain_tree_overview => "General",
         domain_tree_overview_dashboard => <<"Información"/utf8>>,
         domain_tree_overview_domains => "Dominios & Grupos",

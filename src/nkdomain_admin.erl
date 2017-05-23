@@ -21,7 +21,7 @@
 %% @doc NkDomain service callback module
 -module(nkdomain_admin).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
--export([tree_categories/2, tree_get_category/2, event/3, element_action/4]).
+-export([tree_categories/2, tree_get_category/2, event/3, element_action/5]).
 -export([add_tree_resource/5, add_tree_session/7]).
 
 -include("nkdomain.hrl").
@@ -62,11 +62,11 @@ tree_categories(Data, State) ->
 tree_get_category(overview, #{srv_id:=SrvId}=State) ->
     {ok, Domains, State2} = get_domains(SrvId, State),
     Entries = [
-        nkadmin_util:menu_item(?DASHBOARD, menuSimple, State),
-        nkadmin_util:menu_item(?DOMAINS, {menuGroup, Domains}, State),
-        nkadmin_util:menu_item(?ALERTS, {menuBadge, 3}, State)
+        nkadmin_util:menu_item(?DASHBOARD, menuEntry, #{}, State),
+        nkadmin_util:menu_item(?DOMAINS, menuGroup, #{items=>Domains}, State),
+        nkadmin_util:menu_item(?ALERTS, menuEntry, #{badge=>3}, State)
     ],
-    Category = nkadmin_util:menu_item(?OVERVIEW, {menuCategory, Entries}, State),
+    Category = nkadmin_util:menu_item(?OVERVIEW, menuCategory, #{items=>Entries}, State),
     {ok, Category, State2};
 
 tree_get_category(Category, State)
@@ -129,15 +129,54 @@ event(Event, Updates, State) ->
 
 
 %% @doc
-element_action(?DOMAINS_ALL, selected, _Value, State) ->
-    {ok, #{detail=>#{id=>detail_domains_table, class=>table}}, State};
+element_action(?DOMAINS_ALL, selected, Value, Updates, #{domain_path:=Path}=State) ->
+    Updates2 = [
+        #{
+            class => url,
+            id => url,
+            value => #{label => nkadmin_util:append_type(Path, <<"domains">>)}
+        },
+        #{
+            class => breadcrumbs,
+            id => breadcrumbs,
+            value => #{items => nkadmin_util:get_parts(Path)++[<<"domains">>]}
+        },
+        #{
+            class => detail,
+            value => #{}
+        }
+        | Updates
+    ],
+    {continue, [?DOMAINS_ALL, selected, Value, Updates2, State]};
 
-element_action(<<?DOMAINS_ID2, $_, ObjId/binary>>, selected, _Value, State) ->
-    {ok, #{detail=>#{id=>detail_domain_page, class=>ui, obj_id=>ObjId}}, State};
+element_action(<<?DOMAINS_ID2, $_, ObjId/binary>>, selected, Value, Updates, #{srv_id:=SrvId}=State) ->
+    case nkdomain_obj_lib:load(SrvId, ObjId, #{}) of
+        #obj_id_ext{path=Path} ->
+            Updates2 = [
+                #{
+                    class => url,
+                    id => url,
+                    value => #{label => Path}
+                },
+                #{
+                    class => breadcrumbs,
+                    id => breadcrumbs,
+                    value => #{items => nkadmin_util:get_parts(Path)}
+                },
+                #{
+                    class => detail,
+                    value => #{}
+                }
+                | Updates
+            ],
+            State2 = State#{detail_path=>Path},
+            {continue, [?DOMAINS_ALL, selected, Value, Updates2, State2]};
+        {error, Error} ->
+            {error, Error, State}
+    end;
 
-element_action(ElementId, Action, Value, State) ->
-    lager:error("NKLOG DOM ACT ~p", [{ElementId, Action, Value}]),
-    {continue, [ElementId, Action, Value, State]}.
+element_action(ElementId, Action, Value, Updates, State) ->
+    {continue, [ElementId, Action, Value, Updates, State]}.
 
 
 %% ===================================================================
@@ -157,13 +196,13 @@ get_domains(SrvId, #{domain_id:=DomainId}=State) ->
 %% @private
 update_domains(ObjIds, #{srv_id:=SrvId}=State) ->
     {ok, Domains, State2} = do_get_domains(SrvId, ObjIds, [], State),
-    {ok, nkadmin_util:menu_item(?DOMAINS, {menuGroup, Domains}, State2), State2}.
+    {ok, nkadmin_util:menu_item(?DOMAINS, menuGroup, #{items=>Domains}, State2), State2}.
 
 
 %% @private
 do_get_domains(_SrvId, [], Acc, State) ->
     List = [Element || {_ObjName, Element} <- lists:sort(Acc)] ++
-           [nkadmin_util:menu_item(?DOMAINS_ALL, menuSimple, State)],
+           [nkadmin_util:menu_item(?DOMAINS_ALL, menuEntry, #{}, State)],
     {ok, List, State};
 
 do_get_domains(SrvId, [ObjId|Rest], Acc, State) ->
@@ -176,7 +215,7 @@ do_get_domains(SrvId, [ObjId|Rest], Acc, State) ->
         }} ->
             Id = get_domain_id(ObjId),
             Value = #{label=>Name, tooltip=>Desc, path=>Path},
-            Element = nkadmin_util:menu_item(Id, {menuSimple, Value}, State),
+            Element = nkadmin_util:menu_item(Id, menuEntry, Value, State),
             State2 = nkadmin_util:add_element(?DOMAINS_ID, ObjId, ok, State),
             do_get_domains(SrvId, Rest, [{ObjName, Element}|Acc], State2);
         {error, Error} ->
@@ -236,7 +275,7 @@ get_category(Category, Types, State) ->
                 services -> ?SERVICES
             end,
             Entries2 = [E || {E, _} <- lists:keysort(2, Entries)],
-            Data = nkadmin_util:menu_item(Id, {menuCategory, Entries2}, State2),
+            Data = nkadmin_util:menu_item(Id, menuCategory, #{items=>Entries2}, State2),
             {ok, Data, State2}
     end.
 
@@ -261,7 +300,7 @@ do_get_category_entries(Category, [Type|Rest], List, State) ->
 %% ===================================================================
 
 add_tree_resource(resources, Key, Weigth, List, State) ->
-    Item = nkadmin_util:menu_item(Key, menuSimple, State),
+    Item = nkadmin_util:menu_item(Key, menuEntry, #{}, State),
     {ok, [{Item, Weigth}|List]};
 
 add_tree_resource(_Category, _Key, _Weigth, _List, _State) ->
@@ -281,7 +320,7 @@ add_tree_session(sessions, Type, Module, Key, Weight, List, #{domain_path:=Domai
         0 ->
             ok;
         _ ->
-            Item = nkadmin_util:menu_item(Key, {menuBadge, Num}, State),
+            Item = nkadmin_util:menu_item(Key, menuEntry, #{badge=>Num}, State),
             {ok, [{Item, Weight}|List], State#{session_types:=Types#{Type=>Num}}}
     end;
 

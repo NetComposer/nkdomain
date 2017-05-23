@@ -12,7 +12,8 @@
         nkevent,
         nkapi,
         nkmail,
-        nkfile
+        nkfile,
+        pgapp
     ]},
     {env, [
     ]}

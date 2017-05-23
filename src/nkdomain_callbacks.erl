@@ -25,7 +25,7 @@
 -export([service_init/2, service_handle_cast/2, service_handle_info/2]).
 -export([api_error/1, api_server_syntax/3, api_server_allow/2, api_server_cmd/2,
          api_server_reg_down/3]).
--export([admin_tree_categories/2, admin_tree_get_category/2, admin_event/3, admin_element_action/4]).
+-export([admin_tree_categories/2, admin_tree_get_category/2, admin_event/3, admin_element_action/5]).
 -export([object_mapping/0, object_syntax/1, object_parse/3, object_unparse/1]).
 -export([object_load/2, object_get_session/1, object_save/1, object_delete/1, object_archive/1]).
 -export([object_check_active/3, object_do_expired/2]).
@@ -126,8 +126,8 @@ admin_event(_Event, _Updates, _State) ->
 
 
 %% @doc
-admin_element_action(ElementId, Action, Value, State) ->
-    nkdomain_admin:element_action(ElementId, Action, Value, State).
+admin_element_action(ElementId, Action, Value, Updates, State) ->
+    nkdomain_admin:element_action(ElementId, Action, Value, Updates, State).
 
 
 %% ===================================================================
