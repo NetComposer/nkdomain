@@ -46,6 +46,7 @@
 
 -include("nkdomain.hrl").
 -include_lib("nkapi/include/nkapi.hrl").
+-include_lib("nkevent/include/nkevent.hrl").
 
 
 %% ===================================================================
@@ -117,10 +118,14 @@ admin_tree_get_category(Category, State) ->
 
 
 %% @doc
-admin_event(Event, Updates, State) ->
-    nkdomain_admin:event(Event, Updates, State).
+admin_event(#nkevent{class = ?DOMAIN_EVENT_CLASS}=Event, Updates, State) ->
+    nkdomain_admin:event(Event, Updates, State);
+
+admin_event(_Event, _Updates, _State) ->
+    continue.
 
 
+%% @doc
 admin_element_action(ElementId, Action, Value, State) ->
     nkdomain_admin:element_action(ElementId, Action, Value, State).
 

@@ -71,23 +71,21 @@ tree_get_category(overview, #{srv_id:=SrvId}=State) ->
 
 tree_get_category(Category, State)
     when Category==resources; Category==sessions; Category==networks; Category==services ->
-    #{types:=Types1} = State,
-    get_category(Category, maps:keys(Types1), State);
+    #{types:=Types} = State,
+    get_category(Category, Types, State);
 
 tree_get_category(_Category, _State) ->
     continue.
 
 
 %% @doc
-event(#nkevent{class = ?DOMAIN_EVENT_CLASS, type = <<"counter_updated">>, obj_id=ObjId}=Event, Updates,
-      #{domain_path:=ObjId}=State) ->
+event(#nkevent{type = <<"counter_updated">>, obj_id=ObjId}=Event, Updates, #{domain_path:=ObjId}=State) ->
     #nkevent{subclass=ObjType, body=#{counter:=Counter}}=Event,
-    % lager:error("NKLOG EVENT! ~p", [ObjType]),
     #{types:=Types, session_types:=SessTypes} = State,
-    Types2 = Types#{ObjType => Counter},
+    Types2 = nklib_util:store_value(ObjType, Types),
     SessTypes2 = SessTypes#{ObjType => Counter},
     State2 = State#{types:=Types2, session_types:=SessTypes2},
-    case maps:is_key(ObjType, Types) of
+    case lists:member(ObjType, Types) of
         true ->
             case do_get_category_entries(sessions, [ObjType], [], State2) of
                 {ok, [], State3} ->
@@ -98,12 +96,11 @@ event(#nkevent{class = ?DOMAIN_EVENT_CLASS, type = <<"counter_updated">>, obj_id
             end;
         false ->
             lager:warning("NKLOG IS NOT MEMBER"),
-            {ok, Data, State3} = get_category(sessions, maps:keys(Types2), State2),
+            {ok, Data, State3} = get_category(sessions, Types2, State2),
             {continue, [Event, [Data|Updates], State3]}
     end;
 
-event(#nkevent{class = ?DOMAIN_EVENT_CLASS, subclass = ?DOMAIN_DOMAIN}=Event, Updates, State) ->
-    #nkevent{obj_id=ObjId, type=Type, body=Body} = Event,
+event(#nkevent{subclass = ?DOMAIN_DOMAIN, obj_id=ObjId, type=Type, body=Body}=Event, Updates, State) ->
     Group = nkadmin_util:get_group(?DOMAINS_ID, State),
     case event_domain(ObjId, Type, Body, Group, State) of
         {ok, Element, State2} ->
@@ -112,15 +109,14 @@ event(#nkevent{class = ?DOMAIN_EVENT_CLASS, subclass = ?DOMAIN_DOMAIN}=Event, Up
             continue
     end;
 
-event(#nkevent{class = ?DOMAIN_EVENT_CLASS, type = <<"created">>}=Event, Updates, State) ->
-    #nkevent{subclass=ObjType} = Event,
+event(#nkevent{type = <<"created">>, subclass=ObjType}=Event, Updates, State) ->
     #{types:=Types} = State,
-    case maps:is_key(ObjType, Types) of
+    case lists:member(ObjType, Types) of
         true ->
             continue;
         false ->
-            Keys = maps:keys(Types),
-            case get_category(resources, [ObjType|Keys], State) of
+            Types2 = [ObjType|Types],
+            case get_category(resources, Types2, State#{types:=Types2}) of
                 {ok, Element, State2} when map_size(Element)==0 ->
                     {continue, [Event, Updates, State2]};
                 {ok, Element, State2} ->
