@@ -170,10 +170,13 @@ do_get_domains(SrvId, [ObjId|Rest], Acc, State) ->
     case nkdomain_obj:get_name(ObjId) of
         {ok, #{
             name := Name,
-            obj_name := ObjName
+            obj_name := ObjName,
+            description := Desc,
+            path := Path
         }} ->
             Id = get_domain_id(ObjId),
-            Element = nkadmin_util:menu_item(Id, {menuSimple, ObjName, Name}, State),
+            Value = #{label=>Name, tooltip=>Desc, path=>Path},
+            Element = nkadmin_util:menu_item(Id, {menuSimple, Value}, State),
             State2 = nkadmin_util:add_element(?DOMAINS_ID, ObjId, ok, State),
             do_get_domains(SrvId, Rest, [{ObjName, Element}|Acc], State2);
         {error, Error} ->
