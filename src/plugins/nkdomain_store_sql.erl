@@ -89,6 +89,21 @@ create_base() ->
     query(Sql).
 
 
+insert_objs(Start, End) when Start < End ->
+    Pos = esc(Start),
+    Id = <<"TestId-", Pos/binary>>,
+    Path = <<"TestPath-", Pos/binary>>,
+    Parent = <<"TestParent-", Pos/binary>>,
+    Alias = <<"TestAlias-", Pos/binary>>,
+    insert_obj(Id, Path, Parent, Alias),
+    insert_objs(Start+1, End);
+
+insert_objs(_Start, _End) ->
+    ok.
+
+
+
+
 insert_obj(Id, Path, Parent, Alias) ->
     S = [<<"
             BEGIN;
