@@ -81,7 +81,8 @@ create_base() ->
 
         CREATE TABLE nkobjects.aliases (
             obj_id STRING PRIMARY KEY NOT NULL,
-            referred_id STRING NOT NULL
+            referred_id STRING NOT NULL,
+            INDEX (obj_id)
         );
 
 
@@ -119,8 +120,7 @@ insert_obj(Id, Path, Parent, Alias) ->
 f(Id) ->
     S = [
         <<"SELECT object.obj_id, path, aliases.obj_id FROM nkobjects.object, nkobjects.aliases
-           WHERE object.obj_id=">>, esc(Id), <<" OR path=">>, esc(Id), <<"OR aliases.obj_id=">>, esc(Id),
-          <<" LIMIT 2 OFFSET 5">>
+           WHERE object.obj_id=">>, esc(Id), <<" OR path=">>, esc(Id), <<" OR aliases.obj_id=">>, esc(Id)
     ],
     query(S).
 
@@ -190,41 +190,6 @@ create_colum(Data) ->
 
 
 
-
-
-
-
-
-%%product_id           INT PRIMARY KEY NOT NULL,
-%%product_name         STRING(50) UNIQUE NOT NULL,
-%%product_description  STRING(2000),
-%%category_id          STRING(1) NOT NULL CHECK (category_id IN ('A','B','C')),
-%%weight_class         INT,
-%%warranty_period      INT CONSTRAINT valid_warranty CHECK (warranty_period BETWEEN 0 AND 24),
-%%supplier_id          INT,
-%%product_status       STRING(20),
-%%list_price           DECIMAL(8,2),
-%%min_price            DECIMAL(8,2),
-%%catalog_url          STRING(50) UNIQUE,
-%%date_added           DATE DEFAULT CURRENT_DATE(),
-%%CONSTRAINT price_check CHECK (list_price >= min_price),
-%%INDEX date_added_idx (date_added),
-%%INDEX supp_id_prod_status_idx (supplier_id, product_status)
-%%);
-
-%%create_table(Db, Name) ->
-%%    case query(["CREATE TABLE IF NOT EXISTS ", Name, "(", ")"]) of
-%%        {ok, [<<"CREATE DATABASE">>]} ->
-%%            ok;
-%%        {error, Error} ->
-%%            {error, Error};
-%%        Other ->
-%%            {error, Other}
-%%    end.
-
-
-
-
 query(Cmd) ->
     P = get(pgsql),
     Bin = iolist_to_binary(Cmd),
@@ -236,7 +201,7 @@ query(Cmd) ->
             lists:map(
                 fun
                     ({error, Error}) -> {error, nklib_util:get_value(message, Error, <<>>)};
-                    (Bin) -> {ok, Bin}
+                    (Res) -> {ok, Res}
                 end,
                 List);
         Other ->

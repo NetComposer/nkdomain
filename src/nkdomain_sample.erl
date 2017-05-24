@@ -79,8 +79,8 @@ user_create2(Domain, Name, Surname, Avatar, Phone, Address) ->
             name => to_bin(Name),
             surname => to_bin(Surname),
             avatar_t => to_bin(Avatar),
-            phone_t => to_bin(Avatar),
-            address_t => to_bin(Avatar)
+            phone_t => to_bin(Phone),
+            address_t => to_bin(Address)
         }
     },
     case cmd(user, create, Data) of
