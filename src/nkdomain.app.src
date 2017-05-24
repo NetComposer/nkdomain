@@ -12,7 +12,8 @@
         nkevent,
         nkapi,
         nkmail,
-        nkfile
+        nkfile,
+        p1_pgsql
     ]},
     {env, [
     ]}
