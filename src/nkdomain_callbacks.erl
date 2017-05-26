@@ -23,7 +23,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -export([plugin_deps/0, plugin_syntax/0, plugin_config/2]).
 -export([service_init/2, service_handle_cast/2, service_handle_info/2]).
--export([api_error/1, service_api_syntax/2, service_api_allow/2, service_api_cmd/2,
+-export([error/1, service_api_syntax/2, service_api_allow/2, service_api_cmd/2,
          api_server_reg_down/3]).
 -export([admin_tree_categories/2, admin_tree_get_category/2, admin_event/3, admin_element_action/5]).
 -export([object_mapping/0, object_syntax/1, object_parse/3, object_unparse/1]).
@@ -66,39 +66,39 @@
 %% ===================================================================
 
 %% @doc
-api_error({could_not_load_parent, Id})      -> {"Object could not load parent '~s'", [Id]};
-api_error(domain_unknown)                   -> "Unknown domain";
-api_error({invalid_name, N})                -> {"Invalid name '~s'", [N]};
-api_error(invalid_object_id)                -> "Invalid object id";
-api_error(invalid_object_type)              -> "Invalid object type";
-api_error(invalid_object_path)              -> "Invalid object path";
-api_error({invalid_object_path, P})         -> {"Invalid object path '~s'", [P]};
-api_error({invalid_type, T})                -> {"Invalid type '~s'", [T]};
-api_error(invalid_token_ttl)                -> "Invalid token TTL";
-api_error(member_already_present)           -> "Member is already present";
-api_error(member_not_found)                 -> "Member not found";
-api_error(object_already_exists)            -> "Object already exists";
-api_error(object_clean_process)             -> "Object cleaned (process stopped)";
-api_error(object_clean_expire)              -> "Object cleaned (expired)";
-api_error(object_deleted) 		            -> "Object removed";
-api_error(object_expired) 		            -> "Object expired";
-api_error(object_has_childs) 		        -> "Object has childs";
-api_error(object_parent_conflict) 	        -> "Object has conflicting parent";
-api_error(object_is_already_loaded)         -> "Object is already loaded";
-api_error(object_is_disabled) 		        -> "Object is disabled";
-api_error(object_is_stopped) 		        -> "Object is stopped";
-api_error(object_not_found) 		        -> "Object not found";
-api_error(object_not_started) 		        -> "Object is not started";
-api_error(object_stopped) 		            -> "Object stopped";
-api_error(parent_not_found) 		        -> "Parent not found";
-api_error(parent_stopped) 		            -> "Parent stopped";
-api_error(referred_not_found) 		        -> "Referred object not found";
-api_error(session_already_present)          -> "Session is already present";
-api_error(session_not_found)                -> "Session not found";
-api_error(session_is_disabled)              -> "Session is disabled";
-api_error(user_is_disabled) 		        -> "User is disabled";
-api_error(user_unknown)                     -> "Unknown user";
-api_error(_)   		                        -> continue.
+error({could_not_load_parent, Id})      -> {"Object could not load parent '~s'", [Id]};
+error(domain_unknown)                   -> "Unknown domain";
+error({invalid_name, N})                -> {"Invalid name '~s'", [N]};
+error(invalid_object_id)                -> "Invalid object id";
+error(invalid_object_type)              -> "Invalid object type";
+error(invalid_object_path)              -> "Invalid object path";
+error({invalid_object_path, P})         -> {"Invalid object path '~s'", [P]};
+error({invalid_type, T})                -> {"Invalid type '~s'", [T]};
+error(invalid_token_ttl)                -> "Invalid token TTL";
+error(member_already_present)           -> "Member is already present";
+error(member_not_found)                 -> "Member not found";
+error(object_already_exists)            -> "Object already exists";
+error(object_clean_process)             -> "Object cleaned (process stopped)";
+error(object_clean_expire)              -> "Object cleaned (expired)";
+error(object_deleted) 		            -> "Object removed";
+error(object_expired) 		            -> "Object expired";
+error(object_has_childs) 		        -> "Object has childs";
+error(object_parent_conflict) 	        -> "Object has conflicting parent";
+error(object_is_already_loaded)         -> "Object is already loaded";
+error(object_is_disabled) 		        -> "Object is disabled";
+error(object_is_stopped) 		        -> "Object is stopped";
+error(object_not_found) 		        -> "Object not found";
+error(object_not_started) 		        -> "Object is not started";
+error(object_stopped) 		            -> "Object stopped";
+error(parent_not_found) 		        -> "Parent not found";
+error(parent_stopped) 		            -> "Parent stopped";
+error(referred_not_found) 		        -> "Referred object not found";
+error(session_already_present)          -> "Session is already present";
+error(session_not_found)                -> "Session not found";
+error(session_is_disabled)              -> "Session is disabled";
+error(user_is_disabled) 		        -> "User is disabled";
+error(user_unknown)                     -> "Unknown user";
+error(_)   		                        -> continue.
 
 
 

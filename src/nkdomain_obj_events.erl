@@ -51,7 +51,7 @@ event({status, Status}, Session) when is_atom(Status); is_binary(Status) ->
 
 event({status, {Status, Reason}}, Session) when is_atom(Status); is_binary(Status) ->
     #obj_session{srv_id=SrvId} = Session,
-    {Code, Txt} = nkapi_util:api_error(SrvId, Reason),
+    {Code, Txt} = nkservice_util:error(SrvId, Reason),
     {event, updated_status, #{status=>Code, reason=>Txt}, Session};
 
 event(saved, Session) ->
@@ -83,7 +83,7 @@ event({child_unloaded, Type, ObjId}, Session) ->
 
 event({unloaded, Reason}, Session) ->
     #obj_session{srv_id=SrvId} = Session,
-    {Code, Txt} = nkapi_util:api_error(SrvId, Reason),
+    {Code, Txt} = nkservice_util:error(SrvId, Reason),
     {event, unloaded, #{code=>Code, reason=>Txt}, Session};
 
 event(_Event, Session) ->

@@ -965,7 +965,7 @@ do_stop(Reason, State) ->
 %% @private
 do_stop2(Reason, #state{srv_id=SrvId, stop_reason=false, timelog=Log, obj_info=Info}=State) ->
     {ok, State2} = handle(object_stop, [Reason], State#state{stop_reason=Reason}),
-    {Code, Txt} = nkapi_util:api_error(SrvId, Reason),
+    {Code, Txt} = nkservice_util:error(SrvId, Reason),
     State3 = do_add_timelog(#{msg=>stopped, code=>Code, reason=>Txt}, State2),
     State4 = do_save(State3),
     State5 = do_event({unloaded, Reason}, State4),
