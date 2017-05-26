@@ -673,8 +673,8 @@ object_store_clean(SrvId) ->
 %% ===================================================================
 
 %% @doc
-service_api_syntax(Syntax, #nkreq{cmd = <<"objects.", Rest/binary>>}=Req) ->
-    case binary:split(Rest, <<".">>) of
+service_api_syntax(Syntax, #nkreq{cmd = <<"objects/", Rest/binary>>}=Req) ->
+    case binary:split(Rest, <<"/">>) of
         [] ->
             continue;
         [Type, Cmd] ->
@@ -698,7 +698,7 @@ service_api_syntax(_Syntax, _Req) ->
 
 
 %% @doc
-service_api_allow(#nkreq{cmd = <<"objects.", _/binary>>, req_state={Module, Cmd}}=Req, State) ->
+service_api_allow(#nkreq{cmd = <<"objects/", _/binary>>, req_state={Module, Cmd}}=Req, State) ->
     nklib_util:apply(Module, object_api_allow, [Cmd, Req, State]);
 
 service_api_allow(#nkreq{cmd = <<"event", _/binary>>}, State) ->
@@ -715,7 +715,7 @@ service_api_allow(_Req, _State) ->
 
 
 %% @doc
-service_api_cmd(#nkreq{cmd = <<"objects.", _/binary>>}=Req, State) ->
+service_api_cmd(#nkreq{cmd = <<"objects/", _/binary>>}=Req, State) ->
     #nkreq{req_state={Module, Cmd}, data=Data, srv_id=SrvId} = Req,
     Domain = case maps:find(domain, Data) of
         {ok, UserDomain} ->

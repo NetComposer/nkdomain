@@ -18,24 +18,24 @@ login(User, Pass) ->
         password=> nklib_util:to_binary(Pass),
         meta => #{a=>nklib_util:to_binary(User)}
     },
-    {ok, _Reply, _Pid} = nkapi_client:start(root, ?WS, Login, Fun, #{}, <<"objects.user.login">>).
+    {ok, _Reply, _Pid} = nkapi_client:start(root, ?WS, Login, Fun, #{}, <<"objects/user/login">>).
 
 
 event_get_subs() ->
-    cmd(<<"event.get_subscriptions">>, #{}).
+    cmd(<<"event/get_subscriptions">>, #{}).
 
 event_subscribe(ObjType, EvType, ObjId) ->
-    cmd(<<"event.subscribe">>, #{class=>domain, subclass=>ObjType, type=>EvType, obj_id=>ObjId}).
+    cmd(<<"event/subscribe">>, #{class=>domain, subclass=>ObjType, type=>EvType, obj_id=>ObjId}).
 
 event_unsubscribe(ObjType, EvType, ObjId) ->
-    cmd(<<"event.unsubscribe">>, #{class=>domain, subclass=>ObjType, type=>EvType, obj_id=>ObjId}).
+    cmd(<<"event/unsubscribe">>, #{class=>domain, subclass=>ObjType, type=>EvType, obj_id=>ObjId}).
 
 
 user_get() ->
-    cmd(<<"objects.user.get">>, #{unknown=>1}).
+    cmd(<<"objects/user/get">>, #{unknown=>1}).
 
 user_get(Id) ->
-    cmd(<<"objects.user.get">>, #{id=>Id}).
+    cmd(<<"objects/user/get">>, #{id=>Id}).
 
 user_create(Domain, Name, Surname) ->
     Data = #{
@@ -47,7 +47,7 @@ user_create(Domain, Name, Surname) ->
             password => <<"1234">>
         }
     },
-    case cmd(<<"objects.user.create">>, Data) of
+    case cmd(<<"objects/user/create">>, Data) of
         {ok, #{<<"obj_id">>:=ObjId}} -> {ok, ObjId};
         {error, Error} -> {error, Error}
     end.
@@ -66,7 +66,7 @@ user_create(Domain, ObjName, Password, Name, Surname, Email) ->
             email => to_bin(Email)
         }
     },
-    case cmd(<<"objects.user.create">>, Data) of
+    case cmd(<<"objects/user/create">>, Data) of
         {ok, #{<<"obj_id">>:=ObjId}} -> {ok, ObjId};
         {error, Error} -> {error, Error}
     end.
@@ -83,7 +83,7 @@ user_create2(Domain, Name, Surname, Avatar, Phone, Address) ->
             address_t => to_bin(Address)
         }
     },
-    case cmd(<<"objects.user.create">>, Data) of
+    case cmd(<<"objects/user/create">>, Data) of
         {ok, #{<<"obj_id">>:=ObjId}} -> {ok, ObjId};
         {error, Error} -> {error, Error}
     end.
@@ -92,7 +92,7 @@ user_create2(Domain, Name, Surname, Avatar, Phone, Address) ->
 
 
 user_delete(Id) ->
-    cmd(<<"objects.user.delete">>, #{id=>to_bin(Id)}).
+    cmd(<<"objects/user/delete">>, #{id=>to_bin(Id)}).
 
 
 user_update(Id, Name, Password, Email) ->
@@ -104,7 +104,7 @@ user_update(Id, Name, Password, Email) ->
             email => Email
         }
     },
-    cmd(<<"objects.user.update">>, Data).
+    cmd(<<"objects/user/update">>, Data).
 
 user_update(Id, Name) ->
     Data = #{
@@ -113,21 +113,21 @@ user_update(Id, Name) ->
             name => to_bin(Name)
         }
     },
-    cmd(<<"objects.user.update">>, Data).
+    cmd(<<"objects/user/update">>, Data).
 
 
 user_make_token() ->
-    cmd(<<"objects.user.make_token">>, #{ttl=>30}).
+    cmd(<<"objects/user/make_token">>, #{ttl=>30}).
 
 
 
 
 
 domain_get() ->
-    cmd(<<"objects.domain.get">>, #{}).
+    cmd(<<"objects/domain/get">>, #{}).
 
 domain_get(Id) ->
-    cmd(<<"objects.domain.get">>, #{id=>Id}).
+    cmd(<<"objects/domain/get">>, #{id=>Id}).
 
 domain_create(Domain, Name, Desc) ->
     Data = #{
@@ -136,14 +136,14 @@ domain_create(Domain, Name, Desc) ->
         description => Desc,
         domain => #{}
     },
-    case cmd(<<"objects.domain.create">>, Data) of
+    case cmd(<<"objects/domain/create">>, Data) of
         {ok, #{<<"obj_id">>:=ObjId}} -> {ok, ObjId};
         {error, Error} -> {error, Error}
     end.
 
 
 domain_delete(Id) ->
-    cmd(<<"objects.domain.delete">>, #{id=>to_bin(Id)}).
+    cmd(<<"objects/domain/delete">>, #{id=>to_bin(Id)}).
 
 
 domain_update(Id, Name, Desc) ->
@@ -152,89 +152,89 @@ domain_update(Id, Name, Desc) ->
         name => Name,
         description => Desc
     },
-    cmd(<<"objects.domain.update">>, Data).
+    cmd(<<"objects/domain/update">>, Data).
 
 
 domain_find() ->
-    cmd(<<"objects.domain.find">>, #{}).
+    cmd(<<"objects/domain/find">>, #{}).
 
 domain_find(Id) ->
-    cmd(<<"objects.domain.find">>, #{id=>Id}).
+    cmd(<<"objects/domain/find">>, #{id=>Id}).
 
 domain_find(Id, Spec) ->
-    cmd(<<"objects.domain.find">>, Spec#{id=>Id}).
+    cmd(<<"objects/domain/find">>, Spec#{id=>Id}).
 
 domain_find_all() ->
-    cmd(<<"objects.domain.find_all">>, #{}).
+    cmd(<<"objects/domain/find_all">>, #{}).
 
 domain_find_all(Id) ->
-    cmd(<<"objects.domain.find_all">>, #{id=>Id}).
+    cmd(<<"objects/domain/find_all">>, #{id=>Id}).
 
 domain_find_all(Id, Spec) ->
-    cmd(<<"objects.domain.find_all">>, Spec#{id=>Id}).
+    cmd(<<"objects/domain/find_all">>, Spec#{id=>Id}).
 
 domain_find_types() ->
-    cmd(<<"objects.domain.find_types">>, #{}).
+    cmd(<<"objects/domain/find_types">>, #{}).
 
 domain_find_types(Id) ->
-    cmd(<<"objects.domain.find_types">>, #{id=>Id}).
+    cmd(<<"objects/domain/find_types">>, #{id=>Id}).
 
 domain_find_types(Id, Spec) ->
-    cmd(<<"objects.domain.find_types">>, Spec#{id=>Id}).
+    cmd(<<"objects/domain/find_types">>, Spec#{id=>Id}).
 
 domain_find_all_types() ->
-    cmd(<<"objects.domain.find_all_types">>, #{}).
+    cmd(<<"objects/domain/find_all_types">>, #{}).
 
 domain_find_all_types(Id) ->
-    cmd(<<"objects.domain.find_all_types">>, #{id=>Id}).
+    cmd(<<"objects/domain/find_all_types">>, #{id=>Id}).
 
 domain_find_all_types(Id, Spec) ->
-    cmd(<<"objects.domain.find_all_types">>, Spec#{id=>Id}).
+    cmd(<<"objects/domain/find_all_types">>, Spec#{id=>Id}).
 
 domain_find_childs() ->
-    cmd(<<"objects.domain.find_childs">>, #{}).
+    cmd(<<"objects/domain/find_childs">>, #{}).
 
 domain_find_childs(Id) ->
-    cmd(<<"objects.domain.find_childs">>, #{id=>Id}).
+    cmd(<<"objects/domain/find_childs">>, #{id=>Id}).
 
 domain_find_childs(Id, Spec) ->
-    cmd(<<"objects.domain.find_childs">>, Spec#{id=>Id}).
+    cmd(<<"objects/domain/find_childs">>, Spec#{id=>Id}).
 
 domain_find_all_childs() ->
-    cmd(<<"objects.domain.find_all_childs">>, #{}).
+    cmd(<<"objects/domain/find_all_childs">>, #{}).
 
 domain_find_all_childs(Id) ->
-    cmd(<<"objects.domain.find_all_childs">>, #{id=>Id}).
+    cmd(<<"objects/domain/find_all_childs">>, #{id=>Id}).
 
 domain_find_all_childs(Id, Spec) ->
-    cmd(<<"objects.domain.find_all_childs">>, Spec#{id=>Id}).
+    cmd(<<"objects/domain/find_all_childs">>, Spec#{id=>Id}).
 
 
 domain_find_all_users() ->
-    cmd(<<"objects.domain.find_all_childs">>, #{type=>user}).
+    cmd(<<"objects/domain/find_all_childs">>, #{type=>user}).
 
 
 session_get() ->
-    cmd(<<"objects.session.get">>, #{}).
+    cmd(<<"objects/session/get">>, #{}).
 
 session_delete() ->
-    cmd(<<"objects.session.delete">>, #{}).
+    cmd(<<"objects/session/delete">>, #{}).
 
 
 config_create(Sub, Parent, Config) ->
-    cmd(<<"objects.config.create">>, #{subtype=>Sub, parent=>Parent, config=>Config}).
+    cmd(<<"objects/config/create">>, #{subtype=>Sub, parent=>Parent, config=>Config}).
 
 config_get(Id) ->
-    cmd(<<"objects.config.get">>, #{id=>Id}).
+    cmd(<<"objects/config/get">>, #{id=>Id}).
 
 config_update(Id, Config) ->
-    cmd(<<"objects.config.update">>, #{id=>Id, config=>Config}).
+    cmd(<<"objects/config/update">>, #{id=>Id, config=>Config}).
 
 config_delete(Id, Reason) ->
-    cmd(<<"objects.config.update">>, #{id=>Id, reason=>Reason}).
+    cmd(<<"objects/config/update">>, #{id=>Id, reason=>Reason}).
 
 config_find(SubType, Parent) ->
-    cmd(<<"objects.config.find">>, #{parent=>Parent, subtype=>SubType}).
+    cmd(<<"objects/config/find">>, #{parent=>Parent, subtype=>SubType}).
 
 
 
