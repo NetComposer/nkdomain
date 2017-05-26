@@ -22,20 +22,20 @@
 -module(nkdomain_domain_obj_api).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([cmd/4]).
+-export([cmd/3]).
 
 -include("nkdomain.hrl").
--include_lib("nkapi/include/nkapi.hrl").
+-include_lib("nkservice/include/nkservice.hrl").
 
 %% ===================================================================
 %% API
 %% ===================================================================
 
-cmd('', check_name, #nkapi_req{data=#{name:=Name}}, State) ->
+cmd(<<"check_name">>, #nkreq{data=#{name:=Name}}, State) ->
     {ok, #{name=>nkdomain_util:name(Name)}, State};
 
-cmd('', find, #nkapi_req{data=Data}, #{srv_id:=SrvId}=State) ->
-    Id = get_domain(Data, SrvId),
+cmd(<<"find">>, #nkreq{data=Data, srv_id=SrvId}, State) ->
+    Id = get_domain(Data, State),
     case nkdomain_domain_obj:find(SrvId, Id, Data) of
         {ok, Total, List, _Meta} ->
             {ok, #{total=>Total, data=>List}, State};
@@ -43,8 +43,8 @@ cmd('', find, #nkapi_req{data=Data}, #{srv_id:=SrvId}=State) ->
             {error, Error, State}
     end;
 
-cmd('', find_all, #nkapi_req{data=Data}, #{srv_id:=SrvId}=State) ->
-    Id = get_domain(Data, SrvId),
+cmd(<<"find_all">>, #nkreq{data=Data, srv_id=SrvId}, State) ->
+    Id = get_domain(Data, State),
     case nkdomain_domain_obj:find_all(SrvId, Id, Data) of
         {ok, Total, List, _Meta} ->
             {ok, #{total=>Total, data=>List}, State};
@@ -52,8 +52,8 @@ cmd('', find_all, #nkapi_req{data=Data}, #{srv_id:=SrvId}=State) ->
             {error, Error, State}
     end;
 
-cmd('', find_types, #nkapi_req{data=Data}, #{srv_id:=SrvId}=State) ->
-    Id = get_domain(Data, SrvId),
+cmd(<<"find_types">>, #nkreq{data=Data, srv_id=SrvId}, State) ->
+    Id = get_domain(Data, State),
     case nkdomain_domain_obj:find_types(SrvId, Id, Data) of
         {ok, Total, List} ->
             {ok, #{total=>Total, data=>maps:from_list(List)}, State};
@@ -61,8 +61,8 @@ cmd('', find_types, #nkapi_req{data=Data}, #{srv_id:=SrvId}=State) ->
             {error, Error, State}
     end;
 
-cmd('', find_all_types, #nkapi_req{data=Data}, #{srv_id:=SrvId}=State) ->
-    Id = get_domain(Data, SrvId),
+cmd(<<"find_all_types">>, #nkreq{data=Data, srv_id=SrvId}, State) ->
+    Id = get_domain(Data, State),
     case nkdomain_domain_obj:find_all_types(SrvId, Id, Data) of
         {ok, Total, List} ->
             {ok, #{total=>Total, data=>maps:from_list(List)}, State};
@@ -70,23 +70,23 @@ cmd('', find_all_types, #nkapi_req{data=Data}, #{srv_id:=SrvId}=State) ->
             {error, Error, State}
     end;
 
-cmd('', find_childs, #nkapi_req{data=Data}, #{srv_id:=SrvId}=State) ->
-    Id = get_domain(Data, SrvId),
+cmd(<<"find_childs">>, #nkreq{data=Data, srv_id=SrvId}, State) ->
+    Id = get_domain(Data, State),
     Search = nkdomain_domain_obj:find_childs(SrvId, Id, Data),
     nkdomain_api_util:search(Search, State);
 
-cmd('', find_all_childs, #nkapi_req{data=Data}, #{srv_id:=SrvId}=State) ->
-    Id = get_domain(Data, SrvId),
+cmd(<<"find_all_childs">>, #nkreq{data=Data, srv_id=SrvId}, State) ->
+    Id = get_domain(Data, State),
     Search = nkdomain_domain_obj:find_all_childs(SrvId, Id, Data),
     nkdomain_api_util:search(Search, State);
 
-cmd(Sub, Cmd, Req, State) ->
-    nkdomain_obj_api:api(Sub, Cmd, Req, ?DOMAIN_DOMAIN, State).
+cmd(Cmd, Req, State) ->
+    nkdomain_obj_api:api(Cmd, ?DOMAIN_DOMAIN, Req, State).
 
 
 %% ===================================================================
 %% Internal
 %% ===================================================================
 
-get_domain(#{id:=Id}, _SrvId) -> Id;
-get_domain(_, SrvId) -> nkdomain_util:get_service_domain(SrvId).
+get_domain(#{id:=Id}, _State) -> Id;
+get_domain(_, State) -> nkdomain_api_util:get_domain(#{}, State).

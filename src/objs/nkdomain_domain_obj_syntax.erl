@@ -23,7 +23,7 @@
 -module(nkdomain_domain_obj_syntax).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([api/3]).
+-export([api/2]).
 
 -include("nkdomain.hrl").
 
@@ -44,35 +44,35 @@
 %%      simple_query => "message"
 %% }
 
-api('', check_name, Syntax) ->
+api(<<"check_name">>, Syntax) ->
     Syntax#{
         name => binary,
         '__mandatory' => [name]
     };
 
-api('', find, Syntax) ->
+api(<<"find">>, Syntax) ->
     Syntax2 = Syntax#{
         id => binary
     },
     nkdomain_obj_util:search_syntax(Syntax2);
 
-api('', find_all, Syntax) ->
-    api('', find, Syntax);
+api(<<"find_all">>, Syntax) ->
+    api(<<"find">>, Syntax);
 
-api('', find_types, Syntax) ->
-    api('', find, Syntax);
+api(<<"find_types">>, Syntax) ->
+    api(<<"find">>, Syntax);
 
-api('', find_all_types, Syntax) ->
-    api('', find, Syntax);
+api(<<"find_all_types">>, Syntax) ->
+    api(<<"find">>, Syntax);
 
-api('', find_childs, Syntax) ->
-    api('', find, Syntax);
+api(<<"find_childs">>, Syntax) ->
+    api(<<"find">>, Syntax);
 
-api('', find_all_childs, Syntax) ->
-    api('', find, Syntax);
+api(<<"find_all_childs">>, Syntax) ->
+    api(<<"find">>, Syntax);
 
-api(Sub, Cmd, Syntax) ->
-    nkdomain_obj_syntax:syntax(Sub, Cmd, ?DOMAIN_DOMAIN, Syntax).
+api(Cmd, Syntax) ->
+    nkdomain_obj_syntax:syntax(Cmd, ?DOMAIN_DOMAIN, Syntax).
 
 
 %% ===================================================================

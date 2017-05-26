@@ -22,11 +22,11 @@
 -module(nkdomain_user_obj_api).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([cmd/4]).
+-export([cmd/3]).
 
 
 -include("nkdomain.hrl").
--include_lib("nkapi/include/nkapi.hrl").
+-include_lib("nkservice/include/nkservice.hrl").
 
 
 %% ===================================================================
@@ -34,9 +34,11 @@
 %% ===================================================================
 
 %% @doc
-cmd('', login, #nkapi_req{data=#{id:=User}=Data}, #{srv_id:=SrvId}=State) ->
-    LoginMeta1 = maps:with([session_type, session_id, local, remote], State),
+cmd(<<"login">>, Req, State) ->
+    #nkreq{data=#{id:=User}=Data, srv_id=SrvId, session_id=SessId, session_meta=SessMeta} = Req,
+    LoginMeta1 = maps:with([local, remote], SessMeta),
     LoginMeta2 = LoginMeta1#{
+        session_id => SessId,
         password => maps:get(password, Data, <<>>),
         login_meta => maps:get(meta, Data, #{}),
         api_server_pid => self()
@@ -44,10 +46,8 @@ cmd('', login, #nkapi_req{data=#{id:=User}=Data}, #{srv_id:=SrvId}=State) ->
     case nkdomain_user_obj:login(SrvId, User, LoginMeta2) of
         {ok, UserId, SessId, LoginMeta3} ->
             Reply = #{obj_id=>UserId, session_id=>SessId},
-            State2 = case nkdomain_util:get_service_domain(SrvId) of
-                undefined -> State;
-                Domain -> nkdomain_api_util:add_id(?DOMAIN_DOMAIN, Domain, State)
-            end,
+            Domain = nkdomain_api_util:get_domain(#{}, State),
+            State2 = nkdomain_api_util:add_id(?DOMAIN_DOMAIN, Domain, State),
             State3 = nkdomain_api_util:add_id(?DOMAIN_USER, UserId, State2),
             State4 = nkdomain_api_util:add_id(?DOMAIN_SESSION, SessId, State3),
             {login, Reply, UserId, LoginMeta3, State4};
@@ -55,5 +55,5 @@ cmd('', login, #nkapi_req{data=#{id:=User}=Data}, #{srv_id:=SrvId}=State) ->
             {error, Error, State}
     end;
 
-cmd(Sub, Cmd, Req, State) ->
-    nkdomain_obj_api:api(Sub, Cmd, Req, ?DOMAIN_USER, State).
+cmd(Cmd, Req, State) ->
+    nkdomain_obj_api:api(Cmd, ?DOMAIN_USER, Req, State).

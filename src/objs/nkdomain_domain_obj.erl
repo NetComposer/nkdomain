@@ -26,7 +26,7 @@
 
 -export([create/3, find/3, find_all/3, find_types/3, find_all_types/3, find_childs/3, find_all_childs/3]).
 -export([object_get_info/0, object_mapping/0, object_parse/3,
-         object_api_syntax/3, object_api_allow/4, object_api_cmd/4]).
+         object_api_syntax/2, object_api_allow/3, object_api_cmd/3]).
 -export([object_start/1]).
 
 -include("nkdomain.hrl").
@@ -139,18 +139,18 @@ object_parse(_SrvId, _Mode, _Obj) ->
 
 
 %% @private
-object_api_syntax(Sub, Cmd, Syntax) ->
-    nkdomain_domain_obj_syntax:api(Sub, Cmd, Syntax).
+object_api_syntax(Cmd, Syntax) ->
+    nkdomain_domain_obj_syntax:api(Cmd, Syntax).
 
 
 %% @private
-object_api_allow(_Sub, _Cmd, _Data, State) ->
+object_api_allow(_Cmd, _Req, State) ->
     {true, State}.
 
 
 %% @private
-object_api_cmd(Sub, Cmd, Req, State) ->
-    nkdomain_domain_obj_api:cmd(Sub, Cmd, Req, State).
+object_api_cmd(Cmd, Req, State) ->
+    nkdomain_domain_obj_api:cmd(Cmd, Req, State).
 
 
 %% @private

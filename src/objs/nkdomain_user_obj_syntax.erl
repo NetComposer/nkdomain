@@ -23,7 +23,7 @@
 -module(nkdomain_user_obj_syntax).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([api/3]).
+-export([api/2]).
 
 -include("nkdomain.hrl").
 
@@ -33,7 +33,7 @@
 
 
 %% @doc
-api('', login, Syntax) ->
+api(<<"login">>, Syntax) ->
     Syntax#{
         id => binary,
         password => binary,
@@ -42,7 +42,7 @@ api('', login, Syntax) ->
         '__mandatory' => [id]
     };
 
-api('', get_token, Syntax) ->
+api(<<"get_token">>, Syntax) ->
     Syntax#{
         id => binary,
         password => binary,
@@ -50,5 +50,5 @@ api('', get_token, Syntax) ->
         '__mandatory' => [id]
     };
 
-api(Sub, Cmd, Syntax) ->
-    nkdomain_obj_syntax:syntax(Sub, Cmd, ?DOMAIN_USER, Syntax).
+api(Cmd, Syntax) ->
+    nkdomain_obj_syntax:syntax(Cmd, ?DOMAIN_USER, Syntax).

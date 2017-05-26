@@ -23,7 +23,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -export([plugin_deps/0, plugin_syntax/0, plugin_config/2]).
 -export([service_init/2, service_handle_cast/2, service_handle_info/2]).
--export([api_error/1, api_server_syntax/3, api_server_allow/2, api_server_cmd/2,
+-export([api_error/1, service_api_syntax/2, service_api_allow/2, service_api_cmd/2,
          api_server_reg_down/3]).
 -export([admin_tree_categories/2, admin_tree_get_category/2, admin_event/3, admin_element_action/5]).
 -export([object_mapping/0, object_syntax/1, object_parse/3, object_unparse/1]).
@@ -47,6 +47,7 @@
 -include("nkdomain.hrl").
 -include_lib("nkapi/include/nkapi.hrl").
 -include_lib("nkevent/include/nkevent.hrl").
+-include_lib("nkservice/include/nkservice.hrl").
 
 
 %% ===================================================================
@@ -672,44 +673,50 @@ object_store_clean(SrvId) ->
 %% ===================================================================
 
 %% @doc
-api_server_syntax(Syntax, #nkapi_req{class=Type, subclass=Sub, cmd=Cmd}=Req, State) ->
-    case nkdomain_all_types:get_module(Type) of
-        undefined ->
+service_api_syntax(Syntax, #nkreq{cmd = <<"objects.", Rest/binary>>}=Req) ->
+    case binary:split(Rest, <<".">>) of
+        [] ->
             continue;
-        Module ->
-            case nklib_util:apply(Module, object_api_syntax, [Sub, Cmd, Syntax]) of
-                Syntax2 when is_map(Syntax2) ->
-                    {Syntax2, Req#nkapi_req{module=Module}, State};
-                not_exported ->
+        [Type, Cmd] ->
+            case nkdomain_all_types:get_module(Type) of
+                undefined ->
                     continue;
-                continue ->
-                    continue
+                Module ->
+                    case nklib_util:apply(Module, object_api_syntax, [Cmd, Syntax]) of
+                        Syntax2 when is_map(Syntax2) ->
+                            {Syntax2, Req#nkreq{req_state={Module, Cmd}}};
+                        not_exported ->
+                            continue;
+                        continue ->
+                            continue
+                    end
             end
-    end.
+    end;
 
-
-%% @doc
-api_server_allow(#nkapi_req{module=Module}=Req, State) when Module/=undefined ->
-    #nkapi_req{subclass=Sub, cmd=Cmd, data=Data} = Req,
-    nklib_util:apply(Module, object_api_allow, [Sub, Cmd, Data, State]);
-
-api_server_allow(#nkapi_req{class=event}, State) ->
-    {true, State};
-
-api_server_allow(#nkapi_req{class=nkmail}, State) ->
-    {true, State};
-
-api_server_allow(#nkapi_req{class=nkadmin}, State) ->
-    {true, State};
-
-api_server_allow(_Req, _State) ->
+service_api_syntax(_Syntax, _Req) ->
     continue.
 
 
 %% @doc
-api_server_cmd(#nkapi_req{module=Module}=Req, State) when Module/=undefined ->
-    #nkapi_req{subclass=Sub, cmd=Cmd, data=Data} = Req,
-    #{srv_id:=SrvId} = State,
+service_api_allow(#nkreq{cmd = <<"objects.", _/binary>>, req_state={Module, Cmd}}=Req, State) ->
+    nklib_util:apply(Module, object_api_allow, [Cmd, Req, State]);
+
+service_api_allow(#nkreq{cmd = <<"event", _/binary>>}, State) ->
+    {true, State};
+
+service_api_allow(#nkreq{cmd = <<"nkmail", _/binary>>}, State) ->
+    {true, State};
+
+service_api_allow(#nkreq{cmd = <<"nkadmin", _/binary>>}, State) ->
+    {true, State};
+
+service_api_allow(_Req, _State) ->
+    continue.
+
+
+%% @doc
+service_api_cmd(#nkreq{cmd = <<"objects.", _/binary>>}=Req, State) ->
+    #nkreq{req_state={Module, Cmd}, data=Data, srv_id=SrvId} = Req,
     Domain = case maps:find(domain, Data) of
         {ok, UserDomain} ->
             UserDomain;
@@ -720,11 +727,11 @@ api_server_cmd(#nkapi_req{module=Module}=Req, State) when Module/=undefined ->
         undefined ->
             {error, domain_unknown, State};
         _ ->
-            State2 = ?ADD_TO_API_SESSION(domain, Domain, State),
-            nklib_util:apply(Module, object_api_cmd, [Sub, Cmd, Req, State2])
+            State2 = State#{nkdomain_domain => Domain},
+            nklib_util:apply(Module, object_api_cmd, [Cmd, Req, State2])
     end;
 
-api_server_cmd(_Req, _State) ->
+service_api_cmd(_Req, _State) ->
     continue.
 
 

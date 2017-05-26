@@ -2,7 +2,7 @@
 -compile(export_all).
 
 -include("nkdomain.hrl").
--include_lib("nkapi/include/nkapi.hrl").
+-include_lib("nkservice/include/nkservice.hrl").
 
 -define(WS, "ws://127.0.0.1:9301/api/ws").
 -define(ADMIN_PASS, "1234").
@@ -491,7 +491,7 @@ login(User, Pass) ->
     end.
 
 
-api_client_fun(#nkapi_req{class=event, data=Event}, UserData) ->
+api_client_fun(#nkreq{cmd = <<"event">>, data=Event}, UserData) ->
     lager:notice("CLIENT event ~p", [lager:pr(Event, nkevent)]),
     {ok, UserData};
 

@@ -26,7 +26,7 @@
 
 -export([create/4]).
 -export([object_get_info/0, object_mapping/0, object_parse/3,
-         object_api_syntax/3, object_api_allow/4, object_api_cmd/4, object_send_event/2,
+         object_api_syntax/2, object_api_allow/3, object_api_cmd/3, object_send_event/2,
          object_sync_op/3, object_async_op/2]).
 -export([object_admin_tree/3]).
 
@@ -99,12 +99,12 @@ object_parse(_SrvId, _Mode, _Obj) ->
 
 
 %% @private
-object_api_syntax(Sub, Cmd, Syntax) ->
-    nkdomain_obj_syntax:syntax(Sub, Cmd, ?DOMAIN_TOKEN, Syntax).
+object_api_syntax(Cmd, Syntax) ->
+    nkdomain_obj_syntax:syntax(Cmd, ?DOMAIN_TOKEN, Syntax).
 
 
 %% @private
-object_api_allow(_Sub, _Cmd, _Data, State) ->
+object_api_allow(_Cmd, _Req, State) ->
     {true, State}.
 
 
@@ -114,8 +114,8 @@ object_send_event(_Event, Session) ->
 
 
 %% @private
-object_api_cmd(Sub, Cmd, Req, State) ->
-    nkdomain_obj_api:api(Sub, Cmd, Req, ?DOMAIN_TOKEN, State).
+object_api_cmd(Cmd, Req, State) ->
+    nkdomain_obj_api:api(Cmd, ?DOMAIN_TOKEN, Req, State).
 
 
 %% @private

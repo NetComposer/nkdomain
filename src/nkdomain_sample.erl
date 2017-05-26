@@ -1,7 +1,7 @@
 -module(nkdomain_sample).
 -compile(export_all).
 
--include_lib("nkapi/include/nkapi.hrl").
+-include_lib("nkservice/include/nkservice.hrl").
 -include_lib("nkmail/include/nkmail.hrl").
 
 -define(WS, "ws://127.0.0.1:9301/api/ws").
@@ -18,24 +18,24 @@ login(User, Pass) ->
         password=> nklib_util:to_binary(Pass),
         meta => #{a=>nklib_util:to_binary(User)}
     },
-    {ok, _SessId, _Pid, _Reply} = nkapi_client:start(root, ?WS, Login, Fun, #{}).
+    {ok, _Reply, _Pid} = nkapi_client:start(root, ?WS, Login, Fun, #{}, <<"objects.user.login">>).
 
 
 event_get_subs() ->
-    cmd(event, get_subscriptions, #{}).
+    cmd(<<"event.get_subscriptions">>, #{}).
 
 event_subscribe(ObjType, EvType, ObjId) ->
-    cmd(event, subscribe, #{class=>domain, subclass=>ObjType, type=>EvType, obj_id=>ObjId}).
+    cmd(<<"event.subscribe">>, #{class=>domain, subclass=>ObjType, type=>EvType, obj_id=>ObjId}).
 
 event_unsubscribe(ObjType, EvType, ObjId) ->
-    cmd(event, unsubscribe, #{class=>domain, subclass=>ObjType, type=>EvType, obj_id=>ObjId}).
+    cmd(<<"event.unsubscribe">>, #{class=>domain, subclass=>ObjType, type=>EvType, obj_id=>ObjId}).
 
 
 user_get() ->
-    cmd(user, get, #{}).
+    cmd(<<"objects.user.get">>, #{unknown=>1}).
 
 user_get(Id) ->
-    cmd(user, get, #{id=>Id}).
+    cmd(<<"objects.user.get">>, #{id=>Id}).
 
 user_create(Domain, Name, Surname) ->
     Data = #{
@@ -47,12 +47,12 @@ user_create(Domain, Name, Surname) ->
             password => <<"1234">>
         }
     },
-    case cmd(user, create, Data) of
+    case cmd(<<"objects.user.create">>, Data) of
         {ok, #{<<"obj_id">>:=ObjId}} -> {ok, ObjId};
         {error, Error} -> {error, Error}
     end.
 
-user_create(Domain, Name, Password, Surname, Email) ->
+user_create(Domain, Name, Surname, Password, Email) ->
     user_create(Domain, Name, Password, Name, Surname, Email).
 
 user_create(Domain, ObjName, Password, Name, Surname, Email) ->
@@ -66,7 +66,7 @@ user_create(Domain, ObjName, Password, Name, Surname, Email) ->
             email => to_bin(Email)
         }
     },
-    case cmd(user, create, Data) of
+    case cmd(<<"objects.user.create">>, Data) of
         {ok, #{<<"obj_id">>:=ObjId}} -> {ok, ObjId};
         {error, Error} -> {error, Error}
     end.
@@ -83,7 +83,7 @@ user_create2(Domain, Name, Surname, Avatar, Phone, Address) ->
             address_t => to_bin(Address)
         }
     },
-    case cmd(user, create, Data) of
+    case cmd(<<"objects.user.create">>, Data) of
         {ok, #{<<"obj_id">>:=ObjId}} -> {ok, ObjId};
         {error, Error} -> {error, Error}
     end.
@@ -92,7 +92,7 @@ user_create2(Domain, Name, Surname, Avatar, Phone, Address) ->
 
 
 user_delete(Id) ->
-    cmd(user, delete, #{id=>to_bin(Id)}).
+    cmd(<<"objects.user.delete">>, #{id=>to_bin(Id)}).
 
 
 user_update(Id, Name, Password, Email) ->
@@ -104,7 +104,7 @@ user_update(Id, Name, Password, Email) ->
             email => Email
         }
     },
-    cmd(user, update, Data).
+    cmd(<<"objects.user.update">>, Data).
 
 user_update(Id, Name) ->
     Data = #{
@@ -113,21 +113,21 @@ user_update(Id, Name) ->
             name => to_bin(Name)
         }
     },
-    cmd(user, update, Data).
+    cmd(<<"objects.user.update">>, Data).
 
 
 user_make_token() ->
-    cmd(user, make_token, #{ttl=>30}).
+    cmd(<<"objects.user.make_token">>, #{ttl=>30}).
 
 
 
 
 
 domain_get() ->
-    cmd(domain, get, #{}).
+    cmd(<<"objects.domain.get">>, #{}).
 
 domain_get(Id) ->
-    cmd(domain, get, #{id=>Id}).
+    cmd(<<"objects.domain.get">>, #{id=>Id}).
 
 domain_create(Domain, Name, Desc) ->
     Data = #{
@@ -136,14 +136,14 @@ domain_create(Domain, Name, Desc) ->
         description => Desc,
         domain => #{}
     },
-    case cmd(domain, create, Data) of
+    case cmd(<<"objects.domain.create">>, Data) of
         {ok, #{<<"obj_id">>:=ObjId}} -> {ok, ObjId};
         {error, Error} -> {error, Error}
     end.
 
 
 domain_delete(Id) ->
-    cmd(domain, delete, #{id=>to_bin(Id)}).
+    cmd(<<"objects.domain.delete">>, #{id=>to_bin(Id)}).
 
 
 domain_update(Id, Name, Desc) ->
@@ -152,89 +152,89 @@ domain_update(Id, Name, Desc) ->
         name => Name,
         description => Desc
     },
-    cmd(domain, update, Data).
+    cmd(<<"objects.domain.update">>, Data).
 
 
 domain_find() ->
-    cmd(domain, find, #{}).
+    cmd(<<"objects.domain.find">>, #{}).
 
 domain_find(Id) ->
-    cmd(domain, find, #{id=>Id}).
+    cmd(<<"objects.domain.find">>, #{id=>Id}).
 
 domain_find(Id, Spec) ->
-    cmd(domain, find, Spec#{id=>Id}).
+    cmd(<<"objects.domain.find">>, Spec#{id=>Id}).
 
 domain_find_all() ->
-    cmd(domain, find_all, #{}).
+    cmd(<<"objects.domain.find_all">>, #{}).
 
 domain_find_all(Id) ->
-    cmd(domain, find_all, #{id=>Id}).
+    cmd(<<"objects.domain.find_all">>, #{id=>Id}).
 
 domain_find_all(Id, Spec) ->
-    cmd(domain, find_all, Spec#{id=>Id}).
+    cmd(<<"objects.domain.find_all">>, Spec#{id=>Id}).
 
 domain_find_types() ->
-    cmd(domain, find_types, #{}).
+    cmd(<<"objects.domain.find_types">>, #{}).
 
 domain_find_types(Id) ->
-    cmd(domain, find_types, #{id=>Id}).
+    cmd(<<"objects.domain.find_types">>, #{id=>Id}).
 
 domain_find_types(Id, Spec) ->
-    cmd(domain, find_types, Spec#{id=>Id}).
+    cmd(<<"objects.domain.find_types">>, Spec#{id=>Id}).
 
 domain_find_all_types() ->
-    cmd(domain, find_all_types, #{}).
+    cmd(<<"objects.domain.find_all_types">>, #{}).
 
 domain_find_all_types(Id) ->
-    cmd(domain, find_all_types, #{id=>Id}).
+    cmd(<<"objects.domain.find_all_types">>, #{id=>Id}).
 
 domain_find_all_types(Id, Spec) ->
-    cmd(domain, find_all_types, Spec#{id=>Id}).
+    cmd(<<"objects.domain.find_all_types">>, Spec#{id=>Id}).
 
 domain_find_childs() ->
-    cmd(domain, find_childs, #{}).
+    cmd(<<"objects.domain.find_childs">>, #{}).
 
 domain_find_childs(Id) ->
-    cmd(domain, find_childs, #{id=>Id}).
+    cmd(<<"objects.domain.find_childs">>, #{id=>Id}).
 
 domain_find_childs(Id, Spec) ->
-    cmd(domain, find_childs, Spec#{id=>Id}).
+    cmd(<<"objects.domain.find_childs">>, Spec#{id=>Id}).
 
 domain_find_all_childs() ->
-    cmd(domain, find_all_childs, #{}).
+    cmd(<<"objects.domain.find_all_childs">>, #{}).
 
 domain_find_all_childs(Id) ->
-    cmd(domain, find_all_childs, #{id=>Id}).
+    cmd(<<"objects.domain.find_all_childs">>, #{id=>Id}).
 
 domain_find_all_childs(Id, Spec) ->
-    cmd(domain, find_all_childs, Spec#{id=>Id}).
+    cmd(<<"objects.domain.find_all_childs">>, Spec#{id=>Id}).
 
 
 domain_find_all_users() ->
-    cmd(domain, find_all_childs, #{type=>user}).
+    cmd(<<"objects.domain.find_all_childs">>, #{type=>user}).
 
 
 session_get() ->
-    cmd(session, get, #{}).
+    cmd(<<"objects.session.get">>, #{}).
 
 session_delete() ->
-    cmd(session, delete, #{}).
+    cmd(<<"objects.session.delete">>, #{}).
 
 
 config_create(Sub, Parent, Config) ->
-    cmd(config, create, #{subtype=>Sub, parent=>Parent, config=>Config}).
+    cmd(<<"objects.config.create">>, #{subtype=>Sub, parent=>Parent, config=>Config}).
 
 config_get(Id) ->
-    cmd(config, get, #{id=>Id}).
+    cmd(<<"objects.config.get">>, #{id=>Id}).
 
 config_update(Id, Config) ->
-    cmd(config, update, #{id=>Id, config=>Config}).
+    cmd(<<"objects.config.update">>, #{id=>Id, config=>Config}).
 
 config_delete(Id, Reason) ->
-    cmd(config, update, #{id=>Id, reason=>Reason}).
+    cmd(<<"objects.config.update">>, #{id=>Id, reason=>Reason}).
 
 config_find(SubType, Parent) ->
-    cmd(config, find, #{parent=>Parent, subtype=>SubType}).
+    cmd(<<"objects.config.find">>, #{parent=>Parent, subtype=>SubType}).
 
 
 
@@ -244,7 +244,7 @@ config_find(SubType, Parent) ->
 %% ===================================================================
 
 
-api_client_fun(#nkapi_req{class=event, data=Event}, UserData) ->
+api_client_fun(#nkreq{cmd = <<"event">>, data=Event}, UserData) ->
     lager:warning("CLIENT event ~p", [lager:pr(Event, nkevent)]),
     {ok, UserData};
 
@@ -258,12 +258,12 @@ get_client() ->
 
 
 %% Test calling with class=test, cmd=op1, op2, data=#{nim=>1}
-cmd(Class, Cmd, Data) ->
+cmd(Cmd, Data) ->
     Pid = get_client(),
-    cmd(Pid, Class, Cmd, Data).
+    cmd(Pid, Cmd, Data).
 
-cmd(Pid, Class, Cmd, Data) ->
-    nkapi_client:cmd(Pid, Class, <<>>, Cmd, Data).
+cmd(Pid, Cmd, Data) ->
+    nkapi_client:cmd(Pid, Cmd, Data).
 
 
 

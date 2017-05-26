@@ -24,7 +24,7 @@
 -export([search/2, get_id/3, get_id/4, add_id/3, get_domain/2]).
 
 -include("nkdomain.hrl").
--include_lib("nkapi/include/nkapi.hrl").
+-include_lib("nkservice/include/nkservice.hrl").
 
 
 
@@ -34,7 +34,7 @@
 
 
 %% @doc
-search({ok, Total, List}, State) ->
+search({ok, Total, List}, Req) ->
     Data = #{
         total => Total,
         data =>
@@ -42,10 +42,10 @@ search({ok, Total, List}, State) ->
                 fun({Type, ObjId, Path}) -> #{type=>Type, obj_id=>ObjId, path=>Path} end,
                 List)
     },
-    {ok, Data, State};
+    {ok, Data, Req};
 
-search({error, Error}, State) ->
-    {error, Error, State}.
+search({error, Error}, Req) ->
+    {error, Error, Req}.
 
 
 %% @doc
@@ -54,11 +54,12 @@ get_id(Type, Data, State) ->
 
 
 %% @doc
-get_id(Type, Field, Data, #{nkdomain_obj_ids:=ObjIds}=State) ->
+get_id(Type, Field, Data, State) ->
     case maps:find(Field, Data) of
         {ok, Id} ->
             {ok, Id};
         error ->
+            ObjIds = maps:get(nkdomain_obj_ids, State, #{}),
             case maps:find(Type, ObjIds) of
                 {ok, Id} ->
                     {ok, Id};
@@ -73,20 +74,14 @@ get_id(Type, Field, Data, #{nkdomain_obj_ids:=ObjIds}=State) ->
 add_id(Type, Id, State) ->
     ObjIds1 = maps:get(nkdomain_obj_ids, State, #{}),
     ObjIds2 = ObjIds1#{Type => Id},
-    ?ADD_TO_API_SESSION(nkdomain_obj_ids, ObjIds2, State).
+    State#{nkdomain_obj_ids => ObjIds2}.
 
 
 %% @private
 get_domain(#{domain_id:=Domain}, _State) ->
-    {ok, Domain};
+    Domain;
 
-get_domain(_Data, #{srv_id:=SrvId}=State) ->
-    case nkdomain_util:get_service_domain(SrvId) of
-        undefined ->
-            {error, domain_unknown, State};
-        Domain ->
-            {ok, Domain}
-    end.
-
+get_domain(_Data, #{nkdomain_domain:=Domain}) ->
+    Domain.
 
 

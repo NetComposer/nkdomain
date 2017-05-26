@@ -70,6 +70,9 @@
 %% Callbacks definitions
 %% ===================================================================
 
+-type state() :: map().
+
+
 -callback object_get_info() ->
     object_info().
 
@@ -82,18 +85,19 @@
     {ok, nkdomain:obj()} | {error, term()} | nklib_syntax:syntax() | {type_obj, map()}.
 
 
--callback object_api_syntax(nkapi:subclass(), nkapi:cmd(), nklib_syntax:stntax()) ->
+-callback object_api_syntax(Cmd::binary(), nklib_syntax:syntax()) ->
     nklib_syntax:syntax() | continue.
 
 
--callback object_api_allow(nkapi:subclass(), nkapi:cmd(), nkapi:data(), nkapi:state()) ->
-    {boolean, nkapi:state()}.
+-callback object_api_allow(Cmd::binary(), nkservice:req(), state()) ->
+    {boolean, state()} | {true, nkservice:req(), state()}.
 
 
--callback object_api_cmd(nkapi:subclass(), nkapi:cmd(), nkapi:data(), nkapi:state()) ->
-    {ok, map(), nkapi:state()} | {ack, nkapi:state()} |
-    {login, Reply::term(), User::binary(), Meta::map(), nkapi:state()} |
-    {error, nkapi:error(), nkapi:state()}.
+-callback object_api_cmd(Cmd::binary(), nkservice:req(), state()) ->
+    {ok, map(), state()} |
+    {ack, state()} |
+    {login, Reply::term(), User::binary(), Meta::map(), state()} |
+    {error, nkapi:error(), state()}.
 
 
 

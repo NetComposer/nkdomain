@@ -21,10 +21,10 @@
 -module(nkdomain_obj_api).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([api/5]).
+-export([api/4]).
 
 -include("nkdomain.hrl").
--include_lib("nkapi/include/nkapi.hrl").
+-include_lib("nkservice/include/nkservice.hrl").
 
 
 
@@ -34,7 +34,7 @@
 
 
 %% @doc
-api('', create, #nkapi_req{data=Data}, Type, #{srv_id:=SrvId, user_id:=UserId}=State) ->
+api(<<"create">>, Type, #nkreq{data=Data, srv_id=SrvId, user_id=UserId}, State) ->
     Module = nkdomain_all_types:get_module(Type),
     case erlang:function_exported(Module, create, 3) of
         true ->
@@ -44,24 +44,20 @@ api('', create, #nkapi_req{data=Data}, Type, #{srv_id:=SrvId, user_id:=UserId}=S
                 created_by => UserId
             },
             Data3 = maps:remove(obj_name, Data2),
-            case get_parent(Data, State) of
-                {ok, Parent} ->
-                    Data4 = Data3#{parent_id=>Parent},
-                    case Module:create(SrvId, Name, Data4) of
-                        {ok, Reply, _Pid} ->
-                            {ok, Reply, State};
-                        {error, Error} ->
-                            {error, Error, State}
-                    end;
-                Error ->
-                    Error
+            Parent = get_parent(Data, State),
+            Data4 = Data3#{parent_id=>Parent},
+            case Module:create(SrvId, Name, Data4) of
+                {ok, Reply, _Pid} ->
+                    {ok, Reply, State};
+                {error, Error} ->
+                    {error, Error, State}
             end;
         false ->
             {error, not_implemented, State}
     end;
 
-api('', get, #nkapi_req{data=Data}, Type, #{srv_id:=SrvId}=State) ->
-    case get_id(Type, Data, State) of
+api(<<"get">>, Type, #nkreq{data=Data, srv_id=SrvId}, State) ->
+    case nkdomain_api_util:get_id(Type, Data, State) of
         {ok, Id} ->
             case nkdomain_obj_lib:load(SrvId, Id, #{}) of
                 #obj_id_ext{pid=Pid} ->
@@ -81,8 +77,8 @@ api('', get, #nkapi_req{data=Data}, Type, #{srv_id:=SrvId}=State) ->
             Error
     end;
 
-api('', delete, #nkapi_req{data=Data}, Type, #{srv_id:=SrvId}=State) ->
-    case get_id(Type, Data, State) of
+api(<<"delete">>, Type, #nkreq{data=Data, srv_id=SrvId}, State) ->
+    case nkdomain_api_util:get_id(Type, Data, State) of
         {ok, Id} ->
             case cmd_delete_childs(Data, SrvId, Id) of
                 {ok, Num} ->
@@ -99,8 +95,8 @@ api('', delete, #nkapi_req{data=Data}, Type, #{srv_id:=SrvId}=State) ->
             Error
     end;
 
-api('', update, #nkapi_req{data=Data}, Type, #{srv_id:=SrvId, user_id:=_UserId}=State) ->
-    case get_id(Type, Data, State) of
+api(<<"update">>, Type, #nkreq{data=Data, srv_id=SrvId}, State) ->
+    case nkdomain_api_util:get_id(Type, Data, State) of
         {ok, Id} ->
             case nkdomain:update(SrvId, Id, maps:remove(id, Data)) of
                 {ok, []} ->
@@ -114,8 +110,8 @@ api('', update, #nkapi_req{data=Data}, Type, #{srv_id:=SrvId, user_id:=_UserId}=
             Error
     end;
 
-api('', enable, #nkapi_req{data=#{enable:=Enable}=Data}, Type, #{srv_id:=SrvId}=State) ->
-    case get_id(Type, Data, State) of
+api(<<"enable">>, Type, #nkreq{data=#{enable:=Enable}=Data, srv_id=SrvId}, State) ->
+    case nkdomain_api_util:get_id(Type, Data, State) of
         {ok, Id} ->
             case nkdomain:enable(SrvId, Id, Enable) of
                 ok ->
@@ -127,7 +123,7 @@ api('', enable, #nkapi_req{data=#{enable:=Enable}=Data}, Type, #{srv_id:=SrvId}=
             Error
     end;
 
-api('', find, #nkapi_req{data=Data}, Type, #{srv_id:=SrvId}=State) ->
+api(<<"find">>, Type, #nkreq{data=Data, srv_id=SrvId}, State) ->
     Domain = nkdomain_util:get_service_domain(SrvId),
     Filters1 = maps:get(filters, Data, #{}),
     Filters2 = Filters1#{type=>Type},
@@ -139,7 +135,7 @@ api('', find, #nkapi_req{data=Data}, Type, #{srv_id:=SrvId}=State) ->
             {error, Error, State}
     end;
 
-api('', find_all, #nkapi_req{data=Data}, Type, #{srv_id:=SrvId}=State) ->
+api(<<"find_all">>, Type, #nkreq{data=Data, srv_id=SrvId}, State) ->
     Domain = nkdomain_util:get_service_domain(SrvId),
     Filters1 = maps:get(filters, Data, #{}),
     Filters2 = Filters1#{type=>Type},
@@ -151,9 +147,9 @@ api('', find_all, #nkapi_req{data=Data}, Type, #{srv_id:=SrvId}=State) ->
             {error, Error, State}
     end;
 
-api('', wait_for_save, #nkapi_req{data=Data}, Type, #{srv_id:=SrvId}=State) ->
+api(<<"wait_for_save">>, Type, #nkreq{data=Data, srv_id=SrvId}, State) ->
     Time = maps:get(time, Data, 5000),
-    case get_id(Type, Data, State) of
+    case nkdomain_api_util:get_id(Type, Data, State) of
         {ok, Id} ->
             case nkdomain_obj_lib:find(SrvId, Id) of
                 #obj_id_ext{pid=Pid} when is_pid(Pid) ->
@@ -172,14 +168,14 @@ api('', wait_for_save, #nkapi_req{data=Data}, Type, #{srv_id:=SrvId}=State) ->
             Error
     end;
 
-api('', make_token, #nkapi_req{data=Data}, Type, #{srv_id:=SrvId}=State) ->
+api(<<"make_token">>, Type, #nkreq{data=Data, srv_id=SrvId}, State) ->
     Mod = nkdomain_all_types:get_module(Type),
     Info = Mod:object_get_info(),
     DefTTL = maps:get(default_token_ttl, Info, ?DEF_TOKEN_TTL),
     MaxTTL = maps:get(max_token_ttl, Info, ?MAX_TOKEN_TTL),
     case maps:get(ttl, Data, DefTTL) of
         TTL when TTL < MaxTTL ->
-            case get_id(Type, Data, State) of
+            case nkdomain_api_util:get_id(Type, Data, State) of
                 {ok, Id} ->
                     case nkdomain_token_obj:create(SrvId, Id, TTL, #{}) of
                         {ok, Reply, _Pid} ->
@@ -194,7 +190,7 @@ api('', make_token, #nkapi_req{data=Data}, Type, #{srv_id:=SrvId}=State) ->
             {error, invalid_token_ttl, State}
     end;
 
-api(_Sub, _Cmd, _Req, _Type, State) ->
+api(_Req, _Type, _Req, State) ->
     {error, not_implemented, State}.
 
 
@@ -203,22 +199,12 @@ api(_Sub, _Cmd, _Req, _Type, State) ->
 %% Private
 %% ===================================================================
 
-%% @doc
-get_id(Type, Data, State) ->
-    nkdomain_api_util:get_id(Type, id, Data, State).
-
-
 %% @private
 get_parent(#{parent_id:=Parent}, _State) ->
-    {ok, Parent};
+    Parent;
 
-get_parent(_, #{srv_id:=SrvId}=State) ->
-    case nkdomain_util:get_service_domain(SrvId) of
-        undefined ->
-            {error, parent_not_found, State};
-        Domain ->
-            {ok, Domain}
-    end.
+get_parent(Data, State) ->
+    nkdomain_api_util:get_domain(Data, State).
 
 
 %% @private
