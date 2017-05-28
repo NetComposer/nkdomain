@@ -37,7 +37,7 @@ api(<<"login">>, Syntax) ->
     Syntax#{
         id => binary,
         password => binary,
-        domain => binary,
+        domain_id => binary,
         meta => map,
         '__mandatory' => [id]
     };

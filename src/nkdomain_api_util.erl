@@ -21,7 +21,7 @@
 -module(nkdomain_api_util).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([search/2, get_id/3, get_id/4, add_id/3, get_domain/2]).
+-export([search/2, get_id/3, get_id/4, add_id/3]).
 
 -include("nkdomain.hrl").
 -include_lib("nkservice/include/nkservice.hrl").
@@ -76,12 +76,5 @@ add_id(Type, Id, State) ->
     ObjIds2 = ObjIds1#{Type => Id},
     State#{nkdomain_obj_ids => ObjIds2}.
 
-
-%% @private
-get_domain(#{domain_id:=Domain}, _State) ->
-    Domain;
-
-get_domain(_Data, #{nkdomain_domain:=Domain}) ->
-    Domain.
 
 

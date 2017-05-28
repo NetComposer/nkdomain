@@ -55,9 +55,9 @@ start() ->
         debug => [
             %% {nkapi_client, #{nkpacket=>true}},
             nkapi_server,
-            nkelastic,
-            %% {nkelastic, full},
-            {nkdomain_obj, all}
+            nkelastic
+            %{nkelastic, full}
+            %%{nkdomain_obj, all}
         ]
     },
     User = nkdomain_app:get(elastic_user),

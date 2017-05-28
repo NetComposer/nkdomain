@@ -698,6 +698,12 @@ service_api_syntax(_Syntax, _Req) ->
 
 
 %% @doc
+service_api_allow(#nkreq{cmd = <<"objects/user/login">>, user_id = <<>>}, State) ->
+    {true, State};
+
+service_api_allow(#nkreq{cmd = <<"objects/", _/binary>>, user_id = <<>>}, State) ->
+    {false, State};
+
 service_api_allow(#nkreq{cmd = <<"objects/", _/binary>>, req_state={Module, Cmd}}=Req, State) ->
     nklib_util:apply(Module, object_api_allow, [Cmd, Req, State]);
 
@@ -716,20 +722,8 @@ service_api_allow(_Req, _State) ->
 
 %% @doc
 service_api_cmd(#nkreq{cmd = <<"objects/", _/binary>>}=Req, State) ->
-    #nkreq{req_state={Module, Cmd}, data=Data, srv_id=SrvId} = Req,
-    Domain = case maps:find(domain, Data) of
-        {ok, UserDomain} ->
-            UserDomain;
-        error ->
-            nkdomain_util:get_service_domain(SrvId)
-    end,
-    case Domain of
-        undefined ->
-            {error, domain_unknown, State};
-        _ ->
-            State2 = State#{nkdomain_domain => Domain},
-            nklib_util:apply(Module, object_api_cmd, [Cmd, Req, State2])
-    end;
+    #nkreq{req_state={Module, Cmd}} = Req,
+    nklib_util:apply(Module, object_api_cmd, [Cmd, Req, State]);
 
 service_api_cmd(_Req, _State) ->
     continue.

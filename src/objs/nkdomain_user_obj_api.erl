@@ -36,24 +36,52 @@
 %% @doc
 cmd(<<"login">>, Req, State) ->
     #nkreq{data=#{id:=User}=Data, srv_id=SrvId, session_id=SessId, session_meta=SessMeta} = Req,
-    LoginMeta1 = maps:with([local, remote], SessMeta),
-    LoginMeta2 = LoginMeta1#{
-        session_id => SessId,
-        password => maps:get(password, Data, <<>>),
-        login_meta => maps:get(meta, Data, #{}),
-        api_server_pid => self()
-    },
-    case nkdomain_user_obj:login(SrvId, User, LoginMeta2) of
-        {ok, UserId, SessId, LoginMeta3} ->
-            Reply = #{obj_id=>UserId, session_id=>SessId},
-            Domain = nkdomain_api_util:get_domain(#{}, State),
-            State2 = nkdomain_api_util:add_id(?DOMAIN_DOMAIN, Domain, State),
-            State3 = nkdomain_api_util:add_id(?DOMAIN_USER, UserId, State2),
-            State4 = nkdomain_api_util:add_id(?DOMAIN_SESSION, SessId, State3),
-            {login, Reply, UserId, LoginMeta3, State4};
+    case get_domain(Req) of
+        {ok, DomainId} ->
+            LoginMeta1 = maps:with([local, remote], SessMeta),
+            LoginMeta2 = LoginMeta1#{
+                session_id => SessId,
+                password => maps:get(password, Data, <<>>),
+                login_meta => maps:get(meta, Data, #{}),
+                api_server_pid => self()
+            },
+            case nkdomain_user_obj:login(SrvId, User, LoginMeta2) of
+                {ok, UserId, SessId, LoginMeta3} ->
+                    Reply = #{obj_id=>UserId, session_id=>SessId},
+                    State2 = nkdomain_api_util:add_id(?DOMAIN_DOMAIN, DomainId, State),
+                    State3 = nkdomain_api_util:add_id(?DOMAIN_USER, UserId, State2),
+                    State4 = nkdomain_api_util:add_id(?DOMAIN_SESSION, SessId, State3),
+                    {login, Reply, UserId, LoginMeta3, State4};
+                {error, Error} ->
+                    {error, Error, State}
+            end;
         {error, Error} ->
             {error, Error, State}
     end;
 
 cmd(Cmd, Req, State) ->
     nkdomain_obj_api:api(Cmd, ?DOMAIN_USER, Req, State).
+
+
+%% ===================================================================
+%% Private
+%% ===================================================================
+
+%% @private
+get_domain(#nkreq{data = #{domain_id:=Domain}, srv_id=SrvId}) ->
+    case nkdomain_obj_lib:find(SrvId, Domain) of
+        #obj_id_ext{obj_id=DomainId} ->
+            {ok, DomainId};
+        {error, _} ->
+            {error, domain_unknown}
+    end;
+
+get_domain(#nkreq{srv_id=SrvId}) ->
+    case nkdomain_util:get_service_domain(SrvId) of
+        undefined ->
+            {error, domain_unknown};
+        DomainId ->
+            {ok, DomainId}
+    end.
+
+

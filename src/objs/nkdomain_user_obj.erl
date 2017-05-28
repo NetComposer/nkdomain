@@ -24,6 +24,7 @@
 -behavior(nkdomain_obj).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
+-export([create/5]).
 -export([create/3, login/3, get_name/2, send_push/3]).
 -export([object_get_info/0, object_mapping/0, object_parse/3,
          object_api_syntax/2, object_api_allow/3, object_api_cmd/3, object_send_event/2,
@@ -62,6 +63,12 @@
 %% ===================================================================
 %% API
 %% ===================================================================
+
+%% @doc
+create(Srv, Domain, Name, SurName, Email) ->
+    create(root, Name, #{type=>?DOMAIN_USER, parent_id=>Domain, ?DOMAIN_USER=>#{name=>Name, surname=>SurName}}).
+
+
 
 %% @doc
 -spec create(nkservice:id(), nkdomain:name(), nkdomain:obj()) ->

@@ -48,16 +48,35 @@ connect() ->
     P.
 
 
+connect2() ->
+    Opts = [
+        {database, "carlosj"},
+        {host, "127.0.0.1"},
+        {user, "carlosj"},
+        {port, 5432},
+        {password, ""},
+        %{connect_timeout, ConnectTimeout},
+        {as_binary, true}
+    ],
+    {ok, P} = pgsql_proto:start(Opts),
+    put(pgsql, P),
+    P.
+
+
 create_database() ->
     create_database("nkobjects").
 
 
 create_base() ->
+%%    --DROP DATABASE IF EXISTS nkobjects;
+%%--CREATE DATABASE nkobjects;
+%%--SET DATABASE TO nkobjects
+%%--DROP TABLE IF EXISTS carlosj.object CASCADE;
+%%--DROP TABLE IF EXISTS carlosj.aliases CASCADE;
     Sql = <<"
-        DROP TABLE IF EXISTS nkobjects.object CASCADE;
-        DROP TABLE IF EXISTS nkobjects.aliases CASCADE;
 
-        CREATE TABLE nkobjects.object (
+
+        CREATE TABLE object (
             obj_id STRING PRIMARY KEY NOT NULL,
             path STRING UNIQUE NOT NULL,
             parent_id STRING NOT NULL,
@@ -79,7 +98,7 @@ create_base() ->
             INDEX (created_time)
         );
 
-        CREATE TABLE nkobjects.aliases (
+        CREATE TABLE aliases (
             obj_id STRING PRIMARY KEY NOT NULL,
             referred_id STRING NOT NULL,
             INDEX (obj_id)
@@ -96,7 +115,8 @@ insert_objs(Start, End) when Start < End ->
     Path = <<"TestPath-", Pos/binary>>,
     Parent = <<"TestParent-", Pos/binary>>,
     Alias = <<"TestAlias-", Pos/binary>>,
-    insert_obj(Id, Path, Parent, Alias),
+    Type = <<"TestType-", Pos/binary>>,
+    insert_obj(Id, Path, Parent, Alias, Type),
     insert_objs(Start+1, End);
 
 insert_objs(_Start, _End) ->
@@ -105,24 +125,55 @@ insert_objs(_Start, _End) ->
 
 
 
-insert_obj(Id, Path, Parent, Alias) ->
+insert_obj(Id, Path, Parent, Alias, Type) ->
     S = [<<"
-            BEGIN;
+            --BEGIN;
 
-            INSERT INTO nkobjects.object (obj_id, path, parent_id) VALUES ">>, params([Id, Path, Parent]), <<";
+            INSERT INTO nkobjects.object (obj_id, path, parent_id, subtype) VALUES ">>, params([Id, Path, Parent, Type]), <<";
 
             INSERT INTO nkobjects.aliases (obj_id, referred_id) VALUES ">>, params([Alias, Id]), <<";
 
-            COMMIT;
+            --COMMIT;
         ">>],
     query(S).
 
-f(Id) ->
+
+
+f1(Id) ->
     S = [
-        <<"SELECT object.obj_id, path, aliases.obj_id FROM nkobjects.object, nkobjects.aliases
+        <<"SELECT obj_id, path FROM nkobjects.object WHERE object.obj_id=">>, esc(Id)
+    ],
+    query(S).
+
+
+f2(Id) ->
+    S = [
+        <<"SET DATABASE TO nkobjects;\n">>,
+        <<"SELECT obj_id, path FROM nkobjects.object WHERE obj_id=">>, esc(Id), <<" OR subtype=">>, esc(Id), <<";">>
+    ],
+    query(S).
+
+
+
+f3(Id) ->
+    S = [<<"
+            SET DATABASE TO nkobjects;
+            SELECT obj_id, path FROM object@primary, object@object_path_idx WHERE obj_id>">>, esc(Id), <<" ORDER BY obj_id DESC LIMIT 10 OFFSET 9000 ;">> %<<" OR path=">>, esc(Id)
+    ],
+    query(S).
+
+
+f(Id) ->
+    S = [<<"
+            SET DATABASE TO nkobjects;
+            SELECT object.obj_id, path, aliases.obj_id FROM nkobjects.object, nkobjects.aliases
            WHERE object.obj_id=">>, esc(Id), <<" OR path=">>, esc(Id), <<" OR aliases.obj_id=">>, esc(Id)
     ],
     query(S).
+
+show() ->
+    query(<<"SHOW INDEXES FROM nkobjects.object;">>).
+
 
 
 

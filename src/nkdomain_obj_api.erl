@@ -200,11 +200,9 @@ api(_Req, _Type, _Req, State) ->
 %% ===================================================================
 
 %% @private
-get_parent(#{parent_id:=Parent}, _State) ->
-    Parent;
-
 get_parent(Data, State) ->
-    nkdomain_api_util:get_domain(Data, State).
+    {ok, DomainId} = nkdomain_api_util:get_id(?DOMAIN_DOMAIN, parent_id, Data, State),
+    DomainId.
 
 
 %% @private

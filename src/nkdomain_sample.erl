@@ -21,6 +21,18 @@ login(User, Pass) ->
     {ok, _Reply, _Pid} = nkapi_client:start(root, ?WS, Login, Fun, #{}, <<"objects/user/login">>).
 
 
+login(User, Pass, Domain) ->
+    Fun = fun ?MODULE:api_client_fun/2,
+    Login = #{
+        id => nklib_util:to_binary(User),
+        password=> nklib_util:to_binary(Pass),
+        meta => #{a=>nklib_util:to_binary(User)},
+        domain_id => Domain
+    },
+    {ok, _Reply, _Pid} = nkapi_client:start(root, ?WS, Login, Fun, #{}, <<"objects/user/login">>).
+
+
+
 event_get_subs() ->
     cmd(<<"event/get_subscriptions">>, #{}).
 
