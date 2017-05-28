@@ -49,9 +49,11 @@ create() ->
 start() ->
     Spec1 = #{
         plugins => [nkdomain, nkapi, nkchat, nkdomain_store_es, nkadmin,
-                    nkmail_smtp_client, nkfile_filesystem, nkfile_s3],
+                    nkmail_smtp_client, nkfile_filesystem, nkfile_s3, nkservice_webserver],
         domain => <<"root">>,
         domain_elastic_url => nkdomain_app:get(elastic_url),
+        webserver_url => "https://127.0.0.1:1234",
+        webserver_path => "/tmp",
         debug => [
             %% {nkapi_client, #{nkpacket=>true}},
             nkapi_server,
