@@ -43,6 +43,12 @@ event_unsubscribe(ObjType, EvType, ObjId) ->
     cmd(<<"event/unsubscribe">>, #{class=>domain, subclass=>ObjType, type=>EvType, obj_id=>ObjId}).
 
 
+%% @doc
+log(Source, Msg, Data) ->
+    cmd(<<"session/log">>, Data#{source=>Source, message=>Msg}).
+
+
+
 user_get() ->
     cmd(<<"objects/user/get">>, #{unknown=>1}).
 

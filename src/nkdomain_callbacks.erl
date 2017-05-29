@@ -707,6 +707,9 @@ service_api_allow(#nkreq{cmd = <<"objects/", _/binary>>, user_id = <<>>}, State)
 service_api_allow(#nkreq{cmd = <<"objects/", _/binary>>, req_state={Module, Cmd}}=Req, State) ->
     nklib_util:apply(Module, object_api_allow, [Cmd, Req, State]);
 
+service_api_allow(#nkreq{cmd = <<"session", _/binary>>}, State) ->
+    {true, State};
+
 service_api_allow(#nkreq{cmd = <<"event", _/binary>>}, State) ->
     {true, State};
 
