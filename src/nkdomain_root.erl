@@ -54,6 +54,7 @@ start() ->
         domain_elastic_url => nkdomain_app:get(elastic_url),
         webserver_url => "https://127.0.0.1:1234",
         webserver_path => "/tmp",
+        admin_url => nkdomain_app:get(admin_url),
         debug => [
             %% {nkapi_client, #{nkpacket=>true}},
             nkapi_server,

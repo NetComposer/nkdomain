@@ -67,6 +67,7 @@ start(_Type, _Args) ->
         elastic_user => binary,
         elastic_pass => binary,
         api_server => binary,
+        admin_url => binary,
 
         role_proxy_timeout => {integer, 1, none},
         user_password_pbkdf2_iters => {integer, 1, none},
@@ -74,7 +75,7 @@ start(_Type, _Args) ->
             start_root => false,
             elastic_url => <<"http://127.0.0.1:9200/">>,
             api_server => <<"ws:all:9202/api/ws, http:all:9202/api">>,
-
+            admin_url => <<"http://all:9202/admin">>,
             role_proxy_timeout => 10000,
             user_password_pbkdf2_iters => 1
         }
