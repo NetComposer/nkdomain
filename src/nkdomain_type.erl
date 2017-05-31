@@ -97,11 +97,11 @@ get_global_nodes(Module) ->
 
 
 %% @doc
--spec get_global_nodes(module(), nkdomain:domain()) ->
+-spec get_global_nodes(module(), nkdomain:path()) ->
     {ok, #{node() => integer()}}.
 
-get_global_nodes(Module, Domain) ->
-    master_call(Module, {get_global_nodes, to_bin(Domain)}).
+get_global_nodes(Module, DomainPath) ->
+    master_call(Module, {get_global_nodes, to_bin(DomainPath)}).
 
 
 %% @doc

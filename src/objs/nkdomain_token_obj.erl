@@ -28,7 +28,7 @@
 -export([object_get_info/0, object_mapping/0, object_parse/3,
          object_api_syntax/2, object_api_allow/3, object_api_cmd/3, object_send_event/2,
          object_sync_op/3, object_async_op/2]).
--export([object_admin_tree/3]).
+-export([object_admin_info/0]).
 
 -include("nkdomain.hrl").
 -include("nkdomain_debug.hrl").
@@ -87,6 +87,14 @@ object_get_info() ->
         remove_after_stop => true
     }.
 
+%% @doc
+object_admin_info() ->
+    #{
+        class => session,
+        weight => 5000,
+        tree_id => <<"domain_tree_sessions_tokens">>
+    }.
+
 
 %% @private
 object_mapping() ->
@@ -126,12 +134,6 @@ object_sync_op(_Op, _From, _Session) ->
 %% @private
 object_async_op(_Op, _Session) ->
     continue.
-
-
-%% @doc
-object_admin_tree(Category, List, State) ->
-    nkdomain_admin:add_tree_session(Category, ?DOMAIN_TOKEN, ?MODULE,
-                                    domain_tree_sessions_tokens, 5000, List, State).
 
 
 

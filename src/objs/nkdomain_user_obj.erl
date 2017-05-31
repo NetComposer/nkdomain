@@ -24,12 +24,10 @@
 -behavior(nkdomain_obj).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([create/5]).
 -export([create/3, login/3, get_name/2, send_push/3]).
--export([object_get_info/0, object_mapping/0, object_parse/3,
+-export([object_get_info/0, object_admin_info/0, object_mapping/0, object_parse/3,
          object_api_syntax/2, object_api_allow/3, object_api_cmd/3, object_send_event/2,
          object_sync_op/3, object_async_op/2]).
--export([object_admin_tree/3]).
 -export([user_pass/1]).
 -export_type([events/0]).
 
@@ -65,8 +63,8 @@
 %% ===================================================================
 
 %% @doc
-create(Srv, Domain, Name, SurName, Email) ->
-    create(root, Name, #{type=>?DOMAIN_USER, parent_id=>Domain, ?DOMAIN_USER=>#{name=>Name, surname=>SurName}}).
+%%create(Srv, Domain, Name, SurName, Email) ->
+%%    create(root, Name, #{type=>?DOMAIN_USER, parent_id=>Domain, ?DOMAIN_USER=>#{name=>Name, surname=>SurName}}).
 
 
 
@@ -144,6 +142,15 @@ send_push(Srv, Id, Event) ->
 object_get_info() ->
     #{
         type => ?DOMAIN_USER
+    }.
+
+
+%% @doc
+object_admin_info() ->
+    #{
+        class => resource,
+        weight => 100,
+        tree_id => <<"domain_tree_resources_users">>
     }.
 
 
@@ -241,10 +248,6 @@ object_async_op(_Op, _Session) ->
     continue.
 
 
-%% @doc
-object_admin_tree(Category, List, State) ->
-    nkdomain_admin:add_tree_resource(Category, domain_tree_resources_users,
-                                     100, List, State).
 
 
 

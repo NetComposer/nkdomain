@@ -27,7 +27,7 @@
 -export([create/3, find_configs/3]).
 -export([object_get_info/0, object_mapping/0, object_parse/3,
          object_api_syntax/2, object_api_allow/3, object_api_cmd/3]).
--export([object_admin_tree/3]).
+-export([object_admin_info/0]).
 
 -include("nkdomain.hrl").
 
@@ -92,6 +92,15 @@ object_get_info() ->
     }.
 
 
+%% @doc
+object_admin_info() ->
+    #{
+        class => resource,
+        weight => 900,
+        tree_id => <<"domain_tree_resources_configs">>
+    }.
+
+
 %% @private
 object_mapping() ->
     disabled.
@@ -116,11 +125,6 @@ object_api_allow(_Cmd, _Req, State) ->
 object_api_cmd(Cmd, Req, State) ->
     nkdomain_obj_api:api(Cmd, ?DOMAIN_CONFIG, Req, State).
 
-
-%% @private
-object_admin_tree(Category, List, State) ->
-    nkdomain_admin:add_tree_resource(Category, domain_tree_resources_configs,
-                                     900, List, State).
 
 
 

@@ -28,6 +28,7 @@
 -export([admin_tree_categories/2, admin_tree_get_category/2, admin_event/3, admin_element_action/5]).
 -export([object_mapping/0, object_syntax/1, object_parse/3, object_unparse/1]).
 -export([object_load/2, object_get_session/1, object_save/1, object_delete/1, object_archive/1]).
+-export([object_admin_info/1, object_get_counter/2]).
 -export([object_check_active/3, object_do_expired/2]).
 -export([object_init/1, object_terminate/2, object_start/1, object_stop/2,
          object_event/2, object_reg_event/3, object_sync_op/3, object_async_op/2,
@@ -110,17 +111,17 @@ error(_)   		                        -> continue.
 
 %% @private
 admin_tree_categories(Data, State) ->
-    nkdomain_admin:tree_categories(Data, State).
+    nkdomain_admin_tree:categories(Data, State).
 
 
 %% @doc
 admin_tree_get_category(Category, State) ->
-    nkdomain_admin:tree_get_category(Category, State).
+    nkdomain_admin_tree:get_category(Category, State).
 
 
 %% @doc
 admin_event(#nkevent{class = ?DOMAIN_EVENT_CLASS}=Event, Updates, State) ->
-    nkdomain_admin:event(Event, Updates, State);
+    nkdomain_admin_tree:event(Event, Updates, State);
 
 admin_event(_Event, _Updates, _State) ->
     continue.
@@ -128,7 +129,7 @@ admin_event(_Event, _Updates, _State) ->
 
 %% @doc
 admin_element_action(ElementId, Action, Value, Updates, State) ->
-    nkdomain_admin:element_action(ElementId, Action, Value, Updates, State).
+    nkdomain_admin_tree:element_action(ElementId, Action, Value, Updates, State).
 
 
 %% ===================================================================
@@ -384,6 +385,30 @@ object_check_active(SrvId, Type, ObjId) ->
 object_do_expired(SrvId, ObjId) ->
     lager:notice("NkDOMAIN: removing expired object ~s", [ObjId]),
     nkdomain:archive(SrvId, ObjId, object_clean_expire).
+
+
+
+%% @doc
+-spec object_admin_info(nkdomain:type()) ->
+    nkdomain_admin:object_admin_info().
+
+object_admin_info(Type) ->
+    Module = nkdomain_all_types:get_module(Type),
+    case erlang:function_exported(Module, object_admin_info, 0) of
+        true ->
+            Module:object_admin_info();
+        false ->
+            #{}
+    end.
+
+
+%% @doc
+-spec object_get_counter(nkdomain:type(), nkdomain:path()) ->
+    {ok, integer()}.
+
+object_get_counter(Type, DomainPath) ->
+    Module = nkdomain_all_types:get_module(Type),
+    nkdomain_type:get_global_counters(Module, DomainPath).
 
 
 %% ===================================================================
