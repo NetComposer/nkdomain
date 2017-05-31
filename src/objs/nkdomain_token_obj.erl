@@ -131,7 +131,7 @@ object_async_op(_Op, _Session) ->
 %% @doc
 object_admin_tree(Category, List, State) ->
     nkdomain_admin:add_tree_session(Category, ?DOMAIN_TOKEN, ?MODULE,
-                                    domain_tree_sessions_tokens, 800, List, State).
+                                    domain_tree_sessions_tokens, 5000, List, State).
 
 
 

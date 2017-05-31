@@ -80,7 +80,7 @@ tree_get_category(_Category, _State) ->
 
 %% @doc
 event(#nkevent{type = <<"counter_updated">>, obj_id=ObjId}=Event, Updates, #{domain_path:=ObjId}=State) ->
-    lager:error("NKLOG COUNTER ~p", [ObjId]),
+    lager:error("NKLOG COUNTER ~p", [Event]),
     #nkevent{subclass=ObjType, body=#{counter:=Counter}}=Event,
     #{types:=Types, session_types:=SessTypes} = State,
     Types2 = nklib_util:store_value(ObjType, Types),
@@ -115,11 +115,11 @@ event(#nkevent{type = <<"created">>, subclass=ObjType}=Event, Updates, State) ->
     #{types:=Types} = State,
     case lists:member(ObjType, Types) of
         true ->
-            %lager:error("NKLOG CREATED1 ~p ~p", [ObjType, Types]),
+            lager:error("NKLOG CREATED1 ~p ~p", [ObjType, Types]),
             continue;
         false ->
             Types2 = [ObjType|Types],
-            %lager:error("NKLOG ObjType ~p", [ObjType]),
+            lager:error("NKLOG CREATED2 ~p", [ObjType]),
             case do_get_category_entries(resources, [ObjType], [], State#{types=>Types2}) of
                 {ok, [], State2} ->
                     case do_get_category_entries(sessions, [ObjType], [], State2) of
@@ -327,13 +327,8 @@ add_tree_session(sessions, Type, Module, Key, Weight, List, #{domain_path:=Domai
             {ok, Num0} = nkdomain_type:get_global_counters(Module, Domain),
             Num0
     end,
-    case Num of
-        0 ->
-            ok;
-        _ ->
-            Item = nkadmin_util:menu_item(Key, menuEntry, #{badge=>Num}, State),
-            {ok, [{Item, Weight}|List], State#{session_types:=Types#{Type=>Num}}}
-    end;
+    Item = nkadmin_util:menu_item(Key, menuEntry, #{badge=>Num, counter=>Num}, State),
+    {ok, [{Item, Weight}|List], State#{session_types:=Types#{Type=>Num}}};
 
 add_tree_session(_Category, _Type, _Module, _Key, _Weigth, _List, _State) ->
     ok.
