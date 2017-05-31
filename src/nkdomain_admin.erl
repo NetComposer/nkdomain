@@ -116,11 +116,18 @@ event(#nkevent{type = <<"created">>, subclass=ObjType}=Event, Updates, State) ->
             continue;
         false ->
             Types2 = [ObjType|Types],
-            case get_category(resources, Types2, State#{types:=Types2}) of
-                {ok, Element, State2} when map_size(Element)==0 ->
-                    {continue, [Event, Updates, State2]};
-                {ok, Element, State2} ->
-                    {continue, [Event, [Element|Updates], State2]}
+            case do_get_category_entries(resources, [ObjType], [], State#{types=>Types2}) of
+                {ok, [], State2} ->
+                    case do_get_category_entries(sessions, [ObjType], [], State2) of
+                        {ok, [], State3} ->
+                            continue;
+                        {ok, _List, State3} ->
+                            {ok, Element, State4} = get_category(sessions, Types2, State3),
+                            {continue, [Event, [Element|Updates], State4]}
+                    end;
+                {ok, _List, State2} ->
+                    {ok, Element, State3} = get_category(resources, Types2, State2),
+                    {continue, [Event, [Element|Updates], State3]}
             end
     end;
 
