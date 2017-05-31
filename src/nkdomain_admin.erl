@@ -80,6 +80,7 @@ tree_get_category(_Category, _State) ->
 
 %% @doc
 event(#nkevent{type = <<"counter_updated">>, obj_id=ObjId}=Event, Updates, #{domain_path:=ObjId}=State) ->
+    lager:error("NKLOG COUNTER ~p", [ObjId]),
     #nkevent{subclass=ObjType, body=#{counter:=Counter}}=Event,
     #{types:=Types, session_types:=SessTypes} = State,
     Types2 = nklib_util:store_value(ObjType, Types),
@@ -91,13 +92,14 @@ event(#nkevent{type = <<"counter_updated">>, obj_id=ObjId}=Event, Updates, #{dom
                 {ok, [], State3} ->
                     {continue, [Event, Updates, State3]};
                 {ok, [{Data, _Weigth}], State3} ->
-                    lager:warning("NKLOG IS MEMBER: ~p", [Data]),
+                    %lager:warning("NKLOG IS MEMBER: ~p", [Data]),
                     {continue, [Event, [Data|Updates], State3]}
             end;
         false ->
-            lager:warning("NKLOG IS NOT MEMBER"),
-            {ok, Data, State3} = get_category(sessions, Types2, State2),
-            {continue, [Event, [Data|Updates], State3]}
+            continue
+            %lager:warning("NKLOG IS NOT MEMBER"),
+%%            {ok, Data, State3} = get_category(sessions, Types2, State2),
+%%            {continue, [Event, [Data|Updates], State3]}
     end;
 
 event(#nkevent{subclass = ?DOMAIN_DOMAIN, obj_id=ObjId, type=Type, body=Body}=Event, Updates, State) ->
@@ -113,9 +115,11 @@ event(#nkevent{type = <<"created">>, subclass=ObjType}=Event, Updates, State) ->
     #{types:=Types} = State,
     case lists:member(ObjType, Types) of
         true ->
+            %lager:error("NKLOG CREATED1 ~p ~p", [ObjType, Types]),
             continue;
         false ->
             Types2 = [ObjType|Types],
+            %lager:error("NKLOG ObjType ~p", [ObjType]),
             case do_get_category_entries(resources, [ObjType], [], State#{types=>Types2}) of
                 {ok, [], State2} ->
                     case do_get_category_entries(sessions, [ObjType], [], State2) of
