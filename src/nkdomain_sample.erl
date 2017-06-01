@@ -4,8 +4,8 @@
 -include_lib("nkservice/include/nkservice.hrl").
 -include_lib("nkmail/include/nkmail.hrl").
 
+-define(HTTP, "http://127.0.0.1:9301/api").
 -define(WS, "ws://127.0.0.1:9301/api/ws").
-%%-define(WS, "wss://v1.netc.io/netcomp/v01/api/ws").
 
 
 login() ->
@@ -18,7 +18,8 @@ login(User, Pass) ->
         password=> nklib_util:to_binary(Pass),
         meta => #{a=>nklib_util:to_binary(User)}
     },
-    {ok, _Reply, _Pid} = nkapi_client:start(root, ?WS, Login, Fun, #{}, <<"objects/user/login">>).
+    {ok, #{<<"session_id">>:=SessId}, _Pid} = nkapi_client:start(root, ?WS, Login, Fun, #{}, <<"objects/user/login">>),
+    SessId.
 
 
 login(User, Pass, Domain) ->
@@ -29,7 +30,8 @@ login(User, Pass, Domain) ->
         meta => #{a=>nklib_util:to_binary(User)},
         domain_id => Domain
     },
-    {ok, _Reply, _Pid} = nkapi_client:start(root, ?WS, Login, Fun, #{}, <<"objects/user/login">>).
+    {ok, #{<<"session_id">>:=SessId}, _Pid} = nkapi_client:start(root, ?WS, Login, Fun, #{}, <<"objects/user/login">>),
+    SessId.
 
 
 
@@ -282,6 +284,38 @@ cmd(Cmd, Data) ->
 
 cmd(Pid, Cmd, Data) ->
     nkapi_client:cmd(Pid, Cmd, Data).
+
+
+
+
+%% ===================================================================
+%% HTTP
+%% ===================================================================
+
+http_login() ->
+    Data = #{
+        id => <<"admin">>,
+        password=> <<"1234">>,
+        ttl => 60,
+        meta => #{b=>2}
+    },
+    {ok, #{<<"token_id">>:=TokenId}} = http([], <<"objects/user/login">>, Data),
+    TokenId.
+
+http_domain_find(Token, Id) ->
+    http(Token, <<"objects/domain/find">>, #{id=>Id}).
+
+
+http(Token, Cmd, Data) ->
+    Hds = [{"X-NetComposer-Auth", nklib_util:to_list(Token)}],
+    Body = nklib_json:encode_pretty(#{cmd=>to_bin(Cmd), data=>Data}),
+    {ok, {{_, 200, _}, _Hs, B}} = httpc:request(post, {?HTTP, Hds, "application/json", Body}, [], []),
+    case nklib_json:decode(B) of
+        #{<<"result">>:=<<"ok">>}=Result ->
+            {ok, maps:get(<<"data">>, Result)};
+        #{<<"result">>:=<<"error">>, <<"data">>:=#{<<"code">>:=Code, <<"error">>:=Error}} ->
+            {error, {Code, Error}}
+    end.
 
 
 

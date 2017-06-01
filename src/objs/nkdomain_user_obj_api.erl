@@ -34,13 +34,14 @@
 %% ===================================================================
 
 %% @doc
-cmd(<<"login">>, Req, State) ->
+cmd(<<"login">>, #nkreq{session_module=nkapi_server}=Req, State) ->
     #nkreq{data=#{id:=User}=Data, srv_id=SrvId, session_id=SessId, session_meta=SessMeta} = Req,
     case get_domain(Req) of
         {ok, DomainId} ->
             LoginMeta1 = maps:with([local, remote], SessMeta),
             LoginMeta2 = LoginMeta1#{
                 session_id => SessId,
+                domain_id => DomainId,
                 password => maps:get(password, Data, <<>>),
                 login_meta => maps:get(meta, Data, #{}),
                 api_server_pid => self()
@@ -52,6 +53,31 @@ cmd(<<"login">>, Req, State) ->
                     State3 = nkdomain_api_util:add_id(?DOMAIN_USER, UserId, State2),
                     State4 = nkdomain_api_util:add_id(?DOMAIN_SESSION, SessId, State3),
                     {login, Reply, UserId, LoginMeta3, State4};
+                {error, Error} ->
+                    {error, Error, State}
+            end;
+        {error, Error} ->
+            {error, Error, State}
+    end;
+
+cmd(<<"login">>, #nkreq{session_module=nkapi_server_http}=Req, State) ->
+    #nkreq{data=#{id:=User}=Data, srv_id=SrvId, session_id=SessId, session_meta=SessMeta} = Req,
+    case get_domain(Req) of
+        {ok, DomainId} ->
+            LoginMeta1 = maps:with([local, remote], SessMeta),
+            LoginMeta2 = LoginMeta1#{
+                session_id => SessId,
+                domain_id => DomainId,
+                password => maps:get(password, Data, <<>>),
+                login_meta => maps:get(meta, Data, #{})
+            },
+            LoginMeta3 = case Data of
+                #{ttl:=TTL} -> LoginMeta2#{ttl=>TTL};
+                _ -> LoginMeta2
+            end,
+            case nkdomain_user_obj:token(SrvId, User, LoginMeta3) of
+                {ok, Reply} ->
+                    {ok, Reply, State};
                 {error, Error} ->
                     {error, Error, State}
             end;

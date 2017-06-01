@@ -44,13 +44,17 @@ api(<<"create">>, Type, #nkreq{data=Data, srv_id=SrvId, user_id=UserId}, State) 
                 created_by => UserId
             },
             Data3 = maps:remove(obj_name, Data2),
-            Parent = get_parent(Data, State),
-            Data4 = Data3#{parent_id=>Parent},
-            case Module:create(SrvId, Name, Data4) of
-                {ok, Reply, _Pid} ->
-                    {ok, Reply, State};
-                {error, Error} ->
-                    {error, Error, State}
+            case get_parent(Data, State) of
+                {ok, Parent} ->
+                    Data4 = Data3#{parent_id=>Parent},
+                    case Module:create(SrvId, Name, Data4) of
+                        {ok, Reply, _Pid} ->
+                            {ok, Reply, State};
+                        {error, Error} ->
+                            {error, Error, State}
+                    end;
+                Error ->
+                    Error
             end;
         false ->
             {error, not_implemented, State}
@@ -169,25 +173,16 @@ api(<<"wait_for_save">>, Type, #nkreq{data=Data, srv_id=SrvId}, State) ->
     end;
 
 api(<<"make_token">>, Type, #nkreq{data=Data, srv_id=SrvId}, State) ->
-    Mod = nkdomain_all_types:get_module(Type),
-    Info = Mod:object_get_info(),
-    DefTTL = maps:get(default_token_ttl, Info, ?DEF_TOKEN_TTL),
-    MaxTTL = maps:get(max_token_ttl, Info, ?MAX_TOKEN_TTL),
-    case maps:get(ttl, Data, DefTTL) of
-        TTL when TTL < MaxTTL ->
-            case nkdomain_api_util:get_id(Type, Data, State) of
-                {ok, Id} ->
-                    case nkdomain_token_obj:create(SrvId, Id, TTL, #{}) of
-                        {ok, Reply, _Pid} ->
-                            {ok, Reply#{ttl=>TTL}, State};
-                        {error, Error} ->
-                            {error, Error, State}
-                    end;
-                Error ->
-                    Error
+    case nkdomain_api_util:get_id(Type, Data, State) of
+        {ok, Id} ->
+            case nkdomain_token_obj:create(SrvId, Id, Data) of
+                {ok, Reply, _Pid} ->
+                    {ok, Reply, State};
+                {error, Error} ->
+                    {error, Error, State}
             end;
-        _ ->
-            {error, invalid_token_ttl, State}
+        Error ->
+            Error
     end;
 
 api(_Req, _Type, _Req, State) ->
@@ -201,8 +196,7 @@ api(_Req, _Type, _Req, State) ->
 
 %% @private
 get_parent(Data, State) ->
-    {ok, DomainId} = nkdomain_api_util:get_id(?DOMAIN_DOMAIN, parent_id, Data, State),
-    DomainId.
+    nkdomain_api_util:get_id(?DOMAIN_DOMAIN, parent_id, Data, State).
 
 
 %% @private

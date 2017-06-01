@@ -23,7 +23,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -export([plugin_deps/0, plugin_syntax/0, plugin_config/2]).
 -export([service_init/2, service_handle_cast/2, service_handle_info/2]).
--export([error/1, service_api_syntax/2, service_api_allow/2, service_api_cmd/2,
+-export([error/1, service_api_syntax/2, service_api_allow/2, service_api_cmd/2, api_server_http_auth/2,
          api_server_reg_down/3]).
 -export([admin_tree_categories/2, admin_tree_get_category/2, admin_event/3, admin_element_action/5]).
 -export([object_mapping/0, object_syntax/1, object_parse/3, object_unparse/1]).
@@ -74,10 +74,13 @@ error(invalid_object_id)                -> "Invalid object id";
 error(invalid_object_type)              -> "Invalid object type";
 error(invalid_object_path)              -> "Invalid object path";
 error({invalid_object_path, P})         -> {"Invalid object path '~s'", [P]};
+error(invalid_sessionn)                 -> "Invalid session";
 error({invalid_type, T})                -> {"Invalid type '~s'", [T]};
+error(invalid_token)                    -> "Invalid token";
 error(invalid_token_ttl)                -> "Invalid token TTL";
 error(member_already_present)           -> "Member is already present";
 error(member_not_found)                 -> "Member not found";
+error(missing_auth_header)              -> "Missing authentication header";
 error(object_already_exists)            -> "Object already exists";
 error(object_clean_process)             -> "Object cleaned (process stopped)";
 error(object_clean_expire)              -> "Object cleaned (expired)";
@@ -763,6 +766,29 @@ api_server_reg_down({nkdomain_session_obj, _Pid}, _Reason, State) ->
 
 api_server_reg_down(_Link, _Reason, _State) ->
     continue.
+
+%% @doc
+api_server_http_auth(#nkreq{cmd = <<"objects/user/login">>}, _HttpReq) ->
+    {true, <<>>, #{}, #{}};
+
+api_server_http_auth(_Req, HttpReq) ->
+    Headers = nkapi_server_http:get_headers(HttpReq),
+    case nklib_util:get_value(<<"x-netcomposer-auth">>, Headers) of
+        Token when is_binary(Token) ->
+            case nkdomain_user_obj:check_token(Token) of
+                {ok, UserId, Meta, State} ->
+                    {true, UserId, Meta, State};
+                {error, Error} ->
+                    {error, Error}
+            end;
+        _ ->
+            {error, missing_auth_header}
+    end;
+
+api_server_http_auth(_Req, _HttpReq) ->
+    continue.
+
+
 
 %% ===================================================================
 %% Plugin callbacks

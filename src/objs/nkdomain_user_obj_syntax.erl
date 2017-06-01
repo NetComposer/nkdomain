@@ -39,16 +39,17 @@ api(<<"login">>, Syntax) ->
         password => binary,
         domain_id => binary,
         meta => map,
+        ttl => integer,             % Only for http
         '__mandatory' => [id]
     };
 
-api(<<"get_token">>, Syntax) ->
-    Syntax#{
-        id => binary,
-        password => binary,
-        domain => binary,
-        '__mandatory' => [id]
-    };
+%%api(<<"get_token">>, Syntax) ->
+%%    Syntax#{
+%%        id => binary,
+%%        password => binary,
+%%        domain => binary,
+%%        '__mandatory' => [id]
+%%    };
 
 api(Cmd, Syntax) ->
     nkdomain_obj_syntax:syntax(Cmd, ?DOMAIN_USER, Syntax).

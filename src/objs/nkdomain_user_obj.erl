@@ -24,7 +24,7 @@
 -behavior(nkdomain_obj).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([create/3, login/3, get_name/2, send_push/3]).
+-export([create/3, login/3, token/3, check_token/1, get_name/2, send_push/3]).
 -export([object_get_info/0, object_admin_info/0, object_mapping/0, object_parse/3,
          object_api_syntax/2, object_api_allow/3, object_api_cmd/3, object_send_event/2,
          object_sync_op/3, object_async_op/2]).
@@ -93,7 +93,7 @@ create(Srv, Name, Obj) ->
 login(SrvId, Login, Opts) ->
     case do_load(SrvId, Login) of
         {ok, ObjId, UserPid} ->
-            case do_login(UserPid, ObjId, Opts) of
+            case do_check_pass(UserPid, ObjId, Opts) of
                 {ok, UserObjId} ->
                     case do_start_session(SrvId, UserObjId, Opts) of
                         {ok, SessId} ->
@@ -109,6 +109,53 @@ login(SrvId, Login, Opts) ->
         {error, Error} ->
             {error, Error}
     end.
+
+
+%% @doc
+-spec token(nkservice:id(), User::binary(), login_opts()) ->
+    {ok, #{token_id=>Token::nkdomain:obj_id(), ttl=>integer()}} | {error, user_not_found|term()}.
+
+token(SrvId, Login, Opts) ->
+    case do_load(SrvId, Login) of
+        {ok, ObjId, UserPid} ->
+            case do_check_pass(UserPid, ObjId, Opts) of
+                {ok, UserObjId} ->
+                    do_start_token(SrvId, UserObjId, Opts);
+                {error, Error} ->
+                    {error, Error}
+            end;
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
+%% @doc
+check_token(Token) ->
+    case nkdomain_obj:get_session(Token) of
+        {ok, #obj_session{type = ?DOMAIN_SESSION, obj=#{?DOMAIN_SESSION:=Data}}} ->
+            case Data of
+                #{user_id:=UserId, domain_id:=DomainId, login_meta:=Meta} ->
+                    State2 = nkdomain_api_util:add_id(?DOMAIN_DOMAIN, DomainId, #{}),
+                    State3 = nkdomain_api_util:add_id(?DOMAIN_USER, UserId, State2),
+                    State4 = nkdomain_api_util:add_id(?DOMAIN_SESSION, Token, State3),
+                    {ok, UserId, Meta, State4};
+                _ ->
+                    {error, invalid_session}
+            end;
+        {ok, #obj_session{type = ?DOMAIN_TOKEN, obj=#{subtype:=?DOMAIN_USER, ?DOMAIN_TOKEN:=Data}}} ->
+            case Data of
+                #{user_id:=UserId, domain_id:=DomainId, login_meta:=Meta} ->
+                    State2 = nkdomain_api_util:add_id(?DOMAIN_DOMAIN, DomainId, #{}),
+                    State3 = nkdomain_api_util:add_id(?DOMAIN_USER, UserId, State2),
+                    {ok, UserId, Meta, State3};
+                D ->
+                    {error, invalid_token, D}
+            end;
+        _ ->
+            {error, invalid_token}
+    end.
+
+
 
 
 %% @doc
@@ -288,7 +335,7 @@ do_load(SrvId, Login) ->
 
 
 %% @private
-do_login(Pid, ObjId, #{password:=Pass}) ->
+do_check_pass(Pid, ObjId, #{password:=Pass}) ->
     {ok, Pass2} = user_pass(Pass),
     case nkdomain_obj:sync_op(Pid, {?MODULE, check_pass, Pass2}) of
         {ok, true} ->
@@ -299,19 +346,32 @@ do_login(Pid, ObjId, #{password:=Pass}) ->
             {error, Error}
     end;
 
-do_login(_Pid, _ObjId, _Opts) ->
+do_check_pass(_Pid, _ObjId, _Opts) ->
     {error, invalid_password}.
 
 
 %% @private
 do_start_session(SrvId, UserId, Opts) ->
-    Opts2 = maps:with([session_id, api_server_pid, local, remote], Opts),
+    Opts2 = maps:with([session_id, domain_id, local, remote, login_meta], Opts),
     case nkdomain_session_obj:create(SrvId, UserId, Opts2) of
         {ok, #{obj_id:=ObjId}, _Pid} ->
             {ok, ObjId};
         {error, Error} ->
             {error, Error}
     end.
+
+
+%% @private
+do_start_token(SrvId, UserId, Opts) ->
+    Opts2 = maps:with([domain_id, local, remote, ttl, login_meta], Opts),
+    case nkdomain_token_obj:create(SrvId, UserId, Opts2#{user_id=>UserId}) of
+        {ok, Reply, _Pid} ->
+            {ok, Reply};
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
 
 
 %% @private

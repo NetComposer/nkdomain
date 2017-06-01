@@ -24,7 +24,7 @@
 -behavior(nkdomain_obj).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([create/4]).
+-export([create/3]).
 -export([object_get_info/0, object_mapping/0, object_parse/3,
          object_api_syntax/2, object_api_allow/3, object_api_cmd/3, object_send_event/2,
          object_sync_op/3, object_async_op/2]).
@@ -49,21 +49,31 @@
 %% ===================================================================
 
 %% @doc
--spec create(nkservice:id(), nkdomain:id(), integer(), map()) ->
+-spec create(nkservice:id(), nkdomain:id(), #{ttl=>integer(), term()=>term()}) ->
     {ok, nkdomain_obj_lib:make_and_create_reply(), pid()} | {error, term()}.
 
-create(Srv, Parent, SecsTTL, Data) when is_integer(SecsTTL), SecsTTL >= 1 ->
+create(Srv, Parent, Data) ->
     case nkdomain_obj_lib:load(Srv, Parent, #{}) of
         #obj_id_ext{obj_id=ReferredId, type=SubType} ->
-            Obj = #{
-                parent_id => ReferredId,
-                type => ?DOMAIN_TOKEN,
-                referred_id => ReferredId,
-                subtype => SubType,
-                expires_time => nkdomain_util:timestamp() + 1000*SecsTTL,
-                ?DOMAIN_TOKEN => Data
-            },
-            nkdomain_obj_lib:make_and_create(Srv, <<>>, Obj, #{});
+            case check_ttl(SubType, Data) of
+                {ok, SecsTTL} ->
+                    Obj = #{
+                        parent_id => ReferredId,
+                        type => ?DOMAIN_TOKEN,
+                        referred_id => ReferredId,
+                        subtype => SubType,
+                        expires_time => nkdomain_util:timestamp() + 1000*SecsTTL,
+                        ?DOMAIN_TOKEN => Data
+                    },
+                    case nkdomain_obj_lib:make_and_create(Srv, <<>>, Obj, #{}) of
+                        {ok, #{obj_id:=TokenId}, Pid} ->
+                            {ok, #{token_id=>TokenId, ttl=>SecsTTL}, Pid};
+                        {error, Error} ->
+                            {error, Error}
+                    end;
+                {error, Error} ->
+                    {error, Error}
+            end;
         {error, object_not_found} ->
             {error, referred_not_found};
         {error, Error} ->
@@ -71,7 +81,18 @@ create(Srv, Parent, SecsTTL, Data) when is_integer(SecsTTL), SecsTTL >= 1 ->
     end.
 
 
-
+%% @doc
+check_ttl(Type, Opts) ->
+    Mod = nkdomain_all_types:get_module(Type),
+    Info = Mod:object_get_info(),
+    DefTTL = maps:get(default_token_ttl, Info, ?DEF_TOKEN_TTL),
+    MaxTTL = maps:get(max_token_ttl, Info, ?MAX_TOKEN_TTL),
+    case maps:get(ttl, Opts, DefTTL) of
+        TTL when TTL>=0, TTL < MaxTTL ->
+            {ok, TTL};
+        _ ->
+            {error, invalid_token_ttl}
+    end.
 
 
 

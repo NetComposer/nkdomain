@@ -55,12 +55,13 @@
     {ok, nkdomain_obj_lib:make_and_create_reply(), pid()} | {error, term()}.
 
 create(SrvId, UserId, Opts) ->
+    Opts2 = Opts#{user_id=>UserId},
     Obj1 = #{
         type => ?DOMAIN_SESSION,
         active => true,
         created_by => UserId,
         parent_id => UserId,
-        ?DOMAIN_SESSION => maps:with([local, remote], Opts)
+        ?DOMAIN_SESSION => maps:with([local, remote, domain_id, user_id, login_meta], Opts2)
     },
     Obj2 = case Opts of
         #{session_id:=SessId} ->
@@ -68,13 +69,13 @@ create(SrvId, UserId, Opts) ->
         _ ->
             Obj1
     end,
-    Opts2 = case Opts of
+    Opts3 = case Opts2 of
         #{api_server_pid:=Pid1} ->
             #{usage_link => {Pid1, nkdomain_session_api}};
             _ ->
                 #{}
     end,
-    case nkdomain_obj_lib:make_and_create(SrvId, <<>>, Obj2, Opts2) of
+    case nkdomain_obj_lib:make_and_create(SrvId, <<>>, Obj2, Opts3) of
         {ok, Reply, Pid} ->
             case Opts of
                 #{api_server_pid:=Pid2} ->
@@ -89,6 +90,15 @@ create(SrvId, UserId, Opts) ->
         {error, Error} ->
             {error, Error}
     end.
+
+
+%%%% @doc
+%%-spec get_user(nkdomain:obj_id()|pid()) ->
+%%    {ok, #{user_id=>binary(), domain_id=>binary()}}.
+%%
+%%get_user(SessId) ->
+%%    nkdomain_obj:sync_op(SessId, {?MODULE, get_user}).
+
 
 
 %% ===================================================================
@@ -118,7 +128,10 @@ object_admin_info() ->
 object_mapping() ->
     #{
         local => #{type => keyword},
-        remote => #{type => keyword}
+        remote => #{type => keyword},
+        domain_id => #{type => keyword},
+        user_id => #{type => keyword},
+        login_meta => #{enabled => false}
     }.
 
 
@@ -126,7 +139,10 @@ object_mapping() ->
 object_parse(_SrvId, _Mode, _Obj) ->
     #{
         local => binary,
-        remote => binary
+        remote => binary,
+        domain_id => binary,
+        user_id => binary,
+        login_meta => any
     }.
 
 
@@ -154,6 +170,14 @@ object_api_allow(_Cmd, _Req, State) ->
 object_api_cmd(Cmd, Req, State) ->
     nkdomain_obj_api:api(Cmd, ?DOMAIN_SESSION, Req, State).
 
+
+%%%% @private
+%%object_sync_op({?MODULE, get_user}, _From, #obj_session{parent_id=UserId, obj=Obj}=Session) ->
+%%    #{?DOMAIN_SESSION:=#{domain_id:=DomainId, login_meta:=Meta}} = Obj,
+%%    {reply, {ok, #{user_id=>UserId, domain_id=>DomainId, login_meta=>Meta}}, Session};
+%%
+%%object_sync_op(_Op, _From, _Session) ->
+%%    continue.
 
 
 %% ===================================================================
