@@ -343,6 +343,20 @@ download() ->
     httpc:request(get, {Url, []}, [], []).
 
 
+upload_icon(Id) ->
+    {ok, {_, _, B1}} = httpc:request("https://www.flatpyramid.com/uploads/3d-models/samples/other/popeye_3d-3d-model-sample-22266-87323.gif"),
+    Url = binary_to_list(<< ?FILES, "/icon/", (to_bin(Id))/binary>>),
+    httpc:request(post, {Url, [], "image/gif", B1}, [], []).
+
+download_icon(Id) ->
+    Url = binary_to_list(<< ?FILES, "/icon/", (to_bin(Id))/binary>>),
+    httpc:request(get, {Url, []}, [], []).
+
+
+
+
+
+
 
 %% ===================================================================
 %% OBJECTS

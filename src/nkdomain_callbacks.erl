@@ -68,8 +68,10 @@
 %% ===================================================================
 
 %% @doc
+error({body_too_large, Size, Max})      -> {"Body too large (size is ~p, max is ~p)", [Size, Max]};
 error({could_not_load_parent, Id})      -> {"Object could not load parent '~s'", [Id]};
 error(domain_unknown)                   -> "Unknown domain";
+error(invalid_content_type)             -> "Invalid Content-Type";
 error({invalid_name, N})                -> {"Invalid name '~s'", [N]};
 error(invalid_object_id)                -> "Invalid object id";
 error(invalid_object_type)              -> "Invalid object type";
@@ -164,6 +166,22 @@ nkservice_rest_http(SrvId, post, [<<"file">>, Id], Req, State) ->
             nkservice_rest_http:reply_json({error, Error}, Req, State)
     end;
 
+nkservice_rest_http(SrvId, get, [<<"file">>, <<"icon">>, Id], Req, State) ->
+    case nkdomain_util:download_icon(SrvId, Id) of
+        {ok, CT, Body} ->
+            {http, 200, [{<<"Content-Type">>, CT}], Body, State};
+        {error, Error} ->
+            nkservice_rest_http:reply_json({error, Error}, Req, State)
+    end;
+
+nkservice_rest_http(SrvId, post, [<<"file">>, <<"icon">>, Id], Req, State) ->
+    case nkdomain_util:upload_icon(SrvId, Id, Req) of
+        ok ->
+            nkservice_rest_http:reply_json({ok, #{}}, Req, State);
+        {error, Error} ->
+            nkservice_rest_http:reply_json({error, Error}, Req, State)
+    end;
+
 nkservice_rest_http(_SrvId, _Method, _Path, _Req, _State) ->
     continue.
 
@@ -205,7 +223,10 @@ object_mapping() ->
         },
         tags => #{type => keyword},
         aliases => #{type => keyword},
-        icon_id => #{type => keyword}
+        icon_id => #{type => keyword},
+        icon_url => #{type => keyword},
+        icon_content_type => #{type => keyword}
+
     }.
 
 
@@ -236,6 +257,7 @@ object_syntax(load) ->
         tags => {list, binary},
         aliases => {list, binary},
         icon_id => binary,
+        icon_content_type => binary,
         '_store_vsn' => any,
         '__mandatory' => [type, obj_id, parent_id, path, created_time]
     };
@@ -248,7 +270,8 @@ object_syntax(update) ->
         description => binary,
         tags => {list, binary},
         aliases => {list, binary},
-        icon_id => binary
+        icon_id => binary,
+        icon_content_type => binary
     }.
 
 

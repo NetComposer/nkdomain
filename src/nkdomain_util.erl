@@ -26,6 +26,7 @@
 -export([get_service_domain/1]).
 -export([error_code/2]).
 -export([timestamp/0]).
+-export([upload_icon/3, download_icon/2]).
 -export_type([error/0]).
 
 -type error() ::
@@ -36,7 +37,7 @@
 -include("nkdomain.hrl").
 -include_lib("nkapi/include/nkapi.hrl").
 
-
+-define(ICON_TYPES, [<<"image/jpeg">>, <<"image/png">>, <<"image/gif">>]).
 
 %% ===================================================================
 %% Public
@@ -204,6 +205,84 @@ add_destroyed(SrvId, Reason, Obj) ->
 %% @private
 timestamp() ->
     nklib_util:m_timestamp().
+
+
+upload_icon(SrvId, ObjId, Req) ->
+    case nkdomain_obj_lib:load(SrvId, ObjId, #{}) of
+        #obj_id_ext{pid=Pid} ->
+            CT = nkservice_rest_http:get_ct(Req),
+            case lists:member(CT, ?ICON_TYPES) of
+                true ->
+                    case nkservice_rest_http:get_body(Req, #{max_size=>1000000}) of
+                        {ok, Body} ->
+                            case store_file(ObjId, Body) of
+                                ok ->
+                                    Update = #{
+                                        icon_id => <<"/file/icon/", ObjId/binary>>,
+                                        icon_content_type => CT
+                                    },
+                                    case nkdomain_obj:update(Pid, Update) of
+                                        {ok, _} ->
+                                            ok;
+                                        {error, Error} ->
+                                            {error, Error}
+                                    end;
+                                {error, Error} ->
+                                    {error, Error}
+                            end;
+                        {error, Error} ->
+                                {error, Error}
+                    end;
+                false ->
+                    {error, invalid_content_type}
+            end;
+        {error, Error} ->
+                {error, Error}
+    end.
+
+
+download_icon(SrvId, ObjId) ->
+    case nkdomain_obj_lib:load(SrvId, ObjId, #{}) of
+        #obj_id_ext{pid=Pid} ->
+            case nkdomain_obj:get_name(Pid) of
+                {ok, #{icon_id:=<<"/file/icon/", Id/binary>>, icon_content_type:=CT}} ->
+                    case get_file(Id) of
+                        {ok, File} ->
+                            {ok, CT, File};
+                        {error, Error} ->
+                            {error, Error}
+                    end;
+                _ ->
+                    {error, object_not_found}
+            end;
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
+store_file(Id, Body) ->
+    FilesDir = nkdomain_app:get(files_dir),
+    Path = filename:join(FilesDir, Id),
+    case file:write_file(Path, Body) of
+        ok ->
+            ok;
+        {error, Error} ->
+            lager:warning("file ~s write error: ~p", [Error]),
+            {error, file_write_error}
+    end.
+
+
+get_file(Id) ->
+    FilesDir = nkdomain_app:get(files_dir),
+    Path = filename:join(FilesDir, Id),
+    case file:read_file(Path) of
+        {ok, Body} ->
+            {ok, Body};
+        {error, Error} ->
+            lager:warning("file ~s read error: ~p", [Error]),
+            {error, file_read_error}
+    end.
+
 
 
 

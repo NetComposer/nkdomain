@@ -82,7 +82,8 @@ get_name(#obj_session{type=Type, obj_id=ObjId, path=Path, obj=Obj}) ->
         path => Path,
         name => maps:get(name, Obj, ObjName),
         description => maps:get(description, Obj, <<>>),
-        icon_id => maps:get(icon_id, Obj, <<>>)
+        icon_id => maps:get(icon_id, Obj, <<>>),
+        icon_content_type => maps:get(icon_content_type, Obj, <<>>)
     }.
 
 
