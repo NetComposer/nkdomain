@@ -35,7 +35,7 @@ table() ->
         css => <<"flex-tmp">>,
         scroll => <<"xy">>,
         body => #{
-            rows => objects_table()
+            rows => [objects_table()]
         }
     }.
 
