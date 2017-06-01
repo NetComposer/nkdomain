@@ -41,7 +41,9 @@
 -type create_opts() ::
     #{
         session_id => binary(),
+        domain_id => nkdomain:obj_id(),
         api_server_pid => pid(),
+        login_meta => map(),
         local => binary(),
         remote => binary()
     }.

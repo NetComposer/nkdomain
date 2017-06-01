@@ -66,16 +66,20 @@ start(_Type, _Args) ->
         elastic_url => binary,
         elastic_user => binary,
         elastic_pass => binary,
+        listen_ip => binary,
+        listen_port => integer,
+        listen_secure => boolean,
         api_server => binary,
         admin_url => binary,
-
+        file_url => binary,
         role_proxy_timeout => {integer, 1, none},
         user_password_pbkdf2_iters => {integer, 1, none},
         '__defaults' => #{
             start_root => false,
             elastic_url => <<"http://127.0.0.1:9200/">>,
-            api_server => <<"ws:all:9202/api/ws, http:all:9202/api">>,
-            admin_url => <<"http://all:9202/admin">>,
+            listen_ip => <<"127.0.0.1">>,
+            listen_port => 9301,
+            listen_secure => false,
             role_proxy_timeout => 10000,
             user_password_pbkdf2_iters => 1
         }
@@ -88,6 +92,10 @@ start(_Type, _Args) ->
             lager:info("NkDOMAIN v~s has started.", [Vsn]),
             nkdomain_i18n:reload(),
             register_types(),
+            {ok, DataDir} = application:get_env(riak_core, platform_data_dir),
+            FilesDir = filename:join(DataDir, "files"),
+            ok = filelib:ensure_dir(filename:join(FilesDir, "dummy")),
+            put(files_dir, FilesDir),
             case get(start_root) of
                 true ->
                     spawn_link(
@@ -118,6 +126,7 @@ register_types() ->
     ok = nkdomain_all_types:register(nkdomain_session_obj),
     ok = nkdomain_all_types:register(nkdomain_config_obj),
     ok = nkdomain_all_types:register(nkdomain_token_obj),
+    ok = nkdomain_all_types:register(nkdomain_file_obj),
     nkmail_app:register_types().
 
 

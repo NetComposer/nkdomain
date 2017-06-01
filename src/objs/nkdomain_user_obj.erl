@@ -48,9 +48,10 @@
 
 -type login_opts() ::
     #{
-        password => binary(),
         session_id => binary(),
         session_type => module(),
+        domain_id => nkdomain:obj_id(),
+        password => binary(),
         api_server_pid => pid(),
         local => binary(),
         remote => binary(),
@@ -352,7 +353,7 @@ do_check_pass(_Pid, _ObjId, _Opts) ->
 
 %% @private
 do_start_session(SrvId, UserId, Opts) ->
-    Opts2 = maps:with([session_id, domain_id, local, remote, login_meta], Opts),
+    Opts2 = maps:with([session_id, domain_id, local, remote, login_meta, api_server_pid], Opts),
     case nkdomain_session_obj:create(SrvId, UserId, Opts2) of
         {ok, #{obj_id:=ObjId}, _Pid} ->
             {ok, ObjId};
@@ -363,8 +364,8 @@ do_start_session(SrvId, UserId, Opts) ->
 
 %% @private
 do_start_token(SrvId, UserId, Opts) ->
-    Opts2 = maps:with([domain_id, local, remote, ttl, login_meta], Opts),
-    case nkdomain_token_obj:create(SrvId, UserId, Opts2#{user_id=>UserId}) of
+    Opts2 = maps:with([domain_id, local, remote, login_meta], Opts),
+    case nkdomain_token_obj:create_referred(SrvId, UserId, maps:with([ttl], Opts), Opts2#{user_id=>UserId}) of
         {ok, Reply, _Pid} ->
             {ok, Reply};
         {error, Error} ->

@@ -68,6 +68,7 @@
 -define(DOMAIN_SESSION, <<"session">>).
 -define(DOMAIN_TOKEN, <<"token">>).
 -define(DOMAIN_CONFIG, <<"config">>).
+-define(DOMAIN_FILE, <<"file">>).
 
 -define(DOMAIN_EVENT_CLASS, <<"domain">>).
 -define(DEF_TOKEN_TTL, 8*60*60).

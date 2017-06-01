@@ -47,14 +47,23 @@ create() ->
 
 %% @doc Starts the root service
 start() ->
+    ListenIp = nkdomain_app:get(listen_ip),
+    ListenPort = nklib_util:to_binary(nkdomain_app:get(listen_port)),
+    ListenSecure = nkdomain_app:get(listen_secure),
+    Http = case ListenSecure of true -> <<"https">>; false -> <<"http">> end,
+    Ws = case ListenSecure of true -> <<"wss">>; false -> <<"ws">> end,
+    BaseHttp = <<Http/binary, "://", ListenIp/binary, ":", ListenPort/binary>>,
+    BaseWs = <<Ws/binary, "://", ListenIp/binary, ":", ListenPort/binary>>,
     Spec1 = #{
         plugins => [nkdomain, nkapi, nkchat, nkdomain_store_es, nkadmin,
-                    nkmail_smtp_client, nkfile_filesystem, nkfile_s3, nkservice_webserver],
+                    nkmail_smtp_client, nkfile_filesystem, nkfile_s3, nkservice_rest, nkservice_webserver],
         domain => <<"root">>,
         domain_elastic_url => nkdomain_app:get(elastic_url),
         webserver_url => "https://127.0.0.1:1234",
         webserver_path => "/tmp",
-        admin_url => nkdomain_app:get(admin_url),
+        admin_url => <<BaseHttp/binary, "/admin">>,
+        rest_url => BaseHttp,
+        api_server => <<BaseHttp/binary, "/api, ", BaseWs/binary, "/api/ws">>,
         debug => [
             %% {nkapi_client, #{nkpacket=>true}},
             nkapi_server,
@@ -74,17 +83,14 @@ start() ->
         false ->
             Spec1
     end,
-    Spec3 = case nkdomain_app:get(api_server) of
-        undefined ->
-            Spec2;
-        ApiServer ->
-            Spec2#{api_server => ApiServer}
-    end,
-    case nkservice:start(root, Spec3) of
+    lager:error("NKLOG L ~p", [Spec2]),
+
+
+    case nkservice:start(root, Spec2) of
         {ok, _} ->
-            lager:info("Root service started");
+            lager:info("Root service started: ~p", [Spec2]);
         {error, Error} ->
-            lager:error("Could not start root service: ~p (~p)", [Error, Spec3]),
+            lager:error("Could not start root service: ~p (~p)", [Error, Spec2]),
             error(start_root_error)
     end.
 

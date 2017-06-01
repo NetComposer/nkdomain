@@ -25,6 +25,7 @@
 -export([service_init/2, service_handle_cast/2, service_handle_info/2]).
 -export([error/1, service_api_syntax/2, service_api_allow/2, service_api_cmd/2, api_server_http_auth/2,
          api_server_reg_down/3]).
+-export([nkservice_rest_http/5]).
 -export([admin_tree_categories/2, admin_tree_get_category/2, admin_event/3, admin_element_action/5]).
 -export([object_mapping/0, object_syntax/1, object_parse/3, object_unparse/1]).
 -export([object_load/2, object_get_session/1, object_save/1, object_delete/1, object_archive/1]).
@@ -135,6 +136,37 @@ admin_element_action(ElementId, Action, Value, Updates, State) ->
     nkdomain_admin_tree:element_action(ElementId, Action, Value, Updates, State).
 
 
+
+%% ===================================================================
+%% REST
+%% ===================================================================
+
+
+%% @doc
+nkservice_rest_http(SrvId, get, [<<"file">>, Id], Req, State) ->
+    case nkdomain_file_obj:download(SrvId, Id) of
+        {ok, CT, Bin} ->
+            {http, 200, [{<<"Content-Type">>, CT}], Bin, State};
+        {error, Error} ->
+            nkservice_rest_http:reply_json({error, Error}, Req, State)
+    end;
+
+nkservice_rest_http(SrvId, post, [<<"file">>, Id], Req, State) ->
+    case nkservice_rest_http:get_body(Req, #{}) of
+        {ok, Body} ->
+            case nkdomain_file_obj:upload(SrvId, Id, Body) of
+                ok ->
+                    nkservice_rest_http:reply_json({ok, #{}}, Req, State);
+                {error, Error} ->
+                    nkservice_rest_http:reply_json({error, Error}, Req, State)
+            end;
+        {error, Error} ->
+            nkservice_rest_http:reply_json({error, Error}, Req, State)
+    end;
+
+nkservice_rest_http(_SrvId, _Method, _Path, _Req, _State) ->
+    continue.
+
 %% ===================================================================
 %% Offered Object Callbacks
 %% ===================================================================
@@ -171,6 +203,7 @@ object_mapping() ->
             type => text,
             fields => #{keyword => #{type=>keyword}}
         },
+        tags => #{type => keyword},
         aliases => #{type => keyword},
         icon_id => #{type => keyword}
     }.
@@ -200,6 +233,7 @@ object_syntax(load) ->
         destroyed_reason => binary,
         name => binary,
         description => binary,
+        tags => {list, binary},
         aliases => {list, binary},
         icon_id => binary,
         '_store_vsn' => any,
@@ -212,6 +246,7 @@ object_syntax(update) ->
         enabled => boolean,
         name => binary,
         description => binary,
+        tags => {list, binary},
         aliases => {list, binary},
         icon_id => binary
     }.
@@ -783,10 +818,8 @@ api_server_http_auth(_Req, HttpReq) ->
             end;
         _ ->
             {error, missing_auth_header}
-    end;
+    end.
 
-api_server_http_auth(_Req, _HttpReq) ->
-    continue.
 
 
 

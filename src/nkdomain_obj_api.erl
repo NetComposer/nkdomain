@@ -175,7 +175,7 @@ api(<<"wait_for_save">>, Type, #nkreq{data=Data, srv_id=SrvId}, State) ->
 api(<<"make_token">>, Type, #nkreq{data=Data, srv_id=SrvId}, State) ->
     case nkdomain_api_util:get_id(Type, Data, State) of
         {ok, Id} ->
-            case nkdomain_token_obj:create(SrvId, Id, Data) of
+            case nkdomain_token_obj:create_referred(SrvId, Id, Data, #{}) of
                 {ok, Reply, _Pid} ->
                     {ok, Reply, State};
                 {error, Error} ->

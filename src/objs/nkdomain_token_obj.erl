@@ -24,7 +24,7 @@
 -behavior(nkdomain_obj).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([create/3]).
+-export([create_referred/4, create_standalone/5]).
 -export([object_get_info/0, object_mapping/0, object_parse/3,
          object_api_syntax/2, object_api_allow/3, object_api_cmd/3, object_send_event/2,
          object_sync_op/3, object_async_op/2]).
@@ -49,13 +49,13 @@
 %% ===================================================================
 
 %% @doc
--spec create(nkservice:id(), nkdomain:id(), #{ttl=>integer(), term()=>term()}) ->
-    {ok, nkdomain_obj_lib:make_and_create_reply(), pid()} | {error, term()}.
+-spec create_referred(nkservice:id(), nkdomain:id(), #{ttl=>integer()}, map()) ->
+    {ok, #{token_id=>nkdomain:obj_id(), ttl=>integer()}, pid()} | {error, term()}.
 
-create(Srv, Parent, Data) ->
+create_referred(Srv, Parent, Opts, Data) ->
     case nkdomain_obj_lib:load(Srv, Parent, #{}) of
         #obj_id_ext{obj_id=ReferredId, type=SubType} ->
-            case check_ttl(SubType, Data) of
+            case check_ttl(SubType, Opts) of
                 {ok, SecsTTL} ->
                     Obj = #{
                         parent_id => ReferredId,
@@ -79,6 +79,32 @@ create(Srv, Parent, Data) ->
         {error, Error} ->
             {error, Error}
     end.
+
+
+%% @doc
+-spec create_standalone(nkservice:id(), nkdomain:id(), binary(), #{ttl=>integer()}, map()) ->
+    {ok, #{token_id=>nkdomain:obj_id(), ttl=>integer()}, pid()} | {error, term()}.
+
+create_standalone(Srv, Parent, SubType, Opts, Data) ->
+    case check_ttl(SubType, Opts) of
+        {ok, SecsTTL} ->
+            Obj = #{
+                parent_id => Parent,
+                type => ?DOMAIN_TOKEN,
+                subtype => SubType,
+                expires_time => nkdomain_util:timestamp() + 1000*SecsTTL,
+                ?DOMAIN_TOKEN => Data
+            },
+            case nkdomain_obj_lib:make_and_create(Srv, <<>>, Obj, #{}) of
+                {ok, #{obj_id:=TokenId}, Pid} ->
+                    {ok, #{token_id=>TokenId, ttl=>SecsTTL}, Pid};
+                {error, Error} ->
+                    {error, Error}
+            end;
+        {error, Error} ->
+            {error, Error}
+    end.
+
 
 
 %% @doc

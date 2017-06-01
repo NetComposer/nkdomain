@@ -37,6 +37,7 @@ i18n() -> #{
         domain_tree_resources => "Resources",
         domain_tree_resources_users => "Users",
         domain_tree_resources_configs => "Configurations",
+        domain_tree_resources_files => "Files",
 
         domain_tree_sessions => "Sessions",
         domain_tree_sessions_login => "Login",
@@ -58,8 +59,7 @@ i18n() -> #{
         domain_tree_resources => "Recursos",
         domain_tree_resources_users => "Usuarios",
         domain_tree_resources_configs => "Configuraciones",
-        domain_tree_resources_messages => "Mensajes de chat",
-        domain_tree_resources_chat_conversations => "Conversaciones",
+        domain_tree_resources_files => "Ficheros",
 
         domain_tree_sessions => "Sesiones",
         domain_tree_sessions_login => "Login",

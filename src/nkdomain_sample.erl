@@ -6,6 +6,7 @@
 
 -define(HTTP, "http://127.0.0.1:9301/api").
 -define(WS, "ws://127.0.0.1:9301/api/ws").
+-define(FILES, "http://127.0.0.1:9301/file").
 
 
 login() ->
@@ -257,6 +258,16 @@ config_find(SubType, Parent) ->
     cmd(<<"objects/config/find">>, #{parent=>Parent, subtype=>SubType}).
 
 
+file_get(Id) ->
+    cmd(<<"objects/file/get">>, #{id=>Id}).
+
+file_create() ->
+    cmd(<<"objects/file/create">>, #{tags=>[a, b], file=>#{content_type=>pdf}}).
+
+file_update(Id) ->
+    cmd(<<"objects/file/update">>, #{id=>Id, tags=>[b, c], file=>#{content_type=>pdf2}}).
+
+
 
 
 %% ===================================================================
@@ -317,6 +328,19 @@ http(Token, Cmd, Data) ->
             {error, {Code, Error}}
     end.
 
+
+
+upload() ->
+    F = <<"file-3xGzIUw2nmo0YJICQ5aDjfEni2b">>,
+    Path = "/etc/hosts",
+    {ok, Data} = file:read_file(Path),
+    Url = binary_to_list(<< ?FILES, $/, F/binary>>),
+    httpc:request(post, {Url, [], "application/json", Data}, [], []).
+
+download() ->
+    F = <<"file-3xGzIUw2nmo0YJICQ5aDjfEni2b">>,
+    Url = binary_to_list(<< ?FILES, $/, F/binary>>),
+    httpc:request(get, {Url, []}, [], []).
 
 
 
