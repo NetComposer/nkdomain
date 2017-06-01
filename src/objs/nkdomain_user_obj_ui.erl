@@ -20,13 +20,13 @@
 
 %% @doc User Object
 
--module('nkdomain_user_obj_ui.erl').
+-module(nkdomain_user_obj_ui).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([body/0]).
+-export([table/0]).
 
 
-body() ->
+table() ->
     #{
         view => <<"scrollview">>,
         id => <<"body">>,
@@ -125,7 +125,7 @@ create_default_objects_table_data() ->
         ],
         pager => <<"pagerA">>,
         export => true,
-        %data => create_objects_array(150, []),
+        data => create_objects_array(150, []),
         url => <<"wsProxy->">>,
         save => <<"wsProxy->">>,
         onClick => #{

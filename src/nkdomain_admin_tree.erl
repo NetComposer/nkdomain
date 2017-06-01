@@ -126,51 +126,13 @@ event(Event, Updates, State) ->
 
 
 %% @doc
-element_action(?DOMAINS_ALL, selected, Value, Updates, #{domain_path:=Path}=State) ->
-    Updates2 = [
-        #{
-            class => url,
-            id => url,
-            value => #{label => nkadmin_util:append_type(Path, <<"domains">>)}
-        },
-        #{
-            class => breadcrumbs,
-            id => breadcrumbs,
-            value => #{items => nkadmin_util:get_parts(Path)++[<<"domains">>]}
-        },
-        #{
-            class => detail,
-            value => #{}
-        }
-        | Updates
-    ],
-    {continue, [?DOMAINS_ALL, selected, Value, Updates2, State]};
+element_action(?DOMAINS_ALL, selected, Value, Updates, State) ->
+    {Updates2, State2} = selected_all_domains(Updates, State),
+    {continue, [?DOMAINS_ALL, selected, Value, Updates2, State2]};
 
-element_action(<<?DOMAINS_ID2, $_, ObjId/binary>>, selected, Value, Updates, #{srv_id:=SrvId}=State) ->
-    case nkdomain_obj_lib:load(SrvId, ObjId, #{}) of
-        #obj_id_ext{path=Path} ->
-            Updates2 = [
-                #{
-                    class => url,
-                    id => url,
-                    value => #{label => Path}
-                },
-                #{
-                    class => breadcrumbs,
-                    id => breadcrumbs,
-                    value => #{items => nkadmin_util:get_parts(Path)}
-                },
-                #{
-                    class => detail,
-                    value => #{}
-                }
-                | Updates
-            ],
-            State2 = State#{detail_path=>Path},
-            {continue, [?DOMAINS_ALL, selected, Value, Updates2, State2]};
-        {error, Error} ->
-            {error, Error, State}
-    end;
+element_action(<<?DOMAINS_ID2, $_, ObjId/binary>>, selected, Value, Updates, State) ->
+    {Updates2, State2} = selected_domain(ObjId, Updates, State),
+    {continue, [?DOMAINS_ALL, selected, Value, Updates2, State2]};
 
 element_action(ElementId, Action, Value, Updates, State) ->
     {continue, [ElementId, Action, Value, Updates, State]}.
@@ -280,6 +242,56 @@ deleted_domain(ObjId, Updates, State) ->
             {Updates, State}
     end.
 
+
+%% @private
+selected_all_domains(Updates, #{domain_path:=Path}=State) ->
+    Updates2 = [
+        #{
+            class => url,
+            id => url,
+            value => #{label => nkadmin_util:append_type(Path, <<"domains">>)}
+        },
+        #{
+            class => breadcrumbs,
+            id => breadcrumbs,
+            value => #{items => nkadmin_util:get_parts(Path)++[<<"domains">>]}
+        },
+        #{
+            class => detail,
+            value => #{}
+        }
+        | Updates
+    ],
+    {Updates2, State}.
+
+
+%% @private
+selected_domain(ObjId, Updates, #{srv_id:=SrvId}=State) ->
+    case nkdomain_obj_lib:load(SrvId, ObjId, #{}) of
+        #obj_id_ext{path=Path} ->
+            Updates2 = [
+                #{
+                    class => url,
+                    id => url,
+                    value => #{label => Path}
+                },
+                #{
+                    class => breadcrumbs,
+                    id => breadcrumbs,
+                    value => #{items => nkadmin_util:get_parts(Path)}
+                },
+                #{
+                    class => detail,
+                    value => #{}
+                }
+                | Updates
+            ],
+            State2 = State#{detail_path=>Path},
+            {Updates2, State2};
+        {error, Error} ->
+            lager:error("NKLOG SHOW VIEW ERROR: ~p", [Error]),
+            {Updates, State}
+    end.
 
 
 %% ===================================================================
