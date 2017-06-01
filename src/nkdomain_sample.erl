@@ -19,8 +19,8 @@ login(User, Pass) ->
         password=> nklib_util:to_binary(Pass),
         meta => #{a=>nklib_util:to_binary(User)}
     },
-    {ok, #{<<"session_id">>:=SessId}, _Pid} = nkapi_client:start(root, ?WS, Login, Fun, #{}, <<"objects/user/login">>),
-    SessId.
+    {ok, #{<<"session_id">>:=SessId}, Pid} = nkapi_client:start(root, ?WS, Login, Fun, #{}, <<"objects/user/login">>),
+    {ok, SessId, Pid}.
 
 
 login(User, Pass, Domain) ->
@@ -31,8 +31,8 @@ login(User, Pass, Domain) ->
         meta => #{a=>nklib_util:to_binary(User)},
         domain_id => Domain
     },
-    {ok, #{<<"session_id">>:=SessId}, _Pid} = nkapi_client:start(root, ?WS, Login, Fun, #{}, <<"objects/user/login">>),
-    SessId.
+    {ok, #{<<"session_id">>:=SessId}, Pid} = nkapi_client:start(root, ?WS, Login, Fun, #{}, <<"objects/user/login">>),
+    {ok, SessId, Pid}.
 
 
 
@@ -334,8 +334,20 @@ upload() ->
     F = <<"file-3xGzIUw2nmo0YJICQ5aDjfEni2b">>,
     Path = "/etc/hosts",
     {ok, Data} = file:read_file(Path),
-    Url = binary_to_list(<< ?FILES, $/, F/binary>>),
-    httpc:request(post, {Url, [], "application/json", Data}, [], []).
+    upload(F, "text/plain2", Data).
+
+
+upload(Id, CT, File) ->
+    Url = binary_to_list(<< ?FILES, $/, Id/binary>>),
+    case httpc:request(post, {Url, [], nklib_util:to_list(CT), File}, [], []) of
+        {ok, {{_, 200, _}, _, _}} ->
+            ok;
+        _ ->
+            error
+    end.
+
+
+
 
 download() ->
     F = <<"file-3xGzIUw2nmo0YJICQ5aDjfEni2b">>,

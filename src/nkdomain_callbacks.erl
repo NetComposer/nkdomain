@@ -147,16 +147,17 @@ admin_element_action(ElementId, Action, Value, Updates, State) ->
 %% @doc
 nkservice_rest_http(SrvId, get, [<<"file">>, Id], Req, State) ->
     case nkdomain_file_obj:download(SrvId, Id) of
-        {ok, CT, Bin} ->
+        {ok, _Name, CT, Bin} ->
             {http, 200, [{<<"Content-Type">>, CT}], Bin, State};
         {error, Error} ->
             nkservice_rest_http:reply_json({error, Error}, Req, State)
     end;
 
 nkservice_rest_http(SrvId, post, [<<"file">>, Id], Req, State) ->
-    case nkservice_rest_http:get_body(Req, #{}) of
+    case nkservice_rest_http:get_body(Req, #{max_size=>10000000}) of
         {ok, Body} ->
-            case nkdomain_file_obj:upload(SrvId, Id, Body) of
+            CT = nkservice_rest_http:get_ct(Req),
+            case nkdomain_file_obj:upload(SrvId, Id, CT, Body) of
                 ok ->
                     nkservice_rest_http:reply_json({ok, #{}}, Req, State);
                 {error, Error} ->

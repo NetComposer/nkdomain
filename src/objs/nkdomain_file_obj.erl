@@ -25,7 +25,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([create/3]).
--export([upload/3, download/2]).
+-export([upload/4, download/2]).
 -export([object_get_info/0, object_mapping/0, object_parse/3,
          object_api_syntax/2, object_api_allow/3, object_api_cmd/3]).
 -export([object_admin_info/0]).
@@ -54,14 +54,21 @@ create(Srv, Name, Obj) ->
     nkdomain_obj_lib:make_and_create(Srv, Name, Obj, #{}).
 
 
-upload(Srv, File, Body) ->
+upload(Srv, File, CT, Body) ->
     case nkdomain_obj_lib:load(Srv, File, #{}) of
-        #obj_id_ext{type = ?DOMAIN_FILE, pid=_Pid} ->
-            FilesDir = nkdomain_app:get(files_dir),
-            Path = filename:join(FilesDir, File),
-            case file:write_file(Path, Body) of
+        #obj_id_ext{obj_id=ObjId, type = ?DOMAIN_FILE, pid=Pid} ->
+            case nkdomain_util:store_file(ObjId, Body) of
                 ok ->
-                    ok;
+                    Update = #{
+                        content_type => CT,
+                        size => byte_size(Body)
+                    },
+                    case nkdomain_obj:update(Pid, Update) of
+                        {ok, _} ->
+                            ok;
+                        {error, Error} ->
+                            {error, Error}
+                    end;
                 {error, Error} ->
                     ?LLOG(warning, "file ~s write error: ~p", [Error]),
                     {error, file_write_error}
@@ -73,20 +80,25 @@ upload(Srv, File, Body) ->
 
 download(Srv, File) ->
     case nkdomain_obj_lib:load(Srv, File, #{}) of
-        #obj_id_ext{type = ?DOMAIN_FILE, pid=_Pid} ->
-            FilesDir = nkdomain_app:get(files_dir),
-            Path = filename:join(FilesDir, File),
-            case file:read_file(Path) of
-                {ok, Body} ->
-                    {ok, <<>>, Body};
+        #obj_id_ext{type = ?DOMAIN_FILE, obj_id=ObjId, pid=Pid} ->
+            case nkdomain_obj:get_session(Pid) of
+                {ok, #obj_session{obj=Obj}} ->
+                    Name = maps:get(name, Obj, <<>>),
+                    case Obj of
+                        #{?DOMAIN_FILE:=#{content_type:=CT}} ->
+                            case nkdomain_util:get_file(ObjId) of
+                                {ok, Body} ->
+                                    {ok, Name, CT, Body};
+                                {error, Error} ->
+                                    {error, Error}
+                            end
+                    end;
                 {error, Error} ->
-                    ?LLOG(warning, "file ~s write error: ~p", [Error]),
-                    {error, file_write_error}
+                    {error, Error}
             end;
         {error, Error} ->
             {error, Error}
     end.
-
 
 
 
@@ -130,8 +142,7 @@ object_parse(_SrvId, load, _Obj) ->
         content_type => binary,
         size => integer,
         store_id => binary,
-        password => binary,
-        '__mandatory' => [content_type]
+        password => binary
     };
 
 object_parse(_SrvId, update, _Obj) ->

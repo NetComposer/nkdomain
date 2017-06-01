@@ -26,7 +26,7 @@
 -export([get_service_domain/1]).
 -export([error_code/2]).
 -export([timestamp/0]).
--export([upload_icon/3, download_icon/2]).
+-export([upload_icon/3, download_icon/2, store_file/2, get_file/1]).
 -export_type([error/0]).
 
 -type error() ::
