@@ -252,7 +252,7 @@ create_objects_array(N, T) ->
         _ -> TypeName = <<"Service">>,
             ShortName = list_to_binary([<<"service">>,list_to_binary(integer_to_list(UUID))])
     end,
-    io:format(ShortName),
+    %% io:format(ShortName),
     create_objects_array (N-1, [
         #{
             id => N,

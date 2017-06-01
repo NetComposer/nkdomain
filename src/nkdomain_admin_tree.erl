@@ -134,8 +134,25 @@ element_action(<<?DOMAINS_ID2, $_, ObjId/binary>>, selected, Value, Updates, Sta
     {Updates2, State2} = selected_domain(ObjId, Updates, State),
     {continue, [?DOMAINS_ALL, selected, Value, Updates2, State2]};
 
-element_action(ElementId, Action, Value, Updates, State) ->
-    {continue, [ElementId, Action, Value, Updates, State]}.
+element_action(<<?DOMAINS_ID2, $_, ObjId/binary>>, selected, Value, Updates, State) ->
+    {Updates2, State2} = selected_domain(ObjId, Updates, State),
+    {continue, [?DOMAINS_ALL, selected, Value, Updates2, State2]};
+
+element_action(<<"domain_tree_resources_users">>, selected, Value, Updates, State) ->
+    Table = nkdomain_user_obj_ui:table(),
+    Item = #{
+        class => detail,
+        id => detail,
+        value => #{
+            id => <<"domain_detail_user_table">>,
+            webix_ui => Table
+        }
+    },
+    {continue, [<<"domain_tree_resources_users">>, selected, Value, [Item|Updates], State]};
+
+element_action(_Id, _Action, _Value, _Updates, _State) ->
+    continue.
+
 
 
 %% ===================================================================
