@@ -162,23 +162,33 @@ create_default_objects_table_data(Data) ->
     },
             #{
                 id => <<"path">>,
-                header => [<<"Path">>, #{ content => <<"extendedFilter">> }]
+                header => [<<"Path">>, #{ content => <<"extendedFilter">> }],
+                fillspace => <<"1">>
             },
             #{
                 id => <<"name">>,
-                header => [<<"Name">>, #{ content => <<"extendedFilter">> }]
+                header => [<<"Name">>, #{ content => <<"extendedFilter">> }],
+                fillspace => <<"1">>
             },
             #{
                 id => <<"email">>,
-                header => [<<"Email">>, #{ content => <<"extendedFilter">> }]
+                header => [<<"Email">>, #{ content => <<"extendedFilter">> }],
+                fillspace => <<"1">>
             },
             #{
                 id => <<"createdBy">>,
-                header => [<<"Created By">>, #{ content => <<"extendedFilter">> }]
+                header => [<<"Created By">>, #{ content => <<"extendedFilter">> }],
+                fillspace => <<"1">>
             },
             #{
                 id => <<"createdTime">>,
-                header => [<<"Created Time">>, #{ content => <<"extendedFilter">> }]
+                header => [<<"Created Time">>, #{ content => <<"extendedFilter">> }],
+                fillspace => <<"1">>,
+                format => <<"function(value) {
+                        var date = new Date(value);
+                        var format = webix.Date.dateToStr('%Y-%m-%d %H:%i:%s.'+date.getMilliseconds());
+                        return format(new Date(value));
+                }">>
             }
             %%
             %%            #{
