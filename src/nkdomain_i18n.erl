@@ -40,7 +40,7 @@ i18n() -> #{
         domain_tree_resources_files => "Files",
 
         domain_tree_sessions => "Sessions",
-        domain_tree_sessions_login => "Login",
+        domain_tree_sessions_session => "Login",
         domain_tree_sessions_tokens => "Tokens",
         domain_tree_sessions_admin => "Admin",
 
@@ -62,7 +62,7 @@ i18n() -> #{
         domain_tree_resources_files => "Ficheros",
 
         domain_tree_sessions => "Sesiones",
-        domain_tree_sessions_login => "Login",
+        domain_tree_sessions_session => "Login",
         domain_tree_sessions_tokens => "Tokens",
         domain_tree_sessions_admin => "Admin",
 

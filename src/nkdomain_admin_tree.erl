@@ -140,6 +140,7 @@ element_action(<<?DOMAINS_ID2, $_, ObjId/binary>>, selected, Value, Updates, Sta
 
 element_action(<<"domain_tree_resources_users">>, selected, Value, Updates, State) ->
     Table = nkdomain_user_obj_ui:table(),
+    Updates2 = nkadmin_util:append_path(<<"users">>, Updates, State),
     Item = #{
         class => detail,
         id => detail,
@@ -148,7 +149,25 @@ element_action(<<"domain_tree_resources_users">>, selected, Value, Updates, Stat
             webix_ui => Table
         }
     },
-    {continue, [<<"domain_tree_resources_users">>, selected, Value, [Item|Updates], State]};
+    {continue, [<<"domain_tree_resources_users">>, selected, Value, [Item|Updates2], State]};
+
+element_action(<<"domain_tree_resources_", Type/binary>>=Key, selected, Value, Updates, State) ->
+    Updates2 = nkadmin_util:append_path(Type, Updates, State),
+    Item = #{
+        class => detail,
+        id => detail,
+        value => #{}
+    },
+    {continue, [Key, selected, Value, [Item|Updates2], State]};
+
+element_action(<<"domain_tree_sessions_", Type/binary>>=Key, selected, Value, Updates, State) ->
+    Updates2 = nkadmin_util:append_path(Type, Updates, State),
+    Item = #{
+        class => detail,
+        id => detail,
+        value => #{}
+    },
+    {continue, [Key, selected, Value, [Item|Updates2], State]};
 
 element_action(_Id, _Action, _Value, _Updates, _State) ->
     continue.
@@ -261,24 +280,8 @@ deleted_domain(ObjId, Updates, State) ->
 
 
 %% @private
-selected_all_domains(Updates, #{domain_path:=Path}=State) ->
-    Updates2 = [
-        #{
-            class => url,
-            id => url,
-            value => #{label => nkadmin_util:append_type(Path, <<"domains">>)}
-        },
-        #{
-            class => breadcrumbs,
-            id => breadcrumbs,
-            value => #{items => nkadmin_util:get_parts(Path)++[<<"domains">>]}
-        },
-        #{
-            class => detail,
-            value => #{}
-        }
-        | Updates
-    ],
+selected_all_domains(Updates, State) ->
+    Updates2 = nkadmin_util:append_path(<<"domains">>, Updates, State),
     {Updates2, State}.
 
 
@@ -286,23 +289,7 @@ selected_all_domains(Updates, #{domain_path:=Path}=State) ->
 selected_domain(ObjId, Updates, #{srv_id:=SrvId}=State) ->
     case nkdomain_obj_lib:load(SrvId, ObjId, #{}) of
         #obj_id_ext{path=Path} ->
-            Updates2 = [
-                #{
-                    class => url,
-                    id => url,
-                    value => #{label => Path}
-                },
-                #{
-                    class => breadcrumbs,
-                    id => breadcrumbs,
-                    value => #{items => nkadmin_util:get_parts(Path)}
-                },
-                #{
-                    class => detail,
-                    value => #{}
-                }
-                | Updates
-            ],
+            Updates2 = nkadmin_util:update_path(Path, Updates),
             State2 = State#{detail_path=>Path},
             {Updates2, State2};
         {error, Error} ->
@@ -470,4 +457,3 @@ update_session(Type, Counter, #{sessions:=Sessions}=State) ->
 %% ===================================================================
 %% Util
 %% ===================================================================
-

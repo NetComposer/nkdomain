@@ -120,7 +120,7 @@ object_admin_info() ->
     #{
         class => session,
         weight => 1000,
-        tree_id => <<"domain_tree_sessions_login">>
+        tree_id => <<"domain_tree_sessions_session">>
     }.
 
 
