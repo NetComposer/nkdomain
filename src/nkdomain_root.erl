@@ -83,9 +83,6 @@ start() ->
         false ->
             Spec1
     end,
-    lager:error("NKLOG L ~p", [Spec2]),
-
-
     case nkservice:start(root, Spec2) of
         {ok, _} ->
             lager:info("Root service started: ~p", [Spec2]);

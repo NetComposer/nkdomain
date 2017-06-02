@@ -139,7 +139,8 @@ element_action(<<?DOMAINS_ID2, $_, ObjId/binary>>, selected, Value, Updates, Sta
     {continue, [?DOMAINS_ALL, selected, Value, Updates2, State2]};
 
 element_action(<<"domain_tree_resources_users">>, selected, Value, Updates, State) ->
-    Table = nkdomain_user_obj_ui:table(),
+    #{domain_id:=DomainId} = State,
+    Table = nkdomain_user_obj_ui:table(root, DomainId),
     Updates2 = nkadmin_util:append_path(<<"users">>, Updates, State),
     Item = #{
         class => detail,

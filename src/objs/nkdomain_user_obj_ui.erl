@@ -23,10 +23,56 @@
 -module(nkdomain_user_obj_ui).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([table/0]).
+-export([table/2]).
 
 
-table() ->
+table(Srv, Domain) ->
+    Spec = #{
+        filters => #{
+            type => user
+        },
+        fields => [<<"icon_id">>, <<"path">>, <<"created_by">>, <<"created_time">>,
+                   <<"user.name">>, <<"user.surname">>, <<"user.email">>],
+        sort => [<<"path">>],
+        size => 100
+    },
+    case nkdomain_domain_obj:find_all(Srv, Domain, Spec) of
+        {ok, _Total, List, _Meta} ->
+            Data = lists:map(
+                fun(Entry) ->
+                    #{
+                        <<"obj_id">> := ObjId,
+                        <<"path">> := Path,
+                        <<"created_time">> := CreatedTime,
+                        <<"user">> := #{
+                            <<"name">> := Name,
+                            <<"surname">> := Surname
+                        } = User
+                    } = Entry,
+                    CreatedBy = maps:get(<<"created_by">>, Entry, <<>>),
+                    IconId = case maps:get(<<"icon_id">>, Entry, <<>>) of
+                        <<>> -> <<"/admin/img/blank.jpg">>;
+                        Url -> Url
+                    end,
+                    Email = maps:get(<<"email">>, User, <<>>),
+                    #{
+                        id => ObjId,
+                        icon => IconId,
+                        path => Path,
+                        name => <<Name/binary, " ", Surname/binary>>,
+                        email => Email,
+                        createdBy => CreatedBy,
+                        createdTime => CreatedTime
+                    }
+                end,
+                List),
+            make_table(Data);
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
+make_table(Data) ->
     #{
         view => <<"scrollview">>,
         id => <<"body">>,
@@ -35,12 +81,15 @@ table() ->
         css => <<"flex-tmp">>,
         scroll => <<"xy">>,
         body => #{
-            rows => [objects_table()]
+            rows => [objects_table(Data)]
         }
     }.
 
 
-objects_table() ->
+
+
+
+objects_table(Data) ->
     #{
         id => <<"objectsTable">>,
         type => <<"space">>,
@@ -69,7 +118,7 @@ objects_table() ->
             #{
                 rows => [
                     % create default objects table data,
-                    create_default_objects_table_data(),
+                    create_default_objects_table_data(Data),
                     #{
                         view => <<"toolbar">>,
                         css => <<"highlighted_header header6">>,
@@ -94,7 +143,7 @@ objects_table() ->
 
 
 
-create_default_objects_table_data() ->
+create_default_objects_table_data(Data) ->
     #{
         id => <<"objectsData">>,
         view => <<"datatable">>,
@@ -102,30 +151,55 @@ create_default_objects_table_data() ->
         editable => false,
         columns => [
             #{
-                id => <<"id">>, header => [#{ text => <<"#">>, height => 20 }, #{ content => <<"customFilter">> } ], sort => <<"int">>, width => 70
+                id => <<"icon">>, width => 70, template => <<"<img src='#icon#'>">>,
+                header => [<<"Icon">>, <<>>]
+
+%%                { header:"Shot", template:"<img src='imgs/#id#.jpg'>", width:100, css:"noPadding"},
+
+
+
+
+    },
+            #{
+                id => <<"path">>,
+                header => [<<"Path">>, #{ content => <<"extendedFilter">> }]
             },
             #{
-                id => <<"uuid">>, header => [<<"UUID">>, #{ content => <<"extendedFilter">> }], sort => <<"string">>, minWidth => 80, fillspace => 1
+                id => <<"name">>,
+                header => [<<"Name">>, #{ content => <<"extendedFilter">> }]
             },
             #{
-                id => <<"parentUuid">>, header => [<<"Parent UUID">>, #{ content => <<"extendedFilter">> }], sort => <<"string">>, minWidth => 80, fillspace => 1
+                id => <<"email">>,
+                header => [<<"Email">>, #{ content => <<"extendedFilter">> }]
             },
             #{
-                id => <<"typeName">>, header => [<<"Type">>, #{ content => <<"extendedFilter">> }], sort => <<"string">>, minWidth => 120, fillspace => 2, editor => <<"select">>, template => <<"<div class='type#type#'>#typeName#</div>">>
+                id => <<"createdBy">>,
+                header => [<<"Created By">>, #{ content => <<"extendedFilter">> }]
             },
             #{
-                id => <<"shortName">>, header => [<<"Name">>, #{ content => <<"extendedFilter">> }], sort => <<"string">>, minWidth => 120, fillspace => 2, editor => <<"text">>
-            },
-            #{
-                id => <<"enabled">>, header => [<<"Enabled?">>, <<"">>], sort => <<"string">>, minWidth => 50, fillspace => 1, template => <<"<span  style='cursor:pointer;' class='webix_icon #enabledIcon#'></span>">>
-            },
-            #{
-                id => <<"view">>, header => <<"&nbsp;">>, width => 35, template => <<"<span style='cursor:pointer;' class='webix_icon fa-eye'></span>">>
+                id => <<"createdTime">>,
+                header => [<<"Created Time">>, #{ content => <<"extendedFilter">> }]
             }
+            %%
+            %%            #{
+            %%                id => <<"parentUuid">>, header => [<<"Parent UUID">>, #{ content => <<"extendedFilter">> }], sort => <<"string">>, minWidth => 80, fillspace => 1
+            %%            },
+            %%            #{
+            %%                id => <<"typeName">>, header => [<<"Type">>, #{ content => <<"extendedFilter">> }], sort => <<"string">>, minWidth => 120, fillspace => 2, editor => <<"select">>, template => <<"<div class='type#type#'>#typeName#</div>">>
+            %%            },
+            %%            #{
+            %%                id => <<"shortName">>, header => [<<"Name">>, #{ content => <<"extendedFilter">> }], sort => <<"string">>, minWidth => 120, fillspace => 2, editor => <<"text">>
+            %%            },
+            %%            #{
+            %%                id => <<"enabled">>, header => [<<"Enabled?">>, <<"">>], sort => <<"string">>, minWidth => 50, fillspace => 1, template => <<"<span  style='cursor:pointer;' class='webix_icon #enabledIcon#'></span>">>
+            %%            },
+            %%            #{
+            %%                id => <<"view">>, header => <<"&nbsp;">>, width => 35, template => <<"<span style='cursor:pointer;' class='webix_icon fa-eye'></span>">>
+            %%            }
         ],
         pager => <<"pagerA">>,
         export => true,
-        data => create_objects_array(150, []),
+        data => Data,
         url => <<"wsProxy->">>,
         save => <<"wsProxy->">>,
         onClick => #{
@@ -227,41 +301,42 @@ create_default_objects_table_data() ->
         }
     }.
 
-create_objects_array(N, T) when (N =< 0) ->
-    T;
-create_objects_array(N, T) ->
-    UUID = 999999999+N,
-    ParentUUID = UUID - 1,
-    Type = UUID rem 5,
-    Enabled = ((UUID rem 5) rem 2) =:= 0,
-    if
-        Enabled ->
-            Icon = <<"fa-check">>;
-        true ->
-            Icon = <<"fa-times">>
-    end,
-    case Type of
-        0 -> TypeName = <<"User">>,
-            ShortName = list_to_binary([<<"user">>,list_to_binary(integer_to_list(UUID))]);
-        1 -> TypeName = <<"File">>,
-            ShortName = list_to_binary([<<"file">>,list_to_binary(integer_to_list(UUID))]);
-        2 -> TypeName = <<"Node">>,
-            ShortName = list_to_binary([<<"node">>,list_to_binary(integer_to_list(UUID))]);
-        3 -> TypeName = <<"User session">>,
-            ShortName = list_to_binary([<<"user session">>,list_to_binary(integer_to_list(UUID))]);
-        _ -> TypeName = <<"Service">>,
-            ShortName = list_to_binary([<<"service">>,list_to_binary(integer_to_list(UUID))])
-    end,
-    %% io:format(ShortName),
-    create_objects_array (N-1, [
-        #{
-            id => N,
-            uuid => UUID,
-            parentUuid => ParentUUID,
-            type => Type,
-            typeName => TypeName,
-            shortName => ShortName,
-            enabled => Enabled,
-            enabledIcon => Icon
-        }
-        | T]).
+
+%%create_objects_array(N, T) when (N =< 0) ->
+%%    T;
+%%create_objects_array(N, T) ->
+%%    UUID = 999999999+N,
+%%    ParentUUID = UUID - 1,
+%%    Type = UUID rem 5,
+%%    Enabled = ((UUID rem 5) rem 2) =:= 0,
+%%    if
+%%        Enabled ->
+%%            Icon = <<"fa-check">>;
+%%        true ->
+%%            Icon = <<"fa-times">>
+%%    end,
+%%    case Type of
+%%        0 -> TypeName = <<"User">>,
+%%            ShortName = list_to_binary([<<"user">>,list_to_binary(integer_to_list(UUID))]);
+%%        1 -> TypeName = <<"File">>,
+%%            ShortName = list_to_binary([<<"file">>,list_to_binary(integer_to_list(UUID))]);
+%%        2 -> TypeName = <<"Node">>,
+%%            ShortName = list_to_binary([<<"node">>,list_to_binary(integer_to_list(UUID))]);
+%%        3 -> TypeName = <<"User session">>,
+%%            ShortName = list_to_binary([<<"user session">>,list_to_binary(integer_to_list(UUID))]);
+%%        _ -> TypeName = <<"Service">>,
+%%            ShortName = list_to_binary([<<"service">>,list_to_binary(integer_to_list(UUID))])
+%%    end,
+%%    %% io:format(ShortName),
+%%    create_objects_array (N-1, [
+%%        #{
+%%            id => N,
+%%            uuid => UUID,
+%%            parentUuid => ParentUUID,
+%%            type => Type,
+%%            typeName => TypeName,
+%%            shortName => ShortName,
+%%            enabled => Enabled,
+%%            enabledIcon => Icon
+%%        }
+%%        | T]).
