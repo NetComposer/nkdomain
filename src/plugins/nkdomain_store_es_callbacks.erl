@@ -284,8 +284,8 @@ get_mappings(SrvId, Index) ->
         #{
             domain_elastic_index := Index
         } ->
-            lager:info("Installed types: ~p", [nkdomain_all_types:get_types()]),
-            Modules = nkdomain_all_types:get_modules(),
+            lager:info("Installed types: ~p", [nkdomain_all_types:get_all_types()]),
+            Modules = nkdomain_all_types:get_all_modules(),
             Base = SrvId:object_mapping(),
             lists:foldl(
                 fun(Module, Acc) ->
