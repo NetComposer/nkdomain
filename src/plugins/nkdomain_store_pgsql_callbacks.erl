@@ -59,20 +59,20 @@ plugin_deps() ->
 
 plugin_syntax() ->
     #{
-        domain_pgsql_url => binary,
-        domain_pgsql_database =>  binary
+        nkdomain_store_pgsql =>
+            {list, #{
+                id => binary,
+                url => binary,
+                '__mandatory' => [url]
+            }}
     }.
 
 
-plugin_config(#{domain_pgsql_url:=Url}=Config, #{id:=SrvId}) ->
-    #{
-        domain_pgsql_url := Url
-    } = Config,
-    case nkpacket:parse_urls(pgsql, [tcp, tls], Url) of
-        {ok, Conns} ->
-            ServerId1 = <<(nklib_util:to_binary(SrvId))/binary, "_store_pgsql">>,
-            ServerId2 = binary_to_atom(ServerId1, utf8),
-            {ok, Config#{domain_pgsql_conns=>Conns, domain_pgsql_server_id=>ServerId2}, ServerId2};
+plugin_config(#{nkdomain_store_pgsql:=List}=Config, #{id:=SrvId}) ->
+    case parse_stores(List, #{}) of
+        {ok, ConnMap} ->
+            ServerId = nklib_util:to_atom(<<(nklib_util:to_binary(SrvId))/binary, "_nkdomain_store_pgsql">>),
+            {ok, Config#{nkdomain_store_pgsql_stores=>{ServerId, ConnMap}}, ServerId};
         {error, Error} ->
             {error, Error}
     end;
@@ -81,9 +81,8 @@ plugin_config(Config, _Service) ->
     {ok, Config}.
 
 
-plugin_start(#{domain_pgsql_conns:=Conns, domain_pgsql_server_id:=Name}=Config, #{id:=SrvId}) ->
-    Db = maps:get(domain_pgsql_database, Config, <<"nkobjects">>),
-    {ok, _} = nkservice_srv:start_proc(SrvId, Name, nkdomain_store_pgsql_server, [SrvId, Name, Db, Conns]),
+plugin_start(#{nkdomain_store_pgsql_stores:={ServerId, ConnMap}}=Config, #{id:=SrvId}) ->
+    {ok, _} = nkservice_srv:start_proc(SrvId, ServerId, nkdomain_store_pgsql_server, [SrvId, ServerId, ConnMap]),
     {ok, Config};
 
 plugin_start(Config, _Service) ->
@@ -105,3 +104,20 @@ plugin_stop(Config, #{id:=_Id}) ->
 %% ===================================================================
 %% Util
 %% ===================================================================
+
+parse_stores([], Acc) ->
+    {ok, Acc};
+
+parse_stores([#{url:=Url}=Map|Rest], Acc) ->
+    case nkpacket:parse_urls(pgsql, [tcp, tls], Url) of
+        {ok, Conns} ->
+            Id = maps:get(id, Map, <<"main">>),
+            case maps:is_key(Id, Acc) of
+                false ->
+                    parse_stores(Rest, Acc#{Id=>Conns});
+                true ->
+                    {error, duplicated_id}
+            end;
+        {error, Error} ->
+            {error, Error}
+    end.

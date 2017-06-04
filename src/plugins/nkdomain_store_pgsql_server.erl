@@ -22,8 +22,8 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -behaviour(gen_server).
 
--export([get_pool/1]).
--export([start_link/4]).
+-export([get_pool/1, get_pool/2]).
+-export([start_link/3]).
 -export([init/1, terminate/2, code_change/3, handle_call/3,
          handle_cast/2, handle_info/2]).
 
@@ -32,6 +32,8 @@
 
 -define(LLOG(Type, Txt, Args, State),
     lager:Type("NkDOMAIN Store PGSQL Server (~p) "++Txt, [State#state.srv_id|Args])).
+
+-define(DB, <<"nkobjects">>).
 
 
 %% ===================================================================
@@ -47,21 +49,21 @@
 
 
 get_pool(SrvId) ->
+    get_pool(SrvId, <<"main">>).
+
+
+get_pool(SrvId, Id) ->
     Name = SrvId:config_nkdomain_store_pgsql(),
-    gen_server:call(Name, get_pool).
+    gen_server:call(Name, {get_pool, Id}).
 
 
 
 %% @doc
--spec start_link(nkservice:id(), atom(), binary(), list()) ->
+-spec start_link(nkservice:id(), atom(), map()) ->
     {ok, pid()} | {error, term()}.
 
-start_link(SrvId, Name, Db, Conns) ->
-    gen_server:start_link({local, Name}, ?MODULE, [SrvId, Name, Db, Conns], []).
-
-
-%% Proc lib start:
-%% proc_lib:start_link(?MODULE, do_init, [Arg1, Arg2])
+start_link(SrvId, Name, ConnMap) ->
+    gen_server:start_link({local, Name}, ?MODULE, [SrvId, Name, ConnMap], []).
 
 
 
@@ -72,9 +74,8 @@ start_link(SrvId, Name, Db, Conns) ->
 -record(state, {
     srv_id :: nkservice:id(),
     name :: atom(),
-    db :: binary(),
-    pool_pids = [] :: [{pid(), Ip::binary()}],
-    pool_conns :: [list()]
+    pools = #{} :: #{Id::binary() => pid()},
+    conn_map = [] :: [{Id::binary(), Conn::list()}]
 }).
 
 
@@ -84,13 +85,12 @@ start_link(SrvId, Name, Db, Conns) ->
     {ok, tuple()} | {ok, tuple(), timeout()|hibernate} |
     {stop, term()} | ignore.
 
-init([SrvId, Name, Db, Conns]) ->
+init([SrvId, Name, ConnMap]) ->
     State = #state{
         srv_id = SrvId,
         name = Name,
-        db = Db,
-        pool_pids = [],
-        pool_conns = Conns
+        pools = #{},
+        conn_map = maps:to_list(ConnMap)
     },
     process_flag(trap_exit, true),
     % self() ! start_pools,
@@ -102,12 +102,12 @@ init([SrvId, Name, Db, Conns]) ->
     {noreply, #state{}} | {reply, term(), #state{}} |
     {stop, Reason::term(), #state{}} | {stop, Reason::term(), Reply::term(), #state{}}.
 
-handle_call(get_pool, _From, #state{pool_pids=Pids}=State) ->
-    case Pids of
-        [{Pid, _Ip}|_] ->
+handle_call({get_pool, Id}, _From, #state{pools=Pools}=State) ->
+    case maps:find(Id, Pools) of
+        {ok, Pid} ->
             {reply, {ok, Pid}, State};
-        [] ->
-            {reply, {error, no_pool_available}, State}
+        error ->
+            {reply, {error, pool_not_available}, State}
     end;
 
 handle_call(Msg, _From, State) ->
@@ -128,16 +128,17 @@ handle_cast(Msg, State) ->
 -spec handle_info(term(), #state{}) ->
     {noreply, #state{}} | {stop, term(), #state{}}.
 
-handle_info(start_pools, #state{pool_conns=Conns}=State) ->
-    State2 = start_pools(Conns, State),
+handle_info(start_pools, #state{conn_map=ConnMap}=State) ->
+    State2 = start_pools(ConnMap, State),
     erlang:send_after(?CHECK_TIME, self(), start_pools),
     {noreply, State2};
 
-handle_info({'EXIT', Pid, _Reason}, #state{pool_pids=Pids}=State) ->
-    case lists:keytake(Pid, 1, Pids) of
-        {value, {Pid, Ip}, Pids2} ->
-            ?LLOG(warning, "pool at ~s down", [Ip], State),
-            {noreply, State#state{pool_pids=Pids2}};
+handle_info({'EXIT', Pid, _Reason}, #state{pools=Pools}=State) ->
+    PoolList = maps:to_list(Pools),
+    case lists:keytake(Pid, 2, PoolList) of
+        {value, {Id, Pid}, PoolList2} ->
+            ?LLOG(warning, "pool '~s' is down", [Id], State),
+            {noreply, State#state{pools=maps:from_list(PoolList2)}};
         false ->
             lager:warning("Module ~p received unexpected down: ~p", [?MODULE, Pid]),
             {noreply, State}
@@ -173,46 +174,32 @@ terminate(_Reason, _State) ->
 start_pools([], State) ->
     State;
 
-start_pools([{[{undefined, tcp, Ip, Port}|_], Opts}|Rest], State) ->
-    #state{name=Name, db=Db, pool_pids=PoolPids} = State,
-    Ip2 = nklib_util:to_host(Ip),
-    case lists:keymember(Ip2, 2, PoolPids) of
+start_pools([{Id, Conns}|Rest], #state{pools=Pools}=State) ->
+    case maps:is_key(Id, Pools) of
         true ->
             start_pools(Rest, State);
         false ->
-            ConnOpts = [
-                {database, Db},
-                {host, nklib_util:to_host(Ip)},
-                {port, Port},
-                {user, maps:get(user, Opts, <<"root">>)},
-                {password, maps:get(password, Opts, <<"">>)},
-                %{connect_timeout, ConnectTimeout},
-                {as_binary, true}
-            ],
-            Name1 = list_to_binary([nklib_util:to_binary(Name), "-", nklib_util:to_host(Ip)]),
-            Name2 = binary_to_atom(Name1, utf8),
+            WorkerOpts = #{
+                id => Id,
+                database => ?DB,
+                conns => Conns
+            },
             PoolOpts = [
-                {name, {local, Name2}},
                 {worker_module, nkdomain_store_pgsql_worker},
                 {size, 5},
                 {max_overflow, 10}
             ],
-            try poolboy:start_link(PoolOpts, ConnOpts) of
+            try poolboy:start_link(PoolOpts, WorkerOpts) of
                 {ok, Pid} ->
-                    ?LLOG(notice, "connected to pool to ~s", [Ip2], State),
-                    PoolPids2 = case Ip of
-                        {127, _, _, _} ->
-                            [{Pid, Ip2}|PoolPids];
-                        _ ->
-                            PoolPids ++ [{Pid, Ip2}]
-                    end,
-                    start_pools(Rest, State#state{pool_pids=PoolPids2});
+                    ?LLOG(notice, "started pool '~s'", [Id], State),
+                    Pools2 = Pools#{Id => Pid},
+                    start_pools(Rest, State#state{pools=Pools2});
                 {error, Error} ->
-                    ?LLOG(warning, "could not start pool to ~s: ~p", [Ip2, Error], State),
+                    ?LLOG(warning, "could not start pool '~s': ~p", [Id, Error], State),
                     start_pools(Rest, State)
             catch
                 error:Error ->
-                    ?LLOG(warning, "could not start pool to ~s: ~p", [Ip2, Error], State),
+                    ?LLOG(warning, "could not start pool '~s': ~p", [Id, Error], State),
                     start_pools(Rest, State)
             end
     end.

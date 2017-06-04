@@ -37,6 +37,10 @@ get_pool(SrvId) ->
     nkdomain_store_pgsql_server:get_pool(SrvId).
 
 
+get_pool(SrvId, Pool) ->
+    nkdomain_store_pgsql_server:get_pool(SrvId, to_bin(Pool)).
+
+
 
 
 query(SrvId, Sql) ->

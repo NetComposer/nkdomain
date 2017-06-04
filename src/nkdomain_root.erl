@@ -83,11 +83,11 @@ start() ->
         false ->
             Spec1
     end,
-    Spec3 = case nkdomain_app:get(pgsql_url) of
+    Spec3 = case nkdomain_app:get(store_pgsql) of
         undefined ->
             Spec2;
         PgSqlUrl ->
-            Spec2#{domain_pgsql_url => PgSqlUrl}
+            Spec2#{nkdomain_store_pgsql => PgSqlUrl}
     end,
     case nkservice:start(root, Spec3) of
         {ok, _} ->
