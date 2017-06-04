@@ -33,9 +33,20 @@
 %% Public
 %% ===================================================================
 
-query(Pool, Sql) ->
-    Fun = fun(Worker) -> nkdomain_store_pgsql_worker:query(Worker, Sql) end,
-    poolboy:transaction(Pool, Fun).
+get_pool(SrvId) ->
+    nkdomain_store_pgsql_server:get_pool(SrvId).
+
+
+
+
+query(SrvId, Sql) ->
+    case get_pool(SrvId) of
+        {ok, Pid} ->
+            Fun = fun(Worker) -> nkdomain_store_pgsql_worker:query(Worker, Sql) end,
+            poolboy:transaction(Pid, Fun);
+        {error, Error} ->
+            {error, Error}
+    end.
 
 
 
@@ -83,7 +94,7 @@ create_base() ->
 
 
     ">>,
-    query(pgsql_pool, Sql).
+    query(root, Sql).
 
 
 insert_objs(Start, End) when Start < End ->

@@ -64,13 +64,15 @@ plugin_syntax() ->
     }.
 
 
-plugin_config(#{domain_pgsql_url:=Url}=Config, _Service) ->
+plugin_config(#{domain_pgsql_url:=Url}=Config, #{id:=SrvId}) ->
     #{
         domain_pgsql_url := Url
     } = Config,
     case nkpacket:parse_urls(pgsql, [tcp, tls], Url) of
         {ok, Conns} ->
-            {ok, Config#{domain_pgsql_conns=>Conns}};
+            ServerId1 = <<(nklib_util:to_binary(SrvId))/binary, "_store_pgsql">>,
+            ServerId2 = binary_to_atom(ServerId1, utf8),
+            {ok, Config#{domain_pgsql_conns=>Conns, domain_pgsql_server_id=>ServerId2}, ServerId2};
         {error, Error} ->
             {error, Error}
     end;
@@ -79,32 +81,10 @@ plugin_config(Config, _Service) ->
     {ok, Config}.
 
 
-plugin_start(#{domain_pgsql_conns:=Conns}=Config, #{id:=Id}) ->
+plugin_start(#{domain_pgsql_conns:=Conns, domain_pgsql_server_id:=Name}=Config, #{id:=SrvId}) ->
     Db = maps:get(domain_pgsql_database, Config, <<"nkobjects">>),
-    case Conns of
-        [{[{undefined, tcp, Ip, Port}|_], Opts}|_] ->
-            ConnOpts = [
-                {database, Db},
-                {host, nklib_util:to_host(Ip)},
-                {port, Port},
-                {user, maps:get(user, Opts, <<"root">>)},
-                {password, maps:get(password, Opts, <<"">>)},
-                %{connect_timeout, ConnectTimeout},
-                {as_binary, true}
-            ],
-            PoolOpts = [
-                {name, {local, pgsql_pool}},
-                {worker_module, nkdomain_store_pgsql_worker},
-                {size, 5},
-                {max_overflow, 10}
-            ],
-            Spec = poolboy:child_spec(pgsql_pool, PoolOpts, ConnOpts),
-            {ok, _} = nkservice_srv:start_proc(Id, Spec),
-            lager:error("NKLOG CONN1"),
-            {ok, Config};
-        _ ->
-            {ok, Config}
-    end;
+    {ok, _} = nkservice_srv:start_proc(SrvId, Name, nkdomain_store_pgsql_server, [SrvId, Name, Db, Conns]),
+    {ok, Config};
 
 plugin_start(Config, _Service) ->
     {ok, Config}.

@@ -43,7 +43,7 @@ query(Pid, Sql) ->
     case gen_server:call(Pid, {squery, Bin}, 60000) of
         {ok, List} ->
             Time = (nklib_util:l_timestamp() - Start) / 1000,
-            io:format("Q (~p): ~s\n", [Time, Bin]),
+            io:format("Q (~p ~p): ~s\n", [Time, Pid, Bin]),
             lists:map(
                 fun
                     ({error, Error}) ->
