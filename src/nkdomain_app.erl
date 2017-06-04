@@ -66,6 +66,7 @@ start(_Type, _Args) ->
         elastic_url => binary,
         elastic_user => binary,
         elastic_pass => binary,
+        pgsql_url => binary,
         listen_ip => binary,
         listen_port => integer,
         listen_secure => boolean,

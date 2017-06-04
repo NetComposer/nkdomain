@@ -19,7 +19,7 @@
 %% -------------------------------------------------------------------
 
 %% @doc Elasticsearch plugin
--module(nkdomain_store_sql).
+-module(nkdomain_store_pgsql).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -compile(export_all).
 
@@ -33,34 +33,12 @@
 %% Public
 %% ===================================================================
 
-connect() ->
-    Opts = [
-        {database, "system"},
-        {host, "127.0.0.1"},
-        {user, "root"},
-        {port, 26257},
-        {password, ""},
-        %{connect_timeout, ConnectTimeout},
-        {as_binary, true}
-    ],
-    {ok, P} = pgsql_proto:start(Opts),
-    put(pgsql, P),
-    P.
+query(Pool, Sql) ->
+    Fun = fun(Worker) -> nkdomain_store_pgsql_worker:query(Worker, Sql) end,
+    poolboy:transaction(Pool, Fun).
 
 
-connect2() ->
-    Opts = [
-        {database, "carlosj"},
-        {host, "127.0.0.1"},
-        {user, "carlosj"},
-        {port, 5432},
-        {password, ""},
-        %{connect_timeout, ConnectTimeout},
-        {as_binary, true}
-    ],
-    {ok, P} = pgsql_proto:start(Opts),
-    put(pgsql, P),
-    P.
+
 
 
 create_database() ->
@@ -68,13 +46,12 @@ create_database() ->
 
 
 create_base() ->
-%%    --DROP DATABASE IF EXISTS nkobjects;
-%%--CREATE DATABASE nkobjects;
-%%--SET DATABASE TO nkobjects
-%%--DROP TABLE IF EXISTS carlosj.object CASCADE;
-%%--DROP TABLE IF EXISTS carlosj.aliases CASCADE;
     Sql = <<"
-
+        DROP DATABASE IF EXISTS nkobjects;
+        CREATE DATABASE nkobjects;
+        SET DATABASE TO nkobjects;
+        DROP TABLE IF EXISTS nkobjects.object CASCADE;
+        DROP TABLE IF EXISTS nkobjects.aliases CASCADE;
 
         CREATE TABLE object (
             obj_id STRING PRIMARY KEY NOT NULL,
@@ -106,7 +83,7 @@ create_base() ->
 
 
     ">>,
-    query(Sql).
+    query(pgsql_pool, Sql).
 
 
 insert_objs(Start, End) when Start < End ->
