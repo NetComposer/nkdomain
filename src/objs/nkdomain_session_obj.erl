@@ -71,23 +71,18 @@ create(SrvId, UserId, Opts) ->
         _ ->
             Obj1
     end,
+    % If the API server stops, we will stop
+    % If we stop, it will be detected at nkdomain_callbacks:api_server_handle_info and the WS will be stopped
     Opts3 = case Opts2 of
         #{api_server_pid:=Pid1} ->
-            #{usage_link => {Pid1, nkdomain_session_api}};
+            #{usage_link => {Pid1, {?MODULE, api, Pid1}}};
             _ ->
                 #{}
     end,
     case nkdomain_obj_lib:make_and_create(SrvId, <<>>, Obj2, Opts3) of
-        {ok, Reply, Pid} ->
-            case Opts of
-                #{api_server_pid:=Pid2} ->
-                    % Register to keep the user awake
-                    ok = nkdomain_obj:link(UserId, usage, Pid, ?MODULE),
-                    %% TODO if the session is moved, it will fail
-                    ok = nkapi_server:register(Pid2, {?MODULE, Pid});
-                _ ->
-                    ok
-            end,
+        {ok, #{obj_id:=SessId2}=Reply, Pid} ->
+            % Register to keep the user awake
+            ok = nkdomain_obj:link(UserId, usage, Pid, {?MODULE, SessId2}),
             {ok, Reply, Pid};
         {error, Error} ->
             {error, Error}
