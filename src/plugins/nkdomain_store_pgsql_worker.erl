@@ -65,32 +65,21 @@ query(Pid, Sql) ->
 
 -record(state, {
     id :: binary(),
-    db :: binary(),
     pid :: pid()
 }).
 
 
 %% @doc
-start_link(Args) ->
-    gen_server:start_link(?MODULE, Args, []).
+start_link({Id, Conns}) ->
+    gen_server:start_link(?MODULE, {Id, Conns}, []).
 
 
 %% @private
-init(Args) ->
-    #{
-        id := Id,
-        database := Db,
-        conns := Conns
-    } = Args,
-    State = #state{
-        id = Id,
-        db = Db
-    },
-    Conn = get_conns(Conns, [], State),
-    {ok, Pid} = pgsql_proto:start_link(Conn),
-    Host = nklib_util:get_value(host, Conn),
+init({Id, Conns}) ->
+    Conns2 = nklib_util:randomize(Conns),
+    {Host, Pid} = do_connect(Conns2),
     lager:info("NkDOMAIN STORE PSQL (~s) starting connection (~s, ~p)", [Id, Host, self()]),
-    {ok, State#state{pid=Pid}}.
+    {ok, #state{id=Id, pid=Pid}}.
 
 
 %% @private
@@ -129,23 +118,14 @@ terminate(_Reason, _State) ->
 %% Util
 %% ===================================================================
 
-get_conns([], Acc, _State) ->
-    [Conn|_] = nklib_util:randomize(Acc),
-    Conn;
-
-get_conns([{[], _Opts}|Rest2], Acc, State) ->
-    get_conns(Rest2, Acc, State);
-
-get_conns([{[{undefined, tcp, Ip, Port}|Rest1], Opts}|Rest2], Acc, #state{db=Db}=State) ->
-    ConnOpts = [
-        {host, nklib_util:to_host(Ip)},
-        {port, Port},
-        {user, maps:get(user, Opts, <<"root">>)},
-        {password, maps:get(password, Opts, <<"">>)},
-        {database, Db},
-        %{connect_timeout, ConnectTimeout},
-        {as_binary, true}
-    ],
-    get_conns([{Rest1, Opts}|Rest2], [ConnOpts|Acc], State).
-
-
+%% @private
+do_connect([Conn|Rest]) ->
+    try pgsql_proto:start_link(Conn) of
+        {ok, Pid} ->
+            Host = nklib_util:get_value(host, Conn),
+            {Host, Pid};
+        {error, _Error} ->
+            do_connect(Rest)
+    catch
+        _:_ -> do_connect(Rest)
+    end.
