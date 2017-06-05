@@ -105,13 +105,36 @@ objects_table(Data) ->
                         icon => <<"refresh">>,
                         autowidth => true,
                         label => <<"Refresh">>,
-                        click => <<"function () {
+                        click => <<"function() {
                                     var grid = $$(\"objectsData\");
                                     grid.showProgress();
-                                    webix.delay(function () {
+                                    webix.delay(function() {
                                         grid.hideProgress();
                                     }, null, null, 300);
                                     }">>
+                    },
+                    #{},
+					#{
+                        view => <<"richselect">>,
+                        id => <<"order_filter">>,
+                        value => <<"all">>,
+                        maxWidth => 300,
+                        minWidth => 250,
+                        vertical => true,
+                        labelWidth => 110,
+                        options => [
+						    #{id => <<"all_domains">>, value => <<"All">>},
+						    #{id => <<"obj_id_1">>, value => <<"Domain1">>},
+						    #{id => <<"obj_id_2">>, value => <<"Domain2">>},
+						    #{id => <<"obj_id_3">>, value => <<"Domain3">>}
+					    ],
+                        label => <<"Filter domain">>,
+                        on => #{
+						    onChange => <<"function() {
+							    var val = this.getValue();
+							    console.log('Filter datatable: ' + val);
+                            }">>
+					    }
                     }
                 ]
             },
@@ -185,9 +208,8 @@ create_default_objects_table_data(Data) ->
                 header => [<<"Created Time">>, #{ content => <<"extendedFilter">> }],
                 fillspace => <<"1">>,
                 format => <<"function(value) {
-                        var date = new Date(value);
-                        var format = webix.Date.dateToStr('%Y-%m-%d %H:%i:%s.'+date.getMilliseconds());
-                        return format(new Date(value));
+                    //                                     'en-US', 'es-ES', etc.
+                    return (new Date(value)).toLocaleString();
                 }">>
             }
             %%
@@ -213,15 +235,15 @@ create_default_objects_table_data(Data) ->
         url => <<"wsProxy->">>,
         save => <<"wsProxy->">>,
         onClick => #{
-            <<"fa-eye">> => <<"function (e, id, node) {
+            <<"fa-eye">> => <<"function(e, id, node) {
                 console.log('Redirect user to the object selected: ' + id);
             }">>,
-            <<"fa-check">> => <<"function (e, id, node) {
+            <<"fa-check">> => <<"function(e, id, node) {
                 webix.confirm({
                     \"text\": \"This object will be disabled. <br/> Are you sure?\",
                     \"ok\": \"Yes\",
                     \"cancel\": \"Cancel\",
-                    \"callback\": function (res) {
+                    \"callback\": function(res) {
                         if (res) {
                             var item = webix.$$(\"objectsData\").getItem(id);
                             item.enabled = false;
@@ -231,12 +253,12 @@ create_default_objects_table_data(Data) ->
                     }
                 });
             }">>,
-            <<"fa-times">> => <<"function (e, id, node) {
+            <<"fa-times">> => <<"function(e, id, node) {
                 webix.confirm({
                     text: \"This object will be enabled. <br/> Are you sure?\",
                     ok: \"Yes\",
                     cancel: \"Cancel\",
-                    callback: function (res) {
+                    callback: function(res) {
                         if (res) {
                             var item = webix.$$(\"objectsData\").getItem(id);
                             item.enabled = true;
@@ -247,7 +269,7 @@ create_default_objects_table_data(Data) ->
                 });
             }">>
         },
-        ready => <<"function () {
+        ready => <<"function() {
             webix.extend(this, webix.ProgressBar);
         }">>,
         on => #{
