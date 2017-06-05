@@ -28,7 +28,7 @@
          handle_cast/2, handle_info/2]).
 
 
--define(CHECK_TIME, 5000).
+-define(CHECK_TIME, 10000).
 
 -define(LLOG(Type, Txt, Args, State),
     lager:Type("NkDOMAIN Store PGSQL Server (~p) "++Txt, [State#state.srv_id|Args])).
@@ -75,7 +75,7 @@ start_link(SrvId, Name, ConnMap) ->
     srv_id :: nkservice:id(),
     name :: atom(),
     pools = #{} :: #{Id::binary() => pid()},
-    conn_map = [] :: [{Id::binary(), Conn::list()}]
+    conn_map1 = [] :: [{Id::binary(), {Opts::map(), Conn::list()}}]
 }).
 
 
@@ -90,10 +90,10 @@ init([SrvId, Name, ConnMap]) ->
         srv_id = SrvId,
         name = Name,
         pools = #{},
-        conn_map = maps:to_list(ConnMap)
+        conn_map1 = maps:to_list(ConnMap)
     },
     process_flag(trap_exit, true),
-    % self() ! start_pools,
+    self() ! start_pools,
     {ok, State}.
 
 
@@ -128,7 +128,7 @@ handle_cast(Msg, State) ->
 -spec handle_info(term(), #state{}) ->
     {noreply, #state{}} | {stop, term(), #state{}}.
 
-handle_info(start_pools, #state{conn_map=ConnMap}=State) ->
+handle_info(start_pools, #state{conn_map1=ConnMap}=State) ->
     State2 = start_pools(ConnMap, State),
     erlang:send_after(?CHECK_TIME, self(), start_pools),
     {noreply, State2};
@@ -174,33 +174,71 @@ terminate(_Reason, _State) ->
 start_pools([], State) ->
     State;
 
-start_pools([{Id, Conns}|Rest], #state{pools=Pools}=State) ->
+start_pools([{Id, {Opts, Conns}}|Rest], #state{pools=Pools} = State) ->
     case maps:is_key(Id, Pools) of
         true ->
             start_pools(Rest, State);
         false ->
-            WorkerOpts = #{
-                id => Id,
-                database => ?DB,
-                conns => Conns
-            },
-            PoolOpts = [
-                {worker_module, nkdomain_store_pgsql_worker},
-                {size, 5},
-                {max_overflow, 10}
-            ],
-            try poolboy:start_link(PoolOpts, WorkerOpts) of
-                {ok, Pid} ->
-                    ?LLOG(notice, "started pool '~s'", [Id], State),
-                    Pools2 = Pools#{Id => Pid},
-                    start_pools(Rest, State#state{pools=Pools2});
-                {error, Error} ->
-                    ?LLOG(warning, "could not start pool '~s': ~p", [Id, Error], State),
-                    start_pools(Rest, State)
+            SqlConns = get_conns(?DB, Conns, []),
+            try
+                case test_connect(SqlConns) of
+                    ok ->
+                        PoolOpts = [
+                            {worker_module, nkdomain_store_pgsql_worker},
+                            {size, maps:get(pool_size, Opts, 5)},
+                            {max_overflow, maps:get(pool_overflow, Opts, 10)}
+                        ],
+                        {ok, Pid} = poolboy:start_link(PoolOpts, {Id, SqlConns}),
+                        ?LLOG(notice, "started pool '~s'", [Id], State),
+                        Pools2 = Pools#{Id => Pid},
+                        start_pools(Rest, State#state{pools=Pools2});
+                    {error, Error} ->
+                        ?LLOG(warning, "could not start pool '~s': ~p", [Id, Error], State),
+                        start_pools(Rest, State)
+                end
             catch
-                error:Error ->
-                    ?LLOG(warning, "could not start pool '~s': ~p", [Id, Error], State),
+                error:CError ->
+                    ?LLOG(warning, "could not start pool '~s': ~p", [Id, CError], State),
                     start_pools(Rest, State)
             end
     end.
 
+
+
+%% @private
+get_conns(_Db, [], Acc) ->
+    Acc;
+
+get_conns(Db, [{[], _Opts}|Rest2], Acc) ->
+    get_conns(Db, Rest2, Acc);
+
+get_conns(Db, [{[{undefined, tcp, Ip, Port}|Rest1], Opts}|Rest2], Acc) ->
+    ConnOpts = [
+        {host, nklib_util:to_host(Ip)},
+        {port, Port},
+        {user, maps:get(user, Opts, <<"root">>)},
+        {password, maps:get(password, Opts, <<"">>)},
+        {database, Db},
+        %{connect_timeout, ConnectTimeout},
+        {as_binary, true}
+    ],
+    get_conns(Db, [{Rest1, Opts}|Rest2], [ConnOpts|Acc]).
+
+
+%% @private
+test_connect([]) ->
+    {error, no_connections};
+
+test_connect([Conn|Rest]) ->
+    case pgsql_proto:start(Conn) of
+        {ok, Pid} ->
+            gen_server:call(Pid, terminate),
+            ok;
+        {error, Error} ->
+            case Rest of
+                [] ->
+                    {error, Error};
+                _ ->
+                    test_connect(Rest)
+            end
+    end.

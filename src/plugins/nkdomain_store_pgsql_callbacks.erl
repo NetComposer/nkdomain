@@ -63,6 +63,8 @@ plugin_syntax() ->
             {list, #{
                 id => binary,
                 url => binary,
+                pool_size => {integer, 1, none},
+                pool_overflow => {integer, 1, none},
                 '__mandatory' => [url]
             }}
     }.
@@ -70,9 +72,9 @@ plugin_syntax() ->
 
 plugin_config(#{nkdomain_store_pgsql:=List}=Config, #{id:=SrvId}) ->
     case parse_stores(List, #{}) of
-        {ok, ConnMap} ->
+        {ok, ParsedMap} ->
             ServerId = nklib_util:to_atom(<<(nklib_util:to_binary(SrvId))/binary, "_nkdomain_store_pgsql">>),
-            {ok, Config#{nkdomain_store_pgsql_stores=>{ServerId, ConnMap}}, ServerId};
+            {ok, Config#{nkdomain_store_pgsql_stores=>{ServerId, ParsedMap}}, ServerId};
         {error, Error} ->
             {error, Error}
     end;
@@ -81,8 +83,8 @@ plugin_config(Config, _Service) ->
     {ok, Config}.
 
 
-plugin_start(#{nkdomain_store_pgsql_stores:={ServerId, ConnMap}}=Config, #{id:=SrvId}) ->
-    {ok, _} = nkservice_srv:start_proc(SrvId, ServerId, nkdomain_store_pgsql_server, [SrvId, ServerId, ConnMap]),
+plugin_start(#{nkdomain_store_pgsql_stores:={ServerId, ParsedMap}}=Config, #{id:=SrvId}) ->
+    {ok, _} = nkservice_srv:start_proc(SrvId, ServerId, nkdomain_store_pgsql_server, [SrvId, ServerId, ParsedMap]),
     {ok, Config};
 
 plugin_start(Config, _Service) ->
@@ -114,7 +116,7 @@ parse_stores([#{url:=Url}=Map|Rest], Acc) ->
             Id = maps:get(id, Map, <<"main">>),
             case maps:is_key(Id, Acc) of
                 false ->
-                    parse_stores(Rest, Acc#{Id=>Conns});
+                    parse_stores(Rest, Acc#{Id=>{Map, Conns}});
                 true ->
                     {error, duplicated_id}
             end;

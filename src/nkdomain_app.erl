@@ -66,11 +66,7 @@ start(_Type, _Args) ->
         elastic_url => binary,
         elastic_user => binary,
         elastic_pass => binary,
-        store_pgsql =>  {list, #{
-            id => binary,
-            url => binary,
-            '__mandatory' => [url]
-        }},
+        store_pgsql =>  any,
         listen_ip => binary,
         listen_port => integer,
         listen_secure => boolean,
