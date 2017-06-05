@@ -23,8 +23,8 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -behaviour(gen_server).
 
--export([get_module/1, get_modules/0, get_submodule/2]).
--export([get_type/1, get_types/0, get_subtype/1]).
+-export([get_module/1, get_all_modules/0]).
+-export([get_type/1, get_all_types/0, get_subtypes/1]).
 -export([register/1]).
 -export([get_counters/0, get_counters/1, get_global_counters/0, get_global_counters/1]).
 -export([start_link/0]).
@@ -49,33 +49,27 @@
 
 
 %% @doc Finds a type's module
--spec get_module(nkdomain:type()) ->
+-spec get_module(nkdomain:type()|{nkdomain:type(), nkdomain:subtype()}) ->
     module() | undefined.
 
-get_module(Type) when is_binary(Type) ->
-    lookup({type, Type}, undefined);
+get_module({Type, SubType}) ->
+    lookup({subtype, to_bin(Type), to_bin(SubType)});
 
 get_module(Type) ->
-    get_module(to_bin(Type)).
+    case lookup({type, to_bin(Type)}) of
+        undefined ->
+            undefined;
+        {Module, _SubTypes} ->
+            Module
+    end.
 
 
 %% @doc Gets all registered modules
--spec get_modules() ->
+-spec get_all_modules() ->
     [module()].
 
-get_modules() ->
+get_all_modules() ->
     lookup(all_modules, []).
-
-
-%% @doc Finds a subtype's module
--spec get_submodule(nkdomain:type(), nkdomain:subtype()) ->
-    module() | undefined.
-
-get_submodule(Type, SubType) when is_binary(Type), is_binary(SubType) ->
-    lookup({subtype, Type, SubType}, undefined);
-
-get_submodule(Type, SubType) ->
-    get_submodule(to_bin(Type), to_bin(SubType)).
 
 
 %% @doc Finds a module's type
@@ -83,29 +77,27 @@ get_submodule(Type, SubType) ->
     nkdomain:type() | {nkdomain:type(), nkdomain:subtype()} | undefined.
 
 get_type(Module) ->
-    case lookup({module, Module}, undefined) of
-        Type when is_binary(Type) -> Type;
-        _ -> undefined
-    end.
+    lookup({module, Module}).
 
 
 %% @doc Gets all registered types
--spec get_types() ->
+-spec get_all_types() ->
     [nkdomain:type()].
 
-get_types() ->
+get_all_types() ->
     lookup(all_types, []).
 
 
 %% @doc Finds a module's type
--spec get_subtype(module()) ->
-    nkdomain:type() | {nkdomain:type(), nkdomain:subtype()} | undefined.
+-spec get_subtypes(nkdomain:type()) ->
+    [nkdomain:subtype()] | undefined.
 
-get_subtype(Module) ->
-    case lookup({module, Module}, undefined) of
-        {Type, SubType} -> {Type, SubType};
-        _ -> undefined
+get_subtypes(Type) ->
+    case lookup({type, to_bin(Type)}) of
+        undefined -> undefined;
+        {_Module, SubTypes} -> SubTypes
     end.
+
 
 
 %% @doc Gets the obj module for a type or subtype
@@ -117,14 +109,14 @@ register(Module) ->
     Type2 = to_bin(Type),
     % Ensure we have the corresponding atom loaded
     _ = binary_to_atom(Type2, utf8),
-    Module2 = maps:get(module, Info, Module),
+    % Module2 = maps:get(module, Info, Module),
     case maps:find(subtype, Info) of
         error ->
-            gen_server:call(?MODULE, {register_type, Type2, Module2});
+            gen_server:call(?MODULE, {register_type, Type2, Module});
         {ok, SubType} ->
             SubType2 = to_bin(SubType),
             _ = binary_to_atom(SubType2, utf8),
-            gen_server:call(?MODULE, {register_subtype, Type2, SubType2, Module2})
+            gen_server:call(?MODULE, {register_subtype, Type2, SubType2, Module})
     end.
 
 
@@ -144,7 +136,7 @@ get_global_counters(Domain) ->
 
 %% @private
 do_get_counters(Global) ->
-    Modules = get_modules(),
+    Modules = get_all_modules(),
     lists:foldl(
         fun(Module, Acc) ->
             {ok, Counters} = case Global of
@@ -167,7 +159,7 @@ do_get_counters(Global) ->
 
 %% @private
 do_get_counters(Domain, Global) ->
-    Modules = get_modules(),
+    Modules = get_all_modules(),
     lists:foldl(
         fun(Module, Acc) ->
             {ok, Counter} = case Global of
@@ -198,7 +190,7 @@ start_link() ->
 -type ets() ::
     {all_modules, [module()]} |
     {all_types, [nkdomain:type()]} |
-    {{type, nkdomain:type()}, module()} |
+    {{type, nkdomain:type()}, {module(), [nkdomain:subtype()]}} |
     {{subtype, nkdomain:type(), nkdomain:subtype()}, module()} |
     {{module, module()}, nkdomain:type()} |
     {{module, module()}, {nkdomain:type(), nkdomain:subtype()}}.
@@ -228,34 +220,13 @@ init([]) ->
     {noreply, #state{}} | {reply, term(), #state{}} |
     {stop, Reason::term(), #state{}} | {stop, Reason::term(), Reply::term(), #state{}}.
 
-handle_call({register_type, Type, Module}, _From, #state{types=Types}=State) ->
-    AllModules1 = get_modules(),
-    AllModules2 = lists:usort([Module|AllModules1]),
-    AllTypes1 = get_types(),
-    AllTypes2 = lists:usort([Type|AllTypes1]),
-    ets:insert(?MODULE, [
-        {all_modules, AllModules2},
-        {all_types, AllTypes2},
-        {{type, Type}, Module},
-        {{module, Module}, Type}
-    ]),
-    State2 = case maps:is_key(Type, Types) of
-        false ->
-            {ok, _} = nkdomain_types_sup:add_type(Module),
-            Types2 = Types#{Type=>Module},
-            State#state{types=Types2};
-        true ->
-            State
-    end,
+handle_call({register_type, Type, Module}, _From, State) ->
+    State2 = register_type(Type, Module, State),
     {reply, ok, State2};
 
 handle_call({register_subtype, Type, SubType, Module}, _From, State) ->
-    ets:insert(?MODULE, [
-        {{subtype, Type, SubType}, Module},
-        {{module, Module}, {Type, SubType}}
-    ]),
-    {reply, ok, State};
-
+    Reply = register_subtype(Type, SubType, Module),
+    {reply, Reply, State};
 
 handle_call(Msg, _From, State) ->
     lager:error("Module ~p received unexpected call ~p", [?MODULE, Msg]),
@@ -302,10 +273,53 @@ terminate(_Reason, _State) ->
 %% ===================================================================
 
 %% @private
-lookup(Term, Empty) ->
+lookup(Term) ->
+    lookup(Term, undefined).
+
+
+%% @private
+lookup(Term, Default) ->
     case ets:lookup(?MODULE, Term) of
-        [] -> Empty;
+        [] -> Default;
         [{_, Val}] -> Val
+    end.
+
+
+%% @private
+register_type(Type, Module, #state{types=Types}=State) ->
+    AllModules1 = get_all_modules(),
+    AllModules2 = lists:usort([Module|AllModules1]),
+    AllTypes1 = get_all_types(),
+    AllTypes2 = lists:usort([Type|AllTypes1]),
+    ets:insert(?MODULE, [
+        {all_modules, AllModules2},
+        {all_types, AllTypes2},
+        {{type, Type}, {Module, []}},
+        {{module, Module}, Type}
+    ]),
+    case maps:is_key(Type, Types) of
+        false ->
+            {ok, _} = nkdomain_types_sup:add_type(Module),
+            Types2 = Types#{Type=>Module},
+            State#state{types=Types2};
+        true ->
+            State
+    end.
+
+
+%% @private
+register_subtype(Type, SubType, Module) ->
+    case lookup({type, Type}, []) of
+        [] ->
+            {error, unknown_type};
+        {TypeModule, SubTypes} ->
+            SubTypes2 = lists:usort([SubType|SubTypes]),
+            ets:insert(?MODULE, [
+                {{type, Type}, {TypeModule, SubTypes2}},
+                {{subtype, Type, SubType}, Module},
+                {{module, Module}, {Type, SubType}}
+            ]),
+            ok
     end.
 
 

@@ -27,6 +27,8 @@
          api_server_reg_down/3]).
 -export([nkservice_rest_http/5]).
 -export([admin_tree_categories/2, admin_tree_get_category/2, admin_event/3, admin_element_action/5]).
+-export([object_store_read_id/3, object_store_read_path/3, object_store_save/1]).
+
 -export([object_mapping/0, object_syntax/1, object_parse/3, object_unparse/1]).
 -export([object_load/2, object_get_session/1, object_save/1, object_delete/1, object_archive/1]).
 -export([object_admin_info/1, object_get_counter/2]).
@@ -203,7 +205,7 @@ object_mapping() ->
         path => #{type => keyword},
         parent_id => #{type => keyword},
         referred_id => #{type => keyword},
-        subtype => #{type => keyword},
+        subtypes => #{type => keyword},
         created_by => #{type => keyword},
         created_time => #{type => date},
         updated_by => #{type => keyword},
@@ -211,6 +213,7 @@ object_mapping() ->
         enabled => #{type => boolean},
         active => #{type => boolean},
         expires_time => #{type => date},
+        destroyed => #{type => boolean},
         destroyed_time => #{type => date},
         destroyed_code => #{type => keyword},
         destroyed_reason => #{type => keyword},
@@ -241,15 +244,16 @@ object_syntax(load) ->
         path => binary,
         parent_id => binary,
         referred_id => binary,
-        subtype => binary,
+        subtypes => {list, binary},
         created_by => binary,
         created_time => integer,
         updated_by => binary,
         updated_time => integer,
         parent_id => binary,
         enabled => boolean,
-        active => boolean,                    % Must be loaded
+        active => boolean,                    % Must be loaded to exist
         expires_time => integer,
+        destroyed => boolean,
         destroyed_time => integer,
         destroyed_code => binary,
         destroyed_reason => binary,
@@ -274,6 +278,35 @@ object_syntax(update) ->
         icon_id => binary,
         icon_content_type => binary
     }.
+
+%% @doc Reads an object from database, using its ObjId
+%% Must return a parsed object
+%% Opts: {field, [atom()|binary()]
+object_store_read_id(_SrvId, _ObjId, _Meta) ->
+    {error, not_implemented}.
+
+
+%% @doc Reads an object from database, using its Path
+%% Must return a parsed object
+%% Opts: {field, [atom()|binary()]
+object_store_read_path(_SrvId, _Path, _Meta) ->
+    {error, not_implemented}.
+
+
+%% @doc Saves an object to backend
+%%
+
+object_store_save(_Session) ->
+    {error, not_implemented}.
+
+
+
+
+
+
+
+
+
 
 
 

@@ -55,7 +55,7 @@ start() ->
     BaseHttp = <<Http/binary, "://", ListenIp/binary, ":", ListenPort/binary>>,
     BaseWs = <<Ws/binary, "://", ListenIp/binary, ":", ListenPort/binary>>,
     Spec1 = #{
-        plugins => [nkdomain, nkapi, nkchat, nkdomain_store_es, nkadmin,
+        plugins => [nkdomain, nkapi, nkchat, nkdomain_store_es, nkdomain_store_pgsql, nkadmin,
                     nkmail_smtp_client, nkfile_filesystem, nkfile_s3, nkservice_rest, nkservice_webserver],
         domain => <<"root">>,
         domain_elastic_url => nkdomain_app:get(elastic_url),
@@ -83,7 +83,13 @@ start() ->
         false ->
             Spec1
     end,
-    case nkservice:start(root, Spec2) of
+    Spec3 = case nkdomain_app:get(store_pgsql) of
+        undefined ->
+            Spec2;
+        PgSqlUrl ->
+            Spec2#{nkdomain_store_pgsql => PgSqlUrl}
+    end,
+    case nkservice:start(root, Spec3) of
         {ok, _} ->
             lager:info("Root service started: ~p", [Spec2]);
         {error, Error} ->

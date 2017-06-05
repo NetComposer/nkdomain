@@ -22,7 +22,7 @@
 -module(nkdomain_store_es_callbacks).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([plugin_deps/0, plugin_syntax/0, plugin_defaults/0, plugin_config/2]).
+-export([plugin_deps/0, plugin_syntax/0, plugin_config/2]).
 -export([object_store_reload_types/1, object_store_read_raw/2, object_store_save_raw/3,
          object_store_delete_raw/2]).
 -export([object_store_find_obj/2,
@@ -81,19 +81,15 @@ plugin_syntax() ->
         domain_elastic_alias => binary,
         domain_elastic_obj_type => binary,
         domain_elastic_replicas => {integer, 0, 3},
-        domain_elastic_archive_index =>  binary
-    }.
-
-
-plugin_defaults() ->
-    #{
-        domain_elastic_url => <<"http://localhost:9200">>,
-        domain_elastic_index => ?ES_INDEX,
-        domain_elastic_alias => ?ES_ALIAS,
-        domain_elastic_obj_type => ?ES_TYPE,
-        domain_elastic_replicas => 2,
-        domain_elastic_archive_index => ?ES_ARCHIVE_INDEX
-    }.
+        domain_elastic_archive_index =>  binary,
+        '__defaults' => #{
+            domain_elastic_url => <<"http://localhost:9200">>,
+            domain_elastic_index => ?ES_INDEX,
+            domain_elastic_alias => ?ES_ALIAS,
+            domain_elastic_obj_type => ?ES_TYPE,
+            domain_elastic_replicas => 2,
+            domain_elastic_archive_index => ?ES_ARCHIVE_INDEX
+        }}.
 
 
 plugin_config(Config, _Service) ->
@@ -284,8 +280,8 @@ get_mappings(SrvId, Index) ->
         #{
             domain_elastic_index := Index
         } ->
-            lager:info("Installed types: ~p", [nkdomain_all_types:get_types()]),
-            Modules = nkdomain_all_types:get_modules(),
+            lager:info("Installed types: ~p", [nkdomain_all_types:get_all_types()]),
+            Modules = nkdomain_all_types:get_all_modules(),
             Base = SrvId:object_mapping(),
             lists:foldl(
                 fun(Module, Acc) ->
