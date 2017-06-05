@@ -267,7 +267,7 @@ store_file(Id, Body) ->
         ok ->
             ok;
         {error, Error} ->
-            lager:warning("file ~s write error: ~p", [Error]),
+            lager:warning("file ~s write error: ~p", [Path, Error]),
             {error, file_write_error}
     end.
 
@@ -279,7 +279,7 @@ get_file(Id) ->
         {ok, Body} ->
             {ok, Body};
         {error, Error} ->
-            lager:warning("file ~s read error: ~p", [Error]),
+            lager:warning("file ~s read error: ~p", [Path, Error]),
             {error, file_read_error}
     end.
 
