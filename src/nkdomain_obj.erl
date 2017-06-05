@@ -495,6 +495,7 @@ do_init(ObjIdExt, Meta) ->
     end,
     case Meta of
         #{usage_link:={Id1, Tag1}} ->
+            % Id1 is Orig, we are Dest
             % We will receive {received_link, Tag}
             % If they die, we receive {received_link_down, Tag}
             % If we die, they receive {sent_link_down, Tag}

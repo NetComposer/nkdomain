@@ -24,7 +24,7 @@
 -export([plugin_deps/0, plugin_syntax/0, plugin_config/2]).
 -export([service_init/2, service_handle_cast/2, service_handle_info/2]).
 -export([error/1, service_api_syntax/2, service_api_allow/2, service_api_cmd/2, api_server_http_auth/2,
-         api_server_reg_down/3]).
+         api_server_handle_info/2]).
 -export([nkservice_rest_http/5]).
 -export([admin_tree_categories/2, admin_tree_get_category/2, admin_event/3, admin_element_action/5]).
 -export([object_store_read_id/3, object_store_read_path/3, object_store_save/1]).
@@ -852,12 +852,12 @@ service_api_cmd(_Req, _State) ->
     continue.
 
 
-%% @private
-api_server_reg_down({nkdomain_session_obj, _Pid}, _Reason, State) ->
-    {stop, normal, State};
-
-api_server_reg_down(_Link, _Reason, _State) ->
-    continue.
+%%%% @private
+%%api_server_reg_down({nkdomain_session_obj, _Pid}, _Reason, State) ->
+%%    {stop, normal, State};
+%%
+%%api_server_reg_down(_Link, _Reason, _State) ->
+%%    continue.
 
 %% @doc
 api_server_http_auth(#nkreq{cmd = <<"objects/user/login">>}, _HttpReq) ->
@@ -877,7 +877,13 @@ api_server_http_auth(_Req, HttpReq) ->
             {error, missing_auth_header}
     end.
 
+%% @doc
+api_server_handle_info({nkdist, {sent_link_down, Link}}, State) ->
+    nkapi_server:stop(self(), {sent_link_down, Link}),
+    {ok, State};
 
+api_server_handle_info(_Info, _State) ->
+    continue.
 
 
 %% ===================================================================
