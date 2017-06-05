@@ -114,27 +114,27 @@ objects_table(Data) ->
                                     }">>
                     },
                     #{},
-					#{
-                        view => <<"richselect">>,
-                        id => <<"order_filter">>,
-                        value => <<"all">>,
-                        maxWidth => 300,
-                        minWidth => 250,
-                        vertical => true,
-                        labelWidth => 110,
-                        options => [
-						    #{id => <<"all_domains">>, value => <<"All">>},
-						    #{id => <<"obj_id_1">>, value => <<"Domain1">>},
-						    #{id => <<"obj_id_2">>, value => <<"Domain2">>},
-						    #{id => <<"obj_id_3">>, value => <<"Domain3">>}
-					    ],
-                        label => <<"Filter domain">>,
-                        on => #{
-						    onChange => <<"function() {
-							    var val = this.getValue();
-							    console.log('Filter datatable: ' + val);
-                            }">>
-					    }
+                    #{
+                        view => <<"layout">>,
+                        cols => [
+                            #{
+                                view => <<"label">>,
+                                autowidth => true, % This label is defined separately to be able to set its width to 'autowidth'
+                                label => <<"Show subdomains: ">>,
+                                align => <<"right">>
+                            },
+        					#{
+                                view => <<"checkbox">>,
+                                name => <<"show_subdomains_checkbox">>,
+                                width => 20,
+                                value => 1,
+                                on => #{
+                                    onChange => <<"function() {
+                                                    console.log('Checkbox value: ' + this.getValue());
+                                                    }">>
+                                }
+                            }
+                        ]
                     }
                 ]
             },
