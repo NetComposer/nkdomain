@@ -27,10 +27,10 @@
 -export([object_get_info/0, object_mapping/0, object_parse/3,
          object_api_syntax/2, object_api_allow/3, object_api_cmd/3]).
 
--include_lib("nkmail/include/nkmail.hrl").
+-include_lib("nkdomain.hrl").
 
 -define(LLOG(Type, Txt, Args),
-    lager:Type("NkDOMAIN Config "++Txt, Args)).
+    lager:Type("NkDOMAIN Mail "++Txt, Args)).
 
 
 %% ===================================================================
@@ -52,7 +52,7 @@
 %% @private
 object_get_info() ->
     #{
-        type => ?MAIL_MAIL
+        type => ?DOMAIN_MAIL
     }.
 
 

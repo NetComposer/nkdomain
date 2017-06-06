@@ -75,9 +75,11 @@ load_providers() ->
     lists:foreach(
         fun(Id) ->
             Provider = nkmail_app:get_provider(Id),
-            case create(root, Id, #{type=>?DOMAIN_CONFIG, ?MAIL_CONFIG=>Provider}) of
-                {ok, ObjId, _Path, _Pid} ->
-                    ?LLOG(info, "Loaded provider ~s (~s)", [Id, ObjId]);
+            case create(root, Id, #{type=>?DOMAIN_MAIL_CONFIG, parent_id=>root, ?DOMAIN_MAIL_CONFIG=>Provider}) of
+                {ok, #{obj_id:=ObjId, path:=Path}, _Pid} ->
+                    ?LLOG(info, "Loaded provider ~s (~s)", [Path, ObjId]);
+                {error, object_already_exists} ->
+                    ?LLOG(info, "Provider ~s already loaded", [Id]);
                 {error, Error} ->
                     ?LLOG(warning, "Could not load provider ~s: ~p", [Id, Error])
             end
@@ -97,8 +99,8 @@ load_providers() ->
 %% @private
 object_get_info() ->
     #{
-        type => ?DOMAIN_CONFIG,
-        subtype => ?MAIL_CONFIG
+        type => ?DOMAIN_MAIL_CONFIG,
+        subtype => [?DOMAIN_CONFIG]
     }.
 
 
@@ -109,8 +111,8 @@ object_mapping() ->
 
 %% @private
 object_parse(SrvId, _Mode, Obj) ->
-    #{path:=Path, ?MAIL_CONFIG:=Config} = Obj,
-    case nkmail:parse_provider(SrvId, Config#{id=>Path}) of
+    #{path:=Path, ?DOMAIN_MAIL_CONFIG:=Config} = Obj,
+    case nkmail:parse_provider(SrvId, Config#{id=>Path}, #{path=>?DOMAIN_MAIL_CONFIG}) of
         {ok, Provider} ->
             {type_obj, Provider};
         {error, Error} ->
@@ -120,7 +122,7 @@ object_parse(SrvId, _Mode, Obj) ->
 
 %% @private
 object_api_syntax(Cmd, Syntax) ->
-    nkdomain_obj_syntax:syntax(Cmd, ?MAIL_CONFIG, Syntax).
+    nkdomain_obj_syntax:syntax(Cmd, ?DOMAIN_MAIL_CONFIG, Syntax).
 
 
 %% @private
@@ -129,7 +131,7 @@ object_api_allow(_Cmd, _Req, State) ->
 
 
 object_api_cmd(Cmd, Req, State) ->
-    nkdomain_obj_api:api(Cmd, ?MAIL_CONFIG, Req, State).
+    nkdomain_obj_api:api(Cmd, ?DOMAIN_MAIL_CONFIG, Req, State).
 
 
 
