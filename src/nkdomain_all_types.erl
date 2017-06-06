@@ -24,7 +24,7 @@
 -behaviour(gen_server).
 
 -export([get_module/1, get_all_modules/0]).
--export([get_type/1, get_all_types/0, get_subtypes/1]).
+-export([get_type/1, get_all_types/0]).
 -export([register/1]).
 -export([get_counters/0, get_counters/1, get_global_counters/0, get_global_counters/1]).
 -export([start_link/0]).
@@ -49,19 +49,11 @@
 
 
 %% @doc Finds a type's module
--spec get_module(nkdomain:type()|{nkdomain:type(), nkdomain:subtype()}) ->
+-spec get_module(nkdomain:type()) ->
     module() | undefined.
 
-get_module({Type, SubType}) ->
-    lookup({subtype, to_bin(Type), to_bin(SubType)});
-
 get_module(Type) ->
-    case lookup({type, to_bin(Type)}) of
-        undefined ->
-            undefined;
-        {Module, _SubTypes} ->
-            Module
-    end.
+    lookup({type, to_bin(Type)}).
 
 
 %% @doc Gets all registered modules
@@ -74,7 +66,7 @@ get_all_modules() ->
 
 %% @doc Finds a module's type
 -spec get_type(module()) ->
-    nkdomain:type() | {nkdomain:type(), nkdomain:subtype()} | undefined.
+    nkdomain:type() | undefined.
 
 get_type(Module) ->
     lookup({module, Module}).
@@ -88,36 +80,16 @@ get_all_types() ->
     lookup(all_types, []).
 
 
-%% @doc Finds a module's type
--spec get_subtypes(nkdomain:type()) ->
-    [nkdomain:subtype()] | undefined.
-
-get_subtypes(Type) ->
-    case lookup({type, to_bin(Type)}) of
-        undefined -> undefined;
-        {_Module, SubTypes} -> SubTypes
-    end.
-
-
-
-%% @doc Gets the obj module for a type or subtype
+%% @doc Gets the obj module for a type
 -spec register(module()) ->
     ok.
 
 register(Module) ->
-    #{type:=Type} = Info = Module:object_get_info(),
+    #{type:=Type} = Module:object_get_info(),
     Type2 = to_bin(Type),
     % Ensure we have the corresponding atom loaded
     _ = binary_to_atom(Type2, utf8),
-    % Module2 = maps:get(module, Info, Module),
-    case maps:find(subtype, Info) of
-        error ->
-            gen_server:call(?MODULE, {register_type, Type2, Module});
-        {ok, SubType} ->
-            SubType2 = to_bin(SubType),
-            _ = binary_to_atom(SubType2, utf8),
-            gen_server:call(?MODULE, {register_subtype, Type2, SubType2, Module})
-    end.
+    gen_server:call(?MODULE, {register_type, Type2, Module}).
 
 
 get_counters() ->
@@ -190,10 +162,8 @@ start_link() ->
 -type ets() ::
     {all_modules, [module()]} |
     {all_types, [nkdomain:type()]} |
-    {{type, nkdomain:type()}, {module(), [nkdomain:subtype()]}} |
-    {{subtype, nkdomain:type(), nkdomain:subtype()}, module()} |
-    {{module, module()}, nkdomain:type()} |
-    {{module, module()}, {nkdomain:type(), nkdomain:subtype()}}.
+    {{type, nkdomain:type()}, module()} |
+    {{module, module()}, nkdomain:type()}.
 
 -record(type, {
 
@@ -223,10 +193,6 @@ init([]) ->
 handle_call({register_type, Type, Module}, _From, State) ->
     State2 = register_type(Type, Module, State),
     {reply, ok, State2};
-
-handle_call({register_subtype, Type, SubType, Module}, _From, State) ->
-    Reply = register_subtype(Type, SubType, Module),
-    {reply, Reply, State};
 
 handle_call(Msg, _From, State) ->
     lager:error("Module ~p received unexpected call ~p", [?MODULE, Msg]),
@@ -294,7 +260,7 @@ register_type(Type, Module, #state{types=Types}=State) ->
     ets:insert(?MODULE, [
         {all_modules, AllModules2},
         {all_types, AllTypes2},
-        {{type, Type}, {Module, []}},
+        {{type, Type}, Module},
         {{module, Module}, Type}
     ]),
     case maps:is_key(Type, Types) of
@@ -304,22 +270,6 @@ register_type(Type, Module, #state{types=Types}=State) ->
             State#state{types=Types2};
         true ->
             State
-    end.
-
-
-%% @private
-register_subtype(Type, SubType, Module) ->
-    case lookup({type, Type}, []) of
-        [] ->
-            {error, unknown_type};
-        {TypeModule, SubTypes} ->
-            SubTypes2 = lists:usort([SubType|SubTypes]),
-            ets:insert(?MODULE, [
-                {{type, Type}, {TypeModule, SubTypes2}},
-                {{subtype, Type, SubType}, Module},
-                {{module, Module}, {Type, SubType}}
-            ]),
-            ok
     end.
 
 
