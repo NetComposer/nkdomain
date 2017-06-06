@@ -30,27 +30,38 @@
 -define(ADD_TO_OBJ_DEEP(Update, Obj), nklib_util:map_merge(Update, Obj)).
 -define(REMOVE_FROM_OBJ(Key, Obj), maps:remove(Key, Obj)).
 
--record(obj_session, {
-    type :: binary(),
+
+-define(NKOBJ, nkobj_v1).
+
+-record(nkobj_v1, {
+    srv_id :: nkservice:id(),
     obj_id :: nkdomain:obj_id(),
     path :: nkdomain:path(),
+    type :: nkdomain:type(),
     module :: module(),
-    name :: nkdomain:name(),
     parent_id :: nkdomain:obj_id(),
+    name :: nkdomain:name(),
+    object_info :: nkdomain_obj:object_info(),
     obj :: nkdomain:obj(),
-    srv_id :: nkservice:id(),
     is_dirty :: boolean(),
     is_enabled :: boolean(),
     is_created :: boolean(),
+    started :: nklib_util:m_timestamp(),
+    childs :: #{nkdomain:type() => #{nkdomain:name() => nkdomain:obj_id()}},
+    usage_links :: nklib_links:links(),
+    event_links :: nklib_links:links(),
+    link_usages = #{} :: #{term() => ok},
+    link_events = [] :: [term()],
     status :: nkdomain_obj:status(),
     meta :: map(),                      % Object load metadata
     data :: term(),                     % Type-specific metadata
-    started :: nklib_util:m_timestamp(),
-    childs :: #{nkdomain:type() => #{nkdomain:name() => nkdomain:obj_id()}},
-    link_usages = #{} :: #{term() => ok},
-    link_events = [] :: [term()]
-
+    stop_reason = false :: false | nkservice:error(),
+    timer :: reference(),
+    timelog = [] :: [map()],
+    wait_save = [] :: [{pid(), term()}],
+    moved_to :: undefined | pid()
 }).
+
 
 -record(obj_id_ext, {
     srv_id :: nkservice:id(),

@@ -154,7 +154,7 @@ make_and_create(Srv, ObjName, Obj, Opts) ->
     case make_obj(Srv, ObjName, Obj) of
         {ok, Obj2} ->
             %% lager:warning("Obj: ~p", [Obj]),
-            CreateMeta1 = maps:with([usage_link, event_link], Opts),
+            CreateMeta1 = maps:with([meta, usage_link, event_link], Opts),
             CreateMeta2 = case maps:is_key(obj_id, Obj) orelse ObjName /= <<>> of
                 true ->
                     CreateMeta1;
@@ -517,17 +517,17 @@ info(Id, Msg) ->
 
 
 %% @private
-send_event(EvType, Body, #obj_session{obj_id=ObjId, path=Path}=Session) ->
+send_event(EvType, Body, #?NKOBJ{obj_id=ObjId, path=Path}=Session) ->
     send_event(EvType, ObjId, Path, Body, Session).
 
 
 %% @private
-send_event(EvType, ObjId, Body, #obj_session{path=Path}=Session) ->
+send_event(EvType, ObjId, Body, #?NKOBJ{path=Path}=Session) ->
     send_event(EvType, ObjId, Path, Body, Session).
 
 
 %% @private
-send_event(EvType, ObjId, ObjPath, Body, #obj_session{srv_id=SrvId, type=Type}=Session) ->
+send_event(EvType, ObjId, ObjPath, Body, #?NKOBJ{srv_id=SrvId, type=Type}=Session) ->
     Event = #nkevent{
         srv_id = SrvId,
         class = ?DOMAIN_EVENT_CLASS,
@@ -544,7 +544,7 @@ send_event(EvType, ObjId, ObjPath, Body, #obj_session{srv_id=SrvId, type=Type}=S
 
 
 %% @private
-send_direct_event(#nkevent{type=Type, body=Body}=Event, #obj_session{meta=Meta}) ->
+send_direct_event(#nkevent{type=Type, body=Body}=Event, #?NKOBJ{meta=Meta}) ->
     case Meta of
         #{session_events:=Events, session_id:=ConnId} ->
             case lists:member(Type, Events) of

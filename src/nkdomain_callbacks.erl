@@ -24,7 +24,7 @@
 -export([plugin_deps/0, plugin_syntax/0, plugin_config/2]).
 -export([service_init/2, service_handle_cast/2, service_handle_info/2]).
 -export([error/1, service_api_syntax/2, service_api_allow/2, service_api_cmd/2, api_server_http_auth/2,
-         api_server_handle_info/2]).
+         api_server_reg_down/3]).
 -export([nkservice_rest_http/5]).
 -export([admin_tree_categories/2, admin_tree_get_category/2, admin_event/3, admin_element_action/5]).
 -export([object_store_read_id/3, object_store_read_path/3, object_store_save/1]).
@@ -86,6 +86,7 @@ error(invalid_token_ttl)                -> "Invalid token TTL";
 error(member_already_present)           -> "Member is already present";
 error(member_not_found)                 -> "Member not found";
 error(missing_auth_header)              -> "Missing authentication header";
+error({module_failed, Module})          -> {"Module '~s' failed", [Module]};
 error(object_already_exists)            -> "Object already exists";
 error(object_clean_process)             -> "Object cleaned (process stopped)";
 error(object_clean_expire)              -> "Object cleaned (expired)";
@@ -341,17 +342,17 @@ object_get_session(Session) ->
 -spec object_save(session()) ->
     {ok, session()} | {error, term(), session()}.
 
-object_save(#obj_session{is_dirty=false}=Session) ->
+object_save(#?NKOBJ{is_dirty=false}=Session) ->
     {ok, Session};
 
-object_save(#obj_session{srv_id=SrvId, obj_id=ObjId}=Session) ->
+object_save(#?NKOBJ{srv_id=SrvId, obj_id=ObjId}=Session) ->
     {ok, Session2} = call_module(object_restore, [], Session),
     case call_module(object_save, [], Session2) of
         {ok, Session3} ->
             Map = SrvId:object_unparse(Session3),
             case nkdomain_store:save(SrvId, ObjId, Map) of
                 {ok, _Vsn} ->
-                    {ok, Session3#obj_session{is_dirty=false}};
+                    {ok, Session3#?NKOBJ{is_dirty=false}};
                 {error, Error} ->
                     {error, Error, Session3}
             end;
@@ -364,7 +365,7 @@ object_save(#obj_session{srv_id=SrvId, obj_id=ObjId}=Session) ->
 -spec object_delete(session()) ->
     {ok, session()} | {error, term(), session()}.
 
-object_delete(#obj_session{srv_id=SrvId, obj_id=ObjId}=Session) ->
+object_delete(#?NKOBJ{srv_id=SrvId, obj_id=ObjId}=Session) ->
     case call_module(object_delete, [], Session) of
         {ok, Session2} ->
             case nkdomain_store:delete(SrvId, ObjId) of
@@ -383,11 +384,11 @@ object_delete(#obj_session{srv_id=SrvId, obj_id=ObjId}=Session) ->
 -spec object_archive(session()) ->
     {ok, session()} | {error, term(), session()}.
 
-object_archive(#obj_session{srv_id=SrvId, obj_id=ObjId, obj=Obj}=Session) ->
+object_archive(#?NKOBJ{srv_id=SrvId, obj_id=ObjId, obj=Obj}=Session) ->
     {ok, Session2} = call_module(object_restore, [], Session),
     case call_module(object_archive, [], Session2) of
         {ok, Session3} ->
-            Map = SrvId:object_unparse(Session3#obj_session{obj=Obj}),
+            Map = SrvId:object_unparse(Session3#?NKOBJ{obj=Obj}),
             case nkdomain_store:archive(SrvId, ObjId, Map) of
                 ok ->
                     {ok, Session3};
@@ -438,7 +439,7 @@ object_parse(SrvId, Mode, Map) ->
 -spec object_unparse(session()) ->
     map().
 
-object_unparse(#obj_session{srv_id=SrvId, type=Type, module=Module, obj=Obj}) ->
+object_unparse(#?NKOBJ{srv_id=SrvId, type=Type, module=Module, obj=Obj}) ->
     BaseKeys = maps:keys(SrvId:object_mapping()),
     BaseMap1 = maps:with(BaseKeys, Obj),
     BaseMap2 = case BaseMap1 of
@@ -852,12 +853,12 @@ service_api_cmd(_Req, _State) ->
     continue.
 
 
-%%%% @private
-%%api_server_reg_down({nkdomain_session_obj, _Pid}, _Reason, State) ->
-%%    {stop, normal, State};
-%%
-%%api_server_reg_down(_Link, _Reason, _State) ->
-%%    continue.
+%% @private
+api_server_reg_down({nkdomain_stop, Module, _Pid}, _Reason, State) ->
+    {stop, {module_failed, Module}, State};
+
+api_server_reg_down(_Link, _Reason, _State) ->
+    continue.
 
 %% @doc
 api_server_http_auth(#nkreq{cmd = <<"objects/user/login">>}, _HttpReq) ->
@@ -877,13 +878,13 @@ api_server_http_auth(_Req, HttpReq) ->
             {error, missing_auth_header}
     end.
 
-%% @doc
-api_server_handle_info({nkdist, {sent_link_down, Link}}, State) ->
-    nkapi_server:stop(self(), {sent_link_down, Link}),
-    {ok, State};
-
-api_server_handle_info(_Info, _State) ->
-    continue.
+%%%% @doc
+%%api_server_handle_info({nkdist, {sent_link_down, Link}}, State) ->
+%%    nkapi_server:stop(self(), {sent_link_down, Link}),
+%%    {ok, State};
+%%
+%%api_server_handle_info(_Info, _State) ->
+%%    continue.
 
 
 %% ===================================================================
@@ -961,7 +962,7 @@ service_handle_info(_Msg, _State) ->
 
 
 %% @private
-call_module(Fun, Args, #obj_session{module=Module}=Session) ->
+call_module(Fun, Args, #?NKOBJ{module=Module}=Session) ->
     case erlang:function_exported(Module, Fun, length(Args)+1) of
         true ->
             case apply(Module, Fun, Args++[Session]) of

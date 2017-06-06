@@ -84,6 +84,7 @@
     #{
         usage_link => {id() | pid(), nkdist_reg:tag()},    % Id or pid will receive {sent_link_down, Tag}
         event_link => {id() | pid(), nkdist_reg:tag()},
+        meta => map(),
         enabled => boolean()                                        % Start disabled if false
     }.
 
@@ -176,7 +177,7 @@ get(Srv, IdOrPath) ->
     case nkdomain_obj_lib:load(Srv, IdOrPath, #{}) of
         #obj_id_ext{pid=Pid} ->
             case nkdomain_obj:get_session(Pid) of
-                {ok, #obj_session{
+                {ok, #?NKOBJ{
                     module = Module,
                     parent_id = ParentId,
                     status = Status,

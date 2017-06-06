@@ -133,7 +133,7 @@ token(SrvId, Login, Opts) ->
 %% @doc
 check_token(Token) ->
     case nkdomain_obj:get_session(Token) of
-        {ok, #obj_session{type = ?DOMAIN_SESSION, obj=#{?DOMAIN_SESSION:=Data}}} ->
+        {ok, #?NKOBJ{type = ?DOMAIN_SESSION, obj=#{?DOMAIN_SESSION:=Data}}} ->
             case Data of
                 #{user_id:=UserId, domain_id:=DomainId, login_meta:=Meta} ->
                     State2 = nkdomain_api_util:add_id(?DOMAIN_DOMAIN, DomainId, #{}),
@@ -143,7 +143,7 @@ check_token(Token) ->
                 _ ->
                     {error, invalid_session}
             end;
-        {ok, #obj_session{type = ?DOMAIN_TOKEN, obj=#{subtype:=?DOMAIN_USER, ?DOMAIN_TOKEN:=Data}}} ->
+        {ok, #?NKOBJ{type = ?DOMAIN_TOKEN, obj=#{subtype:=?DOMAIN_USER, ?DOMAIN_TOKEN:=Data}}} ->
             case Data of
                 #{user_id:=UserId, domain_id:=DomainId, login_meta:=Meta} ->
                     State2 = nkdomain_api_util:add_id(?DOMAIN_DOMAIN, DomainId, #{}),
@@ -261,7 +261,7 @@ object_api_cmd(Cmd, Req, State) ->
 
 %% @private
 %% It will return 'object_is_disabled' for disabled users
-object_sync_op({?MODULE, check_pass, Pass}, _From, #obj_session{obj=Obj}=Session) ->
+object_sync_op({?MODULE, check_pass, Pass}, _From, #?NKOBJ{obj=Obj}=Session) ->
     case Obj of
         #{?DOMAIN_USER:=#{password:=Pass}} ->
             {reply, {ok, true}, Session};
@@ -269,7 +269,7 @@ object_sync_op({?MODULE, check_pass, Pass}, _From, #obj_session{obj=Obj}=Session
             {reply, {ok, false}, Session}
     end;
 
-object_sync_op({?MODULE, get_name}, _From, #obj_session{obj=Obj}=Session) ->
+object_sync_op({?MODULE, get_name}, _From, #?NKOBJ{obj=Obj}=Session) ->
     Base = nkdomain_obj_util:get_name(Session),
     #{name:=UserName, surname:=UserSurName} = User = maps:get(?DOMAIN_USER, Obj),
     Data = Base#{

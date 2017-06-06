@@ -82,7 +82,7 @@ download(Srv, File) ->
     case nkdomain_obj_lib:load(Srv, File, #{}) of
         #obj_id_ext{type = ?DOMAIN_FILE, obj_id=ObjId, pid=Pid} ->
             case nkdomain_obj:get_session(Pid) of
-                {ok, #obj_session{obj=Obj}} ->
+                {ok, #?NKOBJ{obj=Obj}} ->
                     Name = maps:get(name, Obj, <<>>),
                     case Obj of
                         #{?DOMAIN_FILE:=#{content_type:=CT}} ->

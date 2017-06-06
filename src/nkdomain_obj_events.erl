@@ -40,7 +40,7 @@
 
 
 %% @private
-event(created, #obj_session{parent_id=ParentId}=Session) ->
+event(created, #?NKOBJ{parent_id=ParentId}=Session) ->
     {event, created, #{parent_id=>ParentId}, Session};
 
 event(loaded, Session) ->
@@ -50,7 +50,7 @@ event({status, Status}, Session) when is_atom(Status); is_binary(Status) ->
     {event, updated_status, #{status=>Status}, Session};
 
 event({status, {Status, Reason}}, Session) when is_atom(Status); is_binary(Status) ->
-    #obj_session{srv_id=SrvId} = Session,
+    #?NKOBJ{srv_id=SrvId} = Session,
     {Code, Txt} = nkservice_util:error(SrvId, Reason),
     {event, updated_status, #{status=>Code, reason=>Txt}, Session};
 
@@ -82,7 +82,7 @@ event({child_unloaded, Type, ObjId}, Session) ->
     {event, child_unloaded, #{type=>Type, obj_id=>ObjId}, Session};
 
 event({unloaded, Reason}, Session) ->
-    #obj_session{srv_id=SrvId} = Session,
+    #?NKOBJ{srv_id=SrvId} = Session,
     {Code, Txt} = nkservice_util:error(SrvId, Reason),
     {event, unloaded, #{code=>Code, reason=>Txt}, Session};
 

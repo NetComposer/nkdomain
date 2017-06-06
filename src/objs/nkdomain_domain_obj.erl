@@ -154,7 +154,7 @@ object_api_cmd(Cmd, Req, State) ->
 
 
 %% @private
-object_start(#obj_session{srv_id=SrvId, obj_id=ObjId, path=Path}=Session) ->
+object_start(#?NKOBJ{srv_id=SrvId, obj_id=ObjId, path=Path}=Session) ->
     spawn(fun() -> start_dom_childs(SrvId, ObjId, Path) end),
     {ok, Session}.
 

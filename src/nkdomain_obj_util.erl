@@ -24,6 +24,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -export([event/2, status/2, search_syntax/1, get_name/1]).
 -export([call_type/3]).
+
 -include("nkdomain.hrl").
 
 
@@ -33,27 +34,27 @@
 %% ===================================================================
 
 %% @doc
-event(Event, #obj_session{link_events=Links}=Session) ->
-    {ok, #obj_session{}=Session2} = do_event(Links, Event, Session),
-    Session2.
+event(Event, #?NKOBJ{link_events=Links}=State) ->
+    {ok, #?NKOBJ{}=State2} = do_event(Links, Event, State),
+    State2.
 
 
 %% @private
-do_event([], Event, #obj_session{srv_id=SrvId}=Session) ->
-    {ok, #obj_session{}} = SrvId:object_event(Event, Session);
+do_event([], Event, #?NKOBJ{srv_id=SrvId}=State) ->
+    {ok, #?NKOBJ{}} = SrvId:object_event(Event, State);
 
-do_event([Link|Rest], Event, #obj_session{srv_id=SrvId}=Session) ->
-    {ok, Session2} = SrvId:object_reg_event(Link, Event, Session),
-    do_event(Rest, Event,  Session2).
+do_event([Link|Rest], Event, #?NKOBJ{srv_id=SrvId}=State) ->
+    {ok, State2} = SrvId:object_reg_event(Link, Event, State),
+    do_event(Rest, Event,  State2).
 
 
 %% @doc
-status(Status, #obj_session{status=Status}=Session) ->
-    Session;
+status(Status, #?NKOBJ{status=Status}=State) ->
+    State;
 
-status(Status, Session) ->
-    Session2 = Session#obj_session{status=Status},
-    event({status, Status}, Session2).
+status(Status, State) ->
+    State2 = State#?NKOBJ{status=Status},
+    event({status, Status}, State2).
 
 
 %% @doc
@@ -74,7 +75,7 @@ search_syntax(Base) ->
 
 
 %% @doc
-get_name(#obj_session{type=Type, obj_id=ObjId, path=Path, obj=Obj}) ->
+get_name(#?NKOBJ{type=Type, obj_id=ObjId, path=Path, obj=Obj}) ->
     {ok, _, ObjName} = nkdomain_util:get_parts(Type, Path),
     #{
         obj_id => ObjId,
