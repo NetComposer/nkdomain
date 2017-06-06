@@ -81,6 +81,9 @@
 -define(DOMAIN_CONFIG, <<"config">>).
 -define(DOMAIN_FILE, <<"file">>).
 
+-define(DOMAIN_MAIL, <<"mail">>).
+-define(DOMAIN_MAIL_CONFIG, <<"mail.config">>).
+
 -define(DOMAIN_EVENT_CLASS, <<"domain">>).
 -define(DEF_TOKEN_TTL, 8*60*60).
 -define(MAX_TOKEN_TTL, 24*60*60).

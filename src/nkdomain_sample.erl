@@ -269,6 +269,15 @@ file_update(Id) ->
 
 
 
+mail_config_create(_Id) ->
+    Config = #{
+        class => smtp,
+        from => <<"carlosj.gf@gmail.com">>
+    },
+    cmd(<<"objects/mail.config/create">>, #{tags=>[a, b], 'mail.config'=>Config}).
+
+
+
 
 %% ===================================================================
 %% Client fun
