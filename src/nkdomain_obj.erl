@@ -26,7 +26,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -behaviour(gen_server).
 
--export([get_session/1, save/1, unload/2]).
+-export([get_obj/1, get_state/1, save/1, unload/2]).
 -export([update/2, enable/2, get_name/1, delete/1, sync_op/2, async_op/2, is_enabled/1, apply/2]).
 -export([register/3, unregister/3, link/4, unlink/4, send_info/3, send_event/2, get_childs/1]).
 -export([wait_for_save/2]).
@@ -34,6 +34,7 @@
 -export([start/2]).
 -export([init/1, terminate/2, code_change/3, handle_call/3,  handle_cast/2, handle_info/2]).
 -export([get_all/0, unload_all/0]).
+-export([links_add/3, links_remove/3, links_iter/4]).
 -export_type([event/0, status/0]).
 
 
@@ -160,11 +161,19 @@
 %% ===================================================================
 
 %% @doc
--spec get_session(id()) ->
+-spec get_obj(id()) ->
     {ok, state()} | {error, term()}.
 
-get_session(Id) ->
-    do_call(Id, nkdomain_get_session).
+get_obj(Id) ->
+    do_call(Id, nkdomain_get_obj).
+
+
+%% @doc
+-spec get_state(id()) ->
+    {ok, state()} | {error, term()}.
+
+get_state(Id) ->
+    do_call(Id, nkdomain_get_state).
 
 
 %% @doc
@@ -405,14 +414,15 @@ init({State, Time, OldPid}) ->
             nklib_proc:put(?MODULE, {Type, ObjId, Path}),
             ObjIdExt = #obj_id_ext{srv_id=SrvId, obj_id=ObjId, path=Path, pid=self()},
             ok = nkdomain_type:register(Module, ObjIdExt),
+            set_log(State),
+            nkservice_util:register_for_changes(SrvId),
+            %% TODO: Add moved callback
             Timer = case Time of
                 permanent ->
                     undefined;
                 _ ->
                     erlang:send_after(Time, self(), nkdomain_timer)
             end,
-            set_log(State),
-            nkservice_util:register_for_changes(SrvId),
             {ok, State#?NKOBJ{timer=Timer}};
         {error, Error} ->
             {stop, Error}
@@ -448,7 +458,6 @@ do_init(ObjIdExt, Meta) ->
         _ ->
             maps:get(enabled, Obj, true)
     end,
-    IgnoreMeta = [enabled, obj, event_link, usage_link],
     Info = Module:object_get_info(),
     State1 = #?NKOBJ{
         srv_id = SrvId,
@@ -461,7 +470,7 @@ do_init(ObjIdExt, Meta) ->
         parent_id = ParentId,
         obj = Obj,
         status = init,
-        meta = maps:without(IgnoreMeta, Meta),
+        meta = maps:get(meta, Meta, #{}),
         data = #{},
         is_dirty = IsCreated,
         is_enabled = Enabled,
@@ -527,6 +536,32 @@ handle_call(Msg, _From, #?NKOBJ{moved_to=Pid}=State) when is_pid(Pid) ->
 handle_call(nkdomain_get_session, _From, State) ->
     {ok, State2} = handle(object_get_session, [], State),
     reply({ok, State2}, State2);
+
+handle_call(nkdomain_get_obj, _From, State) ->
+    #?NKOBJ{
+        type = Type,
+        path = Path,
+        module = Module,
+        parent_id = ParentId,
+        status = Status,
+        started = Started,
+        is_enabled = Enabled,
+        obj = Obj
+    } = State,
+    {ok, Domain, ObjName} = nkdomain_util:get_parts(Type, Path),
+    Obj2 = Obj#{
+        '_domain' => Domain,
+        '_obj_name' => ObjName,
+        '_module' => Module,
+        '_parent_id' => ParentId,
+        '_status' => Status,
+        '_started' => Started,
+        '_is_enabled' => Enabled
+    },
+    reply({ok, Obj2}, State);
+
+handle_call(nkdomain_get_state, _From, State) ->
+    reply({ok, State}, State);
 
 handle_call(nkdomain_get_timelog, _From, #?NKOBJ{timelog=Log}=State) ->
     reply({ok, Log}, State);
@@ -607,6 +642,9 @@ handle_call({nkdomain_sync_op, Op}, From, State) ->
             do_stop(Reason, State2);
         {stop, Reason, #?NKOBJ{}=State2} ->
             do_stop(Reason, State2);
+        continue ->
+            ?LLOG(notice, "unknown sync op: ~p", [Op], State),
+            reply({error, unknown_op}, State);
         {continue, #?NKOBJ{}=State2} ->
             ?LLOG(notice, "unknown sync op: ~p", [Op], State2),
             reply({error, unknown_op}, State2)
@@ -680,9 +718,6 @@ handle_call(nkdomain_wait_for_save, _From, #?NKOBJ{is_dirty=false}=State) ->
 handle_call(nkdomain_wait_for_save, From, #?NKOBJ{wait_save=Wait}=State) ->
     noreply(State#?NKOBJ{wait_save=[From|Wait]});
 
-handle_call(nkdomain_get_state, _From, State) ->
-    reply(State, State);
-
 handle_call(Msg, From, State) ->
     handle(object_handle_call, [Msg, From], State).
 
@@ -753,6 +788,9 @@ handle_cast({nkdomain_async_op, Op}, State) ->
             noreply(do_save(State2));
         {stop, Reason, #?NKOBJ{}=State2} ->
             do_stop(Reason, State2);
+        continue ->
+            ?LLOG(notice, "unknown async op: ~p", [Op], State),
+            noreply(State);
         {continue, #?NKOBJ{}=State2} ->
             ?LLOG(notice, "unknown async op: ~p", [Op], State),
             noreply(State2)
@@ -1249,6 +1287,12 @@ links_down(Mon, #?NKOBJ{usage_links=Usage, event_links=Event}=State) ->
     end.
 
 
+%% @private
+links_iter(usage, Fun, Acc, #?NKOBJ{usage_links=Links}) ->
+    nklib_links:fold(Fun, Acc, Links);
+
+links_iter(event, Fun, Acc, #?NKOBJ{event_links=Links}) ->
+    nklib_links:fold(Fun, Acc, Links).
 
 
 %% @private

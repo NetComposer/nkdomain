@@ -176,25 +176,7 @@ get(IdOrPath) ->
 get(Srv, IdOrPath) ->
     case nkdomain_obj_lib:load(Srv, IdOrPath, #{}) of
         #obj_id_ext{pid=Pid} ->
-            case nkdomain_obj:get_session(Pid) of
-                {ok, #?NKOBJ{
-                    module = Module,
-                    parent_id = ParentId,
-                    status = Status,
-                    started = Started,
-                    is_enabled = Enabled,
-                    obj = Obj
-                }} ->
-                    {ok, Obj#{
-                        '_module' => Module,
-                        '_parent_id' => ParentId,
-                        '_status' => Status,
-                        '_started' => Started,
-                        '_is_enabled' => Enabled
-                        }};
-                {error, Error} ->
-                    {error, Error}
-            end;
+            nkdomain_obj:get_obj(Pid);
         {error, Error} ->
             {error, Error}
     end.

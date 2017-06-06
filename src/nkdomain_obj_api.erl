@@ -65,12 +65,9 @@ api(<<"get">>, Type, #nkreq{data=Data, srv_id=SrvId}, State) ->
         {ok, Id} ->
             case nkdomain_obj_lib:load(SrvId, Id, #{}) of
                 #obj_id_ext{pid=Pid} ->
-                    case nkdomain_obj:get_session(Pid) of
-                        {ok, #?NKOBJ{obj=Obj, is_enabled=Enabled, type=Type, path=Path}} ->
-                            {ok, _, ObjName} = nkdomain_util:get_parts(Type, Path),
-                            {ok, Obj#{obj_name=>ObjName, '_is_enabled'=>Enabled}, State};
-                        {ok, _} ->
-                            {error, invalid_object_type, State};
+                    case nkdomain_obj:get_obj(Pid) of
+                        {ok, Obj} ->
+                            {ok, Obj, State};
                         {error, Error} ->
                             {error, Error, State}
                     end;

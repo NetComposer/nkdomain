@@ -24,6 +24,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -export([event/2, status/2, search_syntax/1, get_name/1]).
 -export([call_type/3]).
+-export([link_server_api/3, unlink_server_api/2]).
 
 -include("nkdomain.hrl").
 
@@ -106,5 +107,32 @@ call_type(Fun, Args, Type) ->
                     ok
             end
     end.
+
+
+%% @doc
+link_server_api(Module, ApiPid, State) ->
+    % Stop the API Server if we fail abruptly
+    ok = nkapi_server:register(ApiPid, {nkdomain_stop, Module, self()}),
+    % Monitor the API server, reduce usage count if it fails
+    nkdomain_obj:links_add(usage, {nkdomain_api_server, ApiPid}, State).
+
+
+%% @doc
+unlink_server_api(Module, State) ->
+    nkdomain_obj:links_iter(
+        usage,
+        fun
+            ({nkdomain_api_server, ApiPid}, _Acc) ->
+                nkapi_server:unregister(ApiPid, {nkdomain_stop, Module, self()});
+            (_, _Acc) ->
+                ok
+        end,
+        ok,
+        State),
+    State.
+
+
+
+
 
 

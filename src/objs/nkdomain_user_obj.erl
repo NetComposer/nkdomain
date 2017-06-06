@@ -132,8 +132,8 @@ token(SrvId, Login, Opts) ->
 
 %% @doc
 check_token(Token) ->
-    case nkdomain_obj:get_session(Token) of
-        {ok, #?NKOBJ{type = ?DOMAIN_SESSION, obj=#{?DOMAIN_SESSION:=Data}}} ->
+    case nkdomain_obj:get_obj(Token) of
+        {ok, #{type:=?DOMAIN_SESSION, ?DOMAIN_SESSION:=Data}} ->
             case Data of
                 #{user_id:=UserId, domain_id:=DomainId, login_meta:=Meta} ->
                     State2 = nkdomain_api_util:add_id(?DOMAIN_DOMAIN, DomainId, #{}),
@@ -143,7 +143,7 @@ check_token(Token) ->
                 _ ->
                     {error, invalid_session}
             end;
-        {ok, #?NKOBJ{type = ?DOMAIN_TOKEN, obj=#{subtype:=?DOMAIN_USER, ?DOMAIN_TOKEN:=Data}}} ->
+        {ok, #{type:=?DOMAIN_TOKEN, subtype:=?DOMAIN_USER, ?DOMAIN_TOKEN:=Data}} ->
             case Data of
                 #{user_id:=UserId, domain_id:=DomainId, login_meta:=Meta} ->
                     State2 = nkdomain_api_util:add_id(?DOMAIN_DOMAIN, DomainId, #{}),
