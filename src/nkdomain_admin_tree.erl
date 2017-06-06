@@ -126,6 +126,9 @@ event(Event, Updates, State) ->
 
 
 %% @doc
+element_action(<<"url">>, updated, <<"/users">>, Updates, State) ->
+    element_action(<<"domain_tree_resources_users">>, selected, <<>>, Updates, State);
+
 element_action(?DOMAINS_ALL, selected, Value, Updates, State) ->
     {Updates2, State2} = selected_all_domains(Updates, State),
     {continue, [?DOMAINS_ALL, selected, Value, Updates2, State2]};
@@ -133,10 +136,6 @@ element_action(?DOMAINS_ALL, selected, Value, Updates, State) ->
 element_action(<<?DOMAINS_ID2, $_, ObjId/binary>>, selected, Value, Updates, State) ->
     {Updates2, State2} = selected_domain(ObjId, Updates, State),
     {continue, [?DOMAINS_ALL, selected, Value, Updates2, State2]};
-
-%%element_action(<<?DOMAINS_ID2, $_, ObjId/binary>>, selected, Value, Updates, State) ->
-%%    {Updates2, State2} = selected_domain(ObjId, Updates, State),
-%%    {continue, [?DOMAINS_ALL, selected, Value, Updates2, State2]};
 
 element_action(<<"domain_tree_resources_users">>, selected, Value, Updates, State) ->
     #{domain_id:=DomainId} = State,
