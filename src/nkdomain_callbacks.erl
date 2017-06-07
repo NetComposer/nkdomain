@@ -45,7 +45,7 @@
          object_store_find_childs/3, object_store_find_all_childs/3,
          object_store_find_alias/2, object_store_delete_all_childs/3,
          object_store_find/2, object_store_clean/1]).
--export([nkmail_get_provider/2]).
+-export([nkmail_get_provider/2, nkfile_get_store/2]).
 
 
 -define(LLOG(Type, Txt, Args), lager:Type("NkDOMAIN Callbacks: "++Txt, Args)).
@@ -958,7 +958,15 @@ service_handle_info(_Msg, _State) ->
 %% ===================================================================
 
 nkmail_get_provider(SrvId, Id) ->
-    nkmail_provider_obj:get_provider(SrvId, Id).
+    nkdomain_mail_provider_obj:get_provider(SrvId, Id).
+
+
+%% ===================================================================
+%% NkFILE
+%% ===================================================================
+
+nkfile_get_store(SrvId, Id) ->
+    nkdomain_file_store_obj:get_store(SrvId, Id).
 
 
 %% ===================================================================

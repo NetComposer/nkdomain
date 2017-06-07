@@ -127,10 +127,12 @@ register_types() ->
     ok = nkdomain_all_types:register(nkdomain_session_obj),
     ok = nkdomain_all_types:register(nkdomain_config_obj),
     ok = nkdomain_all_types:register(nkdomain_token_obj),
-    ok = nkdomain_all_types:register(nkdomain_file_obj),
 
-    ok = nkdomain_all_types:register(nkmail_provider_obj),
-    ok = nkdomain_all_types:register(nkmail_mail_obj).
+    ok = nkdomain_all_types:register(nkdomain_mail_obj),
+    ok = nkdomain_all_types:register(nkdomain_mail_provider_obj),
+
+    ok = nkdomain_all_types:register(nkdomain_file_store_obj),
+    ok = nkdomain_all_types:register(nkdomain_file_obj).
 
 
 %% @doc gets a configuration value

@@ -20,7 +20,7 @@
 
 %% @doc Config Object
 
--module(nkmail_provider_obj).
+-module(nkdomain_mail_provider_obj).
 -behavior(nkdomain_obj).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
@@ -33,7 +33,7 @@
 -include_lib("nkapi/include/nkapi.hrl").
 
 -define(LLOG(Type, Txt, Args),
-    lager:Type("NkMAIL Config "++Txt, Args)).
+    lager:Type("NkMAIL Provider "++Txt, Args)).
 
 
 %% ===================================================================
@@ -119,7 +119,7 @@ object_admin_info() ->
     #{
         class => resource,
         weight => 9000,
-        tree_id => <<"domain_tree_resources_mail_configs">>
+        tree_id => <<"domain_tree_resources_mail_providers">>
     }.
 
 

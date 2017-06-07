@@ -38,6 +38,8 @@ i18n() -> #{
         domain_tree_resources_users => "Users",
         domain_tree_resources_configs => "Configurations",
         domain_tree_resources_files => "Files",
+        domain_tree_resources_mail_providers => "eMail Providers",
+        domain_tree_resources_file_stores => <<"File Stores">>,
 
         domain_tree_sessions => "Sessions",
         domain_tree_sessions_session => "Login",
@@ -60,6 +62,8 @@ i18n() -> #{
         domain_tree_resources_users => "Usuarios",
         domain_tree_resources_configs => "Configuraciones",
         domain_tree_resources_files => "Ficheros",
+        domain_tree_resources_mail_providers => "Proveedores eMail",
+        domain_tree_resources_file_stores => <<"Stores de Ficheros">>,
 
         domain_tree_sessions => "Sesiones",
         domain_tree_sessions_session => "Login",

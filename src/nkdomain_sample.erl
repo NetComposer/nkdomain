@@ -112,7 +112,6 @@ user_create2(Domain, Name, Surname, Avatar, Phone, Address) ->
 
 
 
-
 user_delete(Id) ->
     cmd(<<"objects/user/delete">>, #{id=>to_bin(Id)}).
 

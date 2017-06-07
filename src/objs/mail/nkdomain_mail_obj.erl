@@ -20,7 +20,7 @@
 
 %% @doc Config Object
 
--module(nkmail_mail_obj).
+-module(nkdomain_mail_obj).
 -behavior(nkdomain_obj).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
