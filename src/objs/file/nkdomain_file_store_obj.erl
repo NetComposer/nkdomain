@@ -79,7 +79,7 @@ get_store(SrvId, Id) ->
     case nkdomain_obj_lib:load(SrvId, Id, #{}) of
         #obj_id_ext{pid=Pid} ->
             case nkdomain_obj:get_obj(Pid) of
-                {ok, Store} ->
+                {ok, #{?DOMAIN_FILE_STORE:=Store}} ->
                     {ok, Store};
                 {error, _} ->
                     continue

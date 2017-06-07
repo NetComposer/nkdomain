@@ -261,8 +261,11 @@ config_find(SubType, Parent) ->
 file_get(Id) ->
     cmd(<<"objects/file/get">>, #{id=>Id}).
 
-file_create() ->
+file_create_local() ->
     cmd(<<"objects/file/create">>, #{tags=>[a, b], file=>#{store_id=><<"/file.stores/local">>}}).
+
+file_create_s3() ->
+    cmd(<<"objects/file/create">>, #{tags=>[b, c], file=>#{store_id=><<"/file.stores/carlos.s3_secure">>}}).
 
 file_update(Id) ->
     cmd(<<"objects/file/update">>, #{id=>Id, tags=>[b, c], file=>#{content_type=>pdf2}}).
@@ -278,7 +281,7 @@ mail_config_create(_Id) ->
 
 mail_send1() ->
     Msg = #{
-        provider => <<"info.netcomposer">>,
+        provider => <<"/mail.providers/info.netcomposer">>,
         % from => "My test <info.netcomposer@gmail.com>",
         to => <<"My dest <carlosj.gf@gmail.com>, <listas1@maycar.net>">>,
         subject => <<"sub2">>,
@@ -293,7 +296,7 @@ mail_send2() ->
     {ok, F2} = file:read_file(filename:join(Dir, "sample.pdf")),
 
     Msg = #{
-        provider => <<"info.netcomposer">>,
+        provider => <<"/mail.providers/info.netcomposer">>,
         from => <<"My test <info.netcomposer@gmail.com>">>,
         to => <<"My dest <carlosj.gf@gmail.com>, <listas1@maycar.net>">>,
         subject => <<"sub3">>,

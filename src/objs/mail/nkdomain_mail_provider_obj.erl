@@ -80,7 +80,7 @@ get_provider(SrvId, Id) ->
     case nkdomain_obj_lib:load(SrvId, Id, #{}) of
         #obj_id_ext{pid=Pid} ->
             case nkdomain_obj:get_obj(Pid) of
-                {ok, Provider} ->
+                {ok, #{?DOMAIN_MAIL_PROVIDER:=Provider}} ->
                     {ok, Provider};
                 {error, _} ->
                     continue
