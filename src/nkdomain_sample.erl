@@ -1,6 +1,7 @@
 -module(nkdomain_sample).
 -compile(export_all).
 
+-include("nkdomain.hrl").
 -include_lib("nkservice/include/nkservice.hrl").
 -include_lib("nkmail/include/nkmail.hrl").
 
@@ -274,7 +275,48 @@ mail_config_create(_Id) ->
         class => smtp,
         from => <<"carlosj.gf@gmail.com">>
     },
-    cmd(<<"objects/mail.config/create">>, #{tags=>[a, b], 'mail.config'=>Config}).
+    cmd(<<"objects/mail.config/create">>, #{tags=>[a, b], ?DOMAIN_MAIL_PROVIDER=>Config}).
+
+mail_send1() ->
+    Msg = #{
+        provider => <<"info.netcomposer">>,
+        % from => "My test <info.netcomposer@gmail.com>",
+        to => <<"My dest <carlosj.gf@gmail.com>, <listas1@maycar.net>">>,
+        subject => <<"sub2">>,
+        body => <<"msg2">>
+    },
+    cmd(<<"objects/mail/send">>, Msg).
+
+
+mail_send2() ->
+    Dir = code:priv_dir(nkmail),
+    {ok, F1} = file:read_file(filename:join(Dir, "sample.jpg")),
+    {ok, F2} = file:read_file(filename:join(Dir, "sample.pdf")),
+
+    Msg = #{
+        provider => <<"info.netcomposer">>,
+        from => <<"My test <info.netcomposer@gmail.com>">>,
+        to => <<"My dest <carlosj.gf@gmail.com>, <listas1@maycar.net>">>,
+        subject => <<"sub3">>,
+        content_type => <<"text/html">>,
+        %%  body => "This is <strong>msg3</strong> øÿ áñ"
+        body => <<"This is <strong>msg3</strong> øÿ áéíóúñ">>,
+        attachments => [
+            #{
+                name => <<"File1">>,
+                content_type => <<"image/jpeg">>,
+                body => base64:encode(F1)
+            },
+            #{
+                name => <<"File2">>,
+                content_type => <<"application/pdf">>,
+                body => base64:encode(F2)
+            }
+        ]
+    },
+    cmd(<<"objects/mail/send">>, Msg).
+
+
 
 
 

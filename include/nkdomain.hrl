@@ -82,7 +82,7 @@
 -define(DOMAIN_FILE, <<"file">>).
 
 -define(DOMAIN_MAIL, <<"mail">>).
--define(DOMAIN_MAIL_CONFIG, <<"mail.config">>).
+-define(DOMAIN_MAIL_PROVIDER, <<"mail.provider">>).
 
 -define(DOMAIN_EVENT_CLASS, <<"domain">>).
 -define(DEF_TOKEN_TTL, 8*60*60).

@@ -24,10 +24,11 @@
 -behavior(nkdomain_obj).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([object_get_info/0, object_mapping/0, object_parse/3,
+-export([object_get_info/0, object_admin_info/0, object_mapping/0, object_parse/3,
          object_api_syntax/2, object_api_allow/3, object_api_cmd/3]).
 
 -include_lib("nkdomain.hrl").
+-include_lib("nkservice/include/nkservice.hrl").
 
 -define(LLOG(Type, Txt, Args),
     lager:Type("NkDOMAIN Mail "++Txt, Args)).
@@ -56,6 +57,16 @@ object_get_info() ->
     }.
 
 
+%% @doc
+object_admin_info() ->
+    #{
+        class => resource,
+        weight => 8500,
+        tree_id => <<"domain_tree_resources_mails">>
+    }.
+
+
+
 %% @private
 object_mapping() ->
     disabled.
@@ -67,8 +78,12 @@ object_parse(_SrvId, _Mode, _Obj) ->
 
 
 %% @private
-object_api_syntax(Cmd, Syntax) ->
-    nkdomain_config_obj_syntax:api(Cmd, Syntax).
+object_api_syntax(<<"send">>, Syntax) ->
+    MailSyntax = nkmail_util:msg_syntax(),
+    maps:merge(Syntax, MailSyntax);
+
+object_api_syntax(_Cmd, Syntax) ->
+    Syntax.
 
 
 %% @private
@@ -77,8 +92,16 @@ object_api_allow(_Cmd, _Req, State) ->
 
 
 %% @private
-object_api_cmd(Cmd, Req, State) ->
-    nkdomain_config_obj_api:cmd(Cmd, Req, State).
+object_api_cmd(<<"send">>, #nkreq{srv_id=SrvId, data=Data}, State) ->
+    case nkmail:send(SrvId, Data) of
+        {ok, Meta} ->
+            {ok, #{result=>Meta}, State};
+        {error, Error} ->
+            {error, Error, State}
+    end;
+
+object_api_cmd(_Cmd, _Req, State) ->
+    {error, not_implemented2, State}.
 
 
 

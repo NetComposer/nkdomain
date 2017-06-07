@@ -55,8 +55,7 @@ start() ->
     BaseHttp = <<Http/binary, "://", ListenIp/binary, ":", ListenPort/binary>>,
     BaseWs = <<Ws/binary, "://", ListenIp/binary, ":", ListenPort/binary>>,
     Spec1 = #{
-        plugins => [nkdomain, nkapi, nkchat, nkdomain_store_es, nkdomain_store_pgsql, nkadmin,
-                    nkmail_smtp_client, nkfile_filesystem, nkfile_s3, nkservice_rest, nkservice_webserver],
+        plugins => [nkdomain, nkdomain_store_es, nkdomain_store_pgsql, nkadmin, nkchat],
         domain => <<"root">>,
         domain_elastic_url => nkdomain_app:get(elastic_url),
         webserver_url => "https://127.0.0.1:1234",

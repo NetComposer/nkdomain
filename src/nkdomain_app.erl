@@ -129,7 +129,7 @@ register_types() ->
     ok = nkdomain_all_types:register(nkdomain_token_obj),
     ok = nkdomain_all_types:register(nkdomain_file_obj),
 
-    ok = nkdomain_all_types:register(nkmail_mail_config_obj),
+    ok = nkdomain_all_types:register(nkmail_provider_obj),
     ok = nkdomain_all_types:register(nkmail_mail_obj).
 
 

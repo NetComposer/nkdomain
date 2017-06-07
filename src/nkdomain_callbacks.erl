@@ -45,6 +45,8 @@
          object_store_find_childs/3, object_store_find_all_childs/3,
          object_store_find_alias/2, object_store_delete_all_childs/3,
          object_store_find/2, object_store_clean/1]).
+-export([nkmail_get_provider/2]).
+
 
 -define(LLOG(Type, Txt, Args), lager:Type("NkDOMAIN Callbacks: "++Txt, Args)).
 
@@ -834,9 +836,6 @@ service_api_allow(#nkreq{cmd = <<"session", _/binary>>}, State) ->
 service_api_allow(#nkreq{cmd = <<"event", _/binary>>}, State) ->
     {true, State};
 
-service_api_allow(#nkreq{cmd = <<"nkmail", _/binary>>}, State) ->
-    {true, State};
-
 service_api_allow(#nkreq{cmd = <<"nkadmin", _/binary>>}, State) ->
     {true, State};
 
@@ -893,7 +892,7 @@ api_server_http_auth(_Req, HttpReq) ->
 
 %% @private
 plugin_deps() ->
-    [nkelastic, nkadmin].
+    [nkapi, nkadmin, nkmail, nkmail_smtp_client, nkfile_filesystem, nkfile_s3, nkservice_rest, nkservice_webserver].
 
 
 %% @private
@@ -954,6 +953,12 @@ service_handle_info({'DOWN', _Ref, process, Pid, _Reason}, State) ->
 service_handle_info(_Msg, _State) ->
     continue.
 
+%% ===================================================================
+%% NkMAIL
+%% ===================================================================
+
+nkmail_get_provider(SrvId, Id) ->
+    nkmail_provider_obj:get_provider(SrvId, Id).
 
 
 %% ===================================================================
