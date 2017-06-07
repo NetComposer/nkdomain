@@ -85,7 +85,7 @@
 
 
 -callback object_parse(nkservice:id(), load|update, Obj::map()) ->
-    {ok, nkdomain:obj()} | {error, term()} | nklib_syntax:syntax() | {type_obj, map()}.
+    {ok, nkdomain:obj()} | {error, term()} | nklib_syntax:syntax() | {type_obj, map(), [binary()]}.
 
 
 -callback object_api_syntax(Cmd::binary(), nklib_syntax:syntax()) ->
@@ -747,7 +747,7 @@ handle_cast(nkdomain_do_load, #?NKOBJ{srv_id=SrvId, obj_id=ObjId, is_enabled=Ena
             end,
             noreply(State#?NKOBJ{obj=Obj, is_enabled=Enabled2});
         {error, Error} ->
-            do_stop({obj_load_error, Error}, State)
+            do_stop({object_load_error, Error}, State)
     end;
 
 handle_cast(nkdomain_do_start, State) ->

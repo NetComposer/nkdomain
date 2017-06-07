@@ -132,8 +132,8 @@ object_mapping() ->
 object_parse(SrvId, _Mode, Obj) ->
     #{?DOMAIN_MAIL_PROVIDER:=Config} = Obj,
     case nkmail:parse_provider(SrvId, Config, #{path=>?DOMAIN_MAIL_PROVIDER}) of
-        {ok, Provider} ->
-            {type_obj, Provider};
+        {ok, Provider, UnknownFields} ->
+            {type_obj, Provider, UnknownFields};
         {error, Error} ->
             {error, Error}
     end.

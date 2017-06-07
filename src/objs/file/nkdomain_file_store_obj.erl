@@ -88,6 +88,7 @@ get_store(SrvId, Id) ->
             continue
     end.
 
+
 %% @private
 find(SrvId, Root) ->
     nkdomain_domain_obj:find(SrvId, Root, #{filters=>#{type=>?DOMAIN_FILE_STORE}}).
@@ -131,8 +132,8 @@ object_mapping() ->
 object_parse(SrvId, _Mode, Obj) ->
     #{?DOMAIN_FILE_STORE:=Config} = Obj,
     case nkfile:parse_store(SrvId, Config, #{path=>?DOMAIN_FILE_STORE}) of
-        {ok, Store} ->
-            {type_obj, Store};
+        {ok, Store, UnknownTypes} ->
+            {type_obj, Store, UnknownTypes};
         {error, Error} ->
             {error, Error}
     end.

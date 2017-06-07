@@ -95,12 +95,13 @@ error(object_clean_expire)              -> "Object cleaned (expired)";
 error(object_deleted) 		            -> "Object removed";
 error(object_expired) 		            -> "Object expired";
 error(object_has_childs) 		        -> "Object has childs";
-error(object_parent_conflict) 	        -> "Object has conflicting parent";
+error({object_load_error, Error}) 		-> {"Object load error: '~p'", [Error]};
 error(object_is_already_loaded)         -> "Object is already loaded";
 error(object_is_disabled) 		        -> "Object is disabled";
 error(object_is_stopped) 		        -> "Object is stopped";
 error(object_not_found) 		        -> "Object not found";
 error(object_not_started) 		        -> "Object is not started";
+error(object_parent_conflict) 	        -> "Object has conflicting parent";
 error(object_stopped) 		            -> "Object stopped";
 error(parent_not_found) 		        -> "Parent not found";
 error(parent_stopped) 		            -> "Parent stopped";
@@ -325,7 +326,7 @@ object_load(SrvId, ObjId) ->
                     {ok, Obj, UnknownFields};
                 {error, Error} ->
                     ?LLOG(warning, "error parsing loaded object ~s: ~p\n~p", [ObjId, Error, Map]),
-                    {error, object_load_error}
+                    {error, parse_error}
             end;
         {error, Error} ->
             {error, Error}
@@ -421,11 +422,11 @@ object_parse(SrvId, Mode, Map) ->
                     {ok, Obj2, UnknownFields};
                 {error, Error} ->
                     {error, Error};
-                {type_obj, TypeObj} ->
+                {type_obj, TypeObj, UnknownFields1} ->
                     BaseSyn = SrvId:object_syntax(Mode),
                     case nklib_syntax:parse(Map, BaseSyn#{Type=>ignore}) of
-                        {ok, Obj, UnknownFields} ->
-                            {ok, Obj#{Type=>TypeObj}, UnknownFields};
+                        {ok, Obj, UnknownFields2} ->
+                            {ok, Obj#{Type=>TypeObj}, UnknownFields1++UnknownFields2};
                         {error, Error} ->
                             {error, Error}
                     end;

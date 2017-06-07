@@ -262,7 +262,7 @@ file_get(Id) ->
     cmd(<<"objects/file/get">>, #{id=>Id}).
 
 file_create() ->
-    cmd(<<"objects/file/create">>, #{tags=>[a, b], file=>#{content_type=>pdf}}).
+    cmd(<<"objects/file/create">>, #{tags=>[a, b], file=>#{store_id=><<"/file.stores/local">>}}).
 
 file_update(Id) ->
     cmd(<<"objects/file/update">>, #{id=>Id, tags=>[b, c], file=>#{content_type=>pdf2}}).

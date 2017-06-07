@@ -26,6 +26,7 @@
 
 -export([create/3]).
 -export([upload/4, download/2]).
+-export([find/2, delete_all/2]).
 -export([object_get_info/0, object_mapping/0, object_parse/3,
          object_api_syntax/2, object_api_allow/3, object_api_cmd/3]).
 -export([object_admin_info/0]).
@@ -102,6 +103,14 @@ download(Srv, File) ->
 
 
 
+%% @private
+find(SrvId, Root) ->
+    nkdomain_domain_obj:find(SrvId, Root, #{filters=>#{type=>?DOMAIN_FILE}}).
+
+
+%% @private
+delete_all(SrvId, Root) ->
+    nkdomain_store:delete_all_childs_type(SrvId, Root, ?DOMAIN_FILE).
 
 
 
@@ -137,13 +146,27 @@ object_mapping() ->
 
 
 %% @private
-object_parse(_SrvId, load, _Obj) ->
-    #{
+object_parse(SrvId, load, Obj) ->
+    #{?DOMAIN_FILE:=File} = Obj,
+    Syntax = #{
         content_type => binary,
         size => integer,
         store_id => binary,
-        password => binary
-    };
+        password => binary,
+        '__mandatory' => [store_id]
+    },
+    case nklib_syntax:parse(File, Syntax, #{path=>?DOMAIN_FILE}) of
+        {ok, #{store_id:=StoreId}=Store, UnknownFields} ->
+            case nkdomain_obj_lib:load(SrvId, StoreId, #{}) of
+                #obj_id_ext{type = ?DOMAIN_FILE_STORE} ->
+                    {type_obj, Store, UnknownFields};
+                {error, Error} ->
+                    ?LLOG(warning, "error getting store ~s: ~p", [StoreId, Error]),
+                    {error, {store_not_found, StoreId}}
+            end;
+        {error, Error} ->
+            {error, Error}
+    end;
 
 object_parse(_SrvId, update, _Obj) ->
     #{}.
