@@ -146,7 +146,8 @@ element_action(<<"domain_tree_resources_users">>, selected, Value, Updates, Stat
         id => detail,
         value => #{
             id => <<"domain_detail_user_table">>,
-            webix_ui => Table
+            class => webix_ui,
+            value => Table
         }
     },
     {continue, [<<"domain_tree_resources_users">>, selected, Value, [Item|Updates2], State]};

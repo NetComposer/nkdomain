@@ -23,7 +23,7 @@
 -module(nkdomain_user_obj_ui).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([table/2, table2/1]).
+-export([table/2, table2/1, table_data/5]).
 
 
 table2(Opts) ->
@@ -48,10 +48,6 @@ table2(Opts) ->
             #{
                 id => enabled,
                 type => {icon, <<"fa-times">>}
-            },
-            #{
-                id => delete,
-                type => {icon, <<"fa-trash">>}
             }
         ],
         on_click => [
@@ -74,10 +70,48 @@ table2(Opts) ->
 
 
 
-
-
-
-
+table_data(Start, Size, _Filter, _Sort, #{srv_id:=SrvId, domain_id:=DomainId}) ->
+    Spec = #{
+        filters => #{
+            type => user
+        },
+        fields => [<<"icon_id">>, <<"path">>, <<"created_by">>, <<"created_time">>,
+                   <<"user.name">>, <<"user.surname">>, <<"user.email">>],
+        sort => [<<"path">>],
+        start => Start,
+        size => Size,
+        size => 100
+    },
+    case nkdomain_domain_obj:find_all(SrvId, DomainId, Spec) of
+        {ok, Total, List, _Meta} ->
+            Data = lists:map(
+                fun(Entry) ->
+                    #{
+                        <<"obj_id">> := ObjId,
+                        <<"path">> := Path,
+                        <<"created_time">> := CreatedTime,
+                        <<"user">> := #{
+                              <<"name">> := Name,
+                              <<"surname">> := Surname
+                          } = _User
+                    } = Entry,
+                    Enabled = case maps:get(<<"enabled">>, Entry, true) of
+                        true -> <<"fa-times">>;
+                        false -> <<"fa-check">>
+                    end,
+                    #{
+                        id => ObjId,
+                        path => Path,
+                        name => <<Name/binary, " ", Surname/binary>>,
+                        createdTime => CreatedTime,
+                        enabled => Enabled
+                    }
+                end,
+                List),
+            {ok, Total, Data};
+        {error, Error} ->
+            {error, Error}
+    end.
 
 
 
