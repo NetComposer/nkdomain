@@ -5,8 +5,8 @@
 -include_lib("nkservice/include/nkservice.hrl").
 -include_lib("nkmail/include/nkmail.hrl").
 
--define(HTTP, "http://127.0.0.1:9301/api").
--define(WS, "ws://127.0.0.1:9301/api/ws").
+-define(HTTP, "http://127.0.0.1:9301/_api").
+-define(WS, "ws://127.0.0.1:9301/_api/ws").
 -define(FILES, "http://127.0.0.1:9301/file").
 
 

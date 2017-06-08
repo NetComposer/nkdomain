@@ -4,7 +4,7 @@
 -include("nkdomain.hrl").
 -include_lib("nkservice/include/nkservice.hrl").
 
--define(WS, "ws://127.0.0.1:9301/api/ws").
+-define(WS, "ws://127.0.0.1:9301/_api/ws").
 -define(ADMIN_PASS, "1234").
 
 
