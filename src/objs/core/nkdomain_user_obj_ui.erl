@@ -23,7 +23,62 @@
 -module(nkdomain_user_obj_ui).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([table/2]).
+-export([table/2, table2/1]).
+
+
+table2(Opts) ->
+    Spec = Opts#{
+        filters => [<<"objectsDataShowSubdomains">>],
+        columns => [
+            #{
+                id => path,
+                type => text,
+                name => domain_column_path
+            },
+            #{
+                id => name,
+                type => text,
+                name => domain_column_name
+            },
+            #{
+                id => created_time,
+                type => date,
+                name => domain_column_created_time
+            },
+            #{
+                id => enabled,
+                type => {icon, <<"fa-times">>}
+            },
+            #{
+                id => delete,
+                type => {icon, <<"fa-trash">>}
+            }
+        ],
+        on_click => [
+            #{
+                id => <<"fa-times">>,
+                type => disable
+            },
+            #{
+                id => <<"fa-check">>,
+                type => enable
+            },
+            #{
+                id => <<"fa-trash">>,
+                type => delete
+            }
+        ]},
+    M = nkadmin_webix_datatable:datatable(Spec),
+    io:format("~s\n", [nklib_json:encode_pretty(M)]),
+    M.
+
+
+
+
+
+
+
+
 
 
 table(Srv, Domain) ->

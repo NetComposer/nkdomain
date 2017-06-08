@@ -27,6 +27,8 @@
 i18n() -> #{
     en => #{
         logout => "Logout",
+        domain_refresh => "Refresh",
+        domain_show_subdomains => "Show subdomains",
 
         domain_tree_overview => "Overview",
         domain_tree_overview_dashboard => "Dashboard",
@@ -47,10 +49,16 @@ i18n() -> #{
         domain_tree_sessions_admin => "Admin",
 
         domain_tree_networks => "Networks",
-        domain_tree_services => "Services"
+        domain_tree_services => "Services",
+
+        domain_column_name => <<"Name">>,
+        domain_column_path => <<"Path">>,
+        domain_column_created_time => <<"Created">>
     },
     es => #{
         logout => "Salir",
+        domain_refresh => "Refrescar",
+        domain_show_subdomains => "Mostrar subdominios",
 
         domain_tree_overview => "General",
         domain_tree_overview_dashboard => <<"Información"/utf8>>,
@@ -71,7 +79,11 @@ i18n() -> #{
         domain_tree_sessions_admin => "Admin",
 
         domain_tree_networks => "Redes",
-        domain_tree_services => "Servicios"
+        domain_tree_services => "Servicios",
+
+        domain_column_name => <<"Nombre">>,
+        domain_column_path => <<"Path">>,
+        domain_column_created_time => <<"Creación"/utf8>>
     }
 }.
 
