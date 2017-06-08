@@ -26,7 +26,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -behaviour(gen_server).
 
--export([get_obj/1, get_state/1, save/1, unload/2]).
+-export([get_obj/1, get_obj_type/1, get_state/1, save/1, unload/2]).
 -export([update/2, enable/2, get_name/1, delete/1, sync_op/2, async_op/2, is_enabled/1, apply/2]).
 -export([register/3, unregister/3, link/4, unlink/4, send_info/3, send_event/2, get_childs/1]).
 -export([wait_for_save/2]).
@@ -166,6 +166,14 @@
 
 get_obj(Id) ->
     do_call(Id, nkdomain_get_obj).
+
+
+%% @doc
+-spec get_obj_type(id()) ->
+    {ok, map()} | {error, term()}.
+
+get_obj_type(Id) ->
+    do_call(Id, nkdomain_get_obj_type).
 
 
 %% @doc
@@ -559,6 +567,10 @@ handle_call(nkdomain_get_obj, _From, State) ->
         '_is_enabled' => Enabled
     },
     reply({ok, Obj2}, State);
+
+handle_call(nkdomain_get_obj_type, _From, #?NKOBJ{type=Type, obj=Obj}=State) ->
+    ObjType = maps:get(Type, Obj, #{}),
+    reply({ok, ObjType}, State);
 
 handle_call(nkdomain_get_state, _From, State) ->
     reply({ok, State}, State);

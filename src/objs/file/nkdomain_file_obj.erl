@@ -24,8 +24,7 @@
 -behavior(nkdomain_obj).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([create/3]).
--export([upload/4, download/2]).
+-export([create/3, http_post/3, http_get/3]).
 -export([find/2, delete_all/2]).
 -export([object_get_info/0, object_mapping/0, object_parse/3,
          object_api_syntax/2, object_api_allow/3, object_api_cmd/3,
@@ -56,21 +55,38 @@ create(Srv, Name, Obj) ->
     nkdomain_obj_lib:make_and_create(Srv, Name, Obj, #{}).
 
 
-upload(Srv, FileId, CT, Body) ->
-    case nkdomain_obj_lib:load(Srv, FileId, #{}) of
-        #obj_id_ext{obj_id=FileObjId, type = ?DOMAIN_FILE, pid=Pid} ->
-            case nkdomain_obj:get_obj(Pid) of
-                {ok, #{?DOMAIN_FILE:=File}} ->
-                    case nkfile:upload(Srv, File#{name=>FileObjId}, Body) of
-                        {ok, File2} ->
-                            File3 = maps:with([store_id, password], File2),
-                            File4 = File3#{
-                                content_type => nklib_util:to_binary(CT),
-                                size => byte_size(Body)
-                            },
-                            case nkdomain_obj:sync_op(Pid, {?MODULE, update, File4}) of
-                                ok ->
-                                    ok;
+http_post(SrvId, Domain, Req) ->
+    Headers = nkservice_rest_http:get_headers(Req),
+    Token = nklib_util:get_value(<<"x-netcomposer-auth">>, Headers, <<>>),
+    case nkdomain_util:get_http_auth(SrvId, Token) of
+        {ok, UserId, _Meta, _State} ->
+            case nkservice_rest_http:get_body(Req, #{max_size=>10000000}) of
+                {ok, Body} ->
+                    CT = nkservice_rest_http:get_ct(Req),
+                    Qs = nkservice_rest_http:get_qs(Req),
+                    lager:error("NKLOG Qs ~p", [Qs]),
+                    Name = nklib_util:get_value(<<"name">>, Qs, <<>>),
+                    FileId = <<"file-", (nklib_util:luid())/binary>>,
+                    DomainId = case nklib_util:get_value(<<"domain">>, Qs, Domain) of
+                        <<>> -> <<"/">>;
+                        OtherDomain -> OtherDomain
+                    end,
+                    case get_store_id(SrvId, Domain, Qs) of
+                        {ok, StoreId} ->
+                            case upload(SrvId, StoreId, FileId, Body) of
+                                {ok, Meta} ->
+                                    Obj = #{
+                                        obj_id => FileId,
+                                        type => ?DOMAIN_FILE,
+                                        parent_id => DomainId,
+                                        created_by => UserId,
+                                        name => Name,
+                                        ?DOMAIN_FILE => Meta#{
+                                            content_type => CT,
+                                            size => byte_size(Body)
+                                        }
+                                    },
+                                    create(SrvId, <<>>, Obj);
                                 {error, Error} ->
                                     {error, Error}
                             end;
@@ -85,15 +101,50 @@ upload(Srv, FileId, CT, Body) ->
     end.
 
 
-download(Srv, FileId) ->
-    case nkdomain_obj_lib:load(Srv, FileId, #{}) of
-        #obj_id_ext{type = ?DOMAIN_FILE, obj_id=FileObjId, pid=Pid} ->
-            case nkdomain_obj:get_obj(Pid) of
-                {ok, #{?DOMAIN_FILE:=File}} ->
-                    CT = maps:get(content_type, File, <<>>),
-                    case nkfile:download(Srv, File#{name=>FileObjId}) of
-                        {ok, _, Body} ->
-                            {ok, CT, Body};
+upload(SrvId, StoreId, FileId, Body) ->
+    case nkfile:upload(SrvId, #{store_id=>StoreId, name=>FileId}, Body) of
+        {ok, Meta} ->
+            Meta2 = maps:with([store_id, password], Meta),
+            {ok, Meta2#{size => byte_size(Body)}};
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
+get_store_id(SrvId, Domain, Qs) ->
+    case nklib_util:get_value(<<"store_id">>, Qs, <<>>) of
+        <<>> ->
+            case nkdomain_domain_obj:get_config(SrvId, Domain) of
+                {ok, #{default_store_id:=StoreId}} ->
+                    {ok, StoreId};
+                _ ->
+                    case SrvId:config() of
+                        #{domain_default_store_id:=StoreId} ->
+                            {ok, StoreId};
+                        _ ->
+                            {error, missing_store_id}
+                    end
+            end;
+        StoreId ->
+            {ok, StoreId}
+    end.
+
+http_get(SrvId, FileId, Req) ->
+    Headers = nkservice_rest_http:get_headers(Req),
+    Token = nklib_util:get_value(<<"x-netcomposer-auth">>, Headers, <<>>),
+    case nkdomain_util:get_http_auth(SrvId, Token) of
+        {ok, _UserId, _Meta, _State} ->
+            case nkdomain_obj_lib:load(SrvId, FileId, #{}) of
+                #obj_id_ext{type = ?DOMAIN_FILE, obj_id=FileObjId, pid=Pid} ->
+                    case nkdomain_obj:get_obj(Pid) of
+                        {ok, #{?DOMAIN_FILE:=File}} ->
+                            CT = maps:get(content_type, File, <<>>),
+                            case nkfile:download(SrvId, File#{name=>FileObjId}) of
+                                {ok, _, Body} ->
+                                    {ok, CT, Body};
+                                {error, Error} ->
+                                    {error, Error}
+                            end;
                         {error, Error} ->
                             {error, Error}
                     end;

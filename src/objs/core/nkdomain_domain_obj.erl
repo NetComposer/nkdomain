@@ -24,7 +24,8 @@
 -behavior(nkdomain_obj).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([create/3, find/3, find_all/3, find_types/3, find_all_types/3, find_childs/3, find_all_childs/3]).
+-export([create/3, get_config/2]).
+-export([find/3, find_all/3, find_types/3, find_all_types/3, find_childs/3, find_all_childs/3]).
 -export([object_get_info/0, object_mapping/0, object_parse/3,
          object_api_syntax/2, object_api_allow/3, object_api_cmd/3]).
 -export([object_start/1]).
@@ -46,6 +47,16 @@
 
 create(Srv, Name, Obj) ->
     nkdomain_obj_lib:make_and_create(Srv, Name, Obj, #{}).
+
+
+%% @doc
+get_config(Srv, Id) ->
+    case nkdomain_obj_lib:load(Srv, Id, #{}) of
+        #obj_id_ext{pid=Pid} ->
+            nkdomain_obj:get_obj_type(Pid);
+        {error, Error} ->
+            {error, Error}
+    end.
 
 
 %% @doc

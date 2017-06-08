@@ -5,9 +5,8 @@
 -include_lib("nkservice/include/nkservice.hrl").
 -include_lib("nkmail/include/nkmail.hrl").
 
--define(HTTP, "http://127.0.0.1:9301/_api").
+-define(HTTP, "http://127.0.0.1:9301").
 -define(WS, "ws://127.0.0.1:9301/_api/ws").
--define(FILES, "http://127.0.0.1:9301/file").
 
 
 login() ->
@@ -258,8 +257,28 @@ config_find(SubType, Parent) ->
     cmd(<<"objects/config/find">>, #{parent=>Parent, subtype=>SubType}).
 
 
-file_get(Id) ->
-    cmd(<<"objects/file/get">>, #{id=>Id}).
+file_post1(T) ->
+    {ok, #{<<"obj_id">>:=FileId}} = upload(T, "/_file", "text/plain", "1234"),
+    {ok, "1234"} = download(T, FileId),
+    FileId.
+
+file_post2(T) ->
+    {error,#{<<"data">>:=#{<<"code">>:=<<"store_not_found">>}}} =
+       upload(T, "/_file?store_id=none", "text/plain", "4321"),
+     {ok, #{<<"obj_id">>:=FileId}} =
+        upload(T, "/_file?store_id=/file.stores/carlos.s3_secure", "text/plain", "4321"),
+    {ok, "4321"} = download(T, FileId),
+    FileId.
+
+file_post3(T) ->
+    {error,#{<<"data">>:=#{<<"code">>:=<<"could_not_load_parent">>}}} =
+        upload(T, "/_file?domain=a", "text/plain", "4321"),
+    {ok, #{<<"obj_id">>:=FileId}} =
+        upload(T, "/_file?domain=/ct", "text/plain", "4321"),
+    {ok, "4321"} = download(T, FileId),
+    FileId.
+
+
 
 file_create_local() ->
     cmd(<<"objects/file/create">>, #{tags=>[a, b], file=>#{store_id=><<"/file.stores/local">>}}).
@@ -370,10 +389,19 @@ http_domain_find(Token, Id) ->
     http(Token, <<"objects/domain/find">>, #{id=>Id}).
 
 
+http_domain_find(User, Pass, Id) ->
+    http(User, Pass, <<"objects/domain/find">>, #{id=>Id}).
+
+
+http(User, Pass, Cmd, Data) ->
+    http(base64:encode(list_to_binary([User, ":", Pass])), Cmd, Data).
+
+
 http(Token, Cmd, Data) ->
     Hds = [{"X-NetComposer-Auth", nklib_util:to_list(Token)}],
     Body = nklib_json:encode_pretty(#{cmd=>to_bin(Cmd), data=>Data}),
-    {ok, {{_, 200, _}, _Hs, B}} = httpc:request(post, {?HTTP, Hds, "application/json", Body}, [], []),
+    Url = <<?HTTP, "/_api">>,
+    {ok, {{_, 200, _}, _Hs, B}} = httpc:request(post, {to_list(Url), Hds, "application/json", Body}, [], []),
     case nklib_json:decode(B) of
         #{<<"result">>:=<<"ok">>}=Result ->
             {ok, maps:get(<<"data">>, Result)};
@@ -382,41 +410,38 @@ http(Token, Cmd, Data) ->
     end.
 
 
-
-upload() ->
-    F = <<"file-3xGzIUw2nmo0YJICQ5aDjfEni2b">>,
-    Path = "/etc/hosts",
-    {ok, Data} = file:read_file(Path),
-    upload(F, "text/plain2", Data).
-
-
-upload(Id, CT, File) ->
-    Url = binary_to_list(<< ?FILES, $/, Id/binary>>),
-    case httpc:request(post, {Url, [], nklib_util:to_list(CT), File}, [], []) of
-        {ok, {{_, 200, _}, _, _}} ->
-            ok;
-        _ ->
-            error
+upload(T, Url, CT, Body) ->
+    Hds = [{"X-NetComposer-Auth", nklib_util:to_list(T)}],
+    Url2 = list_to_binary([?HTTP, Url]),
+    case httpc:request(post, {to_list(Url2), Hds, to_list(CT), Body}, [], []) of
+        {ok, {{_, 200, _}, _Hs, B}} ->
+            {ok, nklib_json:decode(B)};
+        {ok, {{_, 400, _}, _Hs, B}} ->
+            {error, nklib_json:decode(B)}
     end.
 
 
 
+download(T, File) ->
+    Hds = [{"X-NetComposer-Auth", nklib_util:to_list(T)}],
+    Url = list_to_binary([?HTTP, "/_file/", File]),
+    case httpc:request(get, {to_list(Url), Hds}, [], []) of
+        {ok, {{_, 200, _}, _Hs, B}} ->
+            {ok, B};
+        {ok, {{_, 400, _}, _Hs, B}} ->
+            {error, nklib_json:decode(B)}
+    end.
 
-download() ->
-    F = <<"file-3xGzIUw2nmo0YJICQ5aDjfEni2b">>,
-    Url = binary_to_list(<< ?FILES, $/, F/binary>>),
-    httpc:request(get, {Url, []}, [], []).
 
-
-upload_icon(Id) ->
-    {ok, {_, _, B1}} = httpc:request("https://www.flatpyramid.com/uploads/3d-models/samples/other/popeye_3d-3d-model-sample-22266-87323.gif"),
-    Url = binary_to_list(<< ?FILES, "/icon/", (to_bin(Id))/binary>>),
-    httpc:request(post, {Url, [], "image/gif", B1}, [], []).
-
-download_icon(Id) ->
-    Url = binary_to_list(<< ?FILES, "/icon/", (to_bin(Id))/binary>>),
-    httpc:request(get, {Url, []}, [], []).
-
+%%upload_icon(Id) ->
+%%    {ok, {_, _, B1}} = httpc:request("https://www.flatpyramid.com/uploads/3d-models/samples/other/popeye_3d-3d-model-sample-22266-87323.gif"),
+%%    Url = binary_to_list(<< ?FILES, "/icon/", (to_bin(Id))/binary>>),
+%%    httpc:request(post, {Url, [], "image/gif", B1}, [], []).
+%%
+%%download_icon(Id) ->
+%%    Url = binary_to_list(<< ?FILES, "/icon/", (to_bin(Id))/binary>>),
+%%    httpc:request(get, {Url, []}, [], []).
+%%
 
 
 
@@ -426,5 +451,6 @@ download_icon(Id) ->
 %% ===================================================================
 
 
+to_list(R) -> nklib_util:to_list(R).
 
 to_bin(R) -> nklib_util:to_binary(R).

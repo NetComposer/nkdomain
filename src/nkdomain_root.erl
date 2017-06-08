@@ -57,11 +57,15 @@ start() ->
     Spec1 = #{
         plugins => [nkdomain, nkdomain_store_es, nkdomain_store_pgsql, nkadmin, nkchat],
         domain => <<"root">>,
+        domain_default_store_id => "/file.stores/local",
         domain_elastic_url => nkdomain_app:get(elastic_url),
+
+
         % webserver_url => "https://127.0.0.1:1234",
         % webserver_path => "/tmp",
         admin_url => <<BaseHttp/binary, "/_admin">>,
         rest_url => BaseHttp,
+        % API HTTP Requests will go to SrvId:api_server_http_auth
         api_server => <<BaseHttp/binary, "/_api, ", BaseWs/binary, "/_api/ws">>,
         debug => [
             %% {nkapi_client, #{nkpacket=>true}},

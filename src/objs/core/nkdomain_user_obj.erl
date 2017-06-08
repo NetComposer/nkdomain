@@ -24,7 +24,7 @@
 -behavior(nkdomain_obj).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([create/3, login/3, token/3, check_token/1, get_name/2, send_push/3]).
+-export([create/3, login/3, token/3, check_token/1, check_user_token/2, get_name/2, send_push/3]).
 -export([object_get_info/0, object_admin_info/0, object_mapping/0, object_parse/3,
          object_api_syntax/2, object_api_allow/3, object_api_cmd/3, object_send_event/2,
          object_sync_op/3, object_async_op/2]).
@@ -37,6 +37,7 @@
 -define(LLOG(Type, Txt, Args),
     lager:Type("NkDOMAIN User "++Txt, Args)).
 
+-define(INVALID_PASSWORD_TIME, 500).
 
 %% ===================================================================
 %% Types
@@ -143,20 +144,43 @@ check_token(Token) ->
                 _ ->
                     {error, invalid_session}
             end;
-        {ok, #{type:=?DOMAIN_TOKEN, subtype:=?DOMAIN_USER, ?DOMAIN_TOKEN:=Data}} ->
-            case Data of
+        {ok, #{type:=?DOMAIN_TOKEN, subtype:=SubTypes, ?DOMAIN_TOKEN:=Data}} ->
+            case lists:member(?DOMAIN_USER, SubTypes) andalso Data of
                 #{user_id:=UserId, domain_id:=DomainId, login_meta:=Meta} ->
                     State2 = nkdomain_api_util:add_id(?DOMAIN_DOMAIN, DomainId, #{}),
                     State3 = nkdomain_api_util:add_id(?DOMAIN_USER, UserId, State2),
                     {ok, UserId, Meta, State3};
-                D ->
-                    {error, invalid_token, D}
+                _ ->
+                    {error, invalid_token}
             end;
         _ ->
             {error, invalid_token}
     end.
 
 
+%% @doc
+check_user_token(SrvId, Token) ->
+    case catch base64:decode(Token) of
+        Bin when is_binary(Bin) ->
+            case binary:split(Bin, <<":">>) of
+                [Login, Pass] ->
+                    case do_load(SrvId, Login) of
+                        {ok, ObjId, UserPid} ->
+                            case do_check_pass(UserPid, ObjId, #{password=>Pass}) of
+                                {ok, UserObjId} ->
+                                    {ok, UserObjId};
+                                {error, Error} ->
+                                    {error, Error}
+                            end;
+                        {error, Error} ->
+                            {error, Error}
+                    end;
+                _ ->
+                    {error, invalid_token}
+            end;
+        _ ->
+            {error, invalid_token}
+    end.
 
 
 %% @doc
@@ -341,6 +365,7 @@ do_check_pass(Pid, ObjId, #{password:=Pass}) ->
         {ok, true} ->
             {ok, ObjId};
         {ok, false} ->
+            timer:sleep(?INVALID_PASSWORD_TIME),
             {error, invalid_password};
         {error, Error} ->
             {error, Error}

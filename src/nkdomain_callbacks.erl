@@ -155,46 +155,32 @@ admin_get_data(ElementId, Spec, State) ->
 
 
 %% @doc
-nkservice_rest_http(SrvId, get, [<<"file">>, Id], Req, State) ->
-    case nkdomain_file_obj:download(SrvId, Id) of
-        {ok, _Name, CT, Bin} ->
+nkservice_rest_http(SrvId, get, [<<"_file">>, FileId], Req, State) ->
+    case nkdomain_file_obj:http_get(SrvId, FileId, Req) of
+        {ok, CT, Bin} ->
             {http, 200, [{<<"Content-Type">>, CT}], Bin, State};
         {error, Error} ->
             nkservice_rest_http:reply_json({error, Error}, Req, State)
     end;
 
-nkservice_rest_http(SrvId, post, [<<"file">>, Id], Req, State) ->
-    case nkservice_rest_http:get_body(Req, #{max_size=>10000000}) of
-        {ok, Body} ->
-            CT = nkservice_rest_http:get_ct(Req),
-            case nkdomain_file_obj:upload(SrvId, Id, CT, Body) of
-                ok ->
-                    nkservice_rest_http:reply_json({ok, #{}}, Req, State);
+nkservice_rest_http(SrvId, post, File, Req, State) ->
+    case lists:reverse(File) of
+        [<<"_file">>|Rest] ->
+            Domain = nklib_util:bjoin(lists:reverse(Rest), <<"/">>),
+            case nkdomain_file_obj:http_post(SrvId, Domain, Req) of
+                {ok, Reply, _Pid} ->
+                    nkservice_rest_http:reply_json({ok, Reply}, Req, State);
                 {error, Error} ->
                     nkservice_rest_http:reply_json({error, Error}, Req, State)
             end;
-        {error, Error} ->
-            nkservice_rest_http:reply_json({error, Error}, Req, State)
-    end;
-
-nkservice_rest_http(SrvId, get, [<<"file">>, <<"icon">>, Id], Req, State) ->
-    case nkdomain_util:download_icon(SrvId, Id) of
-        {ok, CT, Body} ->
-            {http, 200, [{<<"Content-Type">>, CT}], Body, State};
-        {error, Error} ->
-            nkservice_rest_http:reply_json({error, Error}, Req, State)
-    end;
-
-nkservice_rest_http(SrvId, post, [<<"file">>, <<"icon">>, Id], Req, State) ->
-    case nkdomain_util:upload_icon(SrvId, Id, Req) of
-        ok ->
-            nkservice_rest_http:reply_json({ok, #{}}, Req, State);
-        {error, Error} ->
-            nkservice_rest_http:reply_json({error, Error}, Req, State)
+        _ ->
+            continue
     end;
 
 nkservice_rest_http(_SrvId, _Method, _Path, _Req, _State) ->
     continue.
+
+
 
 %% ===================================================================
 %% Offered Object Callbacks
@@ -306,16 +292,6 @@ object_store_read_path(_SrvId, _Path, _Meta) ->
 
 object_store_save(_Session) ->
     {error, not_implemented}.
-
-
-
-
-
-
-
-
-
-
 
 
 %% @doc Called to get and parse an object
@@ -868,18 +844,14 @@ api_server_reg_down(_Link, _Reason, _State) ->
 api_server_http_auth(#nkreq{cmd = <<"objects/user/login">>}, _HttpReq) ->
     {true, <<>>, #{}, #{}};
 
-api_server_http_auth(_Req, HttpReq) ->
+api_server_http_auth(#nkreq{srv_id=SrvId}, HttpReq) ->
     Headers = nkapi_server_http:get_headers(HttpReq),
-    case nklib_util:get_value(<<"x-netcomposer-auth">>, Headers) of
-        Token when is_binary(Token) ->
-            case nkdomain_user_obj:check_token(Token) of
-                {ok, UserId, Meta, State} ->
-                    {true, UserId, Meta, State};
-                {error, Error} ->
-                    {error, Error}
-            end;
-        _ ->
-            {error, missing_auth_header}
+    Token = nklib_util:get_value(<<"x-netcomposer-auth">>, Headers, <<>>),
+    case nkdomain_util:get_http_auth(SrvId, Token) of
+        {ok, UserId, Meta, State} ->
+            {true, UserId, Meta, State};
+        {error, Error} ->
+            {error, Error}
     end.
 
 %%%% @doc
@@ -903,7 +875,8 @@ plugin_deps() ->
 %% @private
 plugin_syntax() ->
     #{
-        domain => binary
+        domain => binary,
+        domain_default_store_id => binary
     }.
 
 
