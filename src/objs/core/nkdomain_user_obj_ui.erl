@@ -46,8 +46,8 @@ table2(Opts) ->
                 name => domain_column_created_time
             },
             #{
-                id => enabled,
-                type => {icon, <<"fa-times">>}
+                id => enabled_icon,
+                type => {icon, <<"enabled_icon">>}
             }
         ],
         on_click => [
@@ -103,8 +103,8 @@ table_data(Start, Size, _Filter, _Sort, #{srv_id:=SrvId, domain_id:=DomainId}) -
                         id => ObjId,
                         path => Path,
                         name => <<Name/binary, " ", Surname/binary>>,
-                        createdTime => CreatedTime,
-                        enabled => Enabled
+                        created_time => CreatedTime,
+                        enabled_icon => Enabled
                     }
                 end,
                 List),
