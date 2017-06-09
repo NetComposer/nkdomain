@@ -122,31 +122,31 @@ error(_)   		                        -> continue.
 
 
 %% @private
-admin_tree_categories(Data, State) ->
-    nkdomain_admin_tree:categories(Data, State).
+admin_tree_categories(Data, Session) ->
+    nkdomain_admin_tree:categories(Data, Session).
 
 
 %% @doc
-admin_tree_get_category(Category, State) ->
-    nkdomain_admin_tree:get_category(Category, State).
+admin_tree_get_category(Category, Session) ->
+    nkdomain_admin_tree:get_category(Category, Session).
 
 
 %% @doc
-admin_event(#nkevent{class = ?DOMAIN_EVENT_CLASS}=Event, Updates, State) ->
-    nkdomain_admin_tree:event(Event, Updates, State);
+admin_event(#nkevent{class = ?DOMAIN_EVENT_CLASS}=Event, Updates, Session) ->
+    nkdomain_admin_tree:event(Event, Updates, Session);
 
-admin_event(_Event, _Updates, _State) ->
+admin_event(_Event, _Updates, _Session) ->
     continue.
 
 
 %% @doc
-admin_element_action(ElementId, Action, Value, Updates, State) ->
-    nkdomain_admin_tree:element_action(ElementId, Action, Value, Updates, State).
+admin_element_action(ElementId, Action, Value, Updates, Session) ->
+    nkdomain_admin_tree:element_action(ElementId, Action, Value, Updates, Session).
 
 
 %% @doc
-admin_get_data(ElementId, Spec, State) ->
-    nkdomain_admin_detail:get_data(ElementId, Spec, State).
+admin_get_data(ElementId, Spec, Session) ->
+    nkdomain_admin_detail:get_data(ElementId, Spec, Session).
 
 
 %% ===================================================================

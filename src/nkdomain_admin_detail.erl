@@ -36,35 +36,43 @@
 
 
 %% @doc
-get_data(<<"domain_detail_user_table">>, Spec, State) ->
-    Start = maps:get(start, Spec, 0),
-    Size = case maps:find('end', Spec) of
-        {ok, End} when End > Start -> End-Start;
-        _ -> 100
-    end,
-    Filter = maps:get(filter, Spec, #{}),
-    Sort = case maps:get(sort, Spec, #{}) of
-        #{
-            id := SortId,
-            dir := SortDir
-        } ->
-            {SortId, SortDir};
-        _ ->
-            undefined
-    end,
-    case nkdomain_user_obj_ui:table_data(Start, Size, Filter, Sort, State) of
-        {ok, Total, Data} ->
-            Reply = #{
-                total_count => Total,
-                pos => Start,
-                data => Data
+get_data(Key, Spec, Session) ->
+    case nkadmin_util:get_key_data(Key, Session) of
+        #{data_fun:=Fun} ->
+            Start = maps:get(start, Spec, 0),
+            Size = case maps:find('end', Spec) of
+                {ok, End} when End > Start -> End-Start;
+                _ -> 100
+            end,
+            Filter = maps:get(filter, Spec, #{}),
+            Sort = case maps:get(sort, Spec, #{}) of
+                #{
+                    id := SortId,
+                    dir := SortDir
+                } ->
+                    {SortId, SortDir};
+                _ ->
+                    undefined
+            end,
+            FunSpec = #{
+                start => Start,
+                size => Size,
+                filter => Filter,
+                sort => Sort
             },
-            {ok, Reply, State};
-        {error, Error} ->
-            ?LLOG(warning, "error getting query: ~p", [Error]),
-            {ok, #{total_count=>0, pos=>0, data=>[]}, State}
-    end;
-
-get_data(_ElementId, _Data, _State) ->
-    continue.
+            case Fun(FunSpec, Session) of
+                {ok, Total, Data} ->
+                    Reply = #{
+                        total_count => Total,
+                        pos => Start,
+                        data => Data
+                    },
+                    {ok, Reply, Session};
+                {error, Error} ->
+                    ?LLOG(warning, "error getting query: ~p", [Error]),
+                    {ok, #{total_count=>0, pos=>0, data=>[]}, Session}
+            end;
+        _ ->
+            {error, element_not_found, Session}
+    end.
 

@@ -155,8 +155,7 @@ object_get_info() ->
 object_admin_info() ->
     #{
         class => resource,
-        weight => 1100,
-        tree_id => <<"domain_tree_resources_files">>
+        weight => 1100
     }.
 
 

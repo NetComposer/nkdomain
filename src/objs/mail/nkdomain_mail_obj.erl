@@ -61,8 +61,7 @@ object_get_info() ->
 object_admin_info() ->
     #{
         class => resource,
-        weight => 8500,
-        tree_id => <<"domain_tree_resources_mails">>
+        weight => 8500
     }.
 
 

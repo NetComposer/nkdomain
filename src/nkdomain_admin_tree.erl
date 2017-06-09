@@ -143,23 +143,23 @@ element_action(?ALERTS, selected, Value, Updates, Session) ->
     {Updates2, Session2} = nkadmin_util:update_detail(<<"alerts">>, #{}, Updates, Session),
     {continue, [?ALERTS, selected, Value, Updates2, Session2]};
 
-element_action(<<"domain_tree_resources_users">>=Key, selected, Value, Updates, Session) ->
-    #{domain_id:=_DomainId} = Session,
-    Table = nkdomain_user_obj_ui:table2(Session), %root, DomainId),
-    Detail = #{
-        id => <<"domain_detail_user_table">>,
-        class => webix_ui,
-        value => Table
-    },
-    {Updates2, Session2} = nkadmin_util:update_detail(<<"users">>, Detail, Updates, Session),
-    {continue, [Key, selected, Value, Updates2, Session2]};
-
 element_action(<<"domain_tree_resources_", Type/binary>>=Key, selected, Value, Updates, Session) ->
-    {Updates2, Session2} = nkadmin_util:update_detail(Type, #{}, Updates, Session),
-    {continue, [Key, selected, Value, Updates2, Session2]};
+    {true, Info} = is_resource(Type, Session),
+    Class = nkdomain_util:class(Type),
+    case Info of
+        #{get_tree_detail:=Fun} ->
+            {Detail, Session2} = Fun(Session),
+            {Updates3, Session3} = nkadmin_util:update_detail(Class, Detail, Updates, Session2),
+            {continue, [Key, selected, Value, Updates3, Session3]};
+        _ ->
+            lager:notice("Type with no supported table: ~s", [Type]),
+            {Updates2, Session2} = nkadmin_util:update_detail(Class, #{}, Updates, Session),
+            {continue, [Key, selected, Value, Updates2, Session2]}
+    end;
 
 element_action(<<"domain_tree_sessions_", Type/binary>>=Key, selected, Value, Updates, Session) ->
-    {Updates2, Session2} = nkadmin_util:update_detail(Type, #{}, Updates, Session),
+    Class = nkdomain_util:class(Type),
+    {Updates2, Session2} = nkadmin_util:update_detail(Class, #{}, Updates, Session),
     {continue, [Key, selected, Value, Updates2, Session2]};
 
 element_action(_Id, _Action, _Value, _Updates, _Session) ->
@@ -328,8 +328,9 @@ get_resource_items([], Acc, Session) ->
 
 get_resource_items([Type|Rest], Acc, Session) ->
     case is_resource(Type, Session) of
-        {true, #{tree_id:=Key}=Info} ->
+        {true, Info} ->
             Weight = maps:get(weight, Info, 9000),
+            Key = << ?RESOURCES/binary, $_, Type/binary>>,
             Item = nkadmin_util:menu_item(Key, menuEntry, #{}, Session),
             #{resources:=Resources} = Session,
             Session2 = case lists:member(Type, Resources) of
@@ -393,8 +394,9 @@ get_session_items([], Acc, Session) ->
 
 get_session_items([Type|Rest], Acc, Session) ->
     case is_session(Type, Session) of
-        {true, #{tree_id:=Key}=Info} ->
+        {true, Info} ->
             Weight = maps:get(weight, Info, 9000),
+            Key = <<?SESSIONS/binary, $_, Type/binary>>,
             #{sessions:=Sessions} = Session,
             case maps:find(Type, Sessions) of
                 {ok, 0} ->

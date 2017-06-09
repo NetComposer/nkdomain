@@ -224,8 +224,7 @@ object_admin_info() ->
     #{
         class => resource,
         weight => 100,
-        tree_id => <<"domain_tree_resources_users">>,
-        detail_table => fun nkdomain_user_obj_ui:table/0
+        get_tree_detail => fun nkdomain_user_obj_ui:table/1
     }.
 
 
