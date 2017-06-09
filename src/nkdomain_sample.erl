@@ -257,6 +257,12 @@ config_find(SubType, Parent) ->
     cmd(<<"objects/config/find">>, #{parent=>Parent, subtype=>SubType}).
 
 
+file_create1() ->
+    File = #{content_type=><<"plain/text">>, body=>base64:encode(<<"1234">>)},
+    cmd(<<"objects/file/create">>, #{tags=>[a, b], file=>File}).
+
+
+
 file_post1(T) ->
     {ok, #{<<"obj_id">>:=FileId}} = upload(T, "/_file", "text/plain", "1234"),
     {ok, "1234"} = download(T, FileId),
@@ -280,8 +286,6 @@ file_post3(T) ->
 
 
 
-file_create_local() ->
-    cmd(<<"objects/file/create">>, #{tags=>[a, b], file=>#{store_id=><<"/file.stores/local">>}}).
 
 file_create_s3() ->
     cmd(<<"objects/file/create">>, #{tags=>[b, c], file=>#{store_id=><<"/file.stores/carlos.s3_secure">>}}).

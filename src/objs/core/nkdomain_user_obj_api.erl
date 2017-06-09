@@ -22,7 +22,7 @@
 -module(nkdomain_user_obj_api).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([cmd/3]).
+-export([cmd/2]).
 
 
 -include("nkdomain.hrl").
@@ -34,33 +34,35 @@
 %% ===================================================================
 
 %% @doc
-cmd(<<"login">>, #nkreq{session_module=nkapi_server}=Req, State) ->
+cmd(<<"login">>, #nkreq{session_module=nkapi_server, user_meta=UserMeta}=Req) ->
     #nkreq{data=#{id:=User}=Data, srv_id=SrvId, session_id=SessId, session_meta=SessMeta} = Req,
     case get_domain(Req) of
         {ok, DomainId} ->
-            LoginMeta1 = maps:with([local, remote], SessMeta),
-            LoginMeta2 = LoginMeta1#{
+            LoginOpts1 = maps:with([local, remote], SessMeta),
+            LoginMeta = maps:get(meta, Data, #{}),
+            LoginOpts2 = LoginOpts1#{
                 session_id => SessId,
                 domain_id => DomainId,
                 password => maps:get(password, Data, <<>>),
-                login_meta => maps:get(meta, Data, #{}),
+                login_meta => LoginMeta,
                 api_server_pid => self()
             },
-            case nkdomain_user_obj:login(SrvId, User, LoginMeta2) of
-                {ok, UserId, SessId, LoginMeta3} ->
+            case nkdomain_user_obj:login(SrvId, User, LoginOpts2) of
+                {ok, UserId, SessId} ->
                     Reply = #{obj_id=>UserId, session_id=>SessId},
-                    State2 = nkdomain_api_util:add_id(?DOMAIN_DOMAIN, DomainId, State),
-                    State3 = nkdomain_api_util:add_id(?DOMAIN_USER, UserId, State2),
-                    State4 = nkdomain_api_util:add_id(?DOMAIN_SESSION, SessId, State3),
-                    {login, Reply, UserId, LoginMeta3, State4};
+                    UserMeta1 = UserMeta#{login_meta=>LoginMeta},
+                    UserMeta2 = nkdomain_api_util:add_id(?DOMAIN_DOMAIN, DomainId, UserMeta1),
+                    UserMeta3 = nkdomain_api_util:add_id(?DOMAIN_USER, UserId, UserMeta2),
+                    UserMeta4 = nkdomain_api_util:add_id(?DOMAIN_SESSION, SessId, UserMeta3),
+                    {login, Reply, UserId, UserMeta4};
                 {error, Error} ->
-                    {error, Error, State}
+                    {error, Error}
             end;
         {error, Error} ->
-            {error, Error, State}
+            {error, Error}
     end;
 
-cmd(<<"login">>, #nkreq{session_module=nkapi_server_http}=Req, State) ->
+cmd(<<"login">>, #nkreq{session_module=nkapi_server_http}=Req) ->
     #nkreq{data=#{id:=User}=Data, srv_id=SrvId, session_id=SessId, session_meta=SessMeta} = Req,
     case get_domain(Req) of
         {ok, DomainId} ->
@@ -77,16 +79,16 @@ cmd(<<"login">>, #nkreq{session_module=nkapi_server_http}=Req, State) ->
             end,
             case nkdomain_user_obj:token(SrvId, User, LoginMeta3) of
                 {ok, Reply} ->
-                    {ok, Reply, State};
+                    {ok, Reply};
                 {error, Error} ->
-                    {error, Error, State}
+                    {error, Error}
             end;
         {error, Error} ->
-            {error, Error, State}
+            {error, Error}
     end;
 
-cmd(Cmd, Req, State) ->
-    nkdomain_obj_api:api(Cmd, ?DOMAIN_USER, Req, State).
+cmd(Cmd, Req) ->
+    nkdomain_obj_api:api(Cmd, ?DOMAIN_USER, Req).
 
 
 %% ===================================================================

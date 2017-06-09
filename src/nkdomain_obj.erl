@@ -520,15 +520,19 @@ do_init(ObjIdExt, Meta) ->
     set_log(State2),
     nkservice_util:register_for_changes(SrvId),
     ?DEBUG("loaded (~p)", [self()], State2),
-    {ok, State3} = handle(object_init, [], State2),
-    case IsCreated of
-        false ->
-            gen_server:cast(self(), nkdomain_do_load);
-        true ->
-            ok
-    end,
-    gen_server:cast(self(), nkdomain_do_start),
-    {ok, State3}.
+    case handle(object_init, [], State2) of
+        {ok, State3} ->
+            case IsCreated of
+                false ->
+                    gen_server:cast(self(), nkdomain_do_load);
+                true ->
+                    ok
+            end,
+            gen_server:cast(self(), nkdomain_do_start),
+            {ok, State3};
+        {error, Error} ->
+            {stop, Error}
+    end.
 
 
 %% @private

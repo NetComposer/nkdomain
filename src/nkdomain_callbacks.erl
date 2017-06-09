@@ -826,8 +826,15 @@ service_api_allow(_Req, _State) ->
 
 %% @doc
 service_api_cmd(#nkreq{cmd = <<"objects/", _/binary>>}=Req, State) ->
+    #nkreq{session_module=Mod, tid=TId} = Req,
     #nkreq{req_state={Module, Cmd}} = Req,
-    nklib_util:apply(Module, object_api_cmd, [Cmd, Req, State]);
+    Self = self(),
+    spawn_link(
+        fun() ->
+            Reply = nklib_util:apply(Module, object_api_cmd, [Cmd, Req]),
+            Mod:reply(Self, TId, Reply)
+        end),
+    {ack, State};
 
 service_api_cmd(_Req, _State) ->
     continue.

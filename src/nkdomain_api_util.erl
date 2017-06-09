@@ -21,7 +21,7 @@
 -module(nkdomain_api_util).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([search/2, get_id/3, get_id/4, add_id/3]).
+-export([search/1, get_id/3, get_id/4, add_id/3]).
 
 -include("nkdomain.hrl").
 -include_lib("nkservice/include/nkservice.hrl").
@@ -34,7 +34,7 @@
 
 
 %% @doc
-search({ok, Total, List}, Req) ->
+search({ok, Total, List}) ->
     Data = #{
         total => Total,
         data =>
@@ -42,39 +42,40 @@ search({ok, Total, List}, Req) ->
                 fun({Type, ObjId, Path}) -> #{type=>Type, obj_id=>ObjId, path=>Path} end,
                 List)
     },
-    {ok, Data, Req};
+    {ok, Data};
 
-search({error, Error}, Req) ->
-    {error, Error, Req}.
-
-
-%% @doc
-get_id(Type, Data, State) ->
-    get_id(Type, id, Data, State).
+search({error, Error}) ->
+    {error, Error}.
 
 
 %% @doc
-get_id(Type, Field, Data, State) ->
+get_id(Type, Data, Req) ->
+    get_id(Type, id, Data, Req).
+
+
+%% @doc
+get_id(Type, Field, Data, #nkreq{user_meta=Meta}) ->
     case maps:find(Field, Data) of
         {ok, Id} ->
             {ok, Id};
         error ->
-            ObjIds = maps:get(nkdomain_obj_ids, State, #{}),
+            ObjIds = maps:get(nkdomain_obj_ids, Meta, #{}),
             case maps:find(Type, ObjIds) of
                 {ok, Id} ->
                     {ok, Id};
                 error ->
                     % lager:error("OI: ~s ~p", [Type, ObjIds]),
-                    {error, {missing_field, Field}, State}
+                    {error, {missing_field, Field}}
             end
     end.
 
 
 %% @doc Adds 'logged in' information to the state
-add_id(Type, Id, State) ->
-    ObjIds1 = maps:get(nkdomain_obj_ids, State, #{}),
-    ObjIds2 = ObjIds1#{Type => Id},
-    State#{nkdomain_obj_ids => ObjIds2}.
+add_id(Type, Id, #nkreq{user_meta=Meta}) ->
+    add_id(Type, Id, Meta);
 
+add_id(Type, Id, Meta) ->
+    ObjIds = maps:get(nkdomain_obj_ids, Meta, #{}),
+    ObjIds#{Type => Id}.
 
 

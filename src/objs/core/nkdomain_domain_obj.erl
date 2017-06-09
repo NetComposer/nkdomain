@@ -141,12 +141,14 @@ object_get_info() ->
 
 %% @private
 object_mapping() ->
-    #{}.
+    disabled.
 
 
 %% @private
 object_parse(_SrvId, _Mode, _Obj) ->
-    #{}.
+    #{
+        default_store_id => binary
+    }.
 
 
 %% @private

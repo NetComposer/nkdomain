@@ -89,7 +89,7 @@ create(Srv, Name, Obj) ->
 
 %% @doc
 -spec login(nkservice:id(), User::binary(), login_opts()) ->
-    {ok, UserId::nkdomain:obj_id(), SessId::nkdomain:obj_id(), map()} |
+    {ok, UserId::nkdomain:obj_id(), SessId::nkdomain:obj_id()} |
     {error, user_not_found|term()}.
 
 login(SrvId, Login, Opts) ->
@@ -101,7 +101,7 @@ login(SrvId, Login, Opts) ->
                         {ok, SessId} ->
                             Meta = maps:get(login_meta, Opts, #{}),
                             send_login_event(UserPid, SessId, Meta),
-                            {ok, UserObjId, SessId, #{}};
+                            {ok, UserObjId, SessId};
                         {error, Error} ->
                             {error, Error}
                     end;
@@ -137,19 +137,21 @@ check_token(Token) ->
         {ok, #{type:=?DOMAIN_SESSION, ?DOMAIN_SESSION:=Data}} ->
             case Data of
                 #{user_id:=UserId, domain_id:=DomainId, login_meta:=Meta} ->
-                    State2 = nkdomain_api_util:add_id(?DOMAIN_DOMAIN, DomainId, #{}),
-                    State3 = nkdomain_api_util:add_id(?DOMAIN_USER, UserId, State2),
-                    State4 = nkdomain_api_util:add_id(?DOMAIN_SESSION, Token, State3),
-                    {ok, UserId, Meta, State4};
+                    UserMeta1 = #{login_meta=>Meta},
+                    UserMeta2 = nkdomain_api_util:add_id(?DOMAIN_DOMAIN, DomainId, UserMeta1),
+                    UserMeta3 = nkdomain_api_util:add_id(?DOMAIN_USER, UserId, UserMeta2),
+                    UserMeta4 = nkdomain_api_util:add_id(?DOMAIN_SESSION, Token, UserMeta3),
+                    {ok, UserId, UserMeta4};
                 _ ->
                     {error, invalid_session}
             end;
         {ok, #{type:=?DOMAIN_TOKEN, subtype:=SubTypes, ?DOMAIN_TOKEN:=Data}} ->
             case lists:member(?DOMAIN_USER, SubTypes) andalso Data of
                 #{user_id:=UserId, domain_id:=DomainId, login_meta:=Meta} ->
-                    State2 = nkdomain_api_util:add_id(?DOMAIN_DOMAIN, DomainId, #{}),
-                    State3 = nkdomain_api_util:add_id(?DOMAIN_USER, UserId, State2),
-                    {ok, UserId, Meta, State3};
+                    UserMeta1 = #{login_meta=>Meta},
+                    UserMeta2 = nkdomain_api_util:add_id(?DOMAIN_DOMAIN, DomainId, UserMeta1),
+                    UserMeta3 = nkdomain_api_util:add_id(?DOMAIN_USER, UserId, UserMeta2),
+                    {ok, UserId, UserMeta3};
                 _ ->
                     {error, invalid_token}
             end;
