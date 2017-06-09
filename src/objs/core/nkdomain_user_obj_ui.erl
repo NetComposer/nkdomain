@@ -25,15 +25,27 @@
 
 -export([table/1, table_data/2]).
 
+-include("nkdomain.hrl").
+
+-define(ID, <<"domain_detail_user_table">>).
+
+
 %% @doc
 table(Session) ->
     Spec = Session#{
+        table_id => ?ID,
         filters => [<<"objectsDataShowSubdomains">>],
         columns => [
             #{
-                id => path,
+                id => pos,
+                type => pos,
+                name => domain_column_pos
+            },
+            #{
+                id => domain,
                 type => text,
-                name => domain_column_path
+                name => domain_column_domain,
+                sort => true
             },
             #{
                 id => name,
@@ -41,9 +53,23 @@ table(Session) ->
                 name => domain_column_name
             },
             #{
+                id => email,
+                type => text,
+                name => domain_column_email,
+                sort => true,
+                editor => text
+            },
+            #{
+                id => created_by,
+                type => text,
+                name => domain_column_created_by,
+                sort => true
+            },
+            #{
                 id => created_time,
                 type => date,
-                name => domain_column_created_time
+                name => domain_column_created_time,
+                sort => true
             },
             #{
                 id => enabled_icon,
@@ -65,365 +91,105 @@ table(Session) ->
             }
         ]},
     Table = #{
-        id => <<"domain_detail_user_table">>,
+        id => ?ID,
         class => webix_ui,
         value => nkadmin_webix_datatable:datatable(Spec)
     },
     KeyData = #{data_fun => fun ?MODULE:table_data/2},
-    Session2 = nkadmin_util:set_key_data(<<"domain_detail_user_table">>, KeyData, Session),
+    Session2 = nkadmin_util:set_key_data(?ID, KeyData, Session),
     {Table, Session2}.
 
 
 %% @doc
-table_data(#{start:=Start, size:=Size}, #{srv_id:=SrvId, domain_id:=DomainId}) ->
-    Spec = #{
-        filters => #{
-            type => user
-        },
-        fields => [<<"icon_id">>, <<"path">>, <<"created_by">>, <<"created_time">>,
+table_data(#{start:=Start, size:=Size, sort:=Sort, filter:=Filter}, #{srv_id:=SrvId, domain_id:=DomainId}) ->
+    SortSpec = case Sort of
+        {<<"domain">>, Order} ->
+            <<Order/binary, ":path">>;
+        {<<"name">>, Order} ->
+            <<Order/binary, ":user.name.keyword">>;
+        {<<"email">>, Order} ->
+            <<Order/binary, ":user.email">>;
+        {Field, Order} when Field==<<"created_by">>; Field==<<"created_time">> ->
+            <<Order/binary, $:, Field/binary>>;
+        _ ->
+            <<"desc:path">>
+    end,
+    Filters = table_filter(maps:to_list(Filter), #{type=>user}),
+    FindSpec = #{
+        filters => Filters,
+        fields => [<<"path">>, <<"created_by">>, <<"created_time">>,
                    <<"user.name">>, <<"user.surname">>, <<"user.email">>],
-        sort => [<<"path">>],
+        sort => SortSpec,
         start => Start,
-        size => Size,
-        size => 100
+        size => Size
     },
-    case nkdomain_domain_obj:find_all(SrvId, DomainId, Spec) of
+    Fun = case Filter of
+        #{<<"objectsDataShowSubdomains">> := 0} -> find;
+        _ -> find_all
+    end,
+    case nkdomain_domain_obj:Fun(SrvId, DomainId, FindSpec) of
         {ok, Total, List, _Meta} ->
-            Data = lists:map(
-                fun(Entry) ->
-                    #{
-                        <<"obj_id">> := ObjId,
-                        <<"path">> := Path,
-                        <<"created_time">> := CreatedTime,
-                        <<"user">> := #{
-                              <<"name">> := Name,
-                              <<"surname">> := Surname
-                          } = _User
-                    } = Entry,
-                    Enabled = case maps:get(<<"enabled">>, Entry, true) of
-                        true -> <<"fa-times">>;
-                        false -> <<"fa-check">>
-                    end,
-                    #{
-                        id => ObjId,
-                        path => Path,
-                        name => <<Name/binary, " ", Surname/binary>>,
-                        created_time => CreatedTime,
-                        enabled_icon => Enabled
-                    }
-                end,
-                List),
+            Data = table_iter(List, Start, []),
             {ok, Total, Data};
         {error, Error} ->
             {error, Error}
     end.
-%%
-%%
-%%
-%%table(Srv, Domain) ->
-%%    Spec = #{
-%%        filters => #{
-%%            type => user
-%%        },
-%%        fields => [<<"icon_id">>, <<"path">>, <<"created_by">>, <<"created_time">>,
-%%                   <<"user.name">>, <<"user.surname">>, <<"user.email">>],
-%%        sort => [<<"path">>],
-%%        size => 100
-%%    },
-%%    case nkdomain_domain_obj:find_all(Srv, Domain, Spec) of
-%%        {ok, _Total, List, _Meta} ->
-%%            Data = lists:map(
-%%                fun(Entry) ->
-%%                    #{
-%%                        <<"obj_id">> := ObjId,
-%%                        <<"path">> := Path,
-%%                        <<"created_time">> := CreatedTime,
-%%                        <<"user">> := #{
-%%                            <<"name">> := Name,
-%%                            <<"surname">> := Surname
-%%                        } = User
-%%                    } = Entry,
-%%                    CreatedBy = maps:get(<<"created_by">>, Entry, <<>>),
-%%                    IconId = case maps:get(<<"icon_id">>, Entry, <<>>) of
-%%                        <<>> -> <<"/admin/img/blank.jpg">>;
-%%                        Url -> Url
-%%                    end,
-%%                    Email = maps:get(<<"email">>, User, <<>>),
-%%                    #{
-%%                        id => ObjId,
-%%                        icon => IconId,
-%%                        path => Path,
-%%                        name => <<Name/binary, " ", Surname/binary>>,
-%%                        email => Email,
-%%                        createdBy => CreatedBy,
-%%                        createdTime => CreatedTime
-%%                    }
-%%                end,
-%%                List),
-%%            make_table(Data);
-%%        {error, Error} ->
-%%            {error, Error}
-%%    end.
-%%
-%%
-%%make_table(Data) ->
-%%    #{
-%%        view => <<"scrollview">>,
-%%        id => <<"body">>,
-%%        borderless => true,
-%%        type => <<"space">>,
-%%        css => <<"flex-tmp">>,
-%%        scroll => <<"xy">>,
-%%        body => #{
-%%            rows => [objects_table(Data)]
-%%        }
-%%    }.
-%%
-%%
-%%
-%%
-%%
-%%objects_table(Data) ->
-%%    #{
-%%        id => <<"objectsTable">>,
-%%        type => <<"space">>,
-%%        minHeight => 300,
-%%        minWidth => 400,
-%%        rows => [
-%%            #{
-%%                height => 40,
-%%                cols => [
-%%                    #{
-%%                        view => <<"button">>,
-%%                        type => <<"iconButton">>,
-%%                        icon => <<"refresh">>,
-%%                        autowidth => true,
-%%                        label => <<"Refresh">>,
-%%                        click => <<"function() {
-%%                                    var grid = $$(\"objectsData\");
-%%                                    grid.showProgress();
-%%                                    webix.delay(function() {
-%%                                        grid.hideProgress();
-%%                                    }, null, null, 300);
-%%                                    }">>
-%%                    },
-%%                    #{},
-%%                    #{
-%%                        view => <<"layout">>,
-%%                        cols => [
-%%                            #{
-%%                                view => <<"label">>,
-%%                                autowidth => true, % This label is defined separately to be able to set its width to 'autowidth'
-%%                                label => <<"Show subdomains: ">>,
-%%                                align => <<"right">>
-%%                            },
-%%        					#{
-%%                                view => <<"checkbox">>,
-%%                                name => <<"show_subdomains_checkbox">>,
-%%                                width => 20,
-%%                                value => 1,
-%%                                on => #{
-%%                                    onChange => <<"function() {
-%%                                                    console.log('Checkbox value: ' + this.getValue());
-%%                                                    }">>
-%%                                }
-%%                            }
-%%                        ]
-%%                    }
-%%                ]
-%%            },
-%%            #{
-%%                rows => [
-%%                    % create default objects table data,
-%%                    create_default_objects_table_data(Data),
-%%                    #{
-%%                        view => <<"toolbar">>,
-%%                        css => <<"highlighted_header header6">>,
-%%                        paddingX => 5,
-%%                        paddingY => 5,
-%%                        height => 40,
-%%                        cols => [
-%%                            #{
-%%                                view => <<"pager">>,
-%%                                id => <<"pagerA">>,
-%%                                template => <<"{common.first()}{common.prev()}&nbsp; {common.pages()}&nbsp; {common.next()}{common.last()}">>,
-%%                                autosize => true,
-%%                                height => 35,
-%%                                group => 5
-%%                            }
-%%                        ]
-%%                    }
-%%                ]
-%%            }
-%%        ]
-%%    }.
-%%
-%%
-%%
-%%create_default_objects_table_data(Data) ->
-%%    #{
-%%        id => <<"objectsData">>,
-%%        view => <<"datatable">>,
-%%        select => true,
-%%        editable => false,
-%%        columns => [
-%%            #{
-%%                id => <<"icon">>, width => 70, template => <<"<img src='#icon#'>">>,
-%%                header => [<<"Icon">>, <<>>]
-%%
-%%%%                { header:"Shot", template:"<img src='imgs/#id#.jpg'>", width:100, css:"noPadding"},
-%%
-%%
-%%
-%%
-%%    },
-%%            #{
-%%                id => <<"path">>,
-%%                header => [<<"Path">>, #{ content => <<"extendedFilter">> }],
-%%                fillspace => <<"1">>
-%%            },
-%%            #{
-%%                id => <<"name">>,
-%%                header => [<<"Name">>, #{ content => <<"extendedFilter">> }],
-%%                fillspace => <<"1">>
-%%            },
-%%            #{
-%%                id => <<"email">>,
-%%                header => [<<"Email">>, #{ content => <<"extendedFilter">> }],
-%%                fillspace => <<"1">>
-%%            },
-%%            #{
-%%                id => <<"createdBy">>,
-%%                header => [<<"Created By">>, #{ content => <<"extendedFilter">> }],
-%%                fillspace => <<"1">>
-%%            },
-%%            #{
-%%                id => <<"createdTime">>,
-%%                header => [<<"Created Time">>, #{ content => <<"extendedFilter">> }],
-%%                fillspace => <<"1">>,
-%%                format => <<"function(value) {
-%%                    //                                     'en-US', 'es-ES', etc.
-%%                    return (new Date(value)).toLocaleString();
-%%                }">>
-%%            }
-%%            %%
-%%            %%            #{
-%%            %%                id => <<"parentUuid">>, header => [<<"Parent UUID">>, #{ content => <<"extendedFilter">> }], sort => <<"string">>, minWidth => 80, fillspace => 1
-%%            %%            },
-%%            %%            #{
-%%            %%                id => <<"typeName">>, header => [<<"Type">>, #{ content => <<"extendedFilter">> }], sort => <<"string">>, minWidth => 120, fillspace => 2, editor => <<"select">>, template => <<"<div class='type#type#'>#typeName#</div>">>
-%%            %%            },
-%%            %%            #{
-%%            %%                id => <<"shortName">>, header => [<<"Name">>, #{ content => <<"extendedFilter">> }], sort => <<"string">>, minWidth => 120, fillspace => 2, editor => <<"text">>
-%%            %%            },
-%%            %%            #{
-%%            %%                id => <<"enabled">>, header => [<<"Enabled?">>, <<"">>], sort => <<"string">>, minWidth => 50, fillspace => 1, template => <<"<span  style='cursor:pointer;' class='webix_icon #enabledIcon#'></span>">>
-%%            %%            },
-%%            %%            #{
-%%            %%                id => <<"view">>, header => <<"&nbsp;">>, width => 35, template => <<"<span style='cursor:pointer;' class='webix_icon fa-eye'></span>">>
-%%            %%            }
-%%        ],
-%%        pager => <<"pagerA">>,
-%%        export => true,
-%%        data => Data,
-%%        url => <<"wsProxy->">>,
-%%        save => <<"wsProxy->">>,
-%%        onClick => #{
-%%            <<"fa-eye">> => <<"function(e, id, node) {
-%%                console.log('Redirect user to the object selected: ' + id);
-%%            }">>,
-%%            <<"fa-check">> => <<"function(e, id, node) {
-%%                webix.confirm({
-%%                    \"text\": \"This object will be disabled. <br/> Are you sure?\",
-%%                    \"ok\": \"Yes\",
-%%                    \"cancel\": \"Cancel\",
-%%                    \"callback\": function(res) {
-%%                        if (res) {
-%%                            var item = webix.$$(\"objectsData\").getItem(id);
-%%                            item.enabled = false;
-%%                            item.enabledIcon = \"fa-times\";
-%%                            webix.$$(\"objectsData\").refresh(id);
-%%                        }
-%%                    }
-%%                });
-%%            }">>,
-%%            <<"fa-times">> => <<"function(e, id, node) {
-%%                webix.confirm({
-%%                    text: \"This object will be enabled. <br/> Are you sure?\",
-%%                    ok: \"Yes\",
-%%                    cancel: \"Cancel\",
-%%                    callback: function(res) {
-%%                        if (res) {
-%%                            var item = webix.$$(\"objectsData\").getItem(id);
-%%                            item.enabled = true;
-%%                            item.enabledIcon = \"fa-check\";
-%%                            webix.$$(\"objectsData\").refresh(id);
-%%                        }
-%%                    }
-%%                });
-%%            }">>
-%%        },
-%%        ready => <<"function() {
-%%            webix.extend(this, webix.ProgressBar);
-%%        }">>,
-%%        on => #{
-%%            <<"onBeforeLoad">> => <<"function() {
-%%                webix.ui.datafilter.customFilter = {
-%%                    refresh: function(master, node, column) {
-%%                        node.onchange = function() {};
-%%                        node.onclick = function(e) {
-%%                            // Prevent the column from changing the order when clicking the filter
-%%                            e.stopPropagation();
-%%                        };
-%%                    },
-%%                    render: function(a, b) {
-%%                        return  \"<select style='width:100%; height:25px; font-family:Verdana'; id=\"+b.columnId+\">\" +
-%%                                \"<option>Old</option>\" +
-%%                                \"<option>New</option>\" +
-%%                                \"</select>\";
-%%                    }
-%%                };
-%%                webix.ui.datafilter.extendedFilter = webix.extend({
-%%                    refresh:function(master, node, column){
-%%                        //event handlers
-%%                        node.onclick = function(e) {
-%%                            // Prevent the column from changing the order when clicking the filter
-%%                            e.stopPropagation();
-%%                        };
-%%                        node.onkeyup = function(){
-%%                            let input = this.children[0].children[0];
-%%                            if (input.prevValue !== input.value) {
-%%                                console.log('Filter ' + column.columnId + ' changed: ' + input.value);
-%%                                master.clearAll();
-%%                                let newObj =
-%%                                {
-%%                                    id: 1,
-%%                                    uuid: 123456789,
-%%                                    parentUuid: 987654321,
-%%                                    type: 0,
-%%                                    typeName: \"User\",
-%%                                    shortName: \"user\",
-%%                                    enabled: true,
-%%                                    enabledIcon: \"fa-check\"
-%%                                };
-%%                                if (column.columnId === 'id') {
-%%                                    newObj.id = input.value;
-%%                                } else if (column.columnId === 'uuid') {
-%%                                    newObj.uuid = input.value;
-%%                                } else if (column.columnId === 'parentUuid') {
-%%                                    newObj.parentUuid = input.value;
-%%                                } else if (column.columnId === 'typeName') {
-%%                                    newObj.typeName = input.value;
-%%                                } else if (column.columnId === 'shortName') {
-%%                                    newObj.shortName = input.value;
-%%                                }
-%%                                master.add(newObj, 0);
-%%                            };
-%%                            input.prevValue = input.value;
-%%                        }
-%%                    }
-%%                }, webix.ui.datafilter.textFilter);
-%%            }">>
-%%        }
-%%    }.
+
+
+%% @private
+table_filter([], Acc) ->
+    Acc;
+
+table_filter([{_, <<>>}|Rest], Acc) ->
+    table_filter(Rest, Acc);
+
+table_filter([{<<"domain">>, Data}|Rest], Acc) ->
+    Acc2 = Acc#{<<"path">> => nkdomain_admin_detail:search_spec(Data)},
+    table_filter(Rest, Acc2);
+
+table_filter([{<<"email">>, Data}|Rest], Acc) ->
+    Acc2 = Acc#{<<"user.email">> => nkdomain_admin_detail:search_spec(Data)},
+    table_filter(Rest, Acc2);
+
+table_filter([{<<"name">>, Data}|Rest], Acc) ->
+    Acc2 = Acc#{<<"user.name">> => Data},
+    table_filter(Rest, Acc2);
+
+table_filter([_|Rest], Acc) ->
+    table_filter(Rest, Acc).
+
+
+
+%% @private
+table_iter([], _Pos, Acc) ->
+    lists:reverse(Acc);
+
+table_iter([Entry|Rest], Pos, Acc) ->
+    #{
+        <<"obj_id">> := ObjId,
+        <<"path">> := Path,
+        <<"created_time">> := CreatedTime,
+        <<"user">> := #{
+            <<"name">> := Name,
+            <<"surname">> := Surname
+        } = User
+    } = Entry,
+    Email = maps:get(<<"email">>, User, <<>>),
+    CreatedBy = maps:get(<<"created_by">>, Entry, <<>>),
+    Enabled = case maps:get(<<"enabled">>, Entry, true) of
+        true -> <<"fa-times">>;
+        false -> <<"fa-check">>
+    end,
+    {ok, Domain, _ShortName} = nkdomain_util:get_parts(?DOMAIN_USER, Path),
+    Data = #{
+        pos => Pos,
+        id => ObjId,
+        domain => Domain,
+        name => <<Name/binary, " ", Surname/binary>>,
+        email => Email,
+        created_by => CreatedBy,
+        created_time => CreatedTime,
+        enabled_icon => Enabled
+    },
+    table_iter(Rest, Pos+1, [Data|Acc]).
 

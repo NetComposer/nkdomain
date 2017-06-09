@@ -24,6 +24,7 @@
 -export([i18n/0, reload/0]).
 
 
+
 i18n() -> #{
     en => #{
         logout => "Logout",
@@ -51,9 +52,12 @@ i18n() -> #{
         domain_tree_networks => "Networks",
         domain_tree_services => "Services",
 
-        domain_column_name => <<"Name">>,
-        domain_column_path => <<"Path">>,
-        domain_column_created_time => <<"Created">>
+        domain_column_pos => "#",
+        domain_column_domain => "Domain",
+        domain_column_name => "Name",
+        domain_column_email => "EMail",
+        domain_column_created_by => "Creator",
+        domain_column_created_time => "Created"
     },
     es => #{
         logout => "Salir",
@@ -81,8 +85,11 @@ i18n() -> #{
         domain_tree_networks => "Redes",
         domain_tree_services => "Servicios",
 
-        domain_column_name => <<"Nombre">>,
-        domain_column_path => <<"Path">>,
+        domain_column_pos => "#",
+        domain_column_domain => "Dominio",
+        domain_column_name => "Nombre",
+        domain_column_email => "EMail",
+        domain_column_created_by => "Creador",
         domain_column_created_time => <<"Creación"/utf8>>
     }
 }.

@@ -69,9 +69,9 @@ start() ->
         api_server => <<BaseHttp/binary, "/_api, ", BaseWs/binary, "/_api/ws">>,
         debug => [
             %% {nkapi_client, #{nkpacket=>true}},
-            nkapi_server,
-            nkelastic
-            %{nkelastic, full}
+            %% nkapi_server,
+            %% nkelastic
+            {nkelastic, full}
             %%{nkdomain_obj, all}
         ]
     },

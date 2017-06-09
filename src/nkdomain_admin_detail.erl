@@ -21,7 +21,7 @@
 %% @doc NkDomain service callback module
 -module(nkdomain_admin_detail).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
--export([get_data/3]).
+-export([get_data/3, search_spec/1]).
 
 -include("nkdomain.hrl").
 -include_lib("nkevent/include/nkevent.hrl").
@@ -37,6 +37,7 @@
 
 %% @doc
 get_data(Key, Spec, Session) ->
+    lager:warning("NKLOG Spec ~p", [Spec]),
     case nkadmin_util:get_key_data(Key, Session) of
         #{data_fun:=Fun} ->
             Start = maps:get(start, Spec, 0),
@@ -45,13 +46,13 @@ get_data(Key, Spec, Session) ->
                 _ -> 100
             end,
             Filter = maps:get(filter, Spec, #{}),
-            Sort = case maps:get(sort, Spec, #{}) of
+            Sort = case maps:get(sort, Spec, undefined) of
                 #{
                     id := SortId,
                     dir := SortDir
                 } ->
-                    {SortId, SortDir};
-                _ ->
+                    {SortId, to_bin(SortDir)};
+                undefined ->
                     undefined
             end,
             FunSpec = #{
@@ -76,3 +77,12 @@ get_data(Key, Spec, Session) ->
             {error, element_not_found, Session}
     end.
 
+
+%% @private
+search_spec(<<">", _/binary>>=Data) -> Data;
+search_spec(<<"<", _/binary>>=Data) -> Data;
+search_spec(<<"!", _/binary>>=Data) -> Data;
+search_spec(Data) -> <<"prefix:", Data/binary>>.
+
+%% @private
+to_bin(K) -> nklib_util:to_binary(K).
