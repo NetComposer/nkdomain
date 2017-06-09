@@ -826,39 +826,39 @@ service_api_allow(_Req, _State) ->
 
 
 %% @doc
-%%service_api_cmd(#nkreq{cmd = <<"objects/", _/binary>>, req_state={Type, Module, Cmd}}=Req, State) ->
-%%    #nkreq{session_module=Mod, tid=TId} = Req,
-%%    Self = self(),
-%%    spawn_link(
-%%        fun() ->
-%%            Reply = case erlang:function_exported(Module, object_api_cmd, 2) of
-%%                true ->
-%%                    apply(Module, object_api_cmd, [Cmd, Req]);
-%%                false ->
-%%                    nkdomain_obj_api:api(Cmd, Type, Req)
-%%            end,
-%%            Mod:reply(Self, TId, Reply)
-%%        end),
-%%    {ack, State};
-
 service_api_cmd(#nkreq{cmd = <<"objects/", _/binary>>, req_state={Type, Module, Cmd}}=Req, State) ->
     #nkreq{session_module=Mod, tid=TId} = Req,
-    Reply = case erlang:function_exported(Module, object_api_cmd, 2) of
-        true ->
-            apply(Module, object_api_cmd, [Cmd, Req]);
-        false ->
-            nkdomain_obj_api:api(Cmd, Type, Req)
-    end,
-    case Reply of
-        {login, R, U, M} ->
-            {login, R, U, M, State};
-        {ok, R} ->
-            {ok, R, State};
-        {ok, R, S} ->
-            {ok, R, S, State};
-        {error, E} ->
-            {error, E, State}
-    end;
+    Self = self(),
+    spawn_link(
+        fun() ->
+            Reply = case erlang:function_exported(Module, object_api_cmd, 2) of
+                true ->
+                    apply(Module, object_api_cmd, [Cmd, Req]);
+                false ->
+                    nkdomain_obj_api:api(Cmd, Type, Req)
+            end,
+            Mod:reply(Self, TId, Reply)
+        end),
+    {ack, State};
+
+%%service_api_cmd(#nkreq{cmd = <<"objects/", _/binary>>, req_state={Type, Module, Cmd}}=Req, State) ->
+%%    #nkreq{session_module=Mod, tid=TId} = Req,
+%%    Reply = case erlang:function_exported(Module, object_api_cmd, 2) of
+%%        true ->
+%%            apply(Module, object_api_cmd, [Cmd, Req]);
+%%        false ->
+%%            nkdomain_obj_api:api(Cmd, Type, Req)
+%%    end,
+%%    case Reply of
+%%        {login, R, U, M} ->
+%%            {login, R, U, M, State};
+%%        {ok, R} ->
+%%            {ok, R, State};
+%%        {ok, R, S} ->
+%%            {ok, R, S, State};
+%%        {error, E} ->
+%%            {error, E, State}
+%%    end;
 
 
 service_api_cmd(_Req, _State) ->

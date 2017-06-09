@@ -168,6 +168,8 @@ test_session1(Pid) ->
         {<<"object_has_childs">>,<<"Object has childs">>}} =
         cmd(Pid, <<"objects/user/delete">>, #{id=>UId}),
 
+    timer:sleep(500),
+
     % Get info about the session
     {ok, #{
         <<"type">> := <<"session">>,

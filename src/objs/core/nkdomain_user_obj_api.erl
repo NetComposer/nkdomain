@@ -34,7 +34,7 @@
 %% ===================================================================
 
 %% @doc
-cmd(<<"login">>, #nkreq{session_module=nkapi_server, user_meta=UserMeta}=Req) ->
+cmd(<<"login">>, #nkreq{conn_id=Pid, session_module=nkapi_server, user_meta=UserMeta}=Req) ->
     #nkreq{data=#{id:=User}=Data, srv_id=SrvId, session_id=SessId, session_meta=SessMeta} = Req,
     case get_domain(Req) of
         {ok, DomainId} ->
@@ -45,7 +45,7 @@ cmd(<<"login">>, #nkreq{session_module=nkapi_server, user_meta=UserMeta}=Req) ->
                 domain_id => DomainId,
                 password => maps:get(password, Data, <<>>),
                 login_meta => LoginMeta,
-                api_server_pid => self()
+                api_server_pid => Pid
             },
             case nkdomain_user_obj:login(SrvId, User, LoginOpts2) of
                 {ok, UserId, SessId} ->

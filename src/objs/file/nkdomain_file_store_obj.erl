@@ -119,7 +119,7 @@ object_admin_info() ->
     #{
         class => resource,
         weight => 9000,
-        tree_id => <<"domain_tree_resources_file_stores">>
+        tree_id => <<"domain_tree_resources_file.stores">>
     }.
 
 
