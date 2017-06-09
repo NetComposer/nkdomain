@@ -26,7 +26,7 @@
 
 -export([create/3, login/3, token/3, check_token/1, check_user_token/2, get_name/2, send_push/3]).
 -export([object_get_info/0, object_admin_info/0, object_mapping/0, object_parse/3,
-         object_api_syntax/2, object_api_allow/3, object_api_cmd/3, object_send_event/2,
+         object_api_syntax/2, object_api_allow/3, object_api_cmd/2, object_send_event/2,
          object_sync_op/3, object_async_op/2]).
 -export([user_pass/1]).
 -export_type([events/0]).
@@ -281,8 +281,8 @@ object_send_event(Event, Session) ->
 
 
 %% @private
-object_api_cmd(Cmd, Req, State) ->
-    nkdomain_user_obj_api:cmd(Cmd, Req, State).
+object_api_cmd(Cmd, Req) ->
+    nkdomain_user_obj_api:cmd(Cmd, Req).
 
 
 %% @private

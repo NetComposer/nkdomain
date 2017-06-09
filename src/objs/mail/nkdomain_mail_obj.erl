@@ -25,7 +25,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([object_get_info/0, object_admin_info/0, object_mapping/0, object_parse/3,
-         object_api_syntax/2, object_api_allow/3, object_api_cmd/3]).
+         object_api_syntax/2, object_api_allow/3, object_api_cmd/2]).
 
 -include_lib("nkdomain.hrl").
 -include_lib("nkservice/include/nkservice.hrl").
@@ -92,16 +92,16 @@ object_api_allow(_Cmd, _Req, State) ->
 
 
 %% @private
-object_api_cmd(<<"send">>, #nkreq{srv_id=SrvId, data=Data}, State) ->
+object_api_cmd(<<"send">>, #nkreq{srv_id=SrvId, data=Data}) ->
     case nkmail:send(SrvId, Data) of
         {ok, Meta} ->
-            {ok, #{result=>Meta}, State};
+            {ok, #{result=>Meta}};
         {error, Error} ->
-            {error, Error, State}
+            {error, Error}
     end;
 
-object_api_cmd(_Cmd, _Req, State) ->
-    {error, not_implemented2, State}.
+object_api_cmd(_Cmd, _Req) ->
+    {error, not_implemented2}.
 
 
 

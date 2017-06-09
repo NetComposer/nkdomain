@@ -776,6 +776,8 @@ object_store_clean(SrvId) ->
 %% API Server
 %% ===================================================================
 
+
+
 %% @doc
 service_api_syntax(Syntax, #nkreq{cmd = <<"objects/", Rest/binary>>}=Req) ->
     case binary:split(Rest, <<"/">>) of
@@ -786,14 +788,13 @@ service_api_syntax(Syntax, #nkreq{cmd = <<"objects/", Rest/binary>>}=Req) ->
                 undefined ->
                     continue;
                 Module ->
-                    case nklib_util:apply(Module, object_api_syntax, [Cmd, Syntax]) of
-                        Syntax2 when is_map(Syntax2) ->
-                            {Syntax2, Req#nkreq{req_state={Module, Cmd}}};
-                        not_exported ->
-                            continue;
-                        continue ->
-                            continue
-                    end
+                    Syntax2 = case erlang:function_exported(Module, object_api_syntax, 2) of
+                        true ->
+                            apply(Module, object_api_syntax, [Cmd, Syntax]);
+                        false ->
+                            nkdomain_obj_syntax:syntax(Cmd, Type, Syntax)
+                    end,
+                    {continue, [Syntax2, Req#nkreq{req_state={Type, Module, Cmd}}]}
             end
     end;
 
@@ -808,7 +809,7 @@ service_api_allow(#nkreq{cmd = <<"objects/user/login">>, user_id = <<>>}, State)
 service_api_allow(#nkreq{cmd = <<"objects/", _/binary>>, user_id = <<>>}, State) ->
     {false, State};
 
-service_api_allow(#nkreq{cmd = <<"objects/", _/binary>>, req_state={Module, Cmd}}=Req, State) ->
+service_api_allow(#nkreq{cmd = <<"objects/", _/binary>>, req_state={_Type, Module, Cmd}}=Req, State) ->
     nklib_util:apply(Module, object_api_allow, [Cmd, Req, State]);
 
 service_api_allow(#nkreq{cmd = <<"session", _/binary>>}, State) ->
@@ -825,16 +826,40 @@ service_api_allow(_Req, _State) ->
 
 
 %% @doc
-service_api_cmd(#nkreq{cmd = <<"objects/", _/binary>>}=Req, State) ->
+%%service_api_cmd(#nkreq{cmd = <<"objects/", _/binary>>, req_state={Type, Module, Cmd}}=Req, State) ->
+%%    #nkreq{session_module=Mod, tid=TId} = Req,
+%%    Self = self(),
+%%    spawn_link(
+%%        fun() ->
+%%            Reply = case erlang:function_exported(Module, object_api_cmd, 2) of
+%%                true ->
+%%                    apply(Module, object_api_cmd, [Cmd, Req]);
+%%                false ->
+%%                    nkdomain_obj_api:api(Cmd, Type, Req)
+%%            end,
+%%            Mod:reply(Self, TId, Reply)
+%%        end),
+%%    {ack, State};
+
+service_api_cmd(#nkreq{cmd = <<"objects/", _/binary>>, req_state={Type, Module, Cmd}}=Req, State) ->
     #nkreq{session_module=Mod, tid=TId} = Req,
-    #nkreq{req_state={Module, Cmd}} = Req,
-    Self = self(),
-    spawn_link(
-        fun() ->
-            Reply = nklib_util:apply(Module, object_api_cmd, [Cmd, Req]),
-            Mod:reply(Self, TId, Reply)
-        end),
-    {ack, State};
+    Reply = case erlang:function_exported(Module, object_api_cmd, 2) of
+        true ->
+            apply(Module, object_api_cmd, [Cmd, Req]);
+        false ->
+            nkdomain_obj_api:api(Cmd, Type, Req)
+    end,
+    case Reply of
+        {login, R, U, M} ->
+            {login, R, U, M, State};
+        {ok, R} ->
+            {ok, R, State};
+        {ok, R, S} ->
+            {ok, R, S, State};
+        {error, E} ->
+            {error, E, State}
+    end;
+
 
 service_api_cmd(_Req, _State) ->
     continue.

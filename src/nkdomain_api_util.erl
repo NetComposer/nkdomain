@@ -76,6 +76,6 @@ add_id(Type, Id, #nkreq{user_meta=Meta}) ->
 
 add_id(Type, Id, Meta) ->
     ObjIds = maps:get(nkdomain_obj_ids, Meta, #{}),
-    ObjIds#{Type => Id}.
+    Meta#{nkdomain_obj_ids=>ObjIds#{Type => Id}}.
 
 

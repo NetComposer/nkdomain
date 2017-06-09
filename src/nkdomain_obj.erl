@@ -96,8 +96,8 @@
     {boolean, state()} | {true, nkservice:req(), state()}.
 
 
--callback object_api_cmd(Cmd::binary(), nkservice:req(), state()) ->
-    {ok, map(), state()} |
+-callback object_api_cmd(Cmd::binary(), nkservice:req()) ->
+    {ok, map()} | {ok, map(), map()} |
     {ack, state()} |
     {login, Reply::term(), User::binary(), Meta::map(), state()} |
     {error, nkapi:error(), state()}.

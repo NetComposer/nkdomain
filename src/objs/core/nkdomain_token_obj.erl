@@ -26,7 +26,7 @@
 
 -export([create_referred/4, create_standalone/5]).
 -export([object_get_info/0, object_mapping/0, object_parse/3,
-         object_api_syntax/2, object_api_allow/3, object_api_cmd/3, object_send_event/2,
+         object_api_syntax/2, object_api_allow/3, object_api_cmd/2, object_send_event/2,
          object_sync_op/3, object_async_op/2]).
 -export([object_admin_info/0]).
 
@@ -169,8 +169,8 @@ object_send_event(_Event, Session) ->
 
 
 %% @private
-object_api_cmd(Cmd, Req, State) ->
-    nkdomain_obj_api:api(Cmd, ?DOMAIN_TOKEN, Req, State).
+object_api_cmd(Cmd, Req) ->
+    nkdomain_obj_api:api(Cmd, ?DOMAIN_TOKEN, Req).
 
 
 %% @private

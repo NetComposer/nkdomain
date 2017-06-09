@@ -27,7 +27,7 @@
 -export([create/3, http_post/3, http_get/3]).
 -export([find/2, delete_all/2]).
 -export([object_get_info/0, object_mapping/0, object_parse/3,
-         object_api_syntax/2, object_api_allow/3, object_api_cmd/3,
+         object_api_syntax/2, object_api_allow/3, object_api_cmd/2,
          object_init/1, object_sync_op/3]).
 -export([object_admin_info/0]).
 
@@ -196,8 +196,8 @@ object_api_allow(_Cmd, _Req, State) ->
 
 
 %% @private
-object_api_cmd(Cmd, Req, State) ->
-    nkdomain_obj_api:api(Cmd, ?DOMAIN_FILE, Req, State).
+object_api_cmd(Cmd, Req) ->
+    nkdomain_obj_api:api(Cmd, ?DOMAIN_FILE, Req).
 
 
 %% @private

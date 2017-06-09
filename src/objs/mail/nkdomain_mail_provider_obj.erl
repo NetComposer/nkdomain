@@ -26,7 +26,7 @@
 
 -export([create/3, load_providers/0, get_provider/2, find/2, delete_all/2]).
 -export([object_get_info/0, object_admin_info/0, object_mapping/0, object_parse/3,
-         object_api_syntax/2, object_api_allow/3, object_api_cmd/3]).
+         object_api_syntax/2, object_api_allow/3, object_api_cmd/2]).
 
 -include("nkdomain.hrl").
 -include_lib("nkmail/include/nkmail.hrl").
@@ -149,8 +149,8 @@ object_api_allow(_Cmd, _Req, State) ->
     {true, State}.
 
 
-object_api_cmd(Cmd, Req, State) ->
-    nkdomain_obj_api:api(Cmd, ?DOMAIN_MAIL_PROVIDER, Req, State).
+object_api_cmd(Cmd, Req) ->
+    nkdomain_obj_api:api(Cmd, ?DOMAIN_MAIL_PROVIDER, Req).
 
 
 
