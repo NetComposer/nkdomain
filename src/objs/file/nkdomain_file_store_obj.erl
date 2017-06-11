@@ -128,6 +128,8 @@ object_mapping() ->
 
 
 %% @private
+%% @see nkfile_filesystem:store_syntax()
+%% @see nkfile_s3:store_syntax()
 object_parse(SrvId, _Mode, Obj) ->
     #{?DOMAIN_FILE_STORE:=Config} = Obj,
     case nkfile:parse_store(SrvId, Config, #{path=>?DOMAIN_FILE_STORE}) of

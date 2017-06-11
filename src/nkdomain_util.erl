@@ -289,12 +289,12 @@ get_http_auth(_SrvId, <<>>) ->
 
 get_http_auth(SrvId, Token) ->
     case nkdomain_user_obj:check_token(Token) of
-        {ok, UserId, Meta, State} ->
-            {ok, UserId, Meta, State};
+        {ok, UserId, Meta} ->
+            {ok, UserId, Meta};
         {error, invalid_token} ->
             case nkdomain_user_obj:check_user_token(SrvId, Token) of
                 {ok, UserId} ->
-                    {ok, UserId, #{}, #{}};
+                    {ok, UserId, #{}};
                 {error, Error} ->
                     {error, Error}
             end;

@@ -156,6 +156,7 @@ admin_get_data(ElementId, Spec, Session) ->
 
 %% @doc
 nkservice_rest_http(SrvId, get, [<<"_file">>, FileId], Req, State) ->
+    lager:error("NKLOG GET"),
     case nkdomain_file_obj:http_get(SrvId, FileId, Req) of
         {ok, CT, Bin} ->
             {http, 200, [{<<"Content-Type">>, CT}], Bin, State};
@@ -829,7 +830,7 @@ service_api_allow(_Req, _State) ->
 service_api_cmd(#nkreq{cmd = <<"objects/", _/binary>>, req_state={Type, Module, Cmd}}=Req, State) ->
     #nkreq{session_module=Mod, tid=TId} = Req,
     Self = self(),
-    spawn_link(
+    Pid = spawn_link(
         fun() ->
             Reply = case erlang:function_exported(Module, object_api_cmd, 2) of
                 true ->
@@ -839,7 +840,7 @@ service_api_cmd(#nkreq{cmd = <<"objects/", _/binary>>, req_state={Type, Module, 
             end,
             Mod:reply(Self, TId, Reply)
         end),
-    {ack, State};
+    {ack, Pid, State};
 
 %%service_api_cmd(#nkreq{cmd = <<"objects/", _/binary>>, req_state={Type, Module, Cmd}}=Req, State) ->
 %%    #nkreq{session_module=Mod, tid=TId} = Req,
@@ -880,8 +881,8 @@ api_server_http_auth(#nkreq{srv_id=SrvId}, HttpReq) ->
     Headers = nkapi_server_http:get_headers(HttpReq),
     Token = nklib_util:get_value(<<"x-netcomposer-auth">>, Headers, <<>>),
     case nkdomain_util:get_http_auth(SrvId, Token) of
-        {ok, UserId, Meta, State} ->
-            {true, UserId, Meta, State};
+        {ok, UserId, Meta} ->
+            {true, UserId, Meta, #{}};
         {error, Error} ->
             {error, Error}
     end.

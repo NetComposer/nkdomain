@@ -37,7 +37,7 @@
 
 %% @doc
 get_data(Key, Spec, Session) ->
-    lager:warning("NKLOG Spec ~p", [Spec]),
+    % lager:warning("NKLOG Spec ~p", [Spec]),
     case nkadmin_util:get_key_data(Key, Session) of
         #{data_fun:=Fun} ->
             Start = maps:get(start, Spec, 0),

@@ -32,7 +32,6 @@
 %% Public
 %% ===================================================================
 
-
 %% @doc
 api(<<"create">>, Type, #nkreq{data=Data, srv_id=SrvId, user_id=UserId}=Req) ->
     Module = nkdomain_all_types:get_module(Type),
@@ -182,7 +181,7 @@ api(<<"make_token">>, Type, #nkreq{data=Data, srv_id=SrvId}=Req) ->
             {error, Error}
     end;
 
-api(_Req, _Type, _Req) ->
+api(_Cmd, _Type, _Req) ->
     {error, not_implemented}.
 
 

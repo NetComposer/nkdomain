@@ -257,42 +257,54 @@ config_find(SubType, Parent) ->
     cmd(<<"objects/config/find">>, #{parent=>Parent, subtype=>SubType}).
 
 
-file_create1() ->
+
+file_store_find_all() ->
+    cmd(<<"objects/file.store/find_all">>, #{}).
+
+
+file_get(FileId) ->
+    cmd(<<"objects/file/get">>, #{id=>FileId}).
+
+
+file_create_inline() ->
     File = #{content_type=><<"plain/text">>, body=>base64:encode(<<"1234">>)},
-    cmd(<<"objects/file/create">>, #{tags=>[a, b], file=>File}).
+    {ok, #{<<"obj_id">>:=Id}} = cmd(<<"objects/file/create">>, #{tags=>[a, b], file=>File}),
+    Id.
+
+file_create_inline_secure() ->
+    File = #{content_type=><<"plain/text">>, body=>base64:encode(<<"1234">>), store_id=>"/file.stores/local_secure"},
+    {ok, #{<<"obj_id">>:=Id}} = cmd(<<"objects/file/create">>, #{tags=>[a, b], file=>File}),
+    Id.
+
+file_create_inline_s3_secure() ->
+    File = #{content_type=><<"plain/text">>, body=>base64:encode(<<"1234">>), store_id=>"/file.stores/carlos.s3_secure"},
+    {ok, #{<<"obj_id">>:=Id}} = cmd(<<"objects/file/create">>, #{tags=>[a, b], file=>File}),
+    Id.
 
 
+file_get_inline(Id) ->
+    cmd(<<"objects/file/get_inline">>, #{id=>Id}).
 
-file_post1(T) ->
+
+file_post(T) ->
     {ok, #{<<"obj_id">>:=FileId}} = upload(T, "/_file", "text/plain", "1234"),
-    {ok, "1234"} = download(T, FileId),
     FileId.
 
-file_post2(T) ->
-    {error,#{<<"data">>:=#{<<"code">>:=<<"store_not_found">>}}} =
-       upload(T, "/_file?store_id=none", "text/plain", "4321"),
-     {ok, #{<<"obj_id">>:=FileId}} =
-        upload(T, "/_file?store_id=/file.stores/carlos.s3_secure", "text/plain", "4321"),
-    {ok, "4321"} = download(T, FileId),
+file_post_secure(T) ->
+    {ok, #{<<"obj_id">>:=FileId}} = upload(T, "/_file?store_id=/file.stores/local_secure", "text/plain", "1234"),
     FileId.
 
-file_post3(T) ->
-    {error,#{<<"data">>:=#{<<"code">>:=<<"could_not_load_parent">>}}} =
-        upload(T, "/_file?domain=a", "text/plain", "4321"),
-    {ok, #{<<"obj_id">>:=FileId}} =
-        upload(T, "/_file?domain=/ct", "text/plain", "4321"),
-    {ok, "4321"} = download(T, FileId),
+file_post_s3_secure(T) ->
+    {ok, #{<<"obj_id">>:=FileId}} = upload(T, "/_file?store_id=/file.stores/carlos.s3_secure", "text/plain", "1234"),
     FileId.
 
 
+file_download(T, FileId) ->
+    download(T, FileId).
 
 
-file_create_s3() ->
-    cmd(<<"objects/file/create">>, #{tags=>[b, c], file=>#{store_id=><<"/file.stores/carlos.s3_secure">>}}).
-
-file_update(Id) ->
-    cmd(<<"objects/file/update">>, #{id=>Id, tags=>[b, c], file=>#{content_type=>pdf2}}).
-
+mail_provider_get_all() ->
+    cmd(<<"objects/mail.provider/find_all">>, #{}).
 
 
 mail_config_create(_Id) ->
@@ -430,8 +442,8 @@ download(T, File) ->
     Hds = [{"X-NetComposer-Auth", nklib_util:to_list(T)}],
     Url = list_to_binary([?HTTP, "/_file/", File]),
     case httpc:request(get, {to_list(Url), Hds}, [], []) of
-        {ok, {{_, 200, _}, _Hs, B}} ->
-            {ok, B};
+        {ok, {{_, 200, _}, Hs, B}} ->
+            {ok, Hs, B};
         {ok, {{_, 400, _}, _Hs, B}} ->
             {error, nklib_json:decode(B)}
     end.

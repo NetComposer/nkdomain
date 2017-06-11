@@ -155,6 +155,10 @@ table_filter([{<<"name">>, Data}|Rest], Acc) ->
     Acc2 = Acc#{<<"user.name">> => Data},
     table_filter(Rest, Acc2);
 
+table_filter([{<<"created_by">>, Data}|Rest], Acc) ->
+    Acc2 = Acc#{<<"created_by">> => nkdomain_admin_detail:search_spec(Data)},
+    table_filter(Rest, Acc2);
+
 table_filter([_|Rest], Acc) ->
     table_filter(Rest, Acc).
 

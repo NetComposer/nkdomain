@@ -28,12 +28,12 @@
 -export([find/2, delete_all/2]).
 -export([object_get_info/0, object_mapping/0, object_parse/3,
          object_api_syntax/2, object_api_allow/3, object_api_cmd/2,
-         object_init/1, object_sync_op/3]).
+         object_sync_op/3]).
 -export([object_admin_info/0]).
 
 -include("nkdomain.hrl").
 -include("nkdomain_debug.hrl").
-
+-include_lib("nkservice/include/nkservice.hrl").
 
 %% ===================================================================
 %% Types
@@ -49,15 +49,34 @@
 -spec create(nkservice:id(), nkdomain:name(), nkdomain:obj()) ->
     {ok, nkdomain_obj_lib:make_and_create_reply(), pid()} | {error, term()}.
 
-create(Srv, Name, Obj) ->
-    nkdomain_obj_lib:make_and_create(Srv, Name, Obj, #{}).
+create(SrvId, Name, Obj) ->
+    case nklib_syntax:parse(Obj, inline_syntax()) of
+        {ok, #{?DOMAIN_FILE:=#{body:=Body}=File}, _} ->
+            File2 = maps:remove(body,  File#{size=>byte_size(Body)}),
+            case get_store_id(SrvId, File2) of
+                {ok, #{store_id:=StoreId}=File3} ->
+                    FileId = make_file_id(),
+                    case upload(SrvId, StoreId, FileId, Body) of
+                        {ok, FileMeta} ->
+                            Obj2 = Obj#{?DOMAIN_FILE:=maps:merge(File3, FileMeta)},
+                            Obj3 = Obj2#{obj_id=>FileId},
+                            nkdomain_obj_lib:make_and_create(SrvId, Name, Obj3, #{});
+                        {error, Error} ->
+                            {error, Error}
+                    end;
+                {error, Error} ->
+                    {error, Error}
+            end;
+        _ ->
+            nkdomain_obj_lib:make_and_create(SrvId, Name, Obj, #{})
+    end.
 
 
 http_post(SrvId, Domain, Req) ->
     Headers = nkservice_rest_http:get_headers(Req),
     Token = nklib_util:get_value(<<"x-netcomposer-auth">>, Headers, <<>>),
     case nkdomain_util:get_http_auth(SrvId, Token) of
-        {ok, UserId, _Meta, _State} ->
+        {ok, UserId, _Meta} ->
             case nkservice_rest_http:get_body(Req, #{max_size=>10000000}) of
                 {ok, Body} ->
                     CT = nkservice_rest_http:get_ct(Req),
@@ -67,22 +86,36 @@ http_post(SrvId, Domain, Req) ->
                         <<>> -> <<"/">>;
                         OtherDomain -> OtherDomain
                     end,
-                    File1 = #{content_type => CT},
+                    File1 = #{
+                        content_type => CT,
+                        size => byte_size(Body)
+                    },
                     File2 = case nklib_util:get_value(<<"store_id">>, Qs, <<>>) of
                         <<>> ->
                             File1;
-                        StoreId ->
-                            File1#{store_id=>StoreId}
+                        FileStoreId ->
+                            File1#{store_id=>FileStoreId}
                     end,
-                    Obj = #{
-                        type => ?DOMAIN_FILE,
-                        parent_id => DomainId,
-                        created_by => UserId,
-                        name => Name,
-                        ?DOMAIN_FILE => File2
-                    },
-                    Meta = #{meta => #{nkdomain_file_bin=>Body}},
-                    nkdomain_obj_lib:make_and_create(SrvId, <<>>, Obj, #{meta=>Meta});
+                    case get_store_id(SrvId, File2) of
+                        {ok, #{store_id:=StoreId}=File3} ->
+                            FileId = make_file_id(),
+                            case upload(SrvId, StoreId, FileId, Body) of
+                                {ok, FileMeta} ->
+                                    Obj = #{
+                                        obj_id => FileId,
+                                        type => ?DOMAIN_FILE,
+                                        parent_id => DomainId,
+                                        created_by => UserId,
+                                        name => Name,
+                                        ?DOMAIN_FILE => maps:merge(File3, FileMeta)
+                                    },
+                                    nkdomain_obj_lib:make_and_create(SrvId, <<>>, Obj, #{});
+                                {error, Error} ->
+                                    {error, Error}
+                            end;
+                        {error, Error} ->
+                            {error, Error}
+                    end;
                 {error, Error} ->
                     {error, Error}
             end;
@@ -91,20 +124,12 @@ http_post(SrvId, Domain, Req) ->
     end.
 
 
-upload(SrvId, StoreId, FileId, Body) ->
-    case nkfile:upload(SrvId, #{store_id=>StoreId, name=>FileId}, Body) of
-        {ok, Meta} ->
-            {ok, maps:with([password], Meta)};
-        {error, Error} ->
-            {error, Error}
-    end.
-
 
 http_get(SrvId, FileId, Req) ->
     Headers = nkservice_rest_http:get_headers(Req),
     Token = nklib_util:get_value(<<"x-netcomposer-auth">>, Headers, <<>>),
     case nkdomain_util:get_http_auth(SrvId, Token) of
-        {ok, _UserId, _Meta, _State} ->
+        {ok, _UserId, _Meta} ->
             case nkdomain_obj_lib:load(SrvId, FileId, #{}) of
                 #obj_id_ext{type = ?DOMAIN_FILE, obj_id=FileObjId, pid=Pid} ->
                     case nkdomain_obj:get_obj(Pid) of
@@ -163,21 +188,20 @@ object_admin_info() ->
 object_mapping() ->
     #{
         content_type => #{type => keyword},
-        size => #{type => long},
         store_id => #{type => keyword},
+        size => #{type => long},
         password => #{type => keyword}
     }.
 
 
 %% @private
 object_parse(_SrvId, load, _Obj) ->
-    #{
+     #{
         content_type => binary,
-        size => integer,
         store_id => binary,
+        size => integer,
         password => binary,
-        body => base64,
-        '__mandatory' => [content_type]
+        '__mandatory' => [content_type, store_id, size]
     };
 
 object_parse(_SrvId, update, _Obj) ->
@@ -185,6 +209,12 @@ object_parse(_SrvId, update, _Obj) ->
 
 
 %% @private
+object_api_syntax(<<"get_inline">>=Cmd, Syntax) ->
+    Syntax#{
+        id => binary,
+        '__mandatory' => [id]
+    };
+
 object_api_syntax(Cmd, Syntax) ->
     nkdomain_obj_syntax:syntax(Cmd, ?DOMAIN_FILE, Syntax).
 
@@ -195,48 +225,27 @@ object_api_allow(_Cmd, _Req, State) ->
 
 
 %% @private
-object_api_cmd(Cmd, Req) ->
-    nkdomain_obj_api:api(Cmd, ?DOMAIN_FILE, Req).
-
-
-%% @private
-object_init(#?NKOBJ{srv_id=SrvId, obj_id=FileId, obj=Obj, meta=Meta}=State) ->
-    case get_store_id(State) of
-        {ok, StoreId} ->
-            #{?DOMAIN_FILE:=File} = Obj,
-            case Meta of
-                #{nkdomain_file_bin:=Bin} ->
-                    #{content_type:=_, store_id:=StoreId} =File,
-                    case upload(SrvId, StoreId, FileId, Bin) of
-                        {ok, StoreMeta} ->
-                            File2 = maps:merge(File, StoreMeta),
-                            File3 = File2#{size => byte_size(Bin)},
-                            Obj2 = Obj#{?DOMAIN_FILE:=File3},
-                            Meta2 = maps:remove(nkdomain_file_bin, Meta),
-                            {ok, State#?NKOBJ{obj=Obj2, meta=Meta2}};
+object_api_cmd(<<"get_inline">>, #nkreq{srv_id=SrvId, data=#{id:=Id}}) ->
+    case nkdomain_obj_lib:load(SrvId, Id, #{}) of
+        #obj_id_ext{obj_id=FileId, pid=Pid} ->
+            case nkdomain_obj:get_obj(Pid) of
+                {ok, #{?DOMAIN_FILE:=File}=Obj} ->
+                    case download(SrvId, FileId, File) of
+                        {ok, Body} ->
+                            File2 = File#{body=>base64:encode(Body)},
+                            {ok, Obj#{?DOMAIN_FILE:=File2}};
                         {error, Error} ->
-                            ?LLOG(warning, "error writing file: ~p", [Error], State),
-                            {error, file_write_error}
+                            {error, Error}
                     end;
-                _ ->
-                    case File of
-                        #{body:=Body} ->
-                            case catch base64:decode(Body) of
-                                Bin when is_binary(Bin) ->
-                                    Meta2 = Meta#{nkdomain_file_bin=>Bin},
-                                    File2 = maps:remove(body, File),
-                                    Obj2 = Obj#{?DOMAIN_FILE:=File2},
-                                    object_init(State#?NKOBJ{obj=Obj2, meta=Meta2});
-                                _ ->
-                                    {error, invalid_base64}
-                            end;
-                        _ ->
-                            {error, missing_body}
-                    end
+                {error, Error} ->
+                    {error, Error}
             end;
         {error, Error} ->
             {error, Error}
-    end.
+    end;
+
+object_api_cmd(Cmd, Req) ->
+    nkdomain_obj_api:api(Cmd, ?DOMAIN_FILE, Req).
 
 
 %% @private
@@ -254,31 +263,58 @@ object_sync_op(_Op, _From, _Session) ->
 %% Internal
 %% ===================================================================
 
+make_file_id() ->
+    <<"file-", (nklib_util:luid())/binary>>.
+
+inline_syntax() ->
+    #{
+        ?DOMAIN_FILE => #{
+            content_type => binary,
+            store_id => binary,
+            body => base64,
+            '__mandatory' => [content_type, body]
+        }
+    }.
+
 
 %% @private
-get_store_id(#?NKOBJ{obj=#{?DOMAIN_FILE:=#{store_id:=StoreId}}}=State) ->
-    check_store_id(StoreId, State);
-
-get_store_id(#?NKOBJ{srv_id=SrvId, type=Type, path=Path}=State) ->
-    {ok, Domain, _} = nkdomain_util:get_parts(Type, Path),
-    case nkdomain_domain_obj:get_config(SrvId, Domain) of
-        {ok, #{default_store_id:=StoreId}} ->
-            check_store_id(StoreId, State);
-        _ ->
-            case SrvId:config() of
-                #{domain_default_store_id:=StoreId} ->
-                    check_store_id(StoreId, State);
-                _ ->
-                    {error, missing_store_id}
-            end
+upload(SrvId, StoreId, FileId, Body) ->
+    case nkfile:upload(SrvId, #{store_id=>StoreId, name=>FileId}, Body) of
+        {ok, Meta} ->
+            {ok, maps:with([password], Meta)};
+        {error, Error} ->
+            {error, Error}
     end.
 
 
 %% @private
-check_store_id(StoreId, #?NKOBJ{srv_id=SrvId}) ->
+download(SrvId, FileId, File) ->
+    case nkfile:download(SrvId, File#{name=>FileId}) of
+        {ok, _, Body} ->
+            {ok, Body};
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
+%% @private
+get_store_id(SrvId, #{store_id:=StoreId}=Obj) ->
+    check_store_id(SrvId, StoreId, Obj);
+
+get_store_id(SrvId, Obj) ->
+    case SrvId:config() of
+        #{domain_default_store_id:=StoreId} ->
+            check_store_id(SrvId, StoreId, Obj);
+        _ ->
+            {error, missing_store_id}
+    end.
+
+
+%% @private
+check_store_id(SrvId, StoreId, Obj) ->
     case nkdomain_obj_lib:load(SrvId, StoreId, #{}) of
         #obj_id_ext{type = ?DOMAIN_FILE_STORE} ->
-            {ok, StoreId};
+            {ok, Obj#{store_id=>StoreId}};
         _ ->
             {error, missing_store_id}
     end.
