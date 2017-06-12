@@ -25,7 +25,6 @@
 
 -include("nkdomain.hrl").
 -include_lib("nkevent/include/nkevent.hrl").
--include_lib("nkadmin/include/nkadmin.hrl").
 
 -define(LLOG(Type, Txt, Args), lager:Type("NkDOMAN Admin " ++ Txt, Args)).
 
