@@ -25,7 +25,6 @@
 
 -include("nkdomain.hrl").
 -include_lib("nkevent/include/nkevent.hrl").
--include_lib("nkadmin/include/nkadmin.hrl").
 
 -define(LLOG(Type, Txt, Args), lager:Type("NkDOMAN Admin " ++ Txt, Args)).
 
@@ -334,8 +333,10 @@ get_resource_items([Type|Rest], Acc, Session) ->
             Item = nkadmin_util:menu_item(Key, menuEntry, #{}, Session),
             #{resources:=Resources} = Session,
             Session2 = case lists:member(Type, Resources) of
-                true -> Session;
-                false -> ?ADMIN_SESSION(resources, [Type|Resources], Session)
+                true ->
+                    Session;
+                false ->
+                    nkadmin_util:add_to_session(resources, [Type|Resources], Session)
             end,
             Class = nkdomain_util:class(Type),
             Session3 = nkadmin_util:set_url_key(<<$/, Class/binary>>, Key, Session2),
@@ -414,7 +415,7 @@ get_session_items([Type|Rest], Acc, Session) ->
                         {ok, Counter} ->
                             Item = nkadmin_util:menu_item(Key, menuEntry, #{counter=>Counter}, Session),
                             Class = nkdomain_util:class(Type),
-                            Session2 = ?ADMIN_SESSION(sessions, Sessions#{Type=>Counter}, Session),
+                            Session2 = nkadmin_util:add_to_session(sessions, Sessions#{Type=>Counter}, Session),
                             Session3 = nkadmin_util:set_url_key(<<$/, Class/binary>>, Key, Session2),
                             get_session_items(Rest, [{Weight, Item}|Acc], Session3)
                     end

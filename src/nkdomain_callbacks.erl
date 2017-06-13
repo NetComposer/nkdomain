@@ -244,7 +244,6 @@ object_syntax(load) ->
         created_time => integer,
         updated_by => binary,
         updated_time => integer,
-        parent_id => binary,
         enabled => boolean,
         active => boolean,                    % Must be loaded to exist
         expires_time => integer,
