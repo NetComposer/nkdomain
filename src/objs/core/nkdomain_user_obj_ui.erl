@@ -126,7 +126,7 @@ table_data(#{start:=Start, size:=Size, sort:=Sort, filter:=Filter}, #{srv_id:=Sr
         fields => [<<"path">>, <<"created_by">>, <<"created_time">>,
                    <<"user.name">>, <<"user.surname">>, <<"user.email">>],
         sort => SortSpec,
-        start => Start,
+        from => Start,
         size => Size
     },
     Fun = case Filter of
