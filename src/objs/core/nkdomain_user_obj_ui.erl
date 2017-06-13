@@ -129,7 +129,7 @@ table_data(#{start:=Start, size:=Size, sort:=Sort, filter:=Filter}, #{srv_id:=Sr
     end,
     case nkdomain_domain_obj:Fun(SrvId, DomainId, FindSpec) of
         {ok, Total, List, _Meta} ->
-            Data = table_iter(List, Start, []),
+            Data = table_iter(List, Start+1, []),
             {ok, Total, Data};
         {error, Error} ->
             {error, Error}
