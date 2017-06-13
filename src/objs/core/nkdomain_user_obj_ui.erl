@@ -32,6 +32,11 @@
 
 %% @doc
 table(Session) ->
+    DomainOptions = [
+        #{ id => <<"">>, value => <<"">> },
+        #{ id => <<"/">>, value => <<"/">> },
+        #{ id => <<"/chattest">>, value => <<"/chattest">> }
+    ],
     Spec = Session#{
         table_id => ?ID,
         filters => [<<"objectsDataShowSubdomains">>],
@@ -45,18 +50,23 @@ table(Session) ->
                 id => domain,
                 type => text,
                 name => domain_column_domain,
-                sort => true
+                sort => true,
+                options => DomainOptions
             },
             #{
                 id => name,
                 type => text,
                 filter_colspan => 2,
-                name => domain_column_name
+                name => domain_column_name,
+                sort => true,
+                editor => text
             },
             #{
                 id => surname,
                 type => text,
-                name => domain_column_surname
+                name => domain_column_surname,
+                sort => true,
+                editor => text
             },
             #{
                 id => email,
@@ -82,14 +92,16 @@ table(Session) ->
                 type => {icon, <<"enabled_icon">>}
             }
         ],
+        left_split => 1,
+        right_split => 1,
         on_click => [
             #{
                 id => <<"fa-times">>,
-                type => disable
+                type => enable
             },
             #{
                 id => <<"fa-check">>,
-                type => enable
+                type => disable
             },
             #{
                 id => <<"fa-trash">>,
@@ -113,6 +125,8 @@ table_data(#{start:=Start, size:=Size, sort:=Sort, filter:=Filter}, #{srv_id:=Sr
             <<Order/binary, ":path">>;
         {<<"name">>, Order} ->
             <<Order/binary, ":user.name.keyword">>;
+        {<<"surname">>, Order} ->
+            <<Order/binary, ":user.surname.keyword">>;
         {<<"email">>, Order} ->
             <<Order/binary, ":user.email">>;
         {Field, Order} when Field==<<"created_by">>; Field==<<"created_time">> ->
