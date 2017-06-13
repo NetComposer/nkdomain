@@ -55,6 +55,7 @@ i18n() -> #{
         domain_column_pos => "#",
         domain_column_domain => "Domain",
         domain_column_name => "Name",
+        domain_column_surname => "Surname",
         domain_column_email => "EMail",
         domain_column_created_by => "Creator",
         domain_column_created_time => "Created"
@@ -88,6 +89,7 @@ i18n() -> #{
         domain_column_pos => "#",
         domain_column_domain => "Dominio",
         domain_column_name => "Nombre",
+        domain_column_surname => "Apellidos",
         domain_column_email => "EMail",
         domain_column_created_by => "Creador",
         domain_column_created_time => <<"Creación"/utf8>>

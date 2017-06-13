@@ -50,7 +50,13 @@ table(Session) ->
             #{
                 id => name,
                 type => text,
+                filter_colspan => 2,
                 name => domain_column_name
+            },
+            #{
+                id => surname,
+                type => text,
+                name => domain_column_surname
             },
             #{
                 id => email,
@@ -152,8 +158,9 @@ table_filter([{<<"email">>, Data}|Rest], Acc) ->
     table_filter(Rest, Acc2);
 
 table_filter([{<<"name">>, Data}|Rest], Acc) ->
-    Acc2 = Acc#{<<"user.name">> => Data},
-    table_filter(Rest, Acc2);
+    Acc2 = Acc#{<<"user.name">> => nkdomain_admin_detail:search_spec(Data)},
+    Acc3 = Acc2#{<<"user.surname">> => nkdomain_admin_detail:search_spec(Data)},
+    table_filter(Rest, Acc3);
 
 table_filter([{<<"created_by">>, Data}|Rest], Acc) ->
     Acc2 = Acc#{<<"created_by">> => nkdomain_admin_detail:search_spec(Data)},
@@ -189,7 +196,8 @@ table_iter([Entry|Rest], Pos, Acc) ->
         pos => Pos,
         id => ObjId,
         domain => Domain,
-        name => <<Name/binary, " ", Surname/binary>>,
+        name => Name,
+        surname => Surname,
         email => Email,
         created_by => CreatedBy,
         created_time => CreatedTime,
