@@ -53,12 +53,12 @@ i18n() -> #{
         domain_tree_services => "Services",
 
         domain_column_pos => "#",
-        domain_column_domain => "Domain",
-        domain_column_name => "Name",
-        domain_column_surname => "Surname",
-        domain_column_email => "EMail",
-        domain_column_created_by => "Creator",
-        domain_column_created_time => "Created"
+        domain_column_domain => "DOMAIN",
+        domain_column_firstname => "FIRSTNAME",
+        domain_column_lastname => "LASTNAME",
+        domain_column_email => "EMAIL",
+        domain_column_created_by => "CREATOR",
+        domain_column_created_time => "CREATED"
     },
     es => #{
         logout => "Salir",
@@ -87,12 +87,12 @@ i18n() -> #{
         domain_tree_services => "Servicios",
 
         domain_column_pos => "#",
-        domain_column_domain => "Dominio",
-        domain_column_name => "Nombre",
-        domain_column_surname => "Apellidos",
-        domain_column_email => "EMail",
-        domain_column_created_by => "Creador",
-        domain_column_created_time => <<"Creación"/utf8>>
+        domain_column_domain => "DOMINIO",
+        domain_column_firstname => "NOMBRE",
+        domain_column_lastname => "APELLIDOS",
+        domain_column_email => "EMAIL",
+        domain_column_created_by => "CREADOR",
+        domain_column_created_time => <<"CREACIÓN"/utf8>>
     }
 }.
 

@@ -28,7 +28,7 @@
 -include("nkdomain.hrl").
 
 -define(ID, <<"domain_detail_user_table">>).
-
+-define(ID_SUBDOMAINS, <<"domain_detail_user_table_subdomains">>).
 
 %% @doc
 table(Session) ->
@@ -39,7 +39,8 @@ table(Session) ->
     ],
     Spec = Session#{
         table_id => ?ID,
-        filters => [<<"objectsDataShowSubdomains">>],
+        subdomains_id => ?ID_SUBDOMAINS,
+        filters => [?ID_SUBDOMAINS],
         columns => [
             #{
                 id => pos,
@@ -57,14 +58,14 @@ table(Session) ->
                 id => name,
                 type => text,
                 filter_colspan => 2,
-                name => domain_column_name,
+                name => domain_column_firstname,
                 sort => true,
                 editor => text
             },
             #{
                 id => surname,
                 type => text,
-                name => domain_column_surname,
+                name => domain_column_lastname,
                 sort => true,
                 editor => text
             },
@@ -90,10 +91,14 @@ table(Session) ->
             #{
                 id => enabled_icon,
                 type => {icon, <<"enabled_icon">>}
+            },
+            #{
+                id => delete,
+                type => {fixed_icon, <<"fa-trash">>}
             }
         ],
         left_split => 1,
-        right_split => 1,
+        right_split => 2,
         on_click => [
             #{
                 id => <<"fa-times">>,
@@ -144,7 +149,7 @@ table_data(#{start:=Start, size:=Size, sort:=Sort, filter:=Filter}, #{srv_id:=Sr
         size => Size
     },
     Fun = case Filter of
-        #{<<"objectsDataShowSubdomains">> := 0} -> find;
+        #{?ID_SUBDOMAINS := 0} -> find;
         _ -> find_all
     end,
     case nkdomain_domain_obj:Fun(SrvId, DomainId, FindSpec) of
