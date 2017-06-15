@@ -28,13 +28,19 @@
 -include("nkdomain.hrl").
 
 -define(ID, <<"domain_detail_user_table">>).
-
+-define(ID_SUBDOMAINS, <<"domain_detail_user_table_subdomains">>).
 
 %% @doc
 table(Session) ->
+    DomainOptions = [
+        #{ id => <<"">>, value => <<"">> },
+        #{ id => <<"/">>, value => <<"/">> },
+        #{ id => <<"/chattest/">>, value => <<"/chattest">> }
+    ],
     Spec = Session#{
         table_id => ?ID,
-        filters => [<<"objectsDataShowSubdomains">>],
+        subdomains_id => ?ID_SUBDOMAINS,
+        filters => [?ID_SUBDOMAINS],
         columns => [
             #{
                 id => pos,
@@ -45,18 +51,24 @@ table(Session) ->
                 id => domain,
                 type => text,
                 name => domain_column_domain,
-                sort => true
+                sort => true,
+                options => DomainOptions
             },
             #{
                 id => name,
                 type => text,
+                header_colspan => 2,
                 filter_colspan => 2,
-                name => domain_column_name
+                fillspace => <<"0.5">>,
+                name => domain_column_name,
+                sort => true,
+                editor => text
             },
             #{
                 id => surname,
                 type => text,
-                name => domain_column_surname
+                sort => true,
+                editor => text
             },
             #{
                 id => email,
@@ -80,16 +92,22 @@ table(Session) ->
             #{
                 id => enabled_icon,
                 type => {icon, <<"enabled_icon">>}
+            },
+            #{
+                id => delete,
+                type => {fixed_icon, <<"fa-trash">>}
             }
         ],
+        left_split => 1,
+        right_split => 2,
         on_click => [
             #{
                 id => <<"fa-times">>,
-                type => disable
+                type => enable
             },
             #{
                 id => <<"fa-check">>,
-                type => enable
+                type => disable
             },
             #{
                 id => <<"fa-trash">>,
@@ -113,6 +131,8 @@ table_data(#{start:=Start, size:=Size, sort:=Sort, filter:=Filter}, #{srv_id:=Sr
             <<Order/binary, ":path">>;
         {<<"name">>, Order} ->
             <<Order/binary, ":user.name.keyword">>;
+        {<<"surname">>, Order} ->
+            <<Order/binary, ":user.surname.keyword">>;
         {<<"email">>, Order} ->
             <<Order/binary, ":user.email">>;
         {Field, Order} when Field==<<"created_by">>; Field==<<"created_time">> ->
@@ -120,54 +140,95 @@ table_data(#{start:=Start, size:=Size, sort:=Sort, filter:=Filter}, #{srv_id:=Sr
         _ ->
             <<"desc:path">>
     end,
-    Filters = table_filter(maps:to_list(Filter), #{type=>user}),
-    FindSpec = #{
-        filters => Filters,
-        fields => [<<"path">>, <<"created_by">>, <<"created_time">>,
-                   <<"user.name">>, <<"user.surname">>, <<"user.email">>],
-        sort => SortSpec,
-        from => Start,
-        size => Size
-    },
-    Fun = case Filter of
-        #{<<"objectsDataShowSubdomains">> := 0} -> find;
-        _ -> find_all
-    end,
-    case nkdomain_domain_obj:Fun(SrvId, DomainId, FindSpec) of
-        {ok, Total, List, _Meta} ->
-            Data = table_iter(List, Start+1, []),
-            {ok, Total, Data};
+    %% Get the timezone_offset from the filter list and pass it to table_filter
+    ClientTimeOffset = maps:get(<<"timezone_offset">>, Filter, <<"0">>),
+    case table_filter(maps:to_list(Filter), #{type=>user}, #{timezone_offset => ClientTimeOffset}) of
+        {ok, Filters} -> 
+            FindSpec = #{
+                filters => Filters,
+                fields => [<<"path">>, <<"created_by">>, <<"created_time">>,
+                           <<"user.name">>, <<"user.surname">>, <<"user.email">>],
+                sort => SortSpec,
+                from => Start,
+                size => Size
+            },
+            Fun = case Filter of
+                #{?ID_SUBDOMAINS := 0} -> find;
+                _ -> find_all
+            end,
+            case nkdomain_domain_obj:Fun(SrvId, DomainId, FindSpec) of
+                {ok, Total, List, _Meta} ->
+                    Data = table_iter(List, Start+1, []),
+                    {ok, Total, Data};
+                {error, Error} ->
+                    {error, Error}
+            end;
         {error, Error} ->
             {error, Error}
     end.
 
 
 %% @private
-table_filter([], Acc) ->
-    Acc;
+table_filter([], Acc, _) ->
+    {ok, Acc};
 
-table_filter([{_, <<>>}|Rest], Acc) ->
-    table_filter(Rest, Acc);
+table_filter([{_, <<>>}|Rest], Acc, Info) ->
+    table_filter(Rest, Acc, Info);
 
-table_filter([{<<"domain">>, Data}|Rest], Acc) ->
-    Acc2 = Acc#{<<"path">> => nkdomain_admin_detail:search_spec(Data)},
-    table_filter(Rest, Acc2);
+table_filter([{<<"domain">>, Data}|Rest], Acc, Info) ->
+    Acc2 = Acc#{<<"path">> => nkdomain_admin_detail:search_spec(<<Data/binary, "user">>)},
+    table_filter(Rest, Acc2, Info);
 
-table_filter([{<<"email">>, Data}|Rest], Acc) ->
+table_filter([{<<"email">>, Data}|Rest], Acc, Info) ->
     Acc2 = Acc#{<<"user.email">> => nkdomain_admin_detail:search_spec(Data)},
-    table_filter(Rest, Acc2);
+    table_filter(Rest, Acc2, Info);
 
-table_filter([{<<"name">>, Data}|Rest], Acc) ->
-    Acc2 = Acc#{<<"user.name">> => nkdomain_admin_detail:search_spec(Data)},
-    Acc3 = Acc2#{<<"user.surname">> => nkdomain_admin_detail:search_spec(Data)},
-    table_filter(Rest, Acc3);
+table_filter([{<<"name">>, Data}|Rest], Acc, Info) ->
+    Acc2 = Acc#{
+        <<"or">> => [
+            #{ <<"user.name">> => nkdomain_admin_detail:search_spec(Data) },
+            #{ <<"user.surname">> => nkdomain_admin_detail:search_spec(Data) }
+        ]
+    },
+    table_filter(Rest, Acc2, Info);
 
-table_filter([{<<"created_by">>, Data}|Rest], Acc) ->
+table_filter([{<<"created_by">>, Data}|Rest], Acc, Info) ->
     Acc2 = Acc#{<<"created_by">> => nkdomain_admin_detail:search_spec(Data)},
-    table_filter(Rest, Acc2);
+    table_filter(Rest, Acc2, Info);
 
-table_filter([_|Rest], Acc) ->
-    table_filter(Rest, Acc).
+table_filter([{<<"created_time">>, <<"custom">>}|_Rest], _Acc, _Info) ->
+    {error, date_needs_more_data};
+
+table_filter([{<<"created_time">>, Data}|Rest], Acc, #{timezone_offset:=Offset}=Info) ->
+    SNow = nklib_util:timestamp(),
+    {_,{H,M,S}} = nklib_util:timestamp_to_gmt(SNow),
+    Now = SNow - H*3600 - M*60 - S,
+    OffsetSecs = Offset * 60,
+    io:format("Filter: ~w~nNow: ~w~n", [Data, Now]),
+    case Data of
+        <<"today">> ->
+            Now2 = (Now - 24*60*60 + OffsetSecs)*1000,
+            Filter = list_to_binary([">", nklib_util:to_binary(Now2)]);
+        <<"yesterday">> ->
+            Now2 = (Now - 2*24*60*60 + OffsetSecs)*1000,
+            Now3 = (Now - 24*60*60 + OffsetSecs)*1000,
+            Filter = list_to_binary(["<", nklib_util:to_binary(Now2), "-", nklib_util:to_binary(Now3),">"]);
+        <<"last_7">> ->
+            Now2 = (Now - 7*24*60*60 + OffsetSecs)*1000,
+            Filter = list_to_binary([">", nklib_util:to_binary(Now2)]);
+        <<"last_30">> ->
+            Now2 = (Now - 30*24*60*60 + OffsetSecs)*1000,
+            Filter = list_to_binary([">", nklib_util:to_binary(Now2)]);
+        <<"custom">> ->
+            Filter = <<"">>;
+        _ ->
+            Filter = <<"">>
+    end,
+    Acc2 = Acc#{<<"created_time">> => Filter},
+    table_filter(Rest, Acc2, Info);
+
+table_filter([_|Rest], Acc, Info) ->
+    table_filter(Rest, Acc, Info).
 
 
 
