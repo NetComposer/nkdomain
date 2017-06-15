@@ -54,6 +54,7 @@ i18n() -> #{
 
         domain_column_pos => "#",
         domain_column_domain => "DOMAIN",
+        domain_column_name => "NAME",
         domain_column_firstname => "FIRSTNAME",
         domain_column_lastname => "LASTNAME",
         domain_column_email => "EMAIL",
