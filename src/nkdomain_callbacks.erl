@@ -731,9 +731,10 @@ service_api_allow(#nkreq{cmd = <<"objects/user/login">>, user_id = <<>>}, State)
     {true, State};
 
 service_api_allow(#nkreq{cmd = <<"objects/", _/binary>>, user_id = <<>>}, State) ->
+
     {false, State};
 
-service_api_allow(#nkreq{cmd = <<"objects/", _/binary>>, req_state={_Type, Module, Cmd}}=Req, State) ->
+service_api_allow(#nkreq{cmd = <<"objects/", Rest/binary>>, req_state={_Type, Module, Cmd}}=Req, State) ->
     nklib_util:apply(Module, object_api_allow, [Cmd, Req, State]);
 
 service_api_allow(#nkreq{cmd = <<"session", _/binary>>}, State) ->
@@ -746,6 +747,7 @@ service_api_allow(#nkreq{cmd = <<"nkadmin", _/binary>>}, State) ->
     {true, State};
 
 service_api_allow(_Req, _State) ->
+    lager:error("NKLOG ALLOW2: ~p", [lager:pr(_Req, ?MODULE)]),
     continue.
 
 
