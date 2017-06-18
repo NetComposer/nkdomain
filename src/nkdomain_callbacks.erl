@@ -221,10 +221,7 @@ object_mapping() ->
         },
         tags => #{type => keyword},
         aliases => #{type => keyword},
-        icon_id => #{type => keyword},
-        icon_url => #{type => keyword},
-        icon_content_type => #{type => keyword}
-
+        icon_id => #{type => keyword}
     }.
 
 
@@ -255,7 +252,6 @@ object_syntax(load) ->
         tags => {list, binary},
         aliases => {list, binary},
         icon_id => binary,
-        icon_content_type => binary,
         '_store_vsn' => any,
         '__mandatory' => [type, obj_id, parent_id, path, created_time]
     };
@@ -268,8 +264,7 @@ object_syntax(update) ->
         description => binary,
         tags => {list, binary},
         aliases => {list, binary},
-        icon_id => binary,
-        icon_content_type => binary
+        icon_id => binary
     }.
 
 %% @doc Reads an object from database, using its ObjId
@@ -809,7 +804,7 @@ service_api_allow(#nkreq{cmd = <<"objects/", _/binary>>, user_id = <<>>}, State)
 
     {false, State};
 
-service_api_allow(#nkreq{cmd = <<"objects/", Rest/binary>>, req_state={_Type, Module, Cmd}}=Req, State) ->
+service_api_allow(#nkreq{cmd = <<"objects/", _/binary>>, req_state={_Type, Module, Cmd}}=Req, State) ->
     nklib_util:apply(Module, object_api_allow, [Cmd, Req, State]);
 
 service_api_allow(#nkreq{cmd = <<"session", _/binary>>}, State) ->
@@ -822,7 +817,6 @@ service_api_allow(#nkreq{cmd = <<"nkadmin", _/binary>>}, State) ->
     {true, State};
 
 service_api_allow(_Req, _State) ->
-    lager:error("NKLOG ALLOW2: ~p", [lager:pr(_Req, ?MODULE)]),
     continue.
 
 
