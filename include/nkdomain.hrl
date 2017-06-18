@@ -31,9 +31,9 @@
 -define(REMOVE_FROM_OBJ(Key, Obj), maps:remove(Key, Obj)).
 
 
--define(NKOBJ, nkobj_v1).
+-define(STATE, nkstate_v1).
 
--record(nkobj_v1, {
+-record(nkstate_v1, {
     srv_id :: nkservice:id(),
     obj_id :: nkdomain:obj_id(),
     path :: nkdomain:path(),
@@ -45,20 +45,21 @@
     obj :: nkdomain:obj(),
     is_dirty :: boolean(),
     is_enabled :: boolean(),
-    is_created :: boolean(),
+    %is_created :: boolean(),
     started :: nklib_util:m_timestamp(),
-    childs :: #{nkdomain:type() => #{nkdomain:name() => nkdomain:obj_id()}},
-    usage_links :: nklib_links:links(),
-    event_links :: nklib_links:links(),
-    link_usages = #{} :: #{term() => ok},
-    link_events = [] :: [term()],
+    childs1 :: #{nkdomain:obj_id() => {nkdomain:type(), pid()}},
+    usage_links :: nklib_links:link(),
+    event_links :: nklib_links:link(),
     status :: nkdomain_obj:status(),
     meta :: map(),                      % Object load metadata
     data :: term(),                     % Type-specific metadata
     stop_reason = false :: false | nkservice:error(),
+    ttl :: permanent | {expires, nklib_util:m_timestamp()} | {ttl, integer()},
     timer :: reference(),
     timelog = [] :: [map()],
-    wait_save = [] :: [{pid(), term()}],
+    type_monitor :: reference(),
+    parent_pid :: pid(),
+    service_pid :: pid(),
     moved_to :: undefined | pid()
 }).
 

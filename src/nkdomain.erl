@@ -23,14 +23,11 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 
--export([find_loaded/1, find/1, find/2, load/1, load/2, load/3]).
--export([get/1, get/2, enable/2, enable/3, get_name/1, get_name/2]).
--export([update/2, update/3, delete/1, delete/2]).
--export([force_delete/2, archive/3]).
--export_type([obj_id/0, name/0, obj/0, path/0, type/0, id/0, class/0, history/0, history_op/0]).
--export_type([session_msg/0]).
-
-%%-include_lib("nklib/include/nklib.hrl").
+-export([find/2, load/2, unload/2, unload/3, get_obj/2, get_obj_type/2, get_name/2]).
+-export([enable/3, update/3, delete/2, send_info/4]).
+-export([search/2, delete_all_childs/2, delete_all_childs_type/3]).
+-export([clean/1]).
+-export_type([obj_id/0, name/0, obj/0, path/0, id/0, type/0]).
 
 -include("nkdomain.hrl").
 
@@ -48,45 +45,11 @@
 
 -type type() :: binary().
 
--type class() :: atom().
-
--type history_op() :: term().
-
--type history() :: [{nklib_util:m_timestamp(), User::obj_id(), history_op()}].
-
--type session_msg() ::
-    {created, MsgId::obj_id(), map()} |
-    {updated, MsgId::obj_id(), map()} |
-    {deleted, MsgId::obj_id(), map()}.
-
 %% @see nkdomain_callbacks:domain_store_base_mapping/0
--type obj() :: #{
-    obj_id => obj_id(),
-    domain => path(),
-    type => type(),
-    subtype => atom(),
-    description => binary(),
-    created_by => obj_id(),
-    created_time => nklib_util:m_timestamp(),
-    parent_id => obj_id(),
-    enabled => boolean(),
-    expires_time => nklib_util:m_timestamp(),
-    destroyed_time => nklib_util:m_timestamp(),
-    destroyed_reason => term(),
-    icon_id => binary(),
-    aliases => [binary()],
-    service_id => [nkservice:id()],         % Only for service-related objects
-    class() => map()
-}.
+-type obj() :: map().
 
+-type search_spec() :: map().
 
--type load_opts() ::
-    #{
-        usage_link => {id() | pid(), nkdist_reg:tag()},    % Id or pid will receive {sent_link_down, Tag}
-        event_link => {id() | pid(), nkdist_reg:tag()},
-        meta => map(),
-        enabled => boolean()                                        % Start disabled if false
-    }.
 
 
 %% ===================================================================
@@ -99,33 +62,29 @@
 %% ===================================================================
 %% Public
 %% ===================================================================
-
-%% @doc Finds and loaded object from UUID or Path
--spec find_loaded(id()) ->
-    {ok, type(), domain:obj_id(), path(), pid()} |
-    {error, object_not_loaded|term()}.
-
-find_loaded(IdOrPath) ->
-    case nkdomain_obj_lib:find_loaded(IdOrPath) of
-        #obj_id_ext{type=Type, obj_id=ObjId, path=Path, pid=Pid} ->
-            {ok, Type, ObjId, Path, Pid};
-        not_found ->
-            {error, object_not_loaded}
-    end.
-
-
-%% @doc
-find(IdOrPath) ->
-    find(root, IdOrPath).
 
 
 %% @doc Finds and object from UUID or Path, in memory and disk
--spec find(nkservice:id(), obj_id()|path()) ->
-    {ok, type(), domain:obj_id(), path(), pid()|undefined} |
+-spec find(nkservice:id(), id()) ->
+    {ok, type(), obj_id(), path(), pid()|undefined} |
     {error, object_not_found|term()}.
 
-find(Srv, IdOrPath) ->
-    case nkdomain_obj_lib:find(Srv, IdOrPath) of
+find(SrvId, Id) ->
+    case nkdomain_lib:find(SrvId, Id) of
+        #obj_id_ext{type=Type, obj_id=ObjId, path=Path, pid=Pid} ->
+            {ok, Type, ObjId, Path, Pid};
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
+%% @doc Finds an objects's pid or loads it from storage
+-spec load(nkservice:id(), id()) ->
+    {ok, type(), obj_id(), path(), pid()} |
+    {error, object_not_found|term()}.
+
+load(SrvId, Id) ->
+    case nkdomain_lib:load(SrvId, Id) of
         #obj_id_ext{type=Type, obj_id=ObjId, path=Path, pid=Pid} ->
             {ok, Type, ObjId, Path, Pid};
         {error, Error} ->
@@ -134,173 +93,130 @@ find(Srv, IdOrPath) ->
 
 
 %% @doc
-load(IdOrPath) ->
-    load(root, IdOrPath, #{}).
+-spec get_obj(nkservice:id(), id()) ->
+    {ok, obj()} | {error, term()}.
 
-
-%% @doc Finds an objects's pid or loads it from storage
--spec load(nkservice:id(), obj_id()|path()) ->
-    {ok, type(), obj_id(), path(), pid()} |
-    {error, object_not_found|term()}.
-
-load(Srv, IdOrPath) ->
-    load(Srv, IdOrPath, #{}).
-
-
-%% @doc Finds an objects's pid or loads it from storage
--spec load(nkservice:id(), obj_id()|path(), load_opts()) ->
-    {ok, type(), obj_id(), path(), pid()} |
-    {error, object_not_found|term()}.
-
-load(Srv, IdOrPath, Meta) ->
-    case nkdomain_obj_lib:load(Srv, IdOrPath, Meta) of
-        #obj_id_ext{type=Type, obj_id=ObjId, path=Path, pid=Pid} ->
-            {ok, Type, ObjId, Path, Pid};
-        {error, Error} ->
-            {error, Error}
-    end.
+get_obj(SrvId, Id) ->
+    nkdomain_obj:sync_op(SrvId, Id, get_obj).
 
 
 %% @doc
--spec get(id()) ->
+-spec get_obj_type(nkservice:id(), id()) ->
     {ok, map()} | {error, term()}.
 
-get(IdOrPath) ->
-    get(root, IdOrPath).
-
-
-%% @doc
--spec get(nkservice:id(), id()) ->
-    {ok, map()} | {error, term()}.
-
-get(Srv, IdOrPath) ->
-    case nkdomain_obj_lib:load(Srv, IdOrPath, #{}) of
-        #obj_id_ext{pid=Pid} ->
-            nkdomain_obj:get_obj(Pid);
-        {error, Error} ->
-            {error, Error}
-    end.
-
-
-%% @doc Enables/disabled an object
--spec enable(id(), boolean()) ->
-    ok | {error, term()}.
-
-enable(Id, Enable) ->
-    enable(root, Id, Enable).
-
-
-%% @doc Enables/disabled an object
--spec enable(nkservice:id(), id(), boolean()) ->
-    ok | {error, term()}.
-
-enable(Srv, Id, Enable) ->
-    case nkdomain_obj_lib:load(Srv, Id, #{}) of
-        #obj_id_ext{pid=Pid} ->
-            nkdomain_obj:enable(Pid, Enable);
-        {error, Error} ->
-            {error, Error}
-    end.
-
-
-%% @doc
--spec get_name(id()) ->
-    {ok, map()} | {error, term()}.
-
-get_name(Id) ->
-    get_name(root, Id).
+get_obj_type(SrvId, Id) ->
+    nkdomain_obj:sync_op(SrvId, Id, get_obj_type).
 
 
 %% @doc
 -spec get_name(nkservice:id(), id()) ->
     {ok, map()} | {error, term()}.
 
-get_name(Srv, Id) ->
-    case nkdomain_obj_lib:load(Srv, Id, #{}) of
-        #obj_id_ext{pid=Pid} ->
-            nkdomain_obj:get_name(Pid);
-        {error, Error} ->
-            {error, Error}
-    end.
+get_name(SrvId, Id) ->
+    nkdomain_obj:sync_op(SrvId, Id, get_name).
 
 
-%% @doc Updates an object
--spec update(id(), map()) ->
-    {ok, UnknownFields::[binary()]} | {error, term()}.
+%% @doc Enables/disabled an object
+-spec enable(nkservice:id(), id(), boolean()) ->
+    ok | {error, term()}.
 
-update(Id, Update) ->
-    update(root, Id, Update).
+enable(SrvId, Id, Enable) ->
+    nkdomain_obj:sync_op(SrvId, Id, {enable, Enable}).
 
 
 %% @doc Updates an object
 -spec update(nkservice:id(), id(), map()) ->
     {ok, UnknownFields::[binary()]} | {error, term()}.
 
-update(Srv, Id, Update) ->
-    case nkdomain_obj_lib:load(Srv, Id, #{}) of
-        #obj_id_ext{pid=Pid} ->
-            nkdomain_obj:update(Pid, Update);
-        {error, Error} ->
-            {error, Error}
-    end.
-
-
-%% @doc Remove an object
--spec delete(id()) ->
-    ok | {error, term()}.
-
-delete(Id) ->
-    delete(root, Id).
+update(SrvId, Id, Update) ->
+    nkdomain_obj:sync_op(SrvId, Id, {update, Update}).
 
 
 %% @doc Remove an object
 -spec delete(nkservice:id(), id()) ->
     ok | {error, term()}.
 
-delete(Srv, Id) ->
-    case nkdomain_obj_lib:load(Srv, Id, #{}) of
+delete(SrvId, Id) ->
+    nkdomain_obj:sync_op(SrvId, Id, delete).
+
+
+%% @doc Sends an INFO
+-spec send_info(nkservice:id(), id(), Info::atom()|binary(), Body::map()) ->
+    ok | {error, term()}.
+
+send_info(SrvId, Id, Info, Body) when is_map(Body) ->
+    nkdomain_obj:async_op(SrvId, Id, {send_info, Info, Body}).
+
+
+%% @doc Unloads the object
+-spec unload(nkservice:id(), id()) ->
+    ok | {error, term()}.
+
+unload(SrvId, Id) ->
+    unload(SrvId, Id, user_stop).
+
+%% @doc Unloads the object
+-spec unload(nkservice:id(), id(), Reason::nkservice:error()) ->
+    ok | {error, term()}.
+
+unload(SrvId, Id, Reason) ->
+    case nkdomain_lib:find_loaded(SrvId, Id) of
         #obj_id_ext{pid=Pid} ->
-            nkdomain_obj:delete(Pid);
+            nkdomain_obj:async_op(SrvId, Pid, {unload, Reason});
+        not_found ->
+            ok
+    end.
+
+
+%% @doc
+-spec search(nkservice:id(), search_spec()) ->
+    {ok, integer(), Data::[map()], Meta::map()} | {error, term()}.
+
+search(SrvId, Spec) ->
+    case SrvId:object_db_search(SrvId, Spec) of
+        {ok, Total, List, _Aggs, Meta} ->
+            {ok, Total, List, Meta};
         {error, Error} ->
             {error, Error}
     end.
 
 
-%% @doc Remove an object
-%% If the object can be loaded, it is sent a delete message
-%% If not, it is deleted from disk
--spec force_delete(nkservice:id(), id()) ->
-    ok | {error, term()}.
 
-force_delete(Srv, Id) ->
-    case find(Srv, Id) of
-        #obj_id_ext{pid=Pid} when is_pid(Pid) ->
-            nkdomain_obj:delete(Pid);
-        #obj_id_ext{srv_id=SrvId, obj_id=ObjId} ->
-            nkdomain_store:delete(SrvId, ObjId);
-        {error, Error} ->
-            {error, Error}
-    end.
-
-
-
-%% @doc Archives an object
--spec archive(nkservice:id(), obj_id(), nkservice:error()) ->
-    ok | {error, term()}.
-
-archive(SrvId, ObjId, Reason) ->
-    case SrvId:object_load(SrvId, ObjId) of
-        {ok, Obj, _UnknownFields} ->
-            Obj2 = nkdomain_util:add_destroyed(SrvId, Reason, Obj),
-            case nkdomain_store:archive(SrvId, ObjId, Obj2) of
-                ok ->
-                    nkdomain_store:delete(SrvId, ObjId);
-                {error, Error} ->
-                    {error, Error}
-            end;
-        {error, Error} ->
-            {error, Error}
-    end.
+%%%% @doc Archives an object
+%%-spec archive(nkservice:id(), obj_id(), nkservice:error()) ->
+%%    ok | {error, term()}.
+%%
+%%archive(SrvId, ObjId, Reason) ->
+%%    case SrvId:object_db_read(SrvId, ObjId) of
+%%        {ok, Obj, _Meta} ->
+%%            Obj2 = nkdomain_util:add_destroyed(SrvId, Reason, Obj),
+%%            case nkdomain_store:archive(SrvId, ObjId, Obj2) of
+%%                ok ->
+%%                    nkdomain_store:delete(SrvId, ObjId);
+%%                {error, Error} ->
+%%                    {error, Error}
+%%            end;
+%%        {error, Error} ->
+%%            {error, Error}
+%%    end.
 
 
+
+%% @doc
+delete_all_childs(SrvId, Id) ->
+    SrvId:object_db_delete_all_childs(SrvId, Id, #{}).
+
+
+%% @doc
+delete_all_childs_type(SrvId, Id, Type) ->
+    Spec = #{filters => #{type=>nklib_util:to_binary(Type)}},
+    SrvId:object_db_delete_all_childs(SrvId, Id, Spec).
+
+
+%% @private Performs a periodic cleanup
+-spec clean(nkservice:id()) ->
+    {ok, map()} | {error, term()}.
+
+clean(SrvId) ->
+    SrvId:object_db_clean(SrvId).
 

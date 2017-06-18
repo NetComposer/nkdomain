@@ -24,8 +24,8 @@
 -behavior(nkdomain_obj).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([create/3, find_configs/3]).
--export([object_get_info/0, object_mapping/0, object_parse/3,
+-export([find_configs/3]).
+-export([object_info/0, object_parse/3,
          object_api_syntax/2, object_api_allow/3, object_api_cmd/2]).
 -export([object_admin_info/0]).
 
@@ -43,17 +43,11 @@
 %% API
 %% ===================================================================
 
-%% @doc
--spec create(nkservice:id(), nkdomain:name(), nkdomain:obj()) ->
-    {ok, nkdomain_obj_lib:make_and_create_reply(), pid()} | {error, term()}.
-
-create(Srv, Name, Obj) ->
-    nkdomain_obj_lib:make_and_create(Srv, Name, Obj, #{}).
 
 
 %% @doc
 find_configs(Srv, SubType, Parent) ->
-    case nkdomain_obj_lib:load(Srv, Parent, #{}) of
+    case nkdomain_lib:load(Srv, Parent) of
         #obj_id_ext{obj_id=ParentId} ->
             Search = #{
                 filters => #{
@@ -64,7 +58,7 @@ find_configs(Srv, SubType, Parent) ->
                 fields => [created_time, ?DOMAIN_CONFIG],
                 sort => [#{created_time => #{order => desc}}]
             },
-            case nkdomain_store:find(Srv, Search) of
+            case nkdomain:search(Srv, Search) of
                 {ok, _N, Data, _Meta} ->
                     Data2 = lists:map(
                         fun(#{<<"obj_id">>:=ObjId, <<"created_time">>:=Time, ?DOMAIN_CONFIG:=Config}) ->
@@ -86,7 +80,7 @@ find_configs(Srv, SubType, Parent) ->
 
 
 %% @private
-object_get_info() ->
+object_info() ->
     #{
         type => ?DOMAIN_CONFIG
     }.
@@ -100,9 +94,9 @@ object_admin_info() ->
     }.
 
 
-%% @private
-object_mapping() ->
-    disabled.
+%%%% @private
+%%object_es_mapping() ->
+%%    #{}.
 
 
 %% @private

@@ -25,13 +25,13 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([create/3]).
--export([object_get_info/0, object_mapping/0, object_parse/3,
-         object_api_syntax/2, object_api_allow/3, object_api_cmd/2,
-         object_start/1, object_stop/2, object_event/2]).
+-export([object_info/0, object_es_mapping/0, object_parse/3,
+         object_api_allow/3, object_init/1, object_stop/2, object_event/2]).
 -export([object_admin_info/0]).
 -export([object_check_active/2]).
 
 -include("nkdomain.hrl").
+-include("nkdomain_debug.hrl").
 
 
 %% ===================================================================
@@ -54,7 +54,7 @@
 %% ===================================================================
 
 -spec create(nkservice:id(), nkdomain:obj_id(), create_opts()) ->
-    {ok, nkdomain_obj_lib:make_and_create_reply(), pid()} | {error, term()}.
+    {ok, nkdomain:id(), pid()} | {error, term()}.
 
 create(SrvId, UserId, #{api_server_pid:=ApiPid}=Opts) ->
     Opts2 = Opts#{
@@ -62,11 +62,11 @@ create(SrvId, UserId, #{api_server_pid:=ApiPid}=Opts) ->
     },
     Obj1 = #{
         type => ?DOMAIN_SESSION,
-        active => true,
-        created_by => UserId,
         parent_id => UserId,
-        ?DOMAIN_SESSION => maps:with([local, remote, domain_id, user_id, login_meta], Opts2),
-        meta => maps:with([api_server_pid], Opts2)
+        created_by => UserId,
+        active => true,
+        ?DOMAIN_SESSION => maps:with([local, remote, domain_id, user_id, login_meta], Opts2)
+        %meta => maps:with([api_server_pid], Opts2)
     },
     Obj2 = case Opts of
         #{session_id:=SessId} ->
@@ -74,30 +74,12 @@ create(SrvId, UserId, #{api_server_pid:=ApiPid}=Opts) ->
         _ ->
             Obj1
     end,
-    case nkdomain_obj_lib:make_and_create(SrvId, <<>>, Obj2, #{meta=>#{api_server_pid=>ApiPid}}) of
-        {ok, #{obj_id:=_SessId2}=Reply, Pid} ->
-            % Register to keep the user awake
-            % ok = nkdomain_obj:link(UserId, usage, Pid, {?MODULE, SessId2}),
-%%            case Opts2 of
-%%                #{api_server_pid:=ApiPid} ->
-%%                    ok = nkdomain_obj:register(Pid, usage, {?MODULE, api_server, ApiPid}),
-%%                    ok = nkapi_server:register(ApiPid, {nkdomain_stop, ?MODULE, Pid});
-%%                _ ->
-%%                    ok
-%%            end,
-            {ok, Reply, Pid};
+    case nkdomain_obj_make:create(SrvId, Obj2, #{meta=>#{api_server_pid=>ApiPid}}) of
+        {ok, #obj_id_ext{obj_id=ObjId, pid=Pid}, _} ->
+            {ok, ObjId, Pid};
         {error, Error} ->
             {error, Error}
     end.
-
-
-%%%% @doc
-%%-spec get_user(nkdomain:obj_id()|pid()) ->
-%%    {ok, #{user_id=>binary(), domain_id=>binary()}}.
-%%
-%%get_user(SessId) ->
-%%    nkdomain_obj:sync_op(SessId, {?MODULE, get_user}).
-
 
 
 %% ===================================================================
@@ -105,9 +87,10 @@ create(SrvId, UserId, #{api_server_pid:=ApiPid}=Opts) ->
 %% ===================================================================
 
 %% @private
-object_get_info() ->
+object_info() ->
     #{
         type => ?DOMAIN_SESSION,
+        stop_after_disabled => true,
         remove_after_stop => true
     }.
 
@@ -121,10 +104,8 @@ object_admin_info() ->
     }.
 
 
-
-
 %% @private
-object_mapping() ->
+object_es_mapping() ->
     #{
         local => #{type => keyword},
         remote => #{type => keyword},
@@ -146,49 +127,40 @@ object_parse(_SrvId, _Mode, _Obj) ->
 
 
 %% @private
-object_start(#?NKOBJ{meta=#{api_server_pid:=ApiPid}}=State) ->
+object_init(#?STATE{meta=#{api_server_pid:=ApiPid}}=State) ->
     %% TODO Link again if moved process
-    {ok, nkdomain_obj_util:link_server_api(?MODULE, ApiPid, State)}.
+    {ok, nkdomain_obj_util:link_server_api(?MODULE, ApiPid, State)};
+
+object_init(State) ->
+    ?LLOG(warning, "started without meta", [], State),
+    {ok, State}.
+
 
 
 %% @private
-object_stop(_Reason, #?NKOBJ{meta=#{api_server_pid:=ApiPid}}=State) ->
+object_stop(_Reason, #?STATE{meta=#{api_server_pid:=ApiPid}}=State) ->
+    % When the session stops, we stop the WS
     nkapi_server:stop(ApiPid, nkdomain_session_stop),
+    {ok, State};
+
+object_stop(_Reason, State) ->
     {ok, State}.
+
 
 
 %% @private
 object_event({enabled, false}, State) ->
-    nkdomain_obj:unload(self(), session_is_disabled),
+    nkdomain:unload(any, self(), session_is_disabled),
     {ok, State};
 
 object_event(_Event, State) ->
     {ok, State}.
 
 
-
-%% @private
-object_api_syntax(Cmd, Syntax) ->
-    nkdomain_obj_syntax:syntax(Cmd, ?DOMAIN_SESSION, Syntax).
-
-
 %% @private
 object_api_allow(_Cmd, _Req, State) ->
     {true, State}.
 
-
-%% @private
-object_api_cmd(Cmd, Req) ->
-    nkdomain_obj_api:api(Cmd, ?DOMAIN_SESSION, Req).
-
-
-%%%% @private
-%%object_sync_op({?MODULE, get_user}, _From, #?NKOBJ{parent_id=UserId, obj=Obj}=State) ->
-%%    #{?DOMAIN_SESSION:=#{domain_id:=DomainId, login_meta:=Meta}} = Obj,
-%%    {reply, {ok, #{user_id=>UserId, domain_id=>DomainId, login_meta=>Meta}}, State};
-%%
-%%object_sync_op(_Op, _From, _State) ->
-%%    continue.
 
 
 %% ===================================================================
@@ -197,12 +169,12 @@ object_api_cmd(Cmd, Req) ->
 
 %% @private
 object_check_active(SrvId, ObjId) ->
-    case nkdomain_obj_lib:find_loaded(ObjId) of
+    case nkdomain_lib:find_loaded(SrvId, ObjId) of
         #obj_id_ext{pid=Pid} when is_pid(Pid) ->
             true;
         not_found ->
             lager:notice("NkDOMAIN: removing stalle active object ~s", [ObjId]),
-            nkdomain:archive(SrvId, ObjId, object_clean_process),
+            SrvId:object_db_delete(SrvId, ObjId),
             false
     end.
 

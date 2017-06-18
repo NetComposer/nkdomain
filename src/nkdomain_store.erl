@@ -23,8 +23,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -behaviour(gen_server).
 
--export([save/3, delete/2, archive/3, find/2, find_archive/2, clean/1]).
--export([delete_all_childs/2, delete_all_childs_type/3]).
+-export([find/2, find_archive/2]).
 -export([get_data/0, start_link/0]).
 -export([init/1, terminate/2, code_change/3, handle_call/3,
          handle_cast/2, handle_info/2]).
@@ -58,97 +57,76 @@
 
 
 
-%% @doc Tries to save an object, or it is stored to be saved later
--spec save(nkservice:id(), nkdomain:obj_id(), map()) ->
-    {ok, term()} | {error, term()}.
+%%%% @doc Tries to save an object, or it is stored to be saved later
+%%-spec save(nkservice:id(), nkdomain:obj_id(), map()) ->
+%%    {ok, term()} | {error, term()}.
+%%
+%%save(Srv, ObjId, Obj) ->
+%%    case nkservice_srv:get_srv_id(Srv) of
+%%        {ok, SrvId} ->
+%%            wait_remove_op(SrvId, ObjId),
+%%            case SrvId:object_store_save_raw(SrvId, ObjId, Obj) of
+%%                {ok, Vsn} ->
+%%                    {ok, Vsn};
+%%                {error, Error} ->
+%%                    ?LLOG(info, "could not save object ~s (~s), delaying", [ObjId, SrvId:name()]),
+%%                    gen_server:cast(?MODULE, {save, SrvId, ObjId, Obj}),
+%%                    {error, Error}
+%%            end;
+%%        not_found ->
+%%            {error, service_not_found}
+%%    end.
+%%
+%%
+%%
+%%%% @doc Tries to remove an object, or it is stored to be removed later on
+%%-spec delete(nkservice:id(), nkdomain:obj_id()) ->
+%%    ok | {error, term()}.
+%%
+%%delete(Srv, ObjId) ->
+%%    case nkservice_srv:get_srv_id(Srv) of
+%%        {ok, SrvId} ->
+%%            wait_remove_op(SrvId, ObjId),
+%%            case SrvId:object_store_delete_raw(SrvId, ObjId) of
+%%                ok ->
+%%                    % If the object is deleted (it didn't has childs, etc.) notify the owner (if still present)
+%%                    nkdomain_obj:object_has_been_deleted(ObjId),
+%%                    ok;
+%%                {error, object_not_found} ->
+%%                    {error, object_not_found};
+%%                {error, object_has_childs} ->
+%%                    {error, object_has_childs};
+%%                {error, Error} ->
+%%                    ?LLOG(info, "could not delete object ~s (~s), delaying", [ObjId, SrvId:name()]),
+%%                    gen_server:cast(?MODULE, {delete, SrvId, ObjId}),
+%%                    {error, Error}
+%%            end;
+%%        not_found ->
+%%            {error, service_not_found}
+%%    end.
+%%
+%%
+%%
+%%%% @doc Tries to remove an object, or it is stored to be removed later on
+%%-spec archive(nkservice:id(), nkdomain:obj_id(), nkdomain:obj()) ->
+%%    ok | {error, term()}.
+%%
+%%archive(Srv, ObjId, Obj) ->
+%%    case nkservice_srv:get_srv_id(Srv) of
+%%        {ok, SrvId} ->
+%%            wait_remove_op(SrvId, ObjId),
+%%            case SrvId:object_store_archive_save_raw(SrvId, ObjId, Obj) of
+%%                ok ->
+%%                    ok;
+%%                {error, Error} ->
+%%                    ?LLOG(info, "could not delete object ~s (~s), delaying", [ObjId, SrvId:name()]),
+%%                    gen_server:cast(?MODULE, {archive, SrvId, ObjId, Obj}),
+%%                    {error, Error}
+%%            end;
+%%        not_found ->
+%%            {error, service_not_found}
+%%    end.
 
-save(Srv, ObjId, Obj) ->
-    case nkservice_srv:get_srv_id(Srv) of
-        {ok, SrvId} ->
-            wait_remove_op(SrvId, ObjId),
-            case SrvId:object_store_save_raw(SrvId, ObjId, Obj) of
-                {ok, Vsn} ->
-                    {ok, Vsn};
-                {error, Error} ->
-                    ?LLOG(info, "could not save object ~s (~s), delaying", [ObjId, SrvId:name()]),
-                    gen_server:cast(?MODULE, {save, SrvId, ObjId, Obj}),
-                    {error, Error}
-            end;
-        not_found ->
-            {error, service_not_found}
-    end.
-
-
-
-%% @doc Tries to remove an object, or it is stored to be removed later on
--spec delete(nkservice:id(), nkdomain:obj_id()) ->
-    ok | {error, term()}.
-
-delete(Srv, ObjId) ->
-    case nkservice_srv:get_srv_id(Srv) of
-        {ok, SrvId} ->
-            wait_remove_op(SrvId, ObjId),
-            case SrvId:object_store_delete_raw(SrvId, ObjId) of
-                ok ->
-                    % If the object is deleted (it didn't has childs, etc.) notify the owner (if still present)
-                    nkdomain_obj:object_has_been_deleted(ObjId),
-                    ok;
-                {error, object_not_found} ->
-                    {error, object_not_found};
-                {error, object_has_childs} ->
-                    {error, object_has_childs};
-                {error, Error} ->
-                    ?LLOG(info, "could not delete object ~s (~s), delaying", [ObjId, SrvId:name()]),
-                    gen_server:cast(?MODULE, {delete, SrvId, ObjId}),
-                    {error, Error}
-            end;
-        not_found ->
-            {error, service_not_found}
-    end.
-
-
-
-%% @doc Tries to remove an object, or it is stored to be removed later on
--spec archive(nkservice:id(), nkdomain:obj_id(), nkdomain:obj()) ->
-    ok | {error, term()}.
-
-archive(Srv, ObjId, Obj) ->
-    case nkservice_srv:get_srv_id(Srv) of
-        {ok, SrvId} ->
-            wait_remove_op(SrvId, ObjId),
-            case SrvId:object_store_archive_save_raw(SrvId, ObjId, Obj) of
-                ok ->
-                    ok;
-                {error, Error} ->
-                    ?LLOG(info, "could not delete object ~s (~s), delaying", [ObjId, SrvId:name()]),
-                    gen_server:cast(?MODULE, {archive, SrvId, ObjId, Obj}),
-                    {error, Error}
-            end;
-        not_found ->
-            {error, service_not_found}
-    end.
-
-
-
-%% @doc
-delete_all_childs(Srv, Id) ->
-    case nkdomain_obj_lib:find(Srv, Id) of
-        #obj_id_ext{srv_id = SrvId, path = Path} ->
-            SrvId:object_store_delete_all_childs(SrvId, Path, #{});
-        {error, Error} ->
-            {error, Error}
-    end.
-
-
-%% @doc
-delete_all_childs_type(Srv, Id, Type) ->
-    case nkdomain_obj_lib:find(Srv, Id) of
-        #obj_id_ext{srv_id=SrvId, path=Path} ->
-            Opts = #{filters => #{type=>nklib_util:to_binary(Type)}},
-            SrvId:object_store_delete_all_childs(SrvId, Path, Opts);
-        not_found ->
-            {error, service_not_found}
-    end.
 
 
 
@@ -175,18 +153,6 @@ find_archive(Srv, Spec) ->
             {error, service_not_found}
     end.
 
-
-%% @private Performs a periodic cleanup
--spec clean(nkservice:id()) ->
-    {ok, map()} | {error, term()}.
-
-clean(Srv) ->
-    case nkservice_srv:get_srv_id(Srv) of
-        {ok, SrvId} ->
-            SrvId:object_store_clean(SrvId);
-        not_found ->
-            {error, service_not_found}
-    end.
 
 
 %% @private
@@ -423,11 +389,6 @@ reply(Reply, State) ->
 noreply(State) ->
     {noreply, State}.
 
-
-
-%% @private
-wait_remove_op(SrvId, ObjId) ->
-    _ = gen_server:call(?MODULE, {remove_op, SrvId, ObjId}, 60000).
 
 
 

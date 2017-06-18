@@ -121,3 +121,13 @@ admin_create() ->
         }
     },
     nkdomain_obj_lib:make_and_create(root, <<"admin">>, Obj, #{}).
+
+
+
+
+
+
+
+
+
+

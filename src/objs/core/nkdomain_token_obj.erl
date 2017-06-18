@@ -24,9 +24,8 @@
 -behavior(nkdomain_obj).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([create_referred/4, create_standalone/5]).
--export([object_get_info/0, object_mapping/0, object_parse/3,
-         object_api_syntax/2, object_api_allow/3, object_api_cmd/2, object_send_event/2,
+-export([create/6]).
+-export([object_info/0, object_parse/3, object_api_allow/3, object_send_event/2,
          object_sync_op/3, object_async_op/2]).
 -export([object_admin_info/0]).
 
@@ -42,75 +41,41 @@
 %% ===================================================================
 
 
-
-
 %% ===================================================================
 %% API
 %% ===================================================================
 
 %% @doc
--spec create_referred(nkservice:id(), nkdomain:id(), #{ttl=>integer()}, map()) ->
-    {ok, #{token_id=>nkdomain:obj_id(), ttl=>integer()}, pid()} | {error, term()}.
+-spec create(nkservice:id(), nkdomain:id(), nkdomain:id(), nkdomain:subtype(),
+             nkdomain_obj_make:make_opts(), map()) ->
+    {ok, #obj_id_ext{}, integer(), [Unknown::binary()]} | {error, term()}.
 
-create_referred(Srv, Parent, Opts, Data) ->
-    case nkdomain_obj_lib:load(Srv, Parent, #{}) of
-        #obj_id_ext{obj_id=ReferredId, type=SubType} ->
-            case check_ttl(SubType, Opts) of
-                {ok, SecsTTL} ->
-                    Obj = #{
-                        parent_id => ReferredId,
-                        type => ?DOMAIN_TOKEN,
-                        referred_id => ReferredId,
-                        subtype => SubType,
-                        expires_time => nkdomain_util:timestamp() + 1000*SecsTTL,
-                        ?DOMAIN_TOKEN => Data
-                    },
-                    case nkdomain_obj_lib:make_and_create(Srv, <<>>, Obj, #{}) of
-                        {ok, #{obj_id:=TokenId}, Pid} ->
-                            {ok, #{token_id=>TokenId, ttl=>SecsTTL}, Pid};
-                        {error, Error} ->
-                            {error, Error}
-                    end;
-                {error, Error} ->
-                    {error, Error}
-            end;
-        {error, object_not_found} ->
-            {error, referred_not_found};
-        {error, Error} ->
-            {error, Error}
-    end.
-
-
-%% @doc
--spec create_standalone(nkservice:id(), nkdomain:id(), binary(), #{ttl=>integer()}, map()) ->
-    {ok, #{token_id=>nkdomain:obj_id(), ttl=>integer()}, pid()} | {error, term()}.
-
-create_standalone(Srv, Parent, SubType, Opts, Data) ->
+create(SrvId, Domain, User, SubType, Opts, Data) ->
     case check_ttl(SubType, Opts) of
         {ok, SecsTTL} ->
-            Obj = #{
-                parent_id => Parent,
+            Obj = Opts#{
                 type => ?DOMAIN_TOKEN,
+                parent_id => Domain,
+                created_by => User,
                 subtype => SubType,
-                expires_time => nkdomain_util:timestamp() + 1000*SecsTTL,
+                ttl => SecsTTL,
                 ?DOMAIN_TOKEN => Data
             },
-            case nkdomain_obj_lib:make_and_create(Srv, <<>>, Obj, #{}) of
-                {ok, #{obj_id:=TokenId}, Pid} ->
-                    {ok, #{token_id=>TokenId, ttl=>SecsTTL}, Pid};
+            case nkdomain_obj_make:create(SrvId, Obj) of
+                {ok, ObjIdExt, Unknown} ->
+                    {ok, ObjIdExt, SecsTTL, Unknown};
                 {error, Error} ->
                     {error, Error}
             end;
         {error, Error} ->
             {error, Error}
     end.
-
 
 
 %% @doc
 check_ttl(Type, Opts) ->
     Mod = nkdomain_all_types:get_module(Type),
-    Info = Mod:object_get_info(),
+    Info = Mod:object_info(),
     DefTTL = maps:get(default_token_ttl, Info, ?DEF_TOKEN_TTL),
     MaxTTL = maps:get(max_token_ttl, Info, ?MAX_TOKEN_TTL),
     case maps:get(ttl, Opts, DefTTL) of
@@ -128,7 +93,7 @@ check_ttl(Type, Opts) ->
 
 
 %% @private
-object_get_info() ->
+object_info() ->
     #{
         type => ?DOMAIN_TOKEN,
         remove_after_stop => true
@@ -144,18 +109,8 @@ object_admin_info() ->
 
 
 %% @private
-object_mapping() ->
-    disabled.
-
-
-%% @private
 object_parse(_SrvId, _Mode, _Obj) ->
     any.
-
-
-%% @private
-object_api_syntax(Cmd, Syntax) ->
-    nkdomain_obj_syntax:syntax(Cmd, ?DOMAIN_TOKEN, Syntax).
 
 
 %% @private
@@ -166,11 +121,6 @@ object_api_allow(_Cmd, _Req, State) ->
 %% @private
 object_send_event(_Event, Session) ->
     {ok, Session}.
-
-
-%% @private
-object_api_cmd(Cmd, Req) ->
-    nkdomain_obj_api:api(Cmd, ?DOMAIN_TOKEN, Req).
 
 
 %% @private

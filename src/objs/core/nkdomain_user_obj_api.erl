@@ -33,7 +33,7 @@
 %% API
 %% ===================================================================
 
-%% @doc
+%% @doc WS login
 cmd(<<"login">>, #nkreq{conn_id=Pid, session_module=nkapi_server, user_meta=UserMeta}=Req) ->
     #nkreq{data=#{id:=User}=Data, srv_id=SrvId, session_id=SessId, session_meta=SessMeta} = Req,
     case get_domain(Req) of
@@ -62,6 +62,7 @@ cmd(<<"login">>, #nkreq{conn_id=Pid, session_module=nkapi_server, user_meta=User
             {error, Error}
     end;
 
+%% @doc HTTP login
 cmd(<<"login">>, #nkreq{session_module=nkapi_server_http}=Req) ->
     #nkreq{data=#{id:=User}=Data, srv_id=SrvId, session_id=SessId, session_meta=SessMeta} = Req,
     case get_domain(Req) of
@@ -78,8 +79,8 @@ cmd(<<"login">>, #nkreq{session_module=nkapi_server_http}=Req) ->
                 _ -> LoginMeta2
             end,
             case nkdomain_user_obj:token(SrvId, User, LoginMeta3) of
-                {ok, Reply} ->
-                    {ok, Reply};
+                {ok, TokenId, TTL2} ->
+                    {ok, #{token_id=>TokenId, ttl=>TTL2}};
                 {error, Error} ->
                     {error, Error}
             end;
@@ -97,19 +98,14 @@ cmd(Cmd, Req) ->
 
 %% @private
 get_domain(#nkreq{data = #{domain_id:=Domain}, srv_id=SrvId}) ->
-    case nkdomain_obj_lib:find(SrvId, Domain) of
+    case nkdomain_lib:find(SrvId, Domain) of
         #obj_id_ext{obj_id=DomainId} ->
             {ok, DomainId};
         {error, _} ->
-            {error, domain_unknown}
+            {error, {domain_unknown, Domain}}
     end;
 
-get_domain(#nkreq{srv_id=SrvId}) ->
-    case nkdomain_util:get_service_domain(SrvId) of
-        undefined ->
-            {error, domain_unknown};
-        DomainId ->
-            {ok, DomainId}
-    end.
+get_domain(_Req) ->
+    {ok, <<"root">>}.
 
 

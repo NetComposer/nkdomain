@@ -22,46 +22,30 @@
 -module(nkdomain_store_es_callbacks).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
+-export([error/1]).
+-export([object_es_mapping/0, object_es_mapping/2, object_es_parse/2, object_es_unparse/2]).
+-export([object_db_init/1, object_db_read/2, object_db_save/2, object_db_delete/2,
+         object_db_find_obj/2, object_db_search/2, object_db_search_alias/2,
+         object_db_search_childs/3, object_db_search_all_childs/3,
+         object_db_search_types/3, object_db_search_all_types/3,
+         object_db_delete_all_childs/3, object_db_clean/1]).
 -export([plugin_deps/0, plugin_syntax/0, plugin_config/2]).
--export([object_store_reload_types/1, object_store_read_raw/2, object_store_save_raw/3,
-         object_store_delete_raw/2]).
--export([object_store_find_obj/2,
-         object_store_find_types/3, object_store_find_all_types/3,
-         object_store_find_childs/3, object_store_find_all_childs/3,
-         object_store_find_alias/2, object_store_delete_all_childs/3,
-         object_store_find/2]).
--export([object_store_archive_find/2, object_store_archive_save_raw/3, object_store_clean/1]).
--export([elastic_get_indices/2, elastic_get_mappings/3, elastic_get_aliases/3,
-         elastic_get_templates/2]).
--export([get_index/1, get_archive_index/1, get_mappings/2, get_templates/1]).
 
-
--define(ES_INDEX, <<"nkobjects_v2">>).
--define(ES_ALIAS, <<"nkobjects">>).
--define(ES_TYPE, <<"objs">>).
--define(ES_LOG_TEMPLATE, <<"nkdomain_objs">>).
--define(ES_ARCHIVE_INDEX, <<"nkarchive_v1">>).
-
-%%-define(LLOG(Type, Txt, Args),
-%%    lager:Type("NkDOMAIN Store ES "++Txt, Args)).
 
 -include("nkdomain.hrl").
 
+-define(LLOG(Type, Txt, Args),
+    lager:Type("NkDOMAIN Store ES "++Txt, Args)).
 
-%% ===================================================================
-%% Types
-%% ===================================================================
-
--record(es_config, {
-    index,
-    type,
-    archive_index
-}).
 
 
 %% ===================================================================
-%% Public
+%% Errors
 %% ===================================================================
+
+%% @doc
+error(_)   		                        -> continue.
+
 
 
 %% ===================================================================
@@ -72,52 +56,34 @@ plugin_deps() ->
     [nkdomain, nkelastic].
 
 
+%% Other plugins can also parse db_clusters
 plugin_syntax() ->
     #{
-        domain_elastic_url => binary,
-        domain_elastic_user => binary,
-        domain_elastic_pass => binary,
-        domain_elastic_index =>  binary,
-        domain_elastic_alias => binary,
-        domain_elastic_obj_type => binary,
-        domain_elastic_replicas => {integer, 0, 3},
-        domain_elastic_archive_index =>  binary,
-        '__defaults' => #{
-            domain_elastic_url => <<"http://localhost:9200">>,
-            domain_elastic_index => ?ES_INDEX,
-            domain_elastic_alias => ?ES_ALIAS,
-            domain_elastic_obj_type => ?ES_TYPE,
-            domain_elastic_replicas => 2,
-            domain_elastic_archive_index => ?ES_ARCHIVE_INDEX
-        }}.
+        nkdomain => #{
+            db_store => binary,
+            db_clusters => {list, #{
+                id => binary,
+                class => atom,
+                url => binary,
+                pool_size => {integer, 1, none},
+                pool_overflow => {integer, 1, none},
+                replicas => {integer, 1, 5},
+                database => binary,
+                '__mandatory' => [class]
+            }},
+            '__mandatory' => [db_store]
+        }
+    }.
 
 
-plugin_config(Config, _Service) ->
-    #{
-        domain_elastic_url := Url,
-        domain_elastic_index := Index,
-        domain_elastic_obj_type := Type,
-        domain_elastic_archive_index := ArchiveIndex
-    } = Config,
-    Cache = #es_config{
-        index = Index,
-        type = Type,
-        archive_index = ArchiveIndex
-    },
-    Config2 = case Config of
-        #{
-            domain_elastic_user := User,
-            domain_elastic_pass := Pass
-        } ->
-            Config#{
-                elastic_url => Url,
-                elastic_user => User,
-                elastic_pass => Pass
-            };
-        _ ->
-            Config#{elastic_url => Url}
-    end,
-    {ok, Config2, Cache}.
+plugin_config(#{nkdomain:=NkDomain}=Config, #{id:=SrvId}) ->
+    #{db_store:=DbStore} = NkDomain,
+    Clusters = maps:get(db_clusters, NkDomain, []),
+    Config2 = parse_clusters(SrvId, Clusters, DbStore, Config),
+    {ok, Config2};
+
+plugin_config(_Config, _Service) ->
+    continue.
 
 
 
@@ -125,189 +91,307 @@ plugin_config(Config, _Service) ->
 %% Store callbacks
 %% ===================================================================
 
-%% @doc
-object_store_reload_types(SrvId) ->
-    nkdomain_store_es:reload_types(SrvId).
 
+%% @doc ES base base mapping
+-spec object_es_mapping() ->
+    map().
 
-%% @doc
-object_store_read_raw(SrvId, ObjId) ->
-    nkdomain_store_es:read_obj(SrvId, ObjId).
-
-
-%% @doc
-object_store_save_raw(SrvId, ObjId, Map) ->
-    nkdomain_store_es:save_obj(SrvId, Map#{obj_id=>ObjId}).
-
-
-%% @doc
-object_store_delete_raw(SrvId, ObjId) ->
-    nkdomain_store_es:delete_obj(SrvId, ObjId).
-
-
-%% @doc
-object_store_find_obj(SrvId, Id) ->
-    nkdomain_store_es:find_obj(SrvId, Id).
-
-
-%% @doc
-object_store_find_alias(SrvId, Alias) ->
-    nkdomain_store_es:find_obj_alias(SrvId, Alias).
-
-
-%% @doc
-object_store_find_types(SrvId, ObjId, Spec) ->
-    nkdomain_store_es:find_types(SrvId, ObjId, Spec).
-
-
-%% @doc
-object_store_find_all_types(SrvId, ObjId, Spec) ->
-    nkdomain_store_es:find_all_types(SrvId, ObjId, Spec).
-
-
-%% @doc
-object_store_find_childs(SrvId, ObjId, Spec) ->
-    nkdomain_store_es:find_childs(SrvId, ObjId, Spec).
-
-
-%% @doc
-object_store_find_all_childs(SrvId, Path, Spec) ->
-    nkdomain_store_es:find_all_childs(SrvId, Path, Spec).
-
-
-%% @doc
-object_store_delete_all_childs(SrvId, Path, Spec) ->
-    nkdomain_store_es:delete_all_childs(SrvId, Path, Spec).
-
-
-%% @doc
-object_store_find(SrvId, Spec) ->
-    nkdomain_store_es:find(SrvId, Spec).
-
-
-%% @doc
-object_store_archive_find(SrvId, Spec) ->
-    nkdomain_store_es:archive_find(SrvId, Spec).
-
-
-%% @doc
-object_store_archive_save_raw(SrvId, ObjId, Map) ->
-    nkdomain_store_es:archive_save_obj(SrvId, Map#{obj_id=>ObjId}).
-
-
-%% @doc
-object_store_clean(SrvId) ->
-    nkdomain_store_es:clean(SrvId).
-
-
-%% ===================================================================
-%% NkElastic callbacks
-%% ===================================================================
-
-
-%% @private
-elastic_get_indices(Acc, #{id:=SrvId}=Service) ->
-    Indices = nkdomain_store_es:get_indices(SrvId),
-    {continue, [maps:merge(Acc, Indices), Service]}.
-
-
-%% @private
-elastic_get_mappings(Index, Acc, #{id:=SrvId}=Service) ->
-    Mappings = get_mappings(SrvId, Index),
-    {continue, [Index, maps:merge(Acc, #{<<"objs">> => Mappings}), Service]}.
-
-
-%% @private
-elastic_get_aliases(Index, Acc, #{id:=SrvId}=Service) ->
-    Aliases = nkdomain_store_es:get_aliases(SrvId, Index),
-    {continue, [Index, maps:merge(Acc, Aliases), Service]}.
-
-
-%% @private
-elastic_get_templates(Acc, #{id:=SrvId}=Service) ->
-    Templates = get_templates(SrvId),
-    {continue, [maps:merge(Acc, Templates), Service]}.
-
-
-
-%% ===================================================================
-%% Private
-%% ===================================================================
-
-%% @private
--spec get_index(nkservice:id()) ->
-    {Index::binary(), Type::binary()}.
-
-get_index(SrvId) ->
-    #es_config{index=Index, type=IdxType} = SrvId:config_nkdomain_store_es(),
-    {Index, IdxType}.
-
-
-%% @private
--spec get_archive_index(nkservice:id()) ->
-    {Index::binary(), Type::binary()}.
-
-get_archive_index(SrvId) ->
-    #es_config{archive_index=Index, type=IdxType} = SrvId:config_nkdomain_store_es(),
-    {Index, IdxType}.
-
-
-%% @private Get ES indices
-get_templates(SrvId) ->
+object_es_mapping() ->
     #{
-        domain_elastic_index := Index,
-        domain_elastic_archive_index := StoreIndex
-    } =
-        SrvId:config(),
-    Mappings = get_mappings(SrvId, Index),
-    #{
-        ?ES_LOG_TEMPLATE => #{
-            template => <<StoreIndex/binary, $*>>,
-            mappings => #{
-                ?ES_TYPE => #{
-                    properties => Mappings
-                }
-            }
-        }
+        obj_id => #{type => keyword},
+        type => #{type => keyword},
+        path => #{type => keyword},
+        parent_id => #{type => keyword},
+        referred_id => #{type => keyword},
+        subtype => #{type => keyword},
+        created_by => #{type => keyword},
+        created_time => #{type => date},
+        updated_by => #{type => keyword},
+        updated_time => #{type => date},
+        enabled => #{type => boolean},
+        active => #{type => boolean},
+        expires_time => #{type => date},
+        destroyed => #{type => boolean},
+        destroyed_time => #{type => date},
+        destroyed_code => #{type => keyword},
+        destroyed_reason => #{type => keyword},
+        name => #{
+            type => text,
+            fields => #{keyword => #{type=>keyword}}
+        },
+        description => #{
+            type => text,
+            fields => #{keyword => #{type=>keyword}}
+        },
+        tags => #{type => keyword},
+        aliases => #{type => keyword},
+        icon_id => #{type => keyword},
+        icon_url => #{type => keyword},
+        icon_content_type => #{type => keyword}
+
     }.
 
 
-%% @doc Gets all ES store mappings for all registered types
--spec get_mappings(nkservice:id(), binary()) -> map().
+%% @doc Must return the submapping for a type
+-spec object_es_mapping(nkservice:id(), nkdomain:type()) ->
+    map() | not_exported.
 
-get_mappings(SrvId, Index) ->
-    case SrvId:config() of
-        #{
-            domain_elastic_index := Index
-        } ->
-            lager:info("Installed types: ~p", [nkdomain_all_types:get_all_types()]),
-            Modules = nkdomain_all_types:get_all_modules(),
-            Base = SrvId:object_mapping(),
-            lists:foldl(
-                fun(Module, Acc) ->
-                    #{type:=Type} = Module:object_get_info(),
-                    Obj = get_object_mappings(Module),
-                    Acc#{Type => Obj}
-                end,
-                Base,
-                Modules);
+object_es_mapping(SrvId, Type) ->
+    SrvId:object_apply(Type, object_es_mapping, []).
 
+
+%% @doc Must parse an object
+-spec object_es_parse(nkservice:id(), map()) ->
+    {ok, nkdomain:obj(), Unknown::[binary()]} | {error, term()}.
+
+object_es_parse(SrvId, Map) ->
+    SrvId:object_parse(SrvId, load, Map).
+
+
+%% @doc Called to serialize an object to ES format
+-spec object_es_unparse(nkservice:id(), nkdomain:obj()) ->
+    map().
+
+object_es_unparse(SrvId, #{type:=Type}=Obj) ->
+    BaseKeys = maps:keys(SrvId:object_es_mapping()),
+    BaseMap1 = maps:with(BaseKeys, Obj),
+    BaseMap2 = case BaseMap1 of
+        #{pid:=Pid} ->
+            BaseMap1#{pid:=base64:encode(term_to_binary(Pid))};
         _ ->
-            #{}
+            BaseMap1
+    end,
+    ModData = maps:get(Type, Obj, #{}),
+    case SrvId:object_es_mapping(SrvId, Type) of
+        not_exported ->
+            BaseMap2#{Type => ModData};
+        Map when is_map(Map) ->
+            ModKeys = maps:keys(Map),
+            ModMap = maps:with(ModKeys, ModData),
+            BaseMap2#{Type => ModMap}
     end.
 
+
+
+
+%% ===================================================================
+%% Implemented callbacks
+%% ===================================================================
+
+%% @doc Initializes database
+-spec object_db_init(nkservice:state()) ->
+    {ok, nkservice:state()} | {error, term()}.
+
+object_db_init(#{id:=SrvId}=State) ->
+    case SrvId:config_nkdomain() of
+        {elastic, IndexOpts, EsOpts} ->
+            case nkdomain_store_es_util:db_init(IndexOpts, EsOpts) of
+                ok ->
+                    {ok, State};
+                {error, Error} ->
+                    {error, {object_db_init, Error}}
+            end;
+        _ ->
+            continue
+    end.
+
+
+%% @doc Called to get and parse an object
+-spec object_db_read(nkservice:id(), nkdomain:obj_id()) ->
+    {ok, nkdomain:obj(), Meta::map()} | {error, term()}.
+
+object_db_read(SrvId, ObjId) ->
+    case nkdomain_store_es_util:get_opts(SrvId) of
+        {ok, EsOpts} ->
+            nkdomain_store_es:read_obj(ObjId, EsOpts);
+        _ ->
+            continue
+    end.
+
+
+%% @doc Saves an object to database
+-spec object_db_save(nkservice:id(), nkdomain:obj()) ->
+    {ok, Meta::map()} | {error, term()}.
+
+object_db_save(SrvId, #{obj_id:=ObjId}=Obj) ->
+    case nkdomain_store_es_util:get_opts(SrvId) of
+        {ok, EsOpts} ->
+            nkdomain_store_es:save_obj(ObjId, Obj, EsOpts);
+        _ ->
+            continue
+    end.
+
+
+%% @doc Deletes an object to database
+-spec object_db_delete(nkservice:id(), nkdomain:obj_id()) ->
+    {ok, Meta::map()} | {error, term()}.
+
+object_db_delete(SrvId, ObjId) ->
+    case nkdomain_store_es_util:get_opts(SrvId) of
+        {ok, EsOpts} ->
+            nkdomain_store_es:delete_obj(ObjId, EsOpts);
+        _ ->
+            continue
+    end.
+
+
+%% @doc Finds an object from its ID or Path
+-spec object_db_find_obj(nkservice:id(), nkdomain:id()) ->
+    {ok, nkdomain:type(), nkdomain:obj_id(), nkdomain:path()} | {error, object_not_found|term()}.
+
+object_db_find_obj(SrvId, Id) ->
+    case nkdomain_store_es_util:get_opts(SrvId) of
+        {ok, EsOpts} ->
+            nkdomain_store_es:find_obj(Id, EsOpts);
+        _ ->
+            continue
+    end.
+
+
+%% @doc
+-spec object_db_search(nkservice:id(), nkdomain:search_spec()) ->
+    {ok, Total::integer(), Objs::[map()], Aggs::map(), Meta::map()} |
+    {error, term()}.
+
+object_db_search(SrvId, Spec) ->
+    case nkdomain_store_es_util:get_opts(SrvId) of
+        {ok, EsOpts} ->
+            nkdomain_store_es:search(Spec, EsOpts);
+        _ ->
+            continue
+    end.
+
+
+
+%% @doc
+-spec object_db_search_alias(nkservice:id(), nkdomain:alias()) ->
+    {ok, Total::integer(), [{nkdomain:type(), nkdomain:obj_id(), nkdomain:path()}], Meta::map()} |
+    {error, term()}.
+
+object_db_search_alias(SrvId, Alias) ->
+    case nkdomain_store_es_util:get_opts(SrvId) of
+        {ok, EsOpts} ->
+            nkdomain_store_es:search_obj_alias(Alias, EsOpts);
+        _ ->
+            continue
+    end.
+
+
+%% @doc
+-spec object_db_search_types(nkservice:id(), nkdomain:id(), nkdomain:search_spec()) ->
+    {ok, Total::integer(), [{nkdomain:type(), integer()}], Meta::map()} | {error, term()}.
+
+object_db_search_types(SrvId, Id, Spec) ->
+    case nkdomain_store_es_util:get_opts(SrvId) of
+        {ok, EsOpts} ->
+            nkdomain_store_es:search_types(Id, Spec, EsOpts);
+        _ ->
+            continue
+    end.
+
+
+%% @doc
+-spec object_db_search_all_types(nkservice:id(), nkdomain:id(), nkdomain:search_spec()) ->
+    {ok, Total::integer(), [{nkdomain:type(), integer()}], Map::map()} | {error, term()}.
+
+object_db_search_all_types(SrvId, Id, Spec) ->
+    case nkdomain_store_es_util:get_opts(SrvId) of
+        {ok, EsOpts} ->
+            nkdomain_store_es:search_all_types(Id, Spec, EsOpts);
+        _ ->
+            continue
+    end.
+
+
+%% @doc
+-spec object_db_search_childs(nkservice:id(), nkdomain:id(), nkdomain:search_spec()) ->
+    {ok, Total::integer(), [{nkdomain:type(), nkdomain:obj_id(), nkdomain:path()}], Meta::map()} |
+    {error, term()}.
+
+object_db_search_childs(SrvId, Id, Spec) ->
+    case nkdomain_store_es_util:get_opts(SrvId) of
+        {ok, EsOpts} ->
+            nkdomain_store_es:search_childs(Id, Spec, EsOpts);
+        _ ->
+            continue
+    end.
+
+
+%% @doc
+-spec object_db_search_all_childs(nkservice:id(), nkdomain:id(), nkdomain:search_spec()) ->
+    {ok, Total::integer(), [{nkdomain:type(), nkdomain:obj_id(), nkdomain:path()}], Meta::map()} |
+    {error, term()}.
+
+object_db_search_all_childs(SrvId, Id, Spec) ->
+    case nkdomain_store_es_util:get_opts(SrvId) of
+        {ok, EsOpts} ->
+            nkdomain_store_es:search_all_childs(Id, Spec, EsOpts);
+        _ ->
+            continue
+    end.
+
+
+%% @doc Must stop loaded objects
+-spec object_db_delete_all_childs(nkservice:id(), nkdomain:id(), nkdomain:search_spec()) ->
+    {ok, Total::integer()} | {error, term()}.
+
+object_db_delete_all_childs(SrvId, Id, Spec) ->
+    case nkdomain_store_es_util:get_opts(SrvId) of
+        {ok, EsOpts} ->
+            nkdomain_store_es:delete_all_childs(Id, Spec, EsOpts);
+        _ ->
+            continue
+    end.
+
+
+%% @doc Called to perform a cleanup of the store (expired objects, etc.)
+%% Should call object_check_active/3 for each 'active' object found
+-spec object_db_clean(nkservice:id()) ->
+    ok | {error, term()}.
+
+object_db_clean(SrvId) ->
+    case nkdomain_store_es_util:get_opts(SrvId) of
+        {ok, EsOpts} ->
+            nkdomain_store_es:clean(EsOpts);
+        _ ->
+            continue
+    end.
+
+
+
+%% ===================================================================
+%% Internal
+%% ===================================================================
 
 %% @private
-get_object_mappings(Module) ->
-    case Module:object_mapping() of
-        Map when is_map(Map) ->
-            #{
-                type => object,
-                dynamic => false,
-                properties => Map
-            };
-        disabled ->
-            #{
-                enabled => false
-            }
-    end.
+parse_clusters(_SrvId, [], _DbStore, Config) ->
+    Config;
+
+parse_clusters(SrvId, [#{class:=nkelastic}=Data|Rest], DbStore, Config) ->
+    Id = maps:get(id, Data, <<"main">>),
+    Previous = maps:get(nkelastic, Config, []),
+    Data2 = maps:with([id, url, pool_size, pool_overflow, replicas, database], Data#{id=>Id}),
+    Config2 = Config#{nkelastic => [Data2|Previous]},
+    Config3 = case DbStore of
+        Id ->
+            IndexOpts = #{
+                number_of_replicas => maps:get(replicas, Data2, 2)
+            },
+            Database = maps:get(database, Data, <<"nkobjects">>),
+            EsOpts = #{
+                srv_id => SrvId,
+                cluster_id => Id,
+                index => Database,
+                type => <<"objs">>,
+                refresh => true
+            },
+            % nkdomain_store will be captured by nkdomain and generate cache
+            Config2#{nkdomain_store=>{elastic, IndexOpts, EsOpts}};
+        _ ->
+            Config2
+    end,
+    parse_clusters(SrvId, Rest, DbStore, Config3);
+
+parse_clusters(SrvId, [_|Rest], DbStore, Config) ->
+    parse_clusters(SrvId, Rest, DbStore, Config).
+

@@ -24,7 +24,7 @@
 -behavior(nkdomain_obj).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([object_get_info/0, object_admin_info/0, object_mapping/0, object_parse/3,
+-export([object_info/0, object_admin_info/0, object_parse/3,
          object_api_syntax/2, object_api_allow/3, object_api_cmd/2]).
 
 -include_lib("nkdomain.hrl").
@@ -51,7 +51,7 @@
 
 
 %% @private
-object_get_info() ->
+object_info() ->
     #{
         type => ?DOMAIN_MAIL
     }.
@@ -66,9 +66,9 @@ object_admin_info() ->
 
 
 
-%% @private
-object_mapping() ->
-    disabled.
+%%%% @private
+%%object_es_mapping() ->
+%%    #{}.
 
 
 %% @private

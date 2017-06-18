@@ -64,7 +64,7 @@ cmd(<<"find_types">>, #nkreq{data=Data, srv_id=SrvId}=Req) ->
     case get_domain(Data, Req) of
         {ok, Id} ->
             case nkdomain_domain_obj:find_types(SrvId, Id, Data) of
-                {ok, Total, List} ->
+                {ok, Total, List, _Meta} ->
                     {ok, #{total=>Total, data=>maps:from_list(List)}};
                 {error, Error} ->
                     {error, Error}
@@ -77,7 +77,7 @@ cmd(<<"find_all_types">>, #nkreq{data=Data, srv_id=SrvId}=Req) ->
     case get_domain(Data, Req) of
         {ok, Id} ->
             case nkdomain_domain_obj:find_all_types(SrvId, Id, Data) of
-                {ok, Total, List} ->
+                {ok, Total, List, _Meta} ->
                     {ok, #{total=>Total, data=>maps:from_list(List)}};
                 {error, Error} ->
                     {error, Error}

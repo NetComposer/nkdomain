@@ -21,10 +21,8 @@
 -module(nkdomain_util).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([is_path/1, get_parts/2, class/1, name/1, update/4]).
+-export([is_path/1, get_parts/2, class/1, name/1]).
 -export([add_destroyed/3]).
--export([get_service_domain/1]).
--export([error_code/2]).
 -export([timestamp/0]).
 -export([get_http_auth/2]).
 -export_type([error/0]).
@@ -130,59 +128,75 @@ name(Name) ->
     nklib_parse:normalize(Name, #{space=>$_, allowed=>[$-, $., $_]}).
 
 
-%% @doc Finds the domain for a service
-get_service_domain(Srv) ->
-    case nkservice:get(Srv, nkdomain_data) of
-        #{domain_obj_id:=Domain} -> Domain;
-        _ -> undefined
-    end.
 
 
-%% @doc
--spec error_code(nkservice:id(), error()) ->
-    {atom(), binary()}.
-
-error_code(_SrvId, Term) when is_atom(Term) ->
-    {Term, to_bin(Term)};
-
-error_code(_SrvId, {Key, Term}) when is_atom(Key) ->
-    {Key, list_to_binary([to_bin(Key), <<": ">>, to_bin(Term)])};
-
-error_code(_SrvId, {Key, Fmt, Args}) when is_atom(Key), is_list(Fmt), is_list(Args) ->
-    try list_to_binary(io_lib:format(Fmt, Args)) of
-        Bin ->
-            {Key, Bin}
-    catch
-        _:_ ->
-            Ref = make_ref(),
-            lager:warning("Invalid domain error_code: ~p, ~p (~p)", [Fmt, Args, Ref]),
-            {Key, to_bin(erlang:ref_to_list(Ref))}
-    end;
-
-error_code(_SrvId, Term) ->
-    Ref = make_ref(),
-    lager:warning("Invalid domain error_code: ~p (~p)", [Term, Ref]),
-    {unknown_error, to_bin(erlang:ref_to_list(Ref))}.
 
 
-%% @doc
--spec update(nkservice:id(), nkdomain:type(), nkdomain:id(), nkdomain_obj:apply_fun()) ->
-    {ok, term()} | {error, term()}.
 
-update(Srv, Type, Id, Fun) ->
-    case nkdomain_obj_lib:load(Srv, Id, #{}) of
-        #obj_id_ext{type=Type, pid=Pid} ->
-            case nkdomain_obj:sync_op(Pid, {apply, Fun}) of
-                {ok, Reply} ->
-                    {ok, Reply};
-                {error, Error} ->
-                    {error, Error}
-            end;
-        #obj_id_ext{} ->
-            {error, invalid_object};
-        {error, Error} ->
-            {error, Error}
-    end.
+
+
+
+
+
+
+
+
+
+
+
+%%%% @doc Finds the domain for a service
+%%get_service_domain(Srv) ->
+%%    case nkservice:get(Srv, nkdomain_data) of
+%%        #{domain_obj_id:=Domain} -> Domain;
+%%        _ -> undefined
+%%    end.
+
+
+%%%% @doc
+%%-spec error_code(nkservice:id(), error()) ->
+%%    {atom(), binary()}.
+%%
+%%error_code(_SrvId, Term) when is_atom(Term) ->
+%%    {Term, to_bin(Term)};
+%%
+%%error_code(_SrvId, {Key, Term}) when is_atom(Key) ->
+%%    {Key, list_to_binary([to_bin(Key), <<": ">>, to_bin(Term)])};
+%%
+%%error_code(_SrvId, {Key, Fmt, Args}) when is_atom(Key), is_list(Fmt), is_list(Args) ->
+%%    try list_to_binary(io_lib:format(Fmt, Args)) of
+%%        Bin ->
+%%            {Key, Bin}
+%%    catch
+%%        _:_ ->
+%%            Ref = make_ref(),
+%%            lager:warning("Invalid domain error_code: ~p, ~p (~p)", [Fmt, Args, Ref]),
+%%            {Key, to_bin(erlang:ref_to_list(Ref))}
+%%    end;
+%%
+%%error_code(_SrvId, Term) ->
+%%    Ref = make_ref(),
+%%    lager:warning("Invalid domain error_code: ~p (~p)", [Term, Ref]),
+%%    {unknown_error, to_bin(erlang:ref_to_list(Ref))}.
+
+
+%%%% @doc
+%%-spec update(nkservice:id(), nkdomain:type(), nkdomain:id(), nkdomain_obj:apply_fun()) ->
+%%    {ok, term()} | {error, term()}.
+%%
+%%update(Srv, Type, Id, Fun) ->
+%%    case nkdomain_lib:load(Srv, Id, #{}) of
+%%        #obj_id_ext{type=Type, pid=Pid} ->
+%%            case nkdomain_obj:sync_op(Pid, {apply, Fun}) of
+%%                {ok, Reply} ->
+%%                    {ok, Reply};
+%%                {error, Error} ->
+%%                    {error, Error}
+%%            end;
+%%        #obj_id_ext{} ->
+%%            {error, invalid_object};
+%%        {error, Error} ->
+%%            {error, Error}
+%%    end.
 
 
 %% @doc
@@ -208,7 +222,7 @@ timestamp() ->
 
 
 %%upload_icon(SrvId, ObjId, Req) ->
-%%    case nkdomain_obj_lib:load(SrvId, ObjId, #{}) of
+%%    case nkdomain_lib:load(SrvId, ObjId, #{}) of
 %%        #obj_id_ext{pid=Pid} ->
 %%            CT = nkservice_rest_http:get_ct(Req),
 %%            case lists:member(CT, ?ICON_TYPES) of
@@ -242,7 +256,7 @@ timestamp() ->
 %%
 %%
 %%download_icon(SrvId, ObjId) ->
-%%    case nkdomain_obj_lib:load(SrvId, ObjId, #{}) of
+%%    case nkdomain_lib:load(SrvId, ObjId, #{}) of
 %%        #obj_id_ext{pid=Pid} ->
 %%            case nkdomain_obj:get_name(Pid) of
 %%                {ok, #{icon_id:=<<"/file/icon/", Id/binary>>, icon_content_type:=CT}} ->

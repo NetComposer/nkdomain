@@ -83,12 +83,6 @@ syntax(<<"find">>, _Type, Syntax) ->
 syntax(<<"find_all">>, Type, Syntax) ->
     syntax(<<"find">>, Type, Syntax);
 
-syntax(<<"wait_for_save">>, _Type, Syntax) ->
-    Syntax#{
-        id => binary,
-        time => {integer, {1, none}}
-    };
-
 syntax(<<"make_token">>, _Type, Syntax) ->
     Syntax#{
         ttl => {integer, 1, none}

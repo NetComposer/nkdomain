@@ -74,7 +74,7 @@ get_data(Key, Spec, Session) ->
                     {ok, #{total_count=>0, pos=>0, data=>[]}, Session}
             end;
         _ ->
-            {error, element_not_found, Session}
+            {error, object_not_found, Session}
     end.
 
 

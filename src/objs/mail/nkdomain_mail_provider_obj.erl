@@ -25,7 +25,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([create/3, load_providers/0, get_provider/2, find/2, delete_all/2]).
--export([object_get_info/0, object_admin_info/0, object_mapping/0, object_parse/3,
+-export([object_info/0, object_admin_info/0, object_parse/3,
          object_api_syntax/2, object_api_allow/3, object_api_cmd/2]).
 
 -include("nkdomain.hrl").
@@ -77,7 +77,7 @@ load_providers() ->
 
 %% @doc
 get_provider(SrvId, Id) ->
-    case nkdomain_obj_lib:load(SrvId, Id, #{}) of
+    case nkdomain_lib:load(SrvId, Id) of
         #obj_id_ext{pid=Pid} ->
             case nkdomain_obj:get_obj(Pid) of
                 {ok, #{?DOMAIN_MAIL_PROVIDER:=Provider}} ->
@@ -96,7 +96,7 @@ find(SrvId, Root) ->
 
 %% @private
 delete_all(SrvId, Root) ->
-    nkdomain_store:delete_all_childs_type(SrvId, Root, ?DOMAIN_MAIL_PROVIDER).
+    nkdomain:delete_all_childs_type(SrvId, Root, ?DOMAIN_MAIL_PROVIDER).
 
 
 
@@ -107,7 +107,7 @@ delete_all(SrvId, Root) ->
 
 
 %% @private
-object_get_info() ->
+object_info() ->
     #{
         type => ?DOMAIN_MAIL_PROVIDER,
         subtype => [?DOMAIN_CONFIG]
@@ -122,9 +122,9 @@ object_admin_info() ->
     }.
 
 
-%% @private
-object_mapping() ->
-    disabled.
+%%%% @private
+%%object_es_mapping() ->
+%%    #{}.
 
 
 %% @private

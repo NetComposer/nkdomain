@@ -24,9 +24,8 @@
 -behavior(nkdomain_obj).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([create/3, get_config/2]).
 -export([find/3, find_all/3, find_types/3, find_all_types/3, find_childs/3, find_all_childs/3]).
--export([object_get_info/0, object_mapping/0, object_parse/3,
+-export([object_info/0, object_parse/3,
          object_api_syntax/2, object_api_allow/3, object_api_cmd/2]).
 -export([object_start/1]).
 
@@ -42,31 +41,13 @@
 
 
 %% @doc
--spec create(nkservice:id(), nkdomain:name(), nkdomain:obj()) ->
-    {ok, nkdomain_obj_lib:make_and_create_reply(), pid()} | {error, term()}.
-
-create(Srv, Name, Obj) ->
-    nkdomain_obj_lib:make_and_create(Srv, Name, Obj, #{}).
-
-
-%% @doc
-get_config(Srv, Id) ->
-    case nkdomain_obj_lib:load(Srv, Id, #{}) of
-        #obj_id_ext{pid=Pid} ->
-            nkdomain_obj:get_obj_type(Pid);
-        {error, Error} ->
-            {error, Error}
-    end.
-
-
-%% @doc
 find(Srv, Id, Spec) ->
-    case nkdomain_obj_lib:find(Srv, Id) of
+    case nkdomain_lib:find(Srv, Id) of
         #obj_id_ext{srv_id=SrvId, obj_id=ObjId} ->
             Filters1 = maps:get(filters, Spec, #{}),
             Filters2 = Filters1#{parent_id=>ObjId},
             Spec2 = maps:remove(id, Spec#{filters=>Filters2}),
-            SrvId:object_store_find(SrvId, Spec2);
+            nkdomain:search(SrvId, Spec2);
         {error, Error} ->
             {error, Error}
     end.
@@ -74,12 +55,12 @@ find(Srv, Id, Spec) ->
 
 %% @doc
 find_all(Srv, Id, Spec) ->
-    case nkdomain_obj_lib:find(Srv, Id) of
+    case nkdomain_lib:find(Srv, Id) of
         #obj_id_ext{srv_id=SrvId, path=Path} ->
             Filters1 = maps:get(filters, Spec, #{}),
             Filters2 = Filters1#{path=><<"childs_of:", Path/binary>>},
             Spec2 = maps:remove(id, Spec#{filters=>Filters2}),
-            SrvId:object_store_find(SrvId, Spec2);
+            nkdomain:search(SrvId, Spec2);
         {error, Error} ->
             {error, Error}
     end.
@@ -87,9 +68,9 @@ find_all(Srv, Id, Spec) ->
 
 %% @doc
 find_types(Srv, Id, Spec) ->
-    case nkdomain_obj_lib:find(Srv, Id) of
+    case nkdomain_lib:find(Srv, Id) of
         #obj_id_ext{srv_id=SrvId, obj_id=ObjId} ->
-            SrvId:object_store_find_types(SrvId, ObjId, Spec);
+            SrvId:object_db_search_types(SrvId, ObjId, Spec);
         {error, Error} ->
             {error, Error}
     end.
@@ -97,9 +78,9 @@ find_types(Srv, Id, Spec) ->
 
 %% @doc
 find_all_types(Srv, Id, Spec) ->
-    case nkdomain_obj_lib:find(Srv, Id) of
+    case nkdomain_lib:find(Srv, Id) of
         #obj_id_ext{srv_id=SrvId, path=Path} ->
-            SrvId:object_store_find_all_types(SrvId, Path, Spec);
+            SrvId:object_db_search_all_types(SrvId, Path, Spec);
         {error, Error} ->
             {error, Error}
     end.
@@ -107,9 +88,9 @@ find_all_types(Srv, Id, Spec) ->
 
 %% @doc
 find_childs(Srv, Id, Spec) ->
-    case nkdomain_obj_lib:find(Srv, Id) of
+    case nkdomain_lib:find(Srv, Id) of
         #obj_id_ext{srv_id=SrvId, obj_id=ObjId} ->
-            SrvId:object_store_find_childs(SrvId, ObjId, Spec);
+            SrvId:object_db_search_childs(SrvId, ObjId, Spec);
         {error, Error} ->
             {error, Error}
     end.
@@ -117,9 +98,9 @@ find_childs(Srv, Id, Spec) ->
 
 %% @doc
 find_all_childs(Srv, Id, Spec) ->
-    case nkdomain_obj_lib:find(Srv, Id) of
+    case nkdomain_lib:find(Srv, Id) of
         #obj_id_ext{srv_id=SrvId, path=Path} ->
-            SrvId:object_store_find_all_childs(SrvId, Path, Spec);
+            SrvId:object_db_search_all_childs(SrvId, Path, Spec);
         {error, Error} ->
             {error, Error}
     end.
@@ -132,16 +113,16 @@ find_all_childs(Srv, Id, Spec) ->
 %% ===================================================================
 
 %% @private
-object_get_info() ->
+object_info() ->
     #{
         type => ?DOMAIN_DOMAIN,
         permanent => true
     }.
 
 
-%% @private
-object_mapping() ->
-    disabled.
+%%%% @private
+%%object_es_mapping() ->
+%%    #{}.
 
 
 %% @private
@@ -167,7 +148,7 @@ object_api_cmd(Cmd, Req) ->
 
 
 %% @private
-object_start(#?NKOBJ{srv_id=SrvId, obj_id=ObjId, path=Path}=Session) ->
+object_start(#?STATE{srv_id=SrvId, obj_id=ObjId, path=Path}=Session) ->
     spawn(fun() -> start_dom_childs(SrvId, ObjId, Path) end),
     {ok, Session}.
 

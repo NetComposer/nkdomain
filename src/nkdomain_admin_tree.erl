@@ -276,7 +276,7 @@ deleted_domain(ObjId, Updates, Session) ->
 
 %% @private
 selected_domain(ObjId, Updates, #{srv_id:=SrvId}=Session) ->
-    case nkdomain_obj_lib:load(SrvId, ObjId, #{}) of
+    case nkdomain_lib:load(SrvId, ObjId) of
         #obj_id_ext{path=Path} ->
             {Updates2, Session2} = nkadmin_util:update_path_absolute(Path, Updates, Session),
             {Updates2, Session2};

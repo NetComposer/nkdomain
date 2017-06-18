@@ -85,7 +85,7 @@ get_all_types() ->
     ok.
 
 register(Module) ->
-    #{type:=Type} = Module:object_get_info(),
+    #{type:=Type} = Module:object_info(),
     Type2 = to_bin(Type),
     % Ensure we have the corresponding atom loaded
     _ = binary_to_atom(Type2, utf8),
@@ -115,7 +115,7 @@ do_get_counters(Global) ->
                 true -> nkdomain_type:get_counters(Module);
                 false -> nkdomain_type:get_global_counters(Module)
             end,
-            #{type:=Type} = Module:object_get_info(),
+            #{type:=Type} = Module:object_info(),
             lists:foldl(
                 fun({Domain, Counter}, Acc2) ->
                     DomainMap = maps:get(Domain, Acc2, #{}),
@@ -142,7 +142,7 @@ do_get_counters(Domain, Global) ->
                 0 ->
                     Acc;
                 _ ->
-                    #{type:=Type} = Module:object_get_info(),
+                    #{type:=Type} = Module:object_info(),
                     OldCounter =  maps:get(Type, Acc, 0),
                     Acc#{Type=>OldCounter+Counter}
             end

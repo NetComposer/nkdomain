@@ -26,7 +26,7 @@
 
 -export([create/3, http_post/3, http_get/3]).
 -export([find/2, delete_all/2]).
--export([object_get_info/0, object_mapping/0, object_parse/3,
+-export([object_info/0, object_es_mapping/0, object_parse/3,
          object_api_syntax/2, object_api_allow/3, object_api_cmd/2,
          object_sync_op/3]).
 -export([object_admin_info/0]).
@@ -130,7 +130,7 @@ http_get(SrvId, FileId, Req) ->
     Token = nklib_util:get_value(<<"x-netcomposer-auth">>, Headers, <<>>),
     case nkdomain_util:get_http_auth(SrvId, Token) of
         {ok, _UserId, _Meta} ->
-            case nkdomain_obj_lib:load(SrvId, FileId, #{}) of
+            case nkdomain_lib:load(SrvId, FileId) of
                 #obj_id_ext{type = ?DOMAIN_FILE, obj_id=FileObjId, pid=Pid} ->
                     case nkdomain_obj:get_obj(Pid) of
                         {ok, #{?DOMAIN_FILE:=File}} ->
@@ -160,7 +160,7 @@ find(SrvId, Root) ->
 
 %% @private
 delete_all(SrvId, Root) ->
-    nkdomain_store:delete_all_childs_type(SrvId, Root, ?DOMAIN_FILE).
+    nkdomain:delete_all_childs_type(SrvId, Root, ?DOMAIN_FILE).
 
 
 
@@ -170,7 +170,7 @@ delete_all(SrvId, Root) ->
 
 
 %% @private
-object_get_info() ->
+object_info() ->
     #{
         type => ?DOMAIN_FILE
     }.
@@ -185,7 +185,7 @@ object_admin_info() ->
 
 
 %% @private
-object_mapping() ->
+object_es_mapping() ->
     #{
         content_type => #{type => keyword},
         store_id => #{type => keyword},
@@ -209,7 +209,7 @@ object_parse(_SrvId, update, _Obj) ->
 
 
 %% @private
-object_api_syntax(<<"get_inline">>=Cmd, Syntax) ->
+object_api_syntax(<<"get_inline">>, Syntax) ->
     Syntax#{
         id => binary,
         '__mandatory' => [id]
@@ -226,7 +226,7 @@ object_api_allow(_Cmd, _Req, State) ->
 
 %% @private
 object_api_cmd(<<"get_inline">>, #nkreq{srv_id=SrvId, data=#{id:=Id}}) ->
-    case nkdomain_obj_lib:load(SrvId, Id, #{}) of
+    case nkdomain_lib:load(SrvId, Id) of
         #obj_id_ext{obj_id=FileId, pid=Pid} ->
             case nkdomain_obj:get_obj(Pid) of
                 {ok, #{?DOMAIN_FILE:=File}=Obj} ->
@@ -249,9 +249,9 @@ object_api_cmd(Cmd, Req) ->
 
 
 %% @private
-object_sync_op({?MODULE, update, File}, _From, #?NKOBJ{obj=Obj}=State) ->
+object_sync_op({?MODULE, update, File}, _From, #?STATE{obj=Obj}=State) ->
     Obj2 = Obj#{?DOMAIN_FILE:=File},
-    State2 = State#?NKOBJ{obj=Obj2, is_dirty=true},
+    State2 = State#?STATE{obj=Obj2, is_dirty=true},
     {reply_and_save, ok, State2};
 
 object_sync_op(_Op, _From, _Session) ->
@@ -312,7 +312,7 @@ get_store_id(SrvId, Obj) ->
 
 %% @private
 check_store_id(SrvId, StoreId, Obj) ->
-    case nkdomain_obj_lib:load(SrvId, StoreId, #{}) of
+    case nkdomain_lib:load(SrvId, StoreId) of
         #obj_id_ext{type = ?DOMAIN_FILE_STORE} ->
             {ok, Obj#{store_id=>StoreId}};
         _ ->

@@ -24,11 +24,11 @@
 -behavior(nkdomain_obj).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([create/3, login/3, token/3, check_token/1, check_user_token/2, get_name/2, send_push/3]).
--export([object_get_info/0, object_admin_info/0, object_mapping/0, object_parse/3,
+-export([create/2, login/3, token/3, check_token/1, check_user_token/2, get_name/2]).
+-export([object_info/0, object_admin_info/0, object_create/2, object_es_mapping/0, object_parse/3,
          object_api_syntax/2, object_api_allow/3, object_api_cmd/2, object_send_event/2,
          object_sync_op/3, object_async_op/2]).
--export([user_pass/1]).
+-export([fun_user_pass/1, user_pass/1]).
 -export_type([events/0]).
 
 -include("nkdomain.hrl").
@@ -65,26 +65,16 @@
 %% ===================================================================
 
 %% @doc
-%%create(Srv, Domain, Name, SurName, Email) ->
-%%    create(root, Name, #{type=>?DOMAIN_USER, parent_id=>Domain, ?DOMAIN_USER=>#{name=>Name, surname=>SurName}}).
+-spec create(nkservice:id(), map()) ->
+    {ok, #obj_id_ext{}, [Unknown::binary()]} | {error, term()}.
 
-
-
-%% @doc
--spec create(nkservice:id(), nkdomain:name(), nkdomain:obj()) ->
-    {ok, nkdomain_obj_lib:make_and_create_reply(), pid()} | {error, term()}.
-
-create(Srv, Name, Obj) ->
-    #{?DOMAIN_USER:=User} = Obj,
-    Obj2 = case User of
-        #{email:=Email} ->
-            Obj#{aliases=>Email};
-        #{<<"email">>:=Email} ->
-            Obj#{aliases=>Email};
-        _ ->
-            Obj
-    end,
-    nkdomain_obj_lib:make_and_create(Srv, Name, Obj2, #{}).
+create(SrvId, Obj) ->
+    case check_email(SrvId, Obj) of
+        {ok, Obj2} ->
+            nkdomain_obj_make:create(SrvId, Obj2#{type=>?DOMAIN_USER});
+        {error, Error} ->
+            {error, Error}
+    end.
 
 
 %% @doc
@@ -115,7 +105,7 @@ login(SrvId, Login, Opts) ->
 
 %% @doc
 -spec token(nkservice:id(), User::binary(), login_opts()) ->
-    {ok, #{token_id=>Token::nkdomain:obj_id(), ttl=>integer()}} | {error, user_not_found|term()}.
+    {ok, nkdomain:obj_id(), integer()} | {error, user_not_found|term()}.
 
 token(SrvId, Login, Opts) ->
     case do_load(SrvId, Login) of
@@ -190,21 +180,21 @@ check_user_token(SrvId, Token) ->
     {ok, map()} | {error, term()}.
 
 get_name(Srv, Id) ->
-    sync_op(Srv, Id, {?MODULE, get_name}).
+    nkdomain_obj:sync_op(Srv, Id, {?MODULE, get_name}).
 
 
-%% @doc
--spec send_push(nkservice:id(), nkdomain:id(), nkevent:event()) ->
-    ok | {error, term()}.
-
-send_push(Srv, Id, Event) ->
-    lager:error("SEND USER PUSH"),
-    case nkdomain_obj_lib:load(Srv, Id, #{}) of
-        #obj_id_ext{pid=Pid} ->
-            nkdomain_obj:async_op(Pid, {?MODULE, send_push, Event});
-        {error, Error} ->
-            {error, Error}
-    end.
+%%%% @doc
+%%-spec send_push(nkservice:id(), nkdomain:id(), nkevent:event()) ->
+%%    ok | {error, term()}.
+%%
+%%send_push(Srv, Id, Event) ->
+%%    lager:error("SEND USER PUSH"),
+%%    case nkdomain_lib:load(Srv, Id) of
+%%        #obj_id_ext{pid=Pid} ->
+%%            nkdomain_obj:async_op(Pid, {?MODULE, send_push, Event});
+%%        {error, Error} ->
+%%            {error, Error}
+%%    end.
 
 
 %% ===================================================================
@@ -213,7 +203,7 @@ send_push(Srv, Id, Event) ->
 
 
 %% @private
-object_get_info() ->
+object_info() ->
     #{
         type => ?DOMAIN_USER
     }.
@@ -227,9 +217,13 @@ object_admin_info() ->
         get_tree_detail => fun nkdomain_user_obj_ui:table/1
     }.
 
+%% @doc
+object_create(SrvId, Obj) ->
+    create(SrvId, Obj).
+
 
 %% @private
-object_mapping() ->
+object_es_mapping() ->
     #{
         name => #{
             type => text,
@@ -252,8 +246,8 @@ object_parse(_SrvId, update, _Obj) ->
     #{
         name => binary,
         surname => binary,
-        password => fun ?MODULE:user_pass/1,
-        email => binary,
+        password => fun ?MODULE:fun_user_pass/1,
+        email => lower,
         avatar_t => binary,
         phone_t => binary,
         address_t => binary
@@ -275,8 +269,8 @@ object_api_allow(_Cmd, _Req, State) ->
 
 
 %% @private
-object_send_event(Event, Session) ->
-    nkdomain_user_obj_events:event(Event, Session).
+object_send_event(Event, State) ->
+    nkdomain_user_obj_events:event(Event, State).
 
 
 %% @private
@@ -285,17 +279,20 @@ object_api_cmd(Cmd, Req) ->
 
 
 %% @private
-%% It will return 'object_is_disabled' for disabled users
-object_sync_op({?MODULE, check_pass, Pass}, _From, #?NKOBJ{obj=Obj}=Session) ->
+
+object_sync_op({?MODULE, check_pass, _Pass}, _From, #?STATE{is_enabled=false}=State) ->
+    {reply, {error, object_is_disabled}, State};
+
+object_sync_op({?MODULE, check_pass, Pass}, _From, #?STATE{obj=Obj}=State) ->
     case Obj of
         #{?DOMAIN_USER:=#{password:=Pass}} ->
-            {reply, {ok, true}, Session};
+            {reply, {ok, true}, State};
         _ ->
-            {reply, {ok, false}, Session}
+            {reply, {ok, false}, State}
     end;
 
-object_sync_op({?MODULE, get_name}, _From, #?NKOBJ{obj=Obj}=Session) ->
-    Base = nkdomain_obj_util:get_name(Session),
+object_sync_op({?MODULE, get_name}, _From, #?STATE{obj=Obj}=State) ->
+    Base = nkdomain_obj_util:get_name(State),
     #{name:=UserName, surname:=UserSurName} = User = maps:get(?DOMAIN_USER, Obj),
     Data = Base#{
         ?DOMAIN_USER => #{
@@ -307,17 +304,17 @@ object_sync_op({?MODULE, get_name}, _From, #?NKOBJ{obj=Obj}=Session) ->
             address_t => maps:get(address_t, User, <<>>)
         }
     },
-    {reply, {ok, Data}, Session};
+    {reply, {ok, Data}, State};
 
-object_sync_op(_Op, _From, _Session) ->
+object_sync_op(_Op, _From, _State) ->
     continue.
 
 
-%%object_async_op({?MODULE, send_push, Event}, Session) ->
-%%    ?LLOG(notice, "sending push: ~p", [Event], Session),
-%%    {noreply, Session};
+%%object_async_op({?MODULE, send_push, Event}, State) ->
+%%    ?LLOG(notice, "sending push: ~p", [Event], State),
+%%    {noreply, State};
 
-object_async_op(_Op, _Session) ->
+object_async_op(_Op, _State) ->
     continue.
 
 
@@ -328,26 +325,26 @@ object_async_op(_Op, _Session) ->
 %% Internal
 %% ===================================================================
 
-%% @private
-sync_op(Srv, Id, Op) ->
-    nkdomain_obj_lib:sync_op(Srv, Id, ?DOMAIN_USER, Op, user_not_found).
+%%%% @private
+%%sync_op(Srv, Id, Op) ->
+%%    nkdomain_obj_lib:sync_op(Srv, Id, ?DOMAIN_USER, Op, user_not_found).
 
 
 %% @private
 do_load(SrvId, Login) ->
-    case nkdomain_obj_lib:load(SrvId, Login, #{}) of
+    case nkdomain_lib:load(SrvId, Login) of
         #obj_id_ext{type = ?DOMAIN_USER, obj_id=ObjId, pid=Pid} ->
             {ok, ObjId, Pid};
         _ ->
-            case SrvId:object_store_find_alias(SrvId, Login) of
-                {ok, N, [{?DOMAIN_USER, ObjId, _Path}|_]}->
+            case SrvId:object_db_store_find_alias(SrvId, Login) of
+                {ok, N, [{?DOMAIN_USER, ObjId, _Path}|_], _}->
                     case N > 1 of
                         true ->
                             ?LLOG(notice, "duplicated alias for ~s", [Login]);
                         false ->
                             ok
                     end,
-                    case nkdomain_obj_lib:load(SrvId, ObjId, #{}) of
+                    case nkdomain_lib:load(SrvId, ObjId) of
                         #obj_id_ext{type = ?DOMAIN_USER, obj_id=ObjId, pid=Pid} ->
                             {ok, ObjId, Pid};
                         _ ->
@@ -361,8 +358,8 @@ do_load(SrvId, Login) ->
 
 %% @private
 do_check_pass(Pid, ObjId, #{password:=Pass}) ->
-    {ok, Pass2} = user_pass(Pass),
-    case nkdomain_obj:sync_op(Pid, {?MODULE, check_pass, Pass2}) of
+    Pass2 = user_pass(Pass),
+    case nkdomain_obj:sync_op(any, Pid, {?MODULE, check_pass, Pass2}) of
         {ok, true} ->
             {ok, ObjId};
         {ok, false} ->
@@ -380,7 +377,7 @@ do_check_pass(_Pid, _ObjId, _Opts) ->
 do_start_session(SrvId, UserId, Opts) ->
     Opts2 = maps:with([session_id, domain_id, local, remote, login_meta, api_server_pid], Opts),
     case nkdomain_session_obj:create(SrvId, UserId, Opts2) of
-        {ok, #{obj_id:=ObjId}, _Pid} ->
+        {ok, ObjId, _Pid} ->
             {ok, ObjId};
         {error, Error} ->
             {error, Error}
@@ -389,45 +386,71 @@ do_start_session(SrvId, UserId, Opts) ->
 
 %% @private
 do_start_token(SrvId, UserId, Opts) ->
-    Opts2 = maps:with([domain_id, local, remote, login_meta], Opts),
-    case nkdomain_token_obj:create_referred(SrvId, UserId, maps:with([ttl], Opts), Opts2#{user_id=>UserId}) of
-        {ok, Reply, _Pid} ->
-            {ok, Reply};
+    Opts1 = maps:with([ttl], Opts),
+    Opts2 = Opts1#{referred_id => UserId},
+    Data = maps:with([domain_id, local, remote, login_meta], Opts),
+    case nkdomain_token_obj:create(SrvId, UserId, UserId, ?DOMAIN_USER, Opts2, Data) of
+        {ok, #obj_id_ext{obj_id=TokenId}, TTL, _Unknown} ->
+            {ok, TokenId, TTL};
         {error, Error} ->
             {error, Error}
     end.
 
 
+%% @private
+send_login_event(Pid, SessId, Meta) ->
+    nkdomain_obj:async_op(any, Pid, {send_event, {login, SessId, Meta}}).
 
 
 %% @private
-send_login_event(Pid, SessId, Meta) ->
-    nkdomain_obj:send_event(Pid, {login, SessId, Meta}).
+fun_user_pass(Pass) ->
+    {ok, user_pass(Pass)}.
 
 
 %% @doc Generates a password from an user password or hash
 -spec user_pass(string()|binary()) ->
-    {ok, binary()}.
+    binary().
 
 user_pass(Pass) ->
     Pass2 = nklib_util:to_binary(Pass),
     case binary:split(Pass2, <<"!">>, [global]) of
         [<<"NKD">>, <<>>, P, <<>>] when byte_size(P) > 10 ->
-            {ok, Pass2};
+            Pass2;
         _ ->
-            {ok, make_pass(Pass2)}
+            Salt = <<"netcomposer">>,
+            Iters = nkdomain_app:get(user_password_pbkdf2_iters),
+            {ok, Pbkdf2} = pbkdf2:pbkdf2(sha, Pass2, Salt, Iters),
+            Hash = nklib_util:lhash(Pbkdf2),
+            <<"NKD!!", Hash/binary, "!">>
     end.
 
 
-%% @doc Generates a password from an user password
--spec make_pass(string()|binary()) ->
-    binary().
+%% @private
+check_email(SrvId, #{?DOMAIN_USER:=#{email:=Email}}=Obj) ->
+    check_email2(SrvId, Email, Obj);
 
-make_pass(Pass) ->
-    Pass2 = nklib_util:to_binary(Pass),
-    Salt = <<"netcomposer">>,
-    Iters = nkdomain_app:get(user_password_pbkdf2_iters),
-    {ok, Pbkdf2} = pbkdf2:pbkdf2(sha, Pass2, Salt, Iters),
-    Hash = nklib_util:lhash(Pbkdf2),
-    <<"NKD!!", Hash/binary, "!">>.
+check_email(SrvId, #{?DOMAIN_USER:=#{<<"email">>:=Email}}=Obj) ->
+    check_email2(SrvId, Email, Obj);
+
+check_email(_SrvId, Obj) ->
+    {ok, Obj}.
+
+
+%% @private
+check_email2(SrvId, Email, Obj) ->
+    Email2 = nklib_util:to_lower(Email),
+    Spec = #{
+        size => 0,
+        filters => #{type=>?DOMAIN_USER, << ?DOMAIN_USER/binary, ".email">> => Email2}
+    },
+    case nkdomain:search(SrvId, Spec) of
+        {ok, 0, _, _} ->
+            {ok, Obj#{aliases=>Email2}};
+        {ok, _, _, _} ->
+            {error, {email_duplicated, Email2}};
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
 

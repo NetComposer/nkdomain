@@ -4,7 +4,8 @@
 -include("nkdomain.hrl").
 -include_lib("nkservice/include/nkservice.hrl").
 
--define(WS, "ws://127.0.0.1:9301/_api/ws").
+-define(WS, "ws://127.0.0.1:9301/s/_api/ws").
+-define(SRV, sipstorm_v01).
 -define(ADMIN_PASS, "1234").
 
 
@@ -58,7 +59,7 @@ test_basic_1(Pid) ->
             }
         } = U1} =
         cmd(Pid, <<"objects/user/get">>, #{}),
-    {ok, Pass} = nkdomain_user_obj:user_pass(?ADMIN_PASS),
+    Pass = nkdomain_user_obj:user_pass(?ADMIN_PASS),
     {ok, U1} = cmd(Pid, <<"objects/user/get">>, #{id=><<"admin">>}),
     {ok, U1} = cmd(Pid, <<"objects/user/get">>, #{id=><<"/users/admin">>}),
     {error, {<<"object_not_found">>,<<"Object not found">>}} = cmd(Pid, <<"objects/user/get">>, #{id=><<"admin2">>}),
@@ -80,8 +81,8 @@ test_basic_1(Pid) ->
 
 
 test_create_user(Pid) ->
-    {error, object_not_found} = nkdomain:find(root, "/users/tuser1"),
-    {error, object_not_found} = nkdomain:load(root, "/users/tuser1"),
+    {error, object_not_found} = nkdomain:find(?SRV, "/users/tuser1"),
+    {error, object_not_found} = nkdomain:load(?SRV, "/users/tuser1"),
 
     %% Create user /users/tuser1,
     U2_Create = #{
@@ -94,7 +95,7 @@ test_create_user(Pid) ->
         }
     },
     {ok, #{<<"obj_id">>:=U2Id, <<"path">>:=<<"/users/tuser1">>}} = cmd(Pid, <<"objects/user/create">>, U2_Create),
-    {error, {<<"object_already_exists">>, _}} = cmd(Pid, <<"objects/user/create">>, U2_Create),
+    {error, {<<"email_duplicated">>, _}} = cmd(Pid, <<"objects/user/create">>, U2_Create),
 
     % Check user, creation date and password
     {ok,
@@ -114,22 +115,22 @@ test_create_user(Pid) ->
         } = U2} =
         cmd(Pid, <<"objects/user/get">>, #{id=>U2Id}),
     true = nkdomain_util:timestamp() - CT < 500,
-    {ok, P2} = nkdomain_user_obj:user_pass("pass1"),
+    P2 = nkdomain_user_obj:user_pass("pass1"),
 
     % Find user by several ways
     {ok, U2} = cmd(Pid, <<"objects/user/get">>, #{id=><<"/users/tuser1">>}),
-    {ok, <<"user">>, U2Id, <<"/users/tuser1">>, Pid1} = F1 = nkdomain:find(root, "/users/tuser1"),
-    F1 = nkdomain:find(root, U2Id),
-    F1 = nkdomain:load(root, "/users/tuser1"),
-    F1 = nkdomain:load(root, U2Id),
+    {ok, <<"user">>, U2Id, <<"/users/tuser1">>, Pid1} = F1 = nkdomain:find(?SRV, "/users/tuser1"),
+    F1 = nkdomain:find(?SRV, U2Id),
+    F1 = nkdomain:load(?SRV, "/users/tuser1"),
+    F1 = nkdomain:load(?SRV, U2Id),
 
     % Unload the user
-    ok = nkdomain_obj:unload(U2Id, normal),
+    ok = nkdomain:unload(?SRV, U2Id, normal),
     timer:sleep(100),
-    {ok, <<"user">>, U2Id, <<"/users/tuser1">>, undefined} = F2 = nkdomain:find(root, "/users/tuser1"),
-    F2 = nkdomain:find(root, U2Id),
-    {ok, <<"user">>, U2Id, <<"/users/tuser1">>, Pid2} = F3 = nkdomain:load(root, "/users/tuser1"),
-    F3 = nkdomain:find(root, U2Id),
+    {ok, <<"user">>, U2Id, <<"/users/tuser1">>, undefined} = F2 = nkdomain:find(?SRV, "/users/tuser1"),
+    F2 = nkdomain:find(?SRV, U2Id),
+    {ok, <<"user">>, U2Id, <<"/users/tuser1">>, Pid2} = F3 = nkdomain:load(?SRV, "/users/tuser1"),
+    F3 = nkdomain:find(?SRV, U2Id),
     false = Pid1 == Pid2,
 
     % Update the user
@@ -151,7 +152,7 @@ test_create_user(Pid) ->
             }
         }} =
         cmd(Pid, <<"objects/user/get">>, #{id=>U2Id}),
-    {ok, P3} = nkdomain_user_obj:user_pass("pass2"),
+    P3 = nkdomain_user_obj:user_pass("pass2"),
     ok.
 
 
@@ -160,7 +161,7 @@ test_session1(Pid) ->
     {ok, Pid2, SessId} = login("/users/tuser1", pass2),
     {ok, #{<<"type">>:=<<"user">>, <<"path">>:=<<"/users/tuser1">>, <<"obj_id">>:=UId}} = cmd(Pid2, <<"objects/user/get">>, #{}),
     {ok, #{<<"type">>:=<<"user">>, <<"path">>:=<<"/users/admin">>}} = cmd(Pid, <<"objects/user/get">>, #{}),
-    {ok, <<"session">>, SessId, <<"/users/tuser1/sessions/", _/binary>>, SPid} = nkdomain:find(root, SessId),
+    {ok, <<"session">>, SessId, <<"/users/tuser1/sessions/", _/binary>>, SPid} = nkdomain:find(?SRV, SessId),
     true = is_pid(SPid),
 
     % Object has active childs, we cannot delete it
@@ -191,14 +192,14 @@ test_session1(Pid) ->
     nkapi_client:stop(Pid2),
     timer:sleep(1200),
     false = is_process_alive(SPid),
-    {error, object_not_found} = nkdomain:find(root, SessId),
-    {1, [S2]} = find_archive(SessId),
-    #{
-        <<"obj_id">>:=SessId,
-        <<"destroyed_time">>:= T1,
-        <<"destroyed_code">> := _
-    } = S2,
-    true = nkdomain_util:timestamp() - T1 < 5000,
+    {error, object_not_found} = nkdomain:find(?SRV, SessId),
+%%    {1, [S2]} = find_archive(SessId),
+%%    #{
+%%        <<"obj_id">>:=SessId,
+%%        <<"destroyed_time">>:= T1,
+%%        <<"destroyed_code">> := _
+%%    } = S2,
+%%    true = nkdomain_util:timestamp() - T1 < 5000,
     ok.
 
 
@@ -206,37 +207,35 @@ test_session1(Pid) ->
 test_session2(Pid) ->
     % Get the admin user (without id) and its current session
     {ok, #{<<"obj_id">>:=SessId}} = cmd(Pid, <<"objects/session/get">>, #{}),
-    {ok, <<"session">>, SessId, Path, SessPid} = nkdomain:find(root, SessId),
-    {ok, Childs} = nkdomain_obj:get_childs(<<"admin">>),
-    {ok, _Base, SessName} = nkdomain_util:get_parts(<<"session">>, Path),
-    SessId = maps:get(SessName, maps:get(<<"session">>, Childs)),
+    {ok, <<"session">>, SessId, Path, SessPid} = nkdomain:find(?SRV, SessId),
+    {ok, Childs} = nkdomain_obj:sync_op(?SRV, <<"admin">>, get_childs),
+    {ok, _Base, _SessName} = nkdomain_util:get_parts(<<"session">>, Path),
+    true = maps:is_key(SessId, Childs),
 
     % If we kill the session, admin notices and the web socket is closed
-    % We link with admin so that it is not unloaded after stopping its childs
+    % We link with admin so that it is not unloaded after stopping its childs for 10 secs
     spawn_link(
         fun() ->
-            ok = nkdomain_obj:link(<<"admin">>, usage, self(), dont_stop),
+            ok = nkdomain_obj:sync_op(?SRV, <<"admin">>, {register, usage, {dont_stop, self()}}),
             timer:sleep(10000)
         end),
     timer:sleep(50),
     exit(SessPid, kill),
     timer:sleep(100),
-    {ok, Childs2} = nkdomain_obj:get_childs(<<"admin">>),
-
-    Sessions = maps:get(<<"session">>, Childs2, #{}),
-    false = maps:is_key(SessName, Sessions),
-    {ok, <<"session">>, SessId, Path, undefined} = nkdomain:find(root, SessId),
+    {ok, Childs2} = nkdomain_obj:sync_op(?SRV, <<"admin">>, get_childs),
+    false = maps:is_key(SessId, Childs2),
+    {ok, <<"session">>, SessId, Path, undefined} = nkdomain:find(?SRV, SessId),
 
     % Object has not active childs, but the child is still found on disk
-    {error, object_has_childs} = nkdomain_obj:delete(<<"admin">>),
+    {error, object_has_childs} = nkdomain:delete(?SRV, <<"admin">>),
 
     % If we force a clean of the database, the stale object is deleted and archived
-    {ok, #{inactive:=N}} = nkdomain_store:clean(root),
+    {ok, #{inactive:=N}} = nkdomain:clean(?SRV),
     true = N >= 1,
-    {error, object_not_found} = nkdomain:find(root, SessId),
+    {error, object_not_found} = nkdomain:find(?SRV, SessId),
     % Archive has a 1-second refresh time
     timer:sleep(1100),
-    {1, [#{<<"destroyed_code">>:=<<"object_clean_process">>}]} = find_archive(SessId),
+%%    {1, [#{<<"destroyed_code">>:=<<"object_clean_process">>}]} = find_archive(SessId),
     ok.
 
 
@@ -244,14 +243,14 @@ test_session2(Pid) ->
 test_session3(Admin) ->
     % Do login over tuser1, check the session is created and loaded
     {ok, Pid, SessId} = login("/users/tuser1", pass2),
-    {ok, <<"session">>, SessId, <<"/users/tuser1/sessions/", _/binary>>, SPid} = nkdomain:find(root, SessId),
+    {ok, <<"session">>, SessId, <<"/users/tuser1/sessions/", _/binary>>, SPid} = nkdomain:find(?SRV, SessId),
     true = is_pid(SPid),
 
     {ok, #{<<"path">>:=<<"/users/tuser1">>}} = cmd(Pid, <<"objects/user/get">>, #{}),
     {ok, #{}} = cmd(Pid, <<"objects/user/enable">>, #{enable=>false}),
     timer:sleep(1500),
-    {error, object_not_found} = nkdomain:find(root, SessId),
-    {1, [#{<<"destroyed_code">>:=<<"session_is_disabled">>}]} = find_archive(SessId),
+    {error, object_not_found} = nkdomain:find(?SRV, SessId),
+%%    {1, [#{<<"destroyed_code">>:=<<"session_is_disabled">>}]} = find_archive(SessId),
     false = is_process_alive(Pid),
     false = is_process_alive(SPid),
     {error, {<<"object_is_disabled">>, _}} = login("/users/tuser1", pass2),
@@ -267,14 +266,14 @@ test_session3(Admin) ->
 
 test_delete(Pid) ->
     %% Delete the tuser1 object and find it in archive
-    {ok, #{<<"obj_id">>:=ObjId}} = cmd(Pid, <<"objects/user/get">>, #{id=><<"/users/tuser1">>}),
+    {ok, #{<<"obj_id">>:=_ObjId}} = cmd(Pid, <<"objects/user/get">>, #{id=><<"/users/tuser1">>}),
     {ok, #{}} = cmd(Pid, <<"objects/user/delete">>, #{id=> <<"/users/tuser1">>}),
 
     timer:sleep(1100),
     {error,{<<"object_not_found">>,<<"Object not found">>}} =
         cmd(Pid, <<"objects/user/delete">>, #{id=> <<"/users/tuser1">>}),
-    {1, [#{<<"path">>:=<<"/users/tuser1">>}]} = find_archive(ObjId),
-    {_N, [#{<<"path">>:=<<"/users/tuser1">>}|_]} = find_archive(<<"/users/tuser1">>),
+%%    {1, [#{<<"path">>:=<<"/users/tuser1">>}]} = find_archive(ObjId),
+%%    {_N, [#{<<"path">>:=<<"/users/tuser1">>}|_]} = find_archive(<<"/users/tuser1">>),
     ok.
 
 
@@ -336,14 +335,16 @@ test_basic_2(Pid) ->
     U1 = #{name=>n1, surname=>s1, email=>"u1@sub1"},
     {ok, #{<<"obj_id">>:=U1Id, <<"path">>:=<<"/stest1/users/u1">>}} =
         cmd(Pid, <<"objects/user/create">>, #{parent_id=>S1Id, obj_name=>u1, user=>U1}),
-    {error,{<<"object_already_exists">>, _}} =
+    {error,{<<"email_duplicated">>, _}} =
         cmd(Pid, <<"objects/user/create">>, #{parent_id=>S1Id, obj_name=>u1, user=>U1}),
+    {error,{<<"object_already_exists">>, _}} =
+        cmd(Pid, <<"objects/user/create">>, #{parent_id=>S1Id, obj_name=>u1, user=>U1#{email:="kk"}}),
 
     % Create /stest1/stest2/users/u1
     U2 = #{name=>n2, surname=>s2, email=>"n2@sub1.sub2"},
     {ok, #{<<"obj_id">>:=U2Id, <<"path">>:=<<"/stest1/stest2/users/u1">>}} =
         cmd(Pid, <<"objects/user/create">>, #{parent_id=>S2Id, obj_name=>u1, user=>U2}),
-    {ok, _} = cmd(Pid, <<"objects/user/wait_for_save">>, #{id=>U2Id}),
+    % {ok, _} = cmd(Pid, <<"objects/user/wait_for_save">>, #{id=>U2Id}),
 
 
     % Find types and childs on /stest1
@@ -414,10 +415,10 @@ test_basic_2(Pid) ->
     true = is_loaded("/stest1/stest2/users/u1"),
 
     % We unload everything. We need to unload childs before or they will restart father
-    nkdomain_obj:unload("/stest1/stest2/users/u1", normal),
-    nkdomain_obj:unload("/stest1/stest2", normal),
-    nkdomain_obj:unload("/stest1/users/u1", normal),
-    nkdomain_obj:unload("/stest1", normal),
+    nkdomain:unload(?SRV, "/stest1/stest2/users/u1", normal),
+    nkdomain:unload(?SRV, "/stest1/stest2", normal),
+    nkdomain:unload(?SRV, "/stest1/users/u1", normal),
+    nkdomain:unload(?SRV, "/stest1", normal),
     timer:sleep(100),
     false = is_loaded("/stest1"),
     false = is_loaded("/stest1/users/u1"),
@@ -449,35 +450,35 @@ test_basic_2(Pid) ->
 %% ===================================================================
 
 remove_data() ->
-    case nkdomain:find(root, "/users/tuser1") of
+    case nkdomain:find(?SRV, "/users/tuser1") of
         {ok, <<"user">>, UId, <<"/users/tuser1">>, _} ->
-            ok = nkdomain_store:delete(root, UId);
+            {ok, _} = ?SRV:object_db_delete(?SRV, UId);
         {error, object_not_found} ->
             ok
     end,
-    case nkdomain_domain_obj:find_childs(root, "/stest1", #{}) of
+    case nkdomain_domain_obj:find_childs(?SRV, "/stest1", #{}) of
         {ok, 0, []} ->
             ok;
         _ ->
             %% lager:notice("Deleting all childs for /stest1"),
-            nkdomain_store:delete_all_childs(root, "/stest1")
+            nkdomain:delete_all_childs(?SRV, "/stest1")
     end,
-    case nkdomain:find(root, "/stest1") of
+    case nkdomain:find(?SRV, "/stest1") of
         {ok, ?DOMAIN_DOMAIN, S1Id_0, <<"/stest1">>, _} ->
             %% lager:warning("/stest1 was already present"),
-            ok = nkdomain_store:delete(root, S1Id_0);
+            ok = nkdomain:delete(?SRV, S1Id_0);
         {error, object_not_found} ->
             ok
     end.
 
 
-find_archive(Id) ->
-    Filter = case nkdomain_util:is_path(Id) of
-        {true, Path} -> #{path => Path};
-        false -> #{obj_id => Id}
-    end,
-    {ok, N, Data, _} = nkdomain_store:find_archive(root, #{filters=>Filter}),
-    {N, Data}.
+%%find_archive(Id) ->
+%%    Filter = case nkdomain_util:is_path(Id) of
+%%        {true, Path} -> #{path => Path};
+%%        false -> #{obj_id => Id}
+%%    end,
+%%    {ok, N, Data, _} = nkdomain_store:find_archive(?SRV, #{filters=>Filter}),
+%%    {N, Data}.
 
 
 login(User, Pass) ->
@@ -487,7 +488,7 @@ login(User, Pass) ->
         password=> nklib_util:to_binary(Pass),
         meta => #{a=>nklib_util:to_binary(User)}
     },
-    case nkapi_client:start(root, ?WS, Login, Fun, #{}, <<"objects/user/login">>) of
+    case nkapi_client:start(?SRV, ?WS, Login, Fun, #{}, <<"objects/user/login">>) of
         {ok, #{<<"session_id">>:=SessId}, Pid} -> {ok, Pid, SessId};
         {error, Error} -> {error, Error}
     end.
@@ -511,7 +512,7 @@ cmd(Pid, Cmd, Data) ->
 
 
 is_loaded(Id) ->
-    case nkdomain_obj_lib:find_loaded(Id) of
+    case nkdomain_lib:find_loaded(?SRV, Id) of
         #obj_id_ext{} -> true;
         _ -> false
     end.
@@ -531,4 +532,4 @@ p1() ->
         created_time => 0,
         <<"user">> => #{name => n1}
     },
-    nkdomain_callbacks:object_parse(root, load, Obj).
+    nkdomain_callbacks:object_parse(?SRV, load, Obj).

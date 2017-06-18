@@ -19,14 +19,19 @@
 %% -------------------------------------------------------------------
 %%
 %% @doc A process of this type is started at each node for each registered type
+%% - For each type, a counter of started objects of this type is kept for
+%%   each domain and parent domain the object has
+%% - A master is elected for each type
+%% - When an object instance is registered, it is sent to the master, that keeps a master
+%%   counter for each type, and sends it to every slave
+
 
 -module(nkdomain_type).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -behaviour(gen_server).
 
--export([register/2, get_counters/1, get_counters/2, get_global_counters/1, get_global_counters/2]).
--export([get_global_nodes/1, get_global_nodes/2, get_objs/1]).
--export([start_link/1]).
+-export([register/2, get_counter/3]).
+-export([start_link/1, master_call/2]).
 -export([init/1, terminate/2, code_change/3, handle_call/3,
          handle_cast/2, handle_info/2]).
 
@@ -35,6 +40,9 @@
 
 -include("nkdomain.hrl").
 -include_lib("nkevent/include/nkevent.hrl").
+
+
+-define(THROTTLE, 5).
 
 
 %% ===================================================================
@@ -50,66 +58,21 @@
 
 %% @doc
 -spec register(module(), #obj_id_ext{}) ->
-    ok | {error, term()}.
+    {ok, pid()} | {error, term()}.
 
 register(Module, #obj_id_ext{pid=ObjPid}=ObjIdExt) when is_pid(ObjPid) ->
-    master_cast(Module, {register, ObjIdExt}).
+    master_call(Module, {register, ObjIdExt}).
 
 
 %% @doc
--spec get_counters(module()) ->
-    {ok, #{Domain::binary() => integer()}}.
-
-get_counters(Module) ->
-    gen_server:call(Module, get_counters).
-
-
-%% @doc
--spec get_counters(module(), nkdomain:domain()) ->
+-spec get_counter(nkservice:id(), module(), nkdomain:domain()) ->
     {ok, integer()}.
 
-get_counters(Module, Domain) ->
-    gen_server:call(Module, {get_counters, to_bin(Domain)}).
+get_counter(SrvId, Module, Domain) ->
+    master_call(Module, {get_global_counters, SrvId, to_bin(Domain)}).
 
 
-%% @doc
--spec get_global_counters(module()) ->
-    {ok, #{Domain::binary() => integer()}}.
 
-get_global_counters(Module) ->
-    master_call(Module, get_global_counters).
-
-
-%% @doc
--spec get_global_counters(module(), nkdomain:domain()) ->
-    {ok, integer()}.
-
-get_global_counters(Module, Domain) ->
-    master_call(Module, {get_global_counters, to_bin(Domain)}).
-
-
-%% @doc
--spec get_global_nodes(module()) ->
-    {ok, #{Domain::binary() => #{node() => integer()}}}.
-
-get_global_nodes(Module) ->
-    master_call(Module, get_global_nodes).
-
-
-%% @doc
--spec get_global_nodes(module(), nkdomain:path()) ->
-    {ok, #{node() => integer()}}.
-
-get_global_nodes(Module, DomainPath) ->
-    master_call(Module, {get_global_nodes, to_bin(DomainPath)}).
-
-
-%% @doc
--spec get_objs(module()) ->
-    {ok, map()}.
-
-get_objs(Module) ->
-    gen_server:call(Module, get_objs).
 
 
 % ===================================================================
@@ -120,11 +83,10 @@ get_objs(Module) ->
 start_link(Module) ->
     gen_server:start_link({local, Module}, ?MODULE, [Module], []).
 
+
 -record(obj, {
     pid :: pid(),
-    srv_id :: nkservice:id(),
-    path :: binary(),
-    domains :: [binary()]
+    path :: nkdomain:domain()
 }).
 
 
@@ -132,10 +94,9 @@ start_link(Module) ->
     module :: module(),
     type :: nkdomain:type(),
     master :: pid(),
-    objs = #{} :: #{nkdomain:obj_id() => #obj{}},
-    pids = #{} :: #{pid() => nkdomain:obj_id()},
-    counters = #{} :: #{Domain::binary() => integer()},
-    master_counters = #{} :: #{Domain::binary() => #{node() => integer()}},
+    pids = #{} :: #{pid() => {nkdomain:srv_id(), nkdomain:obj_id()}},
+    counters = #{} :: #{{nkservice:id(), Domain::binary()} => integer()},
+    objs = #{} :: #{{nkservice:id(), nkdomain:obj_id()} => #obj{}},
     dom_cache = #{} :: #{Domain::binary() => [Domains::binary()]}
 }).
 
@@ -145,7 +106,7 @@ start_link(Module) ->
     {ok, #state{}} | {error, term()}.
 
 init([Module]) ->
-    #{type:=Type} = Module:object_get_info(),
+    #{type:=Type} = Module:object_info(),
     ok = nkdist:register(master, nkdomain_types, Type, #{meta=>#{module=>Module}}),
     {ok, #state{module=Module, type=Type, master=self()}}.
 
@@ -155,34 +116,31 @@ init([Module]) ->
     {noreply, #state{}} | {reply, term(), #state{}} |
     {stop, Reason::term(), #state{}} | {stop, Reason::term(), Reply::term(), #state{}}.
 
-handle_call(get_counters, _From, #state{counters=Counters}=State) ->
-    {reply, {ok, Counters}, State};
-
-handle_call({get_counters, Domain}, _From, #state{counters=Counters}=State) ->
-    {reply, {ok, maps:get(Domain, Counters, 0)}, State};
-
-handle_call(get_global_counters, _From, #state{master_counters=Counters}=State) ->
-    Domains = maps:keys(Counters),
-    List = [{Domain, do_get_global_counters(Domain, State)} || Domain <- Domains],
-    {reply, {ok, maps:from_list(List)}, State};
-
-handle_call({get_global_counters, Domain}, _From, State) ->
-    {reply, {ok, do_get_global_counters(Domain, State)}, State};
-
-handle_call(get_global_nodes, _From, #state{master_counters=Counters}=State) ->
-    {reply, {ok, Counters}, State};
-
-handle_call({get_global_nodes, Domain}, _From, #state{master_counters=Counters}=State) ->
-    {reply, {ok, maps:get(Domain, Counters, #{})}, State};
+handle_call({get_counters, SrvId, Domain}, _From, #state{counters=Counters}=State) ->
+    {reply, {ok, maps:get({SrvId, Domain}, Counters, 0)}, State};
 
 handle_call(get_master, _From, #state{master=Master}=State) ->
     {reply, {ok, Master}, State};
 
-handle_call(get_objs, _From, #state{objs=Objs}=State) ->
-    {reply, {ok, Objs}, State};
-
 handle_call(get_state, _From, State) ->
     {reply, State, State};
+
+handle_call({register, ObjIdExt}, _From, State) ->
+    #obj_id_ext{srv_id=SrvId, obj_id=ObjId, path=Path, type=Type, pid=Pid} = ObjIdExt,
+    #state{type=Type, objs=Objs, pids=Pids, counters=Counters} = State,
+    case maps:is_key(Pid, Pids) of
+        true ->
+            {reply, {ok, self()}, State};
+        false ->
+            Obj = #obj{path=Path, pid=Pid},
+            Objs2 = Objs#{{SrvId, ObjId} => Obj},
+            Pids2 = Pids#{Pid => {SrvId, ObjId}},
+            monitor(process, Pid),
+            {DomainList, State2} = make_domains(Path, State),
+            Counters2 = update_counters(SrvId, DomainList, 1, Counters, State2),
+            State3 = State2#state{objs=Objs2, pids=Pids2, counters=Counters2},
+            {reply, {ok, self()}, State3}
+    end;
 
 handle_call(Msg, _From, State) ->
     lager:error("Module ~p received unexpected call ~p", [?MODULE, Msg]),
@@ -192,30 +150,6 @@ handle_call(Msg, _From, State) ->
 %% @private
 -spec handle_cast(term(), #state{}) ->
     {noreply, #state{}} | {stop, term(), #state{}}.
-
-handle_cast({register, ObjIdExt}, State) ->
-    #obj_id_ext{srv_id=SrvId, obj_id=ObjId, path=Path, type=Type, pid=Pid} = ObjIdExt,
-    #state{type=Type, objs=Objs, pids=Pids, counters=Counters} = State,
-    {DomainList, State2} = make_domains(Type, Path, State),
-    monitor(process, Pid),
-    Obj = #obj{path=Path, srv_id=SrvId, pid=Pid, domains=DomainList},
-    Objs2 = Objs#{ObjId => Obj},
-    Pids2 = Pids#{Pid => ObjId},
-    Counters2 = update_counters(DomainList, 1, Counters, State),
-    State3 = State2#state{objs=Objs2, pids=Pids2, counters=Counters2},
-    {noreply, State3};
-
-handle_cast({counter_updated, Node, Domain, Count}, #state{master_counters=Counters}=State) ->
-    Counters2 = update_master_counter(Node, Domain, Count, Counters),
-    State2 = State#state{master_counters=Counters2},
-    send_event(Domain, State2),
-    {noreply, State2};
-
-handle_cast({all_counters_updated, Node, NodeCounters}, #state{master_counters=Counters}=State) ->
-    Counters2 = update_master_all_counters(Node, NodeCounters, Counters),
-    State2 = State#state{master_counters=Counters2},
-    lists:foreach(fun(Domain) -> send_event(Domain, State2) end, maps:keys(Counters2)),
-    {noreply, State2};
 
 handle_cast(Msg, State) ->
     lager:error("Module ~p received unexpected cast ~p", [?MODULE, Msg]),
@@ -227,24 +161,36 @@ handle_cast(Msg, State) ->
     {noreply, #state{}} | {stop, term(), #state{}}.
 
 handle_info({nkdist, {master, Pid}}, State) when Pid==self() ->
-    #state{counters=NodeCounters} = State,
-    Counters = update_master_all_counters(node(), NodeCounters, #{}),
-    {noreply, State#state{master=Pid, master_counters=Counters}};
+    % We are the new master
+    % The old master should have told everyone to register with us now
+    {noreply, State#state{master=Pid}};
 
-handle_info({nkdist, {master, Pid}}, #state{counters=Counters}=State) ->
-    gen_server:cast(Pid, {all_counters_updated, node(), Counters}),
-    {noreply, State#state{master=Pid, master_counters=#{}}};
+handle_info({nkdist, {master, Pid}}, #state{master=OldMaster, pids=Pids}=State) ->
+    % There is a new master
+    case OldMaster == self() of
+        true ->
+            % We were master, we must tell everyone to re-register
+            % We keep the records
+            lists:foreach(
+                fun(ObjPid) -> nkdomain_obj:new_type_master(ObjPid) end,
+                maps:keys(Pids)),
+            {noreply, State#state{master=Pid}};
+        false ->
+            % We were slave
+            {noreply, State#state{master=Pid}}
+    end;
 
 handle_info({'DOWN', _Ref, process, Pid, _Reason}, State) ->
     #state{objs=Objs, pids=Pids, counters=Counters}=State,
     case maps:find(Pid, Pids) of
-        {ok, ObjId} ->
-            #obj{pid=Pid, domains=DomainList} = maps:get(ObjId, Objs),
+        {ok, {SrvId, ObjId}} ->
             Pids2 = maps:remove(Pid, Pids),
-            Objs2 = maps:remove(ObjId, Objs),
-            Counters2 = update_counters(DomainList, -1, Counters, State),
-            State2 = State#state{objs=Objs2, pids=Pids2, counters=Counters2},
-            {noreply, State2};
+            Objs2 = maps:remove({SrvId, ObjId}, Objs),
+            #obj{pid=Pid, path=Path} = maps:get({SrvId, ObjId}, Objs),
+            {DomainList, State2} = make_domains(Path, State),
+            Counters2 = update_counters(SrvId, DomainList, -1, Counters, State2),
+            State3 = State2#state{objs=Objs2, pids=Pids2, counters=Counters2},
+            {noreply, State3};
         error ->
             lager:warning("Module ~p received unexpected DOWN: ~p", [?MODULE, Pid]),
             {noreply, State}
@@ -276,14 +222,14 @@ terminate(_Reason, _State) ->
 %% Internal
 %% ===================================================================
 
-%% @private
-master_cast(Module, Msg) ->
-    case gen_server:call(Module, get_master) of
-        {ok, Pid} ->
-            gen_server:cast(Pid, Msg);
-        _ ->
-            {error, no_master}
-    end.
+%%%% @private
+%%master_cast(Module, Msg) ->
+%%    case gen_server:call(Module, get_master) of
+%%        {ok, Pid} ->
+%%            gen_server:cast(Pid, Msg);
+%%        _ ->
+%%            {error, no_master}
+%%    end.
 
 
 %% @private
@@ -297,7 +243,7 @@ master_call(Module, Msg) ->
 
 
 %% @private
-make_domains(Type, Path, #state{dom_cache=Cache}=State) ->
+make_domains(Path, #state{type=Type, dom_cache=Cache}=State) ->
     {ok, Domain, _ObjName} = nkdomain_util:get_parts(Type, Path),
     case maps:find(Domain, Cache) of
         {ok, DomList} ->
@@ -330,48 +276,23 @@ do_make_domains([Pos|Rest], Acc1, Acc2) ->
 
 
 %% @private
-update_counters([], _N, Counters, _State) ->
+update_counters(_SrvId, [], _N, Counters, _State) ->
     Counters;
 
-update_counters([Domain|Rest], N, Counters, #state{master=Master}=State) ->
-    Count = maps:get(Domain, Counters, 0) + N,
+update_counters(SrvId, [Domain|Rest], N, Counters, State) ->
+    Count = maps:get({SrvId, Domain}, Counters, 0) + N,
+    send_event(SrvId, Domain, Count, State),
     Counters2 = case Count of
-        0 -> maps:remove(Domain, Counters);
-        _ -> Counters#{Domain => Count}
+        0 -> maps:remove({SrvId, Domain}, Counters);
+        _ -> Counters#{{SrvId, Domain} => Count}
     end,
-    gen_server:cast(Master, {counter_updated, node(), Domain, Count}),
-    update_counters(Rest, N, Counters2, State).
+    update_counters(SrvId, Rest, N, Counters2, State).
 
 
 %% @private
-update_master_counter(Node, Domain, Count, Counters) ->
-    Nodes1 = maps:get(Domain, Counters, #{}),
-    Nodes2 = Nodes1#{Node => Count},
-    Counters#{Domain => Nodes2}.
-
-
-%% @private
-update_master_all_counters(Node, NodeCounters, Counters) ->
-    lists:foldl(
-        fun({Domain, Count}, Acc) -> update_master_counter(Node, Domain, Count, Acc) end,
-        Counters,
-        maps:to_list(NodeCounters)).
-
-
-%% @private
-do_get_global_counters(Domain, #state{master_counters=Counters}) ->
-    Nodes = maps:get(Domain, Counters, #{}),
-    lists:foldl(
-        fun({_Node, SubCount}, Acc) -> Acc + SubCount end,
-        0,
-        maps:to_list(Nodes)).
-
-
-%% @private
-send_event(Domain, #state{type=Type}=State) ->
-    Count = do_get_global_counters(Domain, State),
+send_event(SrvId, Domain, Count, #state{type=Type}) ->
     Event = #nkevent{
-        srv_id = root,
+        srv_id = SrvId,
         class = ?DOMAIN_EVENT_CLASS,
         subclass = Type,
         type = counter_updated,
@@ -379,8 +300,9 @@ send_event(Domain, #state{type=Type}=State) ->
         domain = Domain,
         body = #{counter => Count}
     },
-    % lager:error("NKLOG SEND EVENT ~p", [lager:pr(Event, ?MODULE)]),
+    % lager:notice("Counter '~s' updated for ~s~s: ~p", [Type, SrvId, Domain, Count]),
     nkevent:send(Event).
+
 
 
 %% @private

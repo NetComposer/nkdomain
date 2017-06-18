@@ -34,42 +34,11 @@
 
 %% @doc
 api(<<"create">>, Type, #nkreq{data=Data, srv_id=SrvId, user_id=UserId}=Req) ->
-    Module = nkdomain_all_types:get_module(Type),
-    case erlang:function_exported(Module, create, 3) of
-        true ->
-            Name = maps:get(obj_name, Data, <<>>),
-            Data2 = Data#{
-                type => Type,
-                created_by => UserId
-            },
-            Data3 = maps:remove(obj_name, Data2),
-            case get_parent(Data, Req) of
-                {ok, Parent} ->
-                    Data4 = Data3#{parent_id=>Parent},
-                    case Module:create(SrvId, Name, Data4) of
-                        {ok, Reply, _Pid} ->
-                            {ok, Reply};
-                        {error, Error} ->
-                            {error, Error}
-                    end;
-                {error, Error} ->
-                    {error, Error}
-            end;
-        false ->
-            {error, not_implemented}
-    end;
-
-api(<<"get">>, Type, #nkreq{data=Data, srv_id=SrvId}=Req) ->
-    case nkdomain_api_util:get_id(Type, Data, Req) of
-        {ok, Id} ->
-            case nkdomain_obj_lib:load(SrvId, Id, #{}) of
-                #obj_id_ext{pid=Pid} ->
-                    case nkdomain_obj:get_obj(Pid) of
-                        {ok, Obj} ->
-                            {ok, Obj};
-                        {error, Error} ->
-                            {error, Error}
-                    end;
+    case nkdomain_api_util:get_id(?DOMAIN_DOMAIN, parent_id, Data, Req) of
+        {ok, DomainId} ->
+            case SrvId:object_create(SrvId, DomainId, Type, UserId, Data) of
+                {ok, ObjIdExt, Unknown} ->
+                    {ok, obj_id_reply(ObjIdExt, Unknown)};
                 {error, Error} ->
                     {error, Error}
             end;
@@ -77,17 +46,20 @@ api(<<"get">>, Type, #nkreq{data=Data, srv_id=SrvId}=Req) ->
             {error, Error}
     end;
 
+api(<<"get">>, Type, #nkreq{data=Data, srv_id=SrvId}=Req) ->
+    case nkdomain_api_util:get_id(Type, Data, Req) of
+        {ok, Id} ->
+            nkdomain:get_obj(SrvId, Id);
+        {error, Error} ->
+            {error, Error}
+    end;
+
 api(<<"delete">>, Type, #nkreq{data=Data, srv_id=SrvId}=Req) ->
     case nkdomain_api_util:get_id(Type, Data, Req) of
         {ok, Id} ->
-            case cmd_delete_childs(Data, SrvId, Id) of
-                {ok, Num} ->
-                    case nkdomain:delete(SrvId, Id) of
-                        ok ->
-                            {ok, #{deleted=>Num+1}};
-                        {error, Error} ->
-                            {error, Error}
-                    end;
+            case nkdomain:delete(SrvId, Id) of
+                ok ->
+                    {ok, #{}};
                 {error, Error} ->
                     {error, Error}
             end;
@@ -123,44 +95,31 @@ api(<<"enable">>, Type, #nkreq{data=#{enable:=Enable}=Data, srv_id=SrvId}=Req) -
             {error, Error}
     end;
 
-api(<<"find">>, Type, #nkreq{data=Data, srv_id=SrvId}) ->
-    Domain = nkdomain_util:get_service_domain(SrvId),
-    Filters1 = maps:get(filters, Data, #{}),
-    Filters2 = Filters1#{type=>Type},
-    Data2 = Data#{filters=>Filters2},
-    case nkdomain_domain_obj:find(SrvId, Domain, Data2) of
-        {ok, Total, List, _Meta} ->
-            {ok, #{total=>Total, data=>List}};
+api(<<"find">>, Type, #nkreq{data=Data, srv_id=SrvId}=Req) ->
+    case nkdomain_api_util:get_id(?DOMAIN_DOMAIN, domain_id, Data, Req) of
+        {ok, DomainId} ->
+            Filters1 = maps:get(filters, Data, #{}),
+            Filters2 = Filters1#{type=>Type},
+            Data2 = Data#{filters=>Filters2},
+            case nkdomain_domain_obj:find(SrvId, DomainId, Data2) of
+                {ok, Total, List, _Meta} ->
+                    {ok, #{total=>Total, data=>List}};
+                {error, Error} ->
+                    {error, Error}
+            end;
         {error, Error} ->
             {error, Error}
     end;
 
-api(<<"find_all">>, Type, #nkreq{data=Data, srv_id=SrvId}) ->
-    Domain = nkdomain_util:get_service_domain(SrvId),
-    Filters1 = maps:get(filters, Data, #{}),
-    Filters2 = Filters1#{type=>Type},
-    Data2 = Data#{filters=>Filters2},
-    case nkdomain_domain_obj:find_all(SrvId, Domain, Data2) of
-        {ok, Total, List, _Meta} ->
-            {ok, #{total=>Total, data=>List}};
-        {error, Error} ->
-            {error, Error}
-    end;
-
-api(<<"wait_for_save">>, Type, #nkreq{data=Data, srv_id=SrvId}=Req) ->
-    Time = maps:get(time, Data, 5000),
-    case nkdomain_api_util:get_id(Type, Data, Req) of
-        {ok, Id} ->
-            case nkdomain_obj_lib:find(SrvId, Id) of
-                #obj_id_ext{pid=Pid} when is_pid(Pid) ->
-                    case nkdomain_obj:wait_for_save(Pid, Time) of
-                        ok ->
-                            {ok, #{}};
-                        {error, Error} ->
-                            {error, Error}
-                    end;
-                #?NKOBJ{} ->
-                    {error, object_not_loaded};
+api(<<"find_all">>, Type, #nkreq{data=Data, srv_id=SrvId}=Req) ->
+    case nkdomain_api_util:get_id(?DOMAIN_DOMAIN, domain_id, Data, Req) of
+        {ok, DomainId} ->
+            Filters1 = maps:get(filters, Data, #{}),
+            Filters2 = Filters1#{type=>Type},
+            Data2 = Data#{filters=>Filters2},
+            case nkdomain_domain_obj:find_all(SrvId, DomainId, Data2) of
+                {ok, Total, List, _Meta} ->
+                    {ok, #{total=>Total, data=>List}};
                 {error, Error} ->
                     {error, Error}
             end;
@@ -169,11 +128,17 @@ api(<<"wait_for_save">>, Type, #nkreq{data=Data, srv_id=SrvId}=Req) ->
     end;
 
 api(<<"make_token">>, Type, #nkreq{data=Data, srv_id=SrvId}=Req) ->
-    case nkdomain_api_util:get_id(Type, Data, Req) of
-        {ok, Id} ->
-            case nkdomain_token_obj:create_referred(SrvId, Id, Data, #{}) of
-                {ok, Reply, _Pid} ->
-                    {ok, Reply};
+    case nkdomain_api_util:get_id(?DOMAIN_DOMAIN, domain_id, Data, Req) of
+        {ok, DomainId} ->
+            case nkdomain_api_util:get_id(Type, Data, Req) of
+                {ok, Id} ->
+                    case nkdomain_token_obj:create(SrvId, DomainId, Id, Type, #{}, Data) of
+                        {ok, ObjIdExt, TTL, Unknown} ->
+                            Reply = obj_id_reply(ObjIdExt, Unknown),
+                            {ok, Reply#{ttl=>TTL}};
+                        {error, Error} ->
+                            {error, Error}
+                    end;
                 {error, Error} ->
                     {error, Error}
             end;
@@ -190,15 +155,18 @@ api(_Cmd, _Type, _Req) ->
 %% Private
 %% ===================================================================
 
-%% @private
-get_parent(Data, Req) ->
-    nkdomain_api_util:get_id(?DOMAIN_DOMAIN, parent_id, Data, Req).
-
 
 %% @private
-cmd_delete_childs(#{delete_childs:=true}, SrvId, Id) ->
-    nkdomain_store:delete_all_childs(SrvId, Id);
+obj_id_reply(#obj_id_ext{obj_id=ObjId, path=Path}, Unknown) ->
+    Base = #{
+        obj_id => ObjId,
+        path => Path
+    },
+    case Unknown of
+        [] ->
+            Base;
+        _ ->
+            Base#{unknown_fields=>Unknown}
+    end.
 
-cmd_delete_childs(_Data, _SrvId, _Id) ->
-    {ok, 0}.
 

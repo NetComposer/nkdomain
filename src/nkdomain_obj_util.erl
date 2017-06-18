@@ -23,10 +23,13 @@
 -module(nkdomain_obj_util).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -export([event/2, status/2, search_syntax/1, get_name/1]).
+-export([send_event/3, send_event/4, send_event/5]).
 -export([call_type/3]).
 -export([link_server_api/3, unlink_server_api/2]).
 
 -include("nkdomain.hrl").
+-include("nkdomain_debug.hrl").
+-include_lib("nkevent/include/nkevent.hrl").
 
 
 
@@ -34,27 +37,80 @@
 %% Public
 %% ===================================================================
 
-%% @doc
-event(Event, #?NKOBJ{link_events=Links}=State) ->
-    {ok, #?NKOBJ{}=State2} = do_event(Links, Event, State),
+
+%% @doc Sends an event inside an object process to all registered
+%% Calls SrvId:object_event() and SrvId:object_reg_event(), that
+%% normally call send_event/N here
+
+event(Event, #?STATE{event_links=Links}=State) ->
+    {ok, #?STATE{}=State2} = do_event(Links, Event, State),
     State2.
 
 
 %% @private
-do_event([], Event, #?NKOBJ{srv_id=SrvId}=State) ->
-    {ok, #?NKOBJ{}} = SrvId:object_event(Event, State);
+do_event([], Event, #?STATE{srv_id=SrvId}=State) ->
+    {ok, #?STATE{}} = SrvId:object_event(Event, State);
 
-do_event([Link|Rest], Event, #?NKOBJ{srv_id=SrvId}=State) ->
+do_event([Link|Rest], Event, #?STATE{srv_id=SrvId}=State) ->
     {ok, State2} = SrvId:object_reg_event(Link, Event, State),
     do_event(Rest, Event,  State2).
 
 
+%% @doc Sends events inside an object process directly to the event server
+%% If the obj has session_events, they are sent directly to the session also
+send_event(EvType, Body, #?STATE{obj_id=ObjId, path=Path}=State) ->
+    send_event(EvType, ObjId, Path, Body, State).
+
+
+%% @private
+send_event(EvType, ObjId, Body, #?STATE{path=Path}=State) ->
+    send_event(EvType, ObjId, Path, Body, State).
+
+
+%% @private
+send_event(EvType, ObjId, ObjPath, Body, #?STATE{srv_id=SrvId, type=Type}=State) ->
+    Event = #nkevent{
+        srv_id = SrvId,
+        class = ?DOMAIN_EVENT_CLASS,
+        subclass = Type,
+        type = nklib_util:to_binary(EvType),
+        obj_id = ObjId,
+        domain = ObjPath,
+        body = Body
+    },
+    ?DEBUG("event sent to listeners: ~p", [Event], State),
+    send_direct_event(Event, State),
+    nkevent:send(Event),
+    {ok, State}.
+
+
+%% @private
+send_direct_event(#nkevent{type=Type, body=Body}=Event, #?STATE{meta=Meta}) ->
+    case Meta of
+        #{session_events:=Events, session_id:=ConnId} ->
+            case lists:member(Type, Events) of
+                true ->
+                    Event2 = case Meta of
+                        #{session_events_body:=Body2} ->
+                            Event#nkevent{body=maps:merge(Body, Body2)};
+                        _ ->
+                            Event
+                    end,
+                    nkapi_server:event(ConnId, Event2);
+                false ->
+                    ok
+            end;
+        _ ->
+            ok
+    end.
+
+
 %% @doc
-status(Status, #?NKOBJ{status=Status}=State) ->
+status(Status, #?STATE{status=Status}=State) ->
     State;
 
 status(Status, State) ->
-    State2 = State#?NKOBJ{status=Status},
+    State2 = State#?STATE{status=Status},
     event({status, Status}, State2).
 
 
@@ -76,7 +132,7 @@ search_syntax(Base) ->
 
 
 %% @doc
-get_name(#?NKOBJ{type=Type, obj_id=ObjId, path=Path, obj=Obj}) ->
+get_name(#?STATE{type=Type, obj_id=ObjId, path=Path, obj=Obj}) ->
     {ok, _, ObjName} = nkdomain_util:get_parts(Type, Path),
     #{
         obj_id => ObjId,
