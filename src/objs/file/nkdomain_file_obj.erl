@@ -127,7 +127,13 @@ http_post(SrvId, Domain, Req) ->
 
 http_get(SrvId, FileId, Req) ->
     Headers = nkservice_rest_http:get_headers(Req),
-    Token = nklib_util:get_value(<<"x-netcomposer-auth">>, Headers, <<>>),
+    Qs = nkservice_rest_http:get_qs(Req),
+    Token = case nklib_util:get_value(<<"x-netcomposer-auth">>, Headers, <<>>) of
+        <<>> ->
+            nklib_util:get_value(<<"auth">>, Qs, <<>>);
+        Auth0 ->
+            Auth0
+    end,
     case nkdomain_util:get_http_auth(SrvId, Token) of
         {ok, _UserId, _Meta} ->
             case nkdomain_obj_lib:load(SrvId, FileId, #{}) of
@@ -209,7 +215,7 @@ object_parse(_SrvId, update, _Obj) ->
 
 
 %% @private
-object_api_syntax(<<"get_inline">>=Cmd, Syntax) ->
+object_api_syntax(<<"get_inline">>, Syntax) ->
     Syntax#{
         id => binary,
         '__mandatory' => [id]

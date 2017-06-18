@@ -156,7 +156,6 @@ admin_get_data(ElementId, Spec, Session) ->
 
 %% @doc
 nkservice_rest_http(SrvId, get, [<<"_file">>, FileId], Req, State) ->
-    lager:error("NKLOG GET"),
     case nkdomain_file_obj:http_get(SrvId, FileId, Req) of
         {ok, CT, Bin} ->
             {http, 200, [{<<"Content-Type">>, CT}], Bin, State};
@@ -807,9 +806,10 @@ service_api_allow(#nkreq{cmd = <<"objects/user/login">>, user_id = <<>>}, State)
     {true, State};
 
 service_api_allow(#nkreq{cmd = <<"objects/", _/binary>>, user_id = <<>>}, State) ->
+
     {false, State};
 
-service_api_allow(#nkreq{cmd = <<"objects/", _/binary>>, req_state={_Type, Module, Cmd}}=Req, State) ->
+service_api_allow(#nkreq{cmd = <<"objects/", Rest/binary>>, req_state={_Type, Module, Cmd}}=Req, State) ->
     nklib_util:apply(Module, object_api_allow, [Cmd, Req, State]);
 
 service_api_allow(#nkreq{cmd = <<"session", _/binary>>}, State) ->
@@ -822,6 +822,7 @@ service_api_allow(#nkreq{cmd = <<"nkadmin", _/binary>>}, State) ->
     {true, State};
 
 service_api_allow(_Req, _State) ->
+    lager:error("NKLOG ALLOW2: ~p", [lager:pr(_Req, ?MODULE)]),
     continue.
 
 
