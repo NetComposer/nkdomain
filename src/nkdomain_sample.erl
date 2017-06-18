@@ -5,9 +5,8 @@
 -include_lib("nkservice/include/nkservice.hrl").
 -include_lib("nkmail/include/nkmail.hrl").
 
--define(HTTP, "http://127.0.0.1:9301/s").
--define(WS, "ws://127.0.0.1:9301/s/_api/ws").
--define(SRV, sipstorm_v01).
+-define(HTTP, "http://127.0.0.1:9302").
+-define(WS, "ws://127.0.0.1:9302/_api/ws").
 
 
 login() ->
@@ -20,7 +19,7 @@ login(User, Pass) ->
         password=> nklib_util:to_binary(Pass),
         meta => #{a=>nklib_util:to_binary(User)}
     },
-    {ok, #{<<"session_id">>:=SessId}, Pid} = nkapi_client:start(?SRV, ?WS, Login, Fun, #{}, <<"objects/user/login">>),
+    {ok, #{<<"session_id">>:=SessId}, Pid} = nkapi_client:start(root, ?WS, Login, Fun, #{}, <<"objects/user/login">>),
     {ok, SessId, Pid}.
 
 
@@ -32,7 +31,7 @@ login(User, Pass, Domain) ->
         meta => #{a=>nklib_util:to_binary(User)},
         domain_id => Domain
     },
-    {ok, #{<<"session_id">>:=SessId}, Pid} = nkapi_client:start(?SRV, ?WS, Login, Fun, #{}, <<"objects/user/login">>),
+    {ok, #{<<"session_id">>:=SessId}, Pid} = nkapi_client:start(root, ?WS, Login, Fun, #{}, <<"objects/user/login">>),
     {ok, SessId, Pid}.
 
 
@@ -232,7 +231,7 @@ domain_find_all_childs(Id, Spec) ->
 
 
 domain_find_all_users() ->
-    cmd(<<"objects/domain/find_all_childs">>, #{filters=>#{type=>user}}).
+    cmd(<<"objects/domain/find_all_childs">>, #{type=>user}).
 
 
 session_get() ->
