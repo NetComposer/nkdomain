@@ -117,18 +117,19 @@ object_es_mapping() ->
         destroyed_reason => #{type => keyword},
         name => #{
             type => text,
+            analyzer => standard,
             fields => #{keyword => #{type=>keyword}}
         },
+        name_norm => #{type=>text},
         description => #{
             type => text,
+            analyzer => standard,
             fields => #{keyword => #{type=>keyword}}
         },
+        description_norm => #{type=>text},
         tags => #{type => keyword},
         aliases => #{type => keyword},
-        icon_id => #{type => keyword},
-        icon_url => #{type => keyword},
-        icon_content_type => #{type => keyword}
-
+        icon_id => #{type => keyword}
     }.
 
 
@@ -161,16 +162,32 @@ object_es_unparse(SrvId, #{type:=Type}=Obj) ->
         _ ->
             BaseMap1
     end,
-    ModData = maps:get(Type, Obj, #{}),
+    BaseMap3 = case BaseMap2 of
+        #{name:=Name} ->
+            BaseMap2#{name_norm=>nkdomain_store_es_util:normalize(Name)};
+        _ ->
+            BaseMap2
+    end,
+    BaseMap4 = case BaseMap3 of
+        #{description:=Desc} ->
+            BaseMap3#{description_norm=>nkdomain_store_es_util:normalize(Desc)};
+        _ ->
+            BaseMap3
+    end,
     case SrvId:object_es_mapping(SrvId, Type) of
         not_exported ->
-            BaseMap2#{Type => ModData};
+            BaseMap4#{Type => #{}};
         Map when is_map(Map) ->
-            ModKeys = maps:keys(Map),
-            ModMap = maps:with(ModKeys, ModData),
-            BaseMap2#{Type => ModMap}
+            case SrvId:object_apply(Type, object_es_unparse, [SrvId, Obj, BaseMap4]) of
+                not_exported ->
+                    ModData = maps:get(Type, Obj, #{}),
+                    ModKeys = maps:keys(Map),
+                    ModMap = maps:with(ModKeys, ModData),
+                    BaseMap4#{Type => ModMap};
+                Value when is_map(Value) ->
+                    Value
+            end
     end.
-
 
 
 

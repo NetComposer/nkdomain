@@ -22,7 +22,7 @@
 -module(nkdomain_store_es_util).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([get_opts/1, reload/1, db_init/2]).
+-export([get_opts/1, reload/1, db_init/2, normalize/1]).
 
 -define(LLOG(Type, Txt, Args),
     lager:Type("NkDOMAIN Store ES "++Txt, Args)).
@@ -108,7 +108,8 @@ db_init_root(Opts) ->
                 created_time => Now,
                 created_by => <<"admin">>,
                 updated_time => Now,
-                updated_by => <<"admin">>
+                updated_by => <<"admin">>,
+                ?DOMAIN_DOMAIN => #{}
             },
             {ok, _} = nkelastic:put(<<"root">>, Obj, Opts),
             ?LLOG(warning, "created ROOT domain", []),
@@ -119,30 +120,39 @@ db_init_root(Opts) ->
 
 
 %% @private
-db_init_admin(#{srv_id:=SrvId}=Opts) ->
+db_init_admin(Opts) ->
     case nkelastic:get(<<"admin">>, Opts) of
         {ok, #{<<"type">>:=?DOMAIN_USER}, _} ->
             ok;
         {error, object_not_found} ->
-            Opts = #{
+            Now = nkdomain_util:timestamp(),
+            Obj = #{
                 type => ?DOMAIN_USER,
-                parent_id => <<"root">>,
-                created_by => <<"admin">>,
-                obj_name => <<"admin">>,
                 obj_id => <<"admin">>,
+                path => <<"/users/admin">>,
+                parent_id => <<"root">>,
+                description => <<"Admin User">>,
+                created_time => Now,
+                created_by => <<"admin">>,
+                updated_time => Now,
+                updated_by => <<"admin">>,
                 ?DOMAIN_USER => #{
                     name => <<"Admin">>,
                     surname => <<"User">>,
                     password => nkdomain_user_obj:user_pass("netcomposer")
                 }
             },
-            {ok, _, _} = nkdomain_obj_make:make_and_create(SrvId, Opts, #{}),
+            {ok, _} = nkelastic:put(<<"admin">>, Obj, Opts),
             ?LLOG(warning, "created ADMIN user. Password is 'netcomposer'. Change it NOW", []),
             ok;
         {error, Error} ->
             {error, {object_create, Error}}
     end.
 
+
+%% @doc
+normalize(Text) ->
+    nklib_parse:normalize(Text, #{unrecognized=>keep}).
 
 
 %% ===================================================================

@@ -5,16 +5,18 @@
 -include_lib("nkservice/include/nkservice.hrl").
 -include_lib("nkmail/include/nkmail.hrl").
 
-%%-define(HTTP, "http://127.0.0.1:9303").
-%%-define(WS, "ws://127.0.0.1:9303/_api/ws").
+-define(HTTP, "http://127.0.0.1:9304/s").
+-define(WS, "ws://127.0.0.1:9304/s/_api/ws").
 
--define(HTTP, "https://v1.netc.io/s/v03").
--define(WS, "wss://v1.netc.io/s/v03/_api/ws").
+%%-define(HTTP, "https://v1.netc.io/s/v03").
+%%-define(WS, "wss://v1.netc.io/s/v03/_api/ws").
+
+-define(SRV, sipstorm_v01).
 
 
 
 login() ->
-    login(admin, "1234").
+    login(admin, "netcomposer").
 
 login(User, Pass) ->
     Fun = fun ?MODULE:api_client_fun/2,
@@ -23,7 +25,7 @@ login(User, Pass) ->
         password=> nklib_util:to_binary(Pass),
         meta => #{a=>nklib_util:to_binary(User)}
     },
-    {ok, #{<<"session_id">>:=SessId}, Pid} = nkapi_client:start(root, ?WS, Login, Fun, #{}, <<"objects/user/login">>),
+    {ok, #{<<"session_id">>:=SessId}, Pid} = nkapi_client:start(?SRV, ?WS, Login, Fun, #{}, <<"objects/user/login">>),
     {ok, SessId, Pid}.
 
 
@@ -35,7 +37,7 @@ login(User, Pass, Domain) ->
         meta => #{a=>nklib_util:to_binary(User)},
         domain_id => Domain
     },
-    {ok, #{<<"session_id">>:=SessId}, Pid} = nkapi_client:start(root, ?WS, Login, Fun, #{}, <<"objects/user/login">>),
+    {ok, #{<<"session_id">>:=SessId}, Pid} = nkapi_client:start(?SRV, ?WS, Login, Fun, #{}, <<"objects/user/login">>),
     {ok, SessId, Pid}.
 
 
@@ -153,10 +155,11 @@ domain_get() ->
 domain_get(Id) ->
     cmd(<<"objects/domain/get">>, #{id=>Id}).
 
-domain_create(Domain, Name, Desc) ->
+domain_create(Domain, ObjName, Name, Desc) ->
     Data = #{
-        obj_name => Name,
+        obj_name => ObjName,
         parent_id => Domain,
+        name => Name,
         description => Desc,
         domain => #{}
     },
@@ -164,6 +167,10 @@ domain_create(Domain, Name, Desc) ->
         {ok, #{<<"obj_id">>:=ObjId}} -> {ok, ObjId};
         {error, Error} -> {error, Error}
     end.
+
+domain_create2(ObjName) ->
+    domain_create(root, ObjName, <<"ABCDÉ Ñ"/utf8>>, <<"abc déf"/utf8>>).
+
 
 
 domain_delete(Id) ->

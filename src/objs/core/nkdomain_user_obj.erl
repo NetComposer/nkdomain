@@ -25,7 +25,8 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([create/2, login/3, token/3, check_token/1, check_user_token/2, get_name/2]).
--export([object_info/0, object_admin_info/0, object_create/2, object_es_mapping/0, object_parse/3,
+-export([object_info/0, object_admin_info/0, object_create/2, object_es_mapping/0, object_es_unparse/3,
+         object_parse/3,
          object_api_syntax/2, object_api_allow/3, object_api_cmd/2, object_send_event/2,
          object_sync_op/3, object_async_op/2]).
 -export([fun_user_pass/1, user_pass/1]).
@@ -225,19 +226,41 @@ object_create(SrvId, Obj) ->
 %% @private
 object_es_mapping() ->
     #{
-        name => #{
-            type => text,
-            fields => #{keyword => #{type=>keyword}}
-        },
-        surname => #{
-            type => text,
-            fields => #{keyword => #{type=>keyword}}
-        },
+        name => #{type => text},
+        name_norm => #{type => text},
+        name_sort => #{type => keyword},
+        surname => #{type => text},
+        surname_norm =>  #{type => text},
+        surname_sort =>  #{type => keyword},
         email => #{type => keyword},
         password => #{type => keyword},
-        avatar_t => #{type => binary, store => true},
         phone_t => #{type => keyword},
         address_t => #{type => text}
+    }.
+
+
+%% @private
+object_es_unparse(_SrvId, Obj, Base) ->
+    User = maps:get(?DOMAIN_USER, Obj),
+    Name = maps:get(name, User, <<>>),
+    NameNorm = nkdomain_store_es_util:normalize(Name),
+    nklib_parse:normalize(Name),
+    SurName = maps:get(surname, User, <<>>),
+    SurNameNorm = nkdomain_store_es_util:normalize(SurName),
+    UserKeys = maps:keys(object_es_mapping()),
+    UserMap = maps:with(UserKeys, User),
+    UserMap2 = UserMap#{
+        name_norm => NameNorm,
+        name_sort => NameNorm,
+        surname_norm => SurNameNorm,
+        surname_sort => SurNameNorm
+    },
+    FullName = nklib_util:bjoin([Name, SurName], <<" ">>),
+    FullNameNorm = nkdomain_store_es_util:normalize(FullName),
+    Base#{
+        name => FullName,
+        name_norm => FullNameNorm,
+        ?DOMAIN_USER => UserMap2
     }.
 
 
@@ -248,7 +271,6 @@ object_parse(_SrvId, update, _Obj) ->
         surname => binary,
         password => fun ?MODULE:fun_user_pass/1,
         email => lower,
-        avatar_t => binary,
         phone_t => binary,
         address_t => binary
     };
@@ -336,7 +358,7 @@ do_load(SrvId, Login) ->
         #obj_id_ext{type = ?DOMAIN_USER, obj_id=ObjId, pid=Pid} ->
             {ok, ObjId, Pid};
         _ ->
-            case SrvId:object_db_store_find_alias(SrvId, Login) of
+            case SrvId:object_db_search_alias(SrvId, Login) of
                 {ok, N, [{?DOMAIN_USER, ObjId, _Path}|_], _}->
                     case N > 1 of
                         true ->
