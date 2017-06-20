@@ -5,8 +5,12 @@
 -include_lib("nkservice/include/nkservice.hrl").
 -include_lib("nkmail/include/nkmail.hrl").
 
--define(HTTP, "http://127.0.0.1:9302").
--define(WS, "ws://127.0.0.1:9302/_api/ws").
+%%-define(HTTP, "http://127.0.0.1:9303").
+%%-define(WS, "ws://127.0.0.1:9303/_api/ws").
+
+-define(HTTP, "https://v1.netc.io/s/v03").
+-define(WS, "wss://v1.netc.io/s/v03/_api/ws").
+
 
 
 login() ->
@@ -287,8 +291,15 @@ file_get_inline(Id) ->
 
 
 file_post(T) ->
-    {ok, #{<<"obj_id">>:=FileId}} = upload(T, "/_file", "text/plain", "1234"),
+    {ok, #{<<"obj_id">>:=FileId}} = upload(T, "/_file", "text/plain", "1,2,3,4"),
     FileId.
+
+file_post2(T) ->
+    {ok, Bin} = file:read_file("/tmp/file1.png"),
+    {ok, #{<<"obj_id">>:=FileId}} = upload(T, "/_file", "image/png", Bin),
+    FileId.
+
+
 
 file_post_secure(T) ->
     {ok, #{<<"obj_id">>:=FileId}} = upload(T, "/_file?store_id=/file.stores/local_secure", "text/plain", "1234"),
@@ -301,6 +312,10 @@ file_post_s3_secure(T) ->
 
 file_download(T, FileId) ->
     download(T, FileId).
+
+file_download2(T, FileId) ->
+    {ok, _, Body} = download(T, FileId),
+    ok = file:write_file(filename:join("/tmp", FileId), Body).
 
 
 mail_provider_get_all() ->
