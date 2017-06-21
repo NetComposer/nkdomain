@@ -26,6 +26,7 @@
 -export([send_event/3, send_event/4, send_event/5]).
 -export([call_type/3]).
 -export([link_server_api/3, unlink_server_api/2]).
+-export([get_obj_data/1, set_obj_data/2]).
 
 -include("nkdomain.hrl").
 -include("nkdomain_debug.hrl").
@@ -48,27 +49,27 @@ event(Event, #?STATE{event_links=Links}=State) ->
 
 
 %% @private
-do_event([], Event, #?STATE{srv_id=SrvId}=State) ->
+do_event([], Event, #?STATE{id=#obj_id_ext{srv_id=SrvId}}=State) ->
     {ok, #?STATE{}} = SrvId:object_event(Event, State);
 
-do_event([Link|Rest], Event, #?STATE{srv_id=SrvId}=State) ->
+do_event([Link|Rest], Event, #?STATE{id=#obj_id_ext{srv_id=SrvId}}=State) ->
     {ok, State2} = SrvId:object_reg_event(Link, Event, State),
     do_event(Rest, Event,  State2).
 
 
 %% @doc Sends events inside an object process directly to the event server
 %% If the obj has session_events, they are sent directly to the session also
-send_event(EvType, Body, #?STATE{obj_id=ObjId, path=Path}=State) ->
+send_event(EvType, Body, #?STATE{id=#obj_id_ext{obj_id=ObjId, path=Path}}=State) ->
     send_event(EvType, ObjId, Path, Body, State).
 
 
 %% @private
-send_event(EvType, ObjId, Body, #?STATE{path=Path}=State) ->
+send_event(EvType, ObjId, Body, #?STATE{id=#obj_id_ext{path=Path}}=State) ->
     send_event(EvType, ObjId, Path, Body, State).
 
 
 %% @private
-send_event(EvType, ObjId, ObjPath, Body, #?STATE{srv_id=SrvId, type=Type}=State) ->
+send_event(EvType, ObjId, ObjPath, Body, #?STATE{id=#obj_id_ext{srv_id=SrvId, type=Type}}=State) ->
     Event = #nkevent{
         srv_id = SrvId,
         class = ?DOMAIN_EVENT_CLASS,
@@ -132,7 +133,7 @@ search_syntax(Base) ->
 
 
 %% @doc
-get_name(#?STATE{type=Type, obj_id=ObjId, path=Path, obj=Obj}) ->
+get_name(#?STATE{id=#obj_id_ext{type=Type, obj_id=ObjId, path=Path}, obj=Obj}) ->
     {ok, _, ObjName} = nkdomain_util:get_parts(Type, Path),
     #{
         obj_id => ObjId,
@@ -187,6 +188,14 @@ unlink_server_api(Module, State) ->
     State.
 
 
+%% @doc
+get_obj_data(#?STATE{data=Data}) ->
+    Data.
+
+
+%% @doc
+set_obj_data(Data, State) ->
+    State#?STATE{data=Data}.
 
 
 

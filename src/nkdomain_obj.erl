@@ -29,8 +29,8 @@
 -export([sync_op/3, sync_op/4, async_op/3]).
 -export([start/3, new_type_master/1, object_deleted/1]).
 -export([init/1, terminate/2, code_change/3, handle_call/3,  handle_cast/2, handle_info/2]).
--export([get_all/0, unload_all/0]).
--export([links_add/3, links_iter/4]).
+-export([links_add/3, links_remove/3, links_iter/4]).
+-export([get_all/0, unload_all/0, get_state/2, get_time/2]).
 -export_type([event/0, status/0]).
 
 
@@ -217,6 +217,16 @@ object_deleted(Pid) ->
     gen_server:cast(Pid, nkdomain_obj_deleted).
 
 
+%% @private
+get_state(SrvId, Id) ->
+    sync_op(SrvId, Id, get_state).
+
+
+%% @private
+get_time(SrvId, Id) ->
+    sync_op(SrvId, Id, get_time).
+
+
 %% @doc
 -spec get_all() ->
     [{nkdomain:type(), nkdomain:obj_id(), nkdomain:path(), pid()}].
@@ -255,20 +265,19 @@ init({loaded, SrvId, Obj, Meta}) ->
             maps:get(enabled, Obj, true)
     end,
     Info = Module:object_info(),
+    ObjIdExt = #obj_id_ext{srv_id=SrvId, obj_id=ObjId, type=Type, path=Path, pid=self()},
     State1 = #?STATE{
         srv_id = SrvId,
-        obj_id = ObjId,
-        path = Path,
-        type = Type,
+        id = ObjIdExt,
         module = Module,
         parent_id = ParentId,
-        name = ObjName,
+        obj_name = ObjName,
         object_info = Info,
         obj = Obj,
         is_dirty = false,
         is_enabled = Enabled,
         started = nkdomain_util:timestamp(),
-        childs1 = #{},
+        childs = #{},
         usage_links = nklib_links:new(),
         event_links = nklib_links:new(),
         status = init,
@@ -306,12 +315,7 @@ init({loaded, SrvId, Obj, Meta}) ->
     end;
 
 init({moved, State, OldPid}) ->
-    #?STATE{
-        srv_id = SrvId,
-        type = Type,
-        obj_id = ObjId,
-        path = Path
-    } = State,
+    #?STATE{id=#obj_id_ext{srv_id=SrvId, type=Type, obj_id=ObjId, path=Path}} = State,
     case do_init_common(State) of
         {ok, State2} ->
             case register(SrvId, Type, ObjId, Path, #{replace_pid=>OldPid}) of
@@ -358,8 +362,8 @@ handle_call({nkdomain_sync_op, Op}, From, State) ->
             do_stop(Reason, State2);
         continue ->
             do_sync_op(Op, From, State);
-        {continue, #?STATE{}=State2} ->
-            do_sync_op(Op, From, State2)
+        {continue, [Op2, _From2, #?STATE{}=State2]} ->
+            do_sync_op(Op2, From, State2)
     end;
 
 handle_call(Msg, From, State) ->
@@ -385,8 +389,8 @@ handle_cast({nkdomain_async_op, Op}, State) ->
             do_stop(Reason, State2);
         continue ->
             do_async_op(Op, State);
-        {continue, #?STATE{}=State2} ->
-            do_async_op(Op, State2)
+        {continue, [Op2, #?STATE{}=State2]} ->
+            do_async_op(Op2, State2)
     end;
 
 handle_cast({nkdomain_parent_enabled, Enabled}, State) ->
@@ -410,7 +414,7 @@ handle_info(nkdomain_move_completed, State) ->
     ?DEBUG("move completed", [], State),
     {stop, normal, State};
 
-handle_info({nkservice_updated, _SrvId}, #?STATE{srv_id=SrvId, type=Type}=State) ->
+handle_info({nkservice_updated, _SrvId}, #?STATE{id=#obj_id_ext{srv_id=SrvId, type=Type}}=State) ->
     set_log(SrvId, Type),
     noreply(State);
 
@@ -464,13 +468,16 @@ handle_info({'DOWN', Ref, process, _Pid, _Reason}, #?STATE{type_monitor=Ref}=Sta
 
 handle_info({'DOWN', Ref, process, _Pid, _Reason}=Info, State) ->
     case links_down(Ref, State) of
-        {ok, State2} ->
-            noreply(State2);
-        {ok, {child, ObjId, _Pid}, State2} ->
+        {event, State2} ->
+            {ok, State3} = handle(object_link_down, [event], State2),
+            noreply(State3);
+        {usage, {child, ObjId, _Pid}, State2} ->
             State3 = do_rm_child(ObjId, State2),
+            {ok, State4} = handle(object_link_down, [{child, ObjId}], State3),
+            do_check_timeout(State4);
+        {usage, Link, State2} ->
+            {ok, State3} = handle(object_link_down, [{usage, Link}], State2),
             do_check_timeout(State3);
-        {ok, _Link, State2} ->
-            do_check_timeout(State2);
         not_found ->
             handle(object_handle_info, [Info], State)
     end;
@@ -507,28 +514,27 @@ terminate(Reason, State) ->
 %% @private
 do_sync_op(get_obj, _From, State) ->
     #?STATE{
-        type = Type,
-        path = Path,
+        id = ObjIdExt,
         module = Module,
-        parent_id = ParentId,
         status = Status,
         started = Started,
         is_enabled = Enabled,
         obj = Obj
     } = State,
+    #obj_id_ext{obj_id=_ObjId, type=Type, path=Path} = ObjIdExt,
     {ok, Domain, ObjName} = nkdomain_util:get_parts(Type, Path),
     Obj2 = Obj#{
         '_domain' => Domain,
         '_obj_name' => ObjName,
         '_module' => Module,
-        '_parent_id' => ParentId,
         '_status' => Status,
         '_started' => Started,
         '_is_enabled' => Enabled
     },
     reply({ok, Obj2}, State);
 
-do_sync_op(get_obj_type, _From, #?STATE{type=Type, obj=Obj}=State) ->
+do_sync_op(get_obj_type, _From, #?STATE{id=IdExt, obj=Obj}=State) ->
+    #obj_id_ext{type=Type} = IdExt,
     ObjType = maps:get(Type, Obj, #{}),
     reply({ok, ObjType}, do_refresh(State));
 
@@ -542,7 +548,7 @@ do_sync_op(get_state, _From, State) ->
 do_sync_op(get_timelog, _From, #?STATE{timelog=Log}=State) ->
     reply({ok, Log}, State);
 
-do_sync_op(get_childs, _From, #?STATE{childs1=Childs}=State) ->
+do_sync_op(get_childs, _From, #?STATE{childs=Childs}=State) ->
     reply({ok, Childs}, State);
 
 do_sync_op(get_time, _From, State) ->
@@ -654,10 +660,7 @@ do_async_op(Op, State) ->
 %% @private
 do_init_common(State) ->
     #?STATE{
-        srv_id = SrvId,
-        type = Type,
-        obj_id = ObjId,
-        path = Path,
+        id = #obj_id_ext{srv_id=SrvId, type=Type, obj_id=ObjId, path=Path},
         parent_id = ParentId,
         ttl = TTL
     }= State,
@@ -697,11 +700,10 @@ set_log(SrvId, Type) ->
 
 
 %% @private
-register_parent(#?STATE{obj_id = <<"root">>, type = ?DOMAIN_DOMAIN}=State) ->
+register_parent(#?STATE{id=#obj_id_ext{obj_id = <<"root">>, type = ?DOMAIN_DOMAIN}}=State) ->
     {ok, State};
 
-register_parent(#?STATE{srv_id=SrvId, parent_id=ParentId}=State) ->
-    ObjIdExt = get_obj_id_ext(State),
+register_parent(#?STATE{srv_id=SrvId, id=ObjIdExt, parent_id=ParentId}=State) ->
     Op = {nkdomain_reg_child, ObjIdExt},
     case sync_op(SrvId, ParentId, Op) of
         {ok, ParentEnabled, DomainPid} ->
@@ -721,9 +723,9 @@ register_service(#?STATE{srv_id=SrvId}=State) ->
 
 
 %% @private
-register_type(#?STATE{module=Module, type_monitor=OldMon}=State) ->
+register_type(#?STATE{id=ObjIdExt, module=Module, type_monitor=OldMon}=State) ->
     nklib_util:demonitor(OldMon),
-    {ok, Pid} = nkdomain_type:register(Module, get_obj_id_ext(State)),
+    {ok, Pid} = nkdomain_type:register(Module, ObjIdExt),
     State#?STATE{type_monitor=monitor(process, Pid)}.
 
 
@@ -758,7 +760,7 @@ do_save(State) ->
 
 
 %% @private
-do_delete(#?STATE{childs1=Childs}=State) when map_size(Childs)==0 ->
+do_delete(#?STATE{childs=Childs}=State) when map_size(Childs)==0 ->
     case handle(object_delete, [], State) of
         {ok, State2, _Meta} ->
             ?DEBUG("object deleted", [], State2),
@@ -848,7 +850,7 @@ do_stop2(_Reason, State) ->
 
 
 %% @private Checks has correct path and not loaded
-do_check_child(#obj_id_ext{type=Type, path=Path}, #?STATE{path=Base}=State) ->
+do_check_child(#obj_id_ext{type=Type, path=Path}, #?STATE{id=#obj_id_ext{path=Base}}=State) ->
     case nkdomain_util:get_parts(Type, Path) of
         {ok, Base, _Name} ->
             ok;
@@ -861,18 +863,18 @@ do_check_child(#obj_id_ext{type=Type, path=Path}, #?STATE{path=Base}=State) ->
 
 
 %% @private
-do_add_child(ObjId, Type, Pid, #?STATE{childs1=Childs}=State) ->
+do_add_child(ObjId, Type, Pid, #?STATE{childs=Childs}=State) ->
     Childs2 = Childs#{ObjId => {Type, Pid}},
-    State2 = State#?STATE{childs1=Childs2},
+    State2 = State#?STATE{childs=Childs2},
     links_add(usage, {child, ObjId, Pid}, State2).
 
 
 %% @private
-do_rm_child(ObjId, #?STATE{childs1=Childs}=State) ->
+do_rm_child(ObjId, #?STATE{childs=Childs}=State) ->
     case maps:find(ObjId, Childs) of
         {ok, {Type, Pid}} ->
             Childs2 = maps:remove(ObjId, Childs),
-            State2 = State#?STATE{childs1=Childs2},
+            State2 = State#?STATE{childs=Childs2},
             State3 = do_event({child_unloaded, Type, ObjId}, State2),
             links_remove(usage, {child, ObjId, Pid}, State3);
         error ->
@@ -881,7 +883,8 @@ do_rm_child(ObjId, #?STATE{childs1=Childs}=State) ->
 
 
 %% @private
-do_update(Update, #?STATE{srv_id=SrvId, obj=Obj, obj_id=_ObjId, path=_Path, type=Type}=State) ->
+do_update(Update, #?STATE{id=Id, obj=Obj}=State) ->
+    #obj_id_ext{srv_id=SrvId, type=Type} = Id,
     Update2 = Update#{type=>Type},
     case SrvId:object_parse(SrvId, update, Update2) of
         {ok, Update3, UnknownFields} ->
@@ -992,13 +995,7 @@ register(SrvId, Type, ObjId, Path, Opts) ->
     end.
 
 
-%% @private
-get_obj_id_ext(State) ->
-    #?STATE{srv_id=SrvId, type=Type, obj_id=ObjId, path=Path} = State,
-    #obj_id_ext{srv_id=SrvId, type=Type, obj_id=ObjId, path=Path, pid=self()}.
-
-
-%% @private
+% @private
 reply(Reply, #?STATE{}=State) ->
     {reply, Reply, State}.
 
@@ -1014,7 +1011,7 @@ handle(Fun, Args, #?STATE{srv_id=SrvId}=State) ->
 
 
 %% @private
-send_childs(Msg, #?STATE{childs1=Childs}) ->
+send_childs(Msg, #?STATE{childs=Childs}) ->
     lists:foreach(
         fun({_ObjId, {_Type, Pid}}) -> gen_server:cast(Pid, Msg) end,
         maps:to_list(Childs)).
@@ -1050,11 +1047,11 @@ links_remove(event, Link, #?STATE{event_links=Links}=State) ->
 links_down(Mon, #?STATE{usage_links=Usage, event_links=Event}=State) ->
     case nklib_links:down(Mon, Usage) of
         {ok, Link, _Data, Links2} ->
-            {ok, Link, State#?STATE{usage_links=Links2}};
+            {usage, Link, State#?STATE{usage_links=Links2}};
         not_found ->
             case nklib_links:down(Mon, Event) of
                 {ok, _Link, _Data, Links2} ->
-                    {ok, State#?STATE{event_links=Links2}};
+                    {event, State#?STATE{event_links=Links2}};
                 not_found ->
                     not_found
             end

@@ -25,7 +25,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([create/6]).
--export([object_info/0, object_parse/3, object_api_allow/3, object_send_event/2,
+-export([object_info/0, object_parse/3, object_send_event/2,
          object_sync_op/3, object_async_op/2]).
 -export([object_admin_info/0]).
 
@@ -50,20 +50,20 @@
              nkdomain_obj_make:make_opts(), map()) ->
     {ok, #obj_id_ext{}, integer(), [Unknown::binary()]} | {error, term()}.
 
-create(SrvId, Domain, User, SubType, Opts, Data) ->
+create(SrvId, DomainId, UserId, SubType, Opts, Data) ->
     case check_ttl(SubType, Opts) of
         {ok, SecsTTL} ->
             Obj = Opts#{
                 type => ?DOMAIN_TOKEN,
-                parent_id => Domain,
-                created_by => User,
+                parent_id => DomainId,
+                created_by => UserId,
                 subtype => SubType,
                 ttl => SecsTTL,
                 ?DOMAIN_TOKEN => Data
             },
             case nkdomain_obj_make:create(SrvId, Obj) of
-                {ok, ObjIdExt, Unknown} ->
-                    {ok, ObjIdExt, SecsTTL, Unknown};
+                {ok, #obj_id_ext{obj_id=TokenId}, Unknown} ->
+                    {ok, TokenId, SecsTTL, Unknown};
                 {error, Error} ->
                     {error, Error}
             end;
@@ -113,9 +113,6 @@ object_parse(_SrvId, _Mode, _Obj) ->
     any.
 
 
-%% @private
-object_api_allow(_Cmd, _Req, State) ->
-    {true, State}.
 
 
 %% @private

@@ -24,9 +24,8 @@
 -behavior(nkdomain_obj).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([create/3, load_stores/0, get_store/2, find/2, delete_all/2]).
--export([object_info/0, object_admin_info/0, object_parse/3,
-         object_api_syntax/2, object_api_allow/3, object_api_cmd/2]).
+-export([find/1, delete_all/1]).
+-export([object_info/0, object_admin_info/0, object_parse/3, object_es_mapping/0]).
 
 -include("nkdomain.hrl").
 -include_lib("nkapi/include/nkapi.hrl").
@@ -45,58 +44,14 @@
 %% ===================================================================
 
 
-%% @doc
--spec create(nkservice:id(), nkdomain:name(), nkdomain:obj()) ->
-    {ok, nkdomain_obj_lib:make_and_create_reply(), pid()} | {error, term()}.
-
-create(Srv, Name, Obj) ->
-    nkdomain_obj_lib:make_and_create(Srv, Name, Obj#{subtype=>?DOMAIN_CONFIG}, #{}).
-
-
-%% @doc
--spec load_stores() ->
-    ok.
-
-load_stores() ->
-    ProvIds = nkfile_app:get_store_ids(),
-    lists:foreach(
-        fun(Id) ->
-            Store = nkfile_app:get_store(Id),
-            case create(root, Id, #{type=>?DOMAIN_FILE_STORE, parent_id=>root, ?DOMAIN_FILE_STORE=>Store}) of
-                {ok, #{obj_id:=ObjId, path:=Path}, _Pid} ->
-                    ?LLOG(info, "Loaded store ~s (~s)", [Path, ObjId]);
-                {error, object_already_exists} ->
-                    ?LLOG(info, "Store ~s already loaded", [Id]);
-                {error, Error} ->
-                    ?LLOG(warning, "Could not load store ~s: ~p", [Id, Error])
-            end
-        end,
-        ProvIds).
-
-
-%% @doc
-get_store(SrvId, Id) ->
-    case nkdomain_lib:load(SrvId, Id) of
-        #obj_id_ext{pid=Pid} ->
-            case nkdomain_obj:get_obj(Pid) of
-                {ok, #{?DOMAIN_FILE_STORE:=Store}} ->
-                    {ok, Store};
-                {error, _} ->
-                    continue
-            end;
-        _ ->
-            continue
-    end.
+%% @private
+find(SrvId) ->
+    nkdomain_domain_obj:find(SrvId, <<"root">>, #{filters=>#{type=>?DOMAIN_FILE_STORE}}).
 
 
 %% @private
-find(SrvId, Root) ->
-    nkdomain_domain_obj:find(SrvId, Root, #{filters=>#{type=>?DOMAIN_FILE_STORE}}).
-
-
-%% @private
-delete_all(SrvId, Root) ->
-    nkdomain:delete_all_childs_type(SrvId, Root, ?DOMAIN_FILE_STORE).
+delete_all(SrvId) ->
+    nkdomain:delete_all_childs_type(SrvId, <<"root">>, ?DOMAIN_FILE_STORE).
 
 
 
@@ -122,9 +77,9 @@ object_admin_info() ->
     }.
 
 
-%%%% @private
-%%object_es_mapping() ->
-%%    #{}.
+%% @private
+object_es_mapping() ->
+    not_indexed.
 
 
 %% @private
@@ -140,18 +95,6 @@ object_parse(SrvId, _Mode, Obj) ->
     end.
 
 
-%% @private
-object_api_syntax(Cmd, Syntax) ->
-    nkdomain_obj_syntax:syntax(Cmd, ?DOMAIN_FILE_STORE, Syntax).
-
-
-%% @private
-object_api_allow(_Cmd, _Req, State) ->
-    {true, State}.
-
-
-object_api_cmd(Cmd, Req) ->
-    nkdomain_obj_api:api(Cmd, ?DOMAIN_FILE_STORE, Req).
 
 
 

@@ -24,9 +24,9 @@
 -behavior(nkdomain_obj).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([create/3]).
+-export([start/4]).
 -export([object_info/0, object_es_mapping/0, object_parse/3,
-         object_api_allow/3, object_init/1, object_stop/2, object_event/2]).
+         object_init/1, object_stop/2, object_event/2]).
 -export([object_admin_info/0]).
 -export([object_check_active/2]).
 
@@ -41,7 +41,6 @@
 -type create_opts() ::
     #{
         session_id => binary(),
-        domain_id => nkdomain:obj_id(),
         api_server_pid => pid(),
         login_meta => map(),
         local => binary(),
@@ -53,33 +52,31 @@
 %% Public
 %% ===================================================================
 
--spec create(nkservice:id(), nkdomain:obj_id(), create_opts()) ->
-    {ok, nkdomain:id(), pid()} | {error, term()}.
+%% @doc Creates a new session
+-spec start(nkservice:id(), nkdomain:id(), nkdomain:id(), create_opts()) ->
+    {ok, nkdomain:obj_id(), pid()} | {error, term()}.
 
-create(SrvId, UserId, #{api_server_pid:=ApiPid}=Opts) ->
-    Opts2 = Opts#{
-        user_id => UserId
-    },
-    Obj1 = #{
-        type => ?DOMAIN_SESSION,
-        parent_id => UserId,
-        created_by => UserId,
-        active => true,
-        ?DOMAIN_SESSION => maps:with([local, remote, domain_id, user_id, login_meta], Opts2)
-        %meta => maps:with([api_server_pid], Opts2)
-    },
-    Obj2 = case Opts of
-        #{session_id:=SessId} ->
-            Obj1#{obj_id => SessId};
-        _ ->
-            Obj1
-    end,
-    case nkdomain_obj_make:create(SrvId, Obj2, #{meta=>#{api_server_pid=>ApiPid}}) of
-        {ok, #obj_id_ext{obj_id=ObjId, pid=Pid}, _} ->
-            {ok, ObjId, Pid};
-        {error, Error} ->
-            {error, Error}
-    end.
+start(SrvId, DomainId, UserId, Opts) ->
+        Obj1 = #{
+            type => ?DOMAIN_SESSION,
+            parent_id => DomainId,
+            created_by => UserId,
+            active => true,
+            ?DOMAIN_SESSION => maps:with([local, remote, login_meta], Opts)
+        },
+        Obj2 = case Opts of
+            #{session_id:=SessId} ->
+                Obj1#{obj_id => SessId};
+            _ ->
+                Obj1
+        end,
+        #{api_server_pid:=ApiPid} = Opts,
+        case nkdomain_obj_make:create(SrvId, Obj2, #{meta=>#{api_server_pid=>ApiPid}}) of
+            {ok, #obj_id_ext{obj_id=SessId2, pid=Pid}, _} ->
+                {ok, SessId2, Pid};
+            {error, Error} ->
+                {error, Error}
+        end.
 
 
 %% ===================================================================
@@ -109,8 +106,6 @@ object_es_mapping() ->
     #{
         local => #{type => keyword},
         remote => #{type => keyword},
-        domain_id => #{type => keyword},
-        user_id => #{type => keyword},
         login_meta => #{enabled => false}
     }.
 
@@ -120,15 +115,16 @@ object_parse(_SrvId, _Mode, _Obj) ->
     #{
         local => binary,
         remote => binary,
-        domain_id => binary,
-        user_id => binary,
         login_meta => any
     }.
 
 
 %% @private
-object_init(#?STATE{meta=#{api_server_pid:=ApiPid}}=State) ->
+object_init(#?STATE{srv_id=SrvId, id=Id, obj=Obj, meta=#{api_server_pid:=ApiPid}}=State) ->
     %% TODO Link again if moved process
+    #obj_id_ext{obj_id=SessId} = Id,
+    #{created_by:=UserId} = Obj,
+    ok = nkdomain_user_obj:register_session(SrvId, UserId, ?DOMAIN_SESSION, SessId, #{}),
     {ok, nkdomain_obj_util:link_server_api(?MODULE, ApiPid, State)};
 
 object_init(State) ->
@@ -157,9 +153,6 @@ object_event(_Event, State) ->
     {ok, State}.
 
 
-%% @private
-object_api_allow(_Cmd, _Req, State) ->
-    {true, State}.
 
 
 

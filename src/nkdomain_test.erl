@@ -4,9 +4,9 @@
 -include("nkdomain.hrl").
 -include_lib("nkservice/include/nkservice.hrl").
 
--define(WS, "ws://127.0.0.1:9301/s/_api/ws").
+-define(WS, "ws://127.0.0.1:9304/s/_api/ws").
 -define(SRV, sipstorm_v01).
--define(ADMIN_PASS, "1234").
+-define(ADMIN_PASS, "netcomposer").
 
 
 

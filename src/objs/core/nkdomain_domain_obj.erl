@@ -26,7 +26,7 @@
 
 -export([find/3, find_all/3, find_types/3, find_all_types/3, find_childs/3, find_all_childs/3]).
 -export([object_info/0, object_parse/3,
-         object_api_syntax/2, object_api_allow/3, object_api_cmd/2]).
+         object_api_syntax/2, object_api_cmd/2]).
 -export([object_start/1]).
 
 -include("nkdomain.hrl").
@@ -137,9 +137,6 @@ object_api_syntax(Cmd, Syntax) ->
     nkdomain_domain_obj_syntax:api(Cmd, Syntax).
 
 
-%% @private
-object_api_allow(_Cmd, _Req, State) ->
-    {true, State}.
 
 
 %% @private
@@ -148,9 +145,9 @@ object_api_cmd(Cmd, Req) ->
 
 
 %% @private
-object_start(#?STATE{srv_id=SrvId, obj_id=ObjId, path=Path}=Session) ->
+object_start(#?STATE{id=#obj_id_ext{srv_id=SrvId, obj_id=ObjId, path=Path}}=State) ->
     spawn(fun() -> start_dom_childs(SrvId, ObjId, Path) end),
-    {ok, Session}.
+    {ok, State}.
 
 
 %% ===================================================================

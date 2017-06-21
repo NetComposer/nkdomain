@@ -24,12 +24,14 @@
 -behavior(nkdomain_obj).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([create/2, login/3, token/3, check_token/1, check_user_token/2, get_name/2]).
+-export([create/2, auth/3, make_token/5, check_token/2, get_name/2]).
 -export([object_info/0, object_admin_info/0, object_create/2, object_es_mapping/0, object_es_unparse/3,
-         object_parse/3,
-         object_api_syntax/2, object_api_allow/3, object_api_cmd/2, object_send_event/2,
-         object_sync_op/3, object_async_op/2]).
+         object_parse/3, object_api_syntax/2, object_api_cmd/2, object_send_event/2]).
+-export([object_init/1, object_sync_op/3, object_async_op/2, object_link_down/2]).
 -export([fun_user_pass/1, user_pass/1]).
+-export([get_sessions/2, get_sessions/3]).
+-export([register_session/5, unregister_session/3]).
+
 -export_type([events/0]).
 
 -include("nkdomain.hrl").
@@ -47,18 +49,7 @@
 -type events() ::
     {login, SessId::binary(), Meta::map()}.
 
-
--type login_opts() ::
-    #{
-        session_id => binary(),
-        session_type => module(),
-        domain_id => nkdomain:obj_id(),
-        password => binary(),
-        api_server_pid => pid(),
-        local => binary(),
-        remote => binary(),
-        login_meta => map()         % Meta coming from API meta field
-    }.
+-type auth_opts() :: #{password=>binary()}.
 
 
 %% ===================================================================
@@ -79,67 +70,50 @@ create(SrvId, Obj) ->
 
 
 %% @doc
--spec login(nkservice:id(), User::binary(), login_opts()) ->
+-spec auth(nkservice:id(), User::binary(), auth_opts()) ->
     {ok, UserId::nkdomain:obj_id(), SessId::nkdomain:obj_id()} |
     {error, user_not_found|term()}.
 
-login(SrvId, Login, Opts) ->
-    case do_load(SrvId, Login) of
-        {ok, ObjId, UserPid} ->
-            case do_check_pass(UserPid, ObjId, Opts) of
-                {ok, UserObjId} ->
-                    case do_start_session(SrvId, UserObjId, Opts) of
-                        {ok, SessId} ->
-                            Meta = maps:get(login_meta, Opts, #{}),
-                            send_login_event(UserPid, SessId, Meta),
-                            {ok, UserObjId, SessId};
-                        {error, Error} ->
-                            {error, Error}
-                    end;
-                {error, Error} ->
-                    {error, Error}
-            end;
+auth(SrvId, UserId, #{password:=Pass}) ->
+    Pass2 = user_pass(Pass),
+    case nkdomain_obj:sync_op(SrvId, UserId, {?MODULE, check_pass, Pass2}) of
+        {ok, {true, ObjId}} ->
+            {ok, ObjId};
+        {ok, false} ->
+            timer:sleep(?INVALID_PASSWORD_TIME),
+            {error, invalid_password};
+        {error, Error} ->
+            {error, Error}
+    end.
+
+%% @doc
+-spec make_token(nkservice:id(), nkdomain:id(), nkdomain:id(), #{ttl=>integer()}, map()) ->
+    {ok, nkdomain:obj_id(), integer()} | {error, term()}.
+
+make_token(SrvId, DomainId, UserId, TokenOpts, TokenData) ->
+    case nkdomain_token_obj:create(SrvId, DomainId, UserId, ?DOMAIN_USER, TokenOpts, TokenData) of
+        {ok, TokenId, TTL, _Unknown} ->
+            {ok, TokenId, TTL};
         {error, Error} ->
             {error, Error}
     end.
 
 
 %% @doc
--spec token(nkservice:id(), User::binary(), login_opts()) ->
-    {ok, nkdomain:obj_id(), integer()} | {error, user_not_found|term()}.
-
-token(SrvId, Login, Opts) ->
-    case do_load(SrvId, Login) of
-        {ok, ObjId, UserPid} ->
-            case do_check_pass(UserPid, ObjId, Opts) of
-                {ok, UserObjId} ->
-                    do_start_token(SrvId, UserObjId, Opts);
-                {error, Error} ->
-                    {error, Error}
-            end;
-        {error, Error} ->
-            {error, Error}
-    end.
-
-
-%% @doc
-check_token(Token) ->
-    case nkdomain_obj:get_obj(Token) of
-        {ok, #{type:=?DOMAIN_SESSION, ?DOMAIN_SESSION:=Data}} ->
-            case Data of
-                #{user_id:=UserId, domain_id:=DomainId, login_meta:=Meta} ->
-                    UserMeta1 = #{login_meta=>Meta},
-                    UserMeta2 = nkdomain_api_util:add_id(?DOMAIN_DOMAIN, DomainId, UserMeta1),
-                    UserMeta3 = nkdomain_api_util:add_id(?DOMAIN_USER, UserId, UserMeta2),
-                    UserMeta4 = nkdomain_api_util:add_id(?DOMAIN_SESSION, Token, UserMeta3),
-                    {ok, UserId, UserMeta4};
-                _ ->
-                    {error, invalid_session}
-            end;
-        {ok, #{type:=?DOMAIN_TOKEN, subtype:=SubTypes, ?DOMAIN_TOKEN:=Data}} ->
-            case lists:member(?DOMAIN_USER, SubTypes) andalso Data of
-                #{user_id:=UserId, domain_id:=DomainId, login_meta:=Meta} ->
-                    UserMeta1 = #{login_meta=>Meta},
+check_token(SrvId, Token) ->
+    case nkdomain:get_obj(SrvId, Token) of
+        {ok, #{type:=?DOMAIN_SESSION, ?DOMAIN_SESSION:=Data}=Obj} ->
+            #{parent_id:=DomainId, created_by:=UserId} = Obj,
+            UserMeta1 = #{login_meta=>maps:get(login_meta, Data)},
+            UserMeta2 = nkdomain_api_util:add_id(?DOMAIN_DOMAIN, DomainId, UserMeta1),
+            UserMeta3 = nkdomain_api_util:add_id(?DOMAIN_USER, UserId, UserMeta2),
+            UserMeta4 = nkdomain_api_util:add_id(?DOMAIN_SESSION, Token, UserMeta3),
+            {ok, UserId, UserMeta4};
+        {ok, #{type:=?DOMAIN_TOKEN, subtype:=SubTypes, ?DOMAIN_TOKEN:=Data}=Obj} ->
+            case lists:member(?DOMAIN_USER, SubTypes) of
+                true ->
+                    #{parent_id:=DomainId, created_by:=UserId} = Obj,
+                    UserMeta1 = #{login_meta=>maps:get(login_meta, Data)},
                     UserMeta2 = nkdomain_api_util:add_id(?DOMAIN_DOMAIN, DomainId, UserMeta1),
                     UserMeta3 = nkdomain_api_util:add_id(?DOMAIN_USER, UserId, UserMeta2),
                     {ok, UserId, UserMeta3};
@@ -147,33 +121,39 @@ check_token(Token) ->
                     {error, invalid_token}
             end;
         _ ->
-            {error, invalid_token}
+            case catch base64:decode(Token) of
+                Bin when is_binary(Bin) ->
+                    case binary:split(Bin, <<":">>) of
+                        [Login, Pass] ->
+                            case auth(SrvId, Login, #{password=>Pass}) of
+                                {ok, UserId} ->
+                                    {ok, UserId, #{}};
+                                {error, Error} ->
+                                    {error, Error}
+                            end;
+                        _ ->
+                            {error, invalid_token}
+                    end;
+                _ ->
+                    {error, invalid_token}
+            end
     end.
 
 
 %% @doc
-check_user_token(SrvId, Token) ->
-    case catch base64:decode(Token) of
-        Bin when is_binary(Bin) ->
-            case binary:split(Bin, <<":">>) of
-                [Login, Pass] ->
-                    case do_load(SrvId, Login) of
-                        {ok, ObjId, UserPid} ->
-                            case do_check_pass(UserPid, ObjId, #{password=>Pass}) of
-                                {ok, UserObjId} ->
-                                    {ok, UserObjId};
-                                {error, Error} ->
-                                    {error, Error}
-                            end;
-                        {error, Error} ->
-                            {error, Error}
-                    end;
-                _ ->
-                    {error, invalid_token}
-            end;
-        _ ->
-            {error, invalid_token}
-    end.
+-spec get_sessions(nkservice:id(), nkdomain:id()) ->
+    {ok, #{nkdomain:obj_id() => session()}} | {error, term()}.
+
+get_sessions(SrvId, UserId) ->
+    nkdomain_obj:sync_op(SrvId, UserId, {?MODULE, get_sessions}).
+
+
+%% @doc
+-spec get_sessions(nkservice:id(), nkdomain:id(), nkdomain:type()) ->
+    {ok, [{nkomain:obj_id(), Meta::map(), pid()}]} | {error, term()}.
+
+get_sessions(SrvId, UserId, Type) ->
+    nkdomain_obj:sync_op(SrvId, UserId, {?MODULE, get_sessions, nklib_util:to_binary(Type)}).
 
 
 %% @doc
@@ -198,9 +178,28 @@ get_name(Srv, Id) ->
 %%    end.
 
 
+%% @doc
+register_session(SrvId, Id, Type, SessId, Meta) ->
+    nkdomain_obj:sync_op(SrvId, Id, {?MODULE, register_session, Type, SessId, Meta, self()}).
+
+
+%% @doc
+unregister_session(SrvId, Id, SessId) ->
+    nkdomain_obj:async_op(SrvId, Id, {?MODULE, unregister_session, SessId}).
+
+
+
+
 %% ===================================================================
 %% nkdomain_obj behaviour
 %% ===================================================================
+
+-type session() :: {Type::nkdomain:type(), Meta::map(), pid()}.
+
+-record(obj_data, {
+    sessions = #{} :: #{nkdomain:obj_id() => session()}
+}).
+
 
 
 %% @private
@@ -285,9 +284,6 @@ object_api_syntax(Cmd, Syntax) ->
     nkdomain_user_obj_syntax:api(Cmd, Syntax).
 
 
-%% @private
-object_api_allow(_Cmd, _Req, State) ->
-    {true, State}.
 
 
 %% @private
@@ -300,15 +296,23 @@ object_api_cmd(Cmd, Req) ->
     nkdomain_user_obj_api:cmd(Cmd, Req).
 
 
-%% @private
 
+%% @private
+%% We initialize soon in case of early terminate
+object_init(State) ->
+    ObjData = #obj_data{},
+    {ok, set_obj_data(ObjData, State)}.
+
+
+%% @private
 object_sync_op({?MODULE, check_pass, _Pass}, _From, #?STATE{is_enabled=false}=State) ->
     {reply, {error, object_is_disabled}, State};
 
-object_sync_op({?MODULE, check_pass, Pass}, _From, #?STATE{obj=Obj}=State) ->
+object_sync_op({?MODULE, check_pass, Pass}, _From, #?STATE{id=Id, obj=Obj}=State) ->
     case Obj of
         #{?DOMAIN_USER:=#{password:=Pass}} ->
-            {reply, {ok, true}, State};
+            #obj_id_ext{obj_id=ObjId} = Id,
+            {reply, {ok, {true, ObjId}}, State};
         _ ->
             {reply, {ok, false}, State}
     end;
@@ -328,100 +332,55 @@ object_sync_op({?MODULE, get_name}, _From, #?STATE{obj=Obj}=State) ->
     },
     {reply, {ok, Data}, State};
 
+object_sync_op({?MODULE, register_session, Type, SessId, Meta, Pid}, _From, State) ->
+    #obj_data{sessions=Sessions} = get_obj_data(State),
+    case maps:find(SessId, Sessions) of
+        error ->
+            {reply, ok, add_session(Type, SessId, Meta, Pid, State)};
+        {ok, _} ->
+            State2 = rm_session(SessId, State),
+            {reply, ok, add_session(Type, SessId, Meta, Pid, State2)}
+    end;
+
+object_sync_op({?MODULE, get_sessions}, _From, State) ->
+    #obj_data{sessions=Sessions} = get_obj_data(State),
+    {reply, {ok, Sessions}, State};
+
+object_sync_op({?MODULE, get_sessions, Type}, _From, State) ->
+    #obj_data{sessions=Sessions} = get_obj_data(State),
+    Sessions2 = [
+        {SessId, Meta, Pid} ||
+        {SessId, {T, Meta, Pid}} <- maps:to_list(Sessions), T==Type
+    ],
+    {reply, {ok, Sessions2}, State};
+
 object_sync_op(_Op, _From, _State) ->
     continue.
 
 
-%%object_async_op({?MODULE, send_push, Event}, State) ->
-%%    ?LLOG(notice, "sending push: ~p", [Event], State),
-%%    {noreply, State};
+%% @private
+object_async_op({?MODULE, unregister_session, SessId}, State) ->
+    State2 = rm_session(SessId, State),
+    {noreply, State2};
 
 object_async_op(_Op, _State) ->
     continue.
 
 
+%% @private
+object_link_down({usage, {?MODULE, sesison, SessId}}=Link, State) ->
+    ?DEBUG("registered session down: ~s", [SessId], State),
+    State2 = rm_session(SessId, State),
+    {continue, [Link, State2]};
+
+object_link_down(_Link, _State) ->
+    continue.
 
 
 
 %% ===================================================================
 %% Internal
 %% ===================================================================
-
-%%%% @private
-%%sync_op(Srv, Id, Op) ->
-%%    nkdomain_obj_lib:sync_op(Srv, Id, ?DOMAIN_USER, Op, user_not_found).
-
-
-%% @private
-do_load(SrvId, Login) ->
-    case nkdomain_lib:load(SrvId, Login) of
-        #obj_id_ext{type = ?DOMAIN_USER, obj_id=ObjId, pid=Pid} ->
-            {ok, ObjId, Pid};
-        _ ->
-            case SrvId:object_db_search_alias(SrvId, Login) of
-                {ok, N, [{?DOMAIN_USER, ObjId, _Path}|_], _}->
-                    case N > 1 of
-                        true ->
-                            ?LLOG(notice, "duplicated alias for ~s", [Login]);
-                        false ->
-                            ok
-                    end,
-                    case nkdomain_lib:load(SrvId, ObjId) of
-                        #obj_id_ext{type = ?DOMAIN_USER, obj_id=ObjId, pid=Pid} ->
-                            {ok, ObjId, Pid};
-                        _ ->
-                            {error, user_not_found}
-                    end;
-                _ ->
-                    {error, user_not_found}
-            end
-    end.
-
-
-%% @private
-do_check_pass(Pid, ObjId, #{password:=Pass}) ->
-    Pass2 = user_pass(Pass),
-    case nkdomain_obj:sync_op(any, Pid, {?MODULE, check_pass, Pass2}) of
-        {ok, true} ->
-            {ok, ObjId};
-        {ok, false} ->
-            timer:sleep(?INVALID_PASSWORD_TIME),
-            {error, invalid_password};
-        {error, Error} ->
-            {error, Error}
-    end;
-
-do_check_pass(_Pid, _ObjId, _Opts) ->
-    {error, invalid_password}.
-
-
-%% @private
-do_start_session(SrvId, UserId, Opts) ->
-    Opts2 = maps:with([session_id, domain_id, local, remote, login_meta, api_server_pid], Opts),
-    case nkdomain_session_obj:create(SrvId, UserId, Opts2) of
-        {ok, ObjId, _Pid} ->
-            {ok, ObjId};
-        {error, Error} ->
-            {error, Error}
-    end.
-
-
-%% @private
-do_start_token(SrvId, UserId, Opts) ->
-    Opts1 = maps:with([ttl], Opts),
-    Opts2 = Opts1#{referred_id => UserId},
-    Data = maps:with([domain_id, local, remote, login_meta], Opts),
-    case nkdomain_token_obj:create(SrvId, UserId, UserId, ?DOMAIN_USER, Opts2, Data) of
-        {ok, #obj_id_ext{obj_id=TokenId}, TTL, _Unknown} ->
-            {ok, TokenId, TTL};
-        {error, Error} ->
-            {error, Error}
-    end.
-
-
-%% @private
-send_login_event(Pid, SessId, Meta) ->
-    nkdomain_obj:async_op(any, Pid, {send_event, {login, SessId, Meta}}).
 
 
 %% @private
@@ -475,4 +434,35 @@ check_email2(SrvId, Email, Obj) ->
     end.
 
 
+%% @private
+add_session(Type, SessId, Meta, Pid, State) ->
+    #obj_data{sessions=Sessions} = ObjData = get_obj_data(State),
+    Sessions2 = Sessions#{SessId => {Type, Meta, Pid}},
+    ObjData2 = ObjData#obj_data{sessions=Sessions2},
+    State2 = nkdomain_obj:links_add(usage, {?MODULE, session, SessId, Pid}, State),
+    State3 = nkdomain_obj_util:event({session_started, Type, SessId}, State2),
+    set_obj_data(ObjData2, State3).
 
+
+%% @private
+rm_session(SessId, State) ->
+    #obj_data{sessions=Sessions} = ObjData = get_obj_data(State),
+    case maps:find(SessId, Sessions) of
+        {ok, {_Type, _Meta, Pid}} ->
+            Sessions2 = maps:remove(SessId, Sessions),
+            ObjData2 = ObjData#obj_data{sessions=Sessions2},
+            State2 = nkdomain_obj:links_remove(usage, {?MODULE, session, SessId, Pid}, State),
+            set_obj_data(ObjData2, State2);
+        error ->
+            State
+    end.
+
+
+%% @private
+get_obj_data(State) ->
+    nkdomain_obj_util:get_obj_data(State).
+
+
+%% @private
+set_obj_data(Data, State) ->
+    nkdomain_obj_util:set_obj_data(Data, State).

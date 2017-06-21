@@ -32,7 +32,7 @@
 -export([object_syntax/1, object_parse/3]).
 -export([object_init/1, object_terminate/2, object_stop/2,
          object_event/2, object_reg_event/3, object_sync_op/3, object_async_op/2,
-         object_save/1, object_delete/1, object_archive/1,
+         object_save/1, object_delete/1, object_archive/1, object_link_down/2,
          object_handle_call/3, object_handle_cast/2, object_handle_info/2]).
 -export([object_db_init/1, object_db_read/2, object_db_save/2, object_db_delete/2]).
 -export([object_db_find_obj/2, object_db_search/2, object_db_search_alias/2,
@@ -43,7 +43,6 @@
 -export([service_api_syntax/2, service_api_allow/2, service_api_cmd/2]).
 -export([api_server_http_auth/2, api_server_reg_down/3]).
 -export([service_init/2, service_handle_cast/2, service_handle_info/2]).
--export([nkmail_get_provider/2, nkfile_get_store/2]).
 
 
 -define(LLOG(Type, Txt, Args), lager:Type("NkDOMAIN Callbacks: "++Txt, Args)).
@@ -111,6 +110,8 @@ error(service_down)                     -> "Service is down";
 error(session_already_present)          -> "Session is already present";
 error(session_not_found)                -> "Session not found";
 error(session_is_disabled)              -> "Session is disabled";
+error(store_id_invalid)                 -> "Invalid Store Id";
+error(store_id_missing)                 -> "Missing Store Id";
 error(user_is_disabled) 		        -> "User is disabled";
 error(user_unknown)                     -> "Unknown user";
 
@@ -174,7 +175,8 @@ nkservice_rest_http(SrvId, post, File, Req, State) ->
         [<<"_file">>|Rest] ->
             Domain = nklib_util:bjoin(lists:reverse(Rest), <<"/">>),
             case nkdomain_file_obj:http_post(SrvId, Domain, Req) of
-                {ok, Reply, _Pid} ->
+                {ok, #obj_id_ext{obj_id=ObjId, path=Path}, _Unknown} ->
+                    Reply = #{obj_id=>ObjId, path=>Path},
                     nkservice_rest_http:reply_json({ok, Reply}, Req, State);
                 {error, Error} ->
                     nkservice_rest_http:reply_json({error, Error}, Req, State)
@@ -451,8 +453,9 @@ object_reg_event(Link, Event, State) ->
 
 object_sync_op(Op, From, State) ->
     case call_module(object_sync_op, [Op, From], State) of
-        {ok, _State} ->
-            continue;
+        {ok, State2} ->
+            % It is probably not exported
+            {continue, [Op, From, State2]};
         Other ->
             Other
     end.
@@ -466,11 +469,13 @@ object_sync_op(Op, From, State) ->
 
 object_async_op(Op, State) ->
     case call_module(object_async_op, [Op], State) of
-        {ok, _State} ->
-            continue;
+        {ok, State2} ->
+            % It is probably not exported
+            {continue, [Op, State2]};
         Other ->
             Other
     end.
+
 
 
 %% @doc Called to save the object to disk
@@ -499,7 +504,7 @@ object_save(#?STATE{srv_id=SrvId}=State) ->
 -spec object_delete(state()) ->
     {ok, state(), Meta::map()} | {error, term(), state()}.
 
-object_delete(#?STATE{srv_id=SrvId, obj_id=ObjId}=State) ->
+object_delete(#?STATE{srv_id=SrvId, id=#obj_id_ext{obj_id=ObjId}}=State) ->
     case call_module(object_delete, [], State) of
         {ok, State2} ->
             case SrvId:object_db_delete(SrvId, ObjId) of
@@ -517,7 +522,7 @@ object_delete(#?STATE{srv_id=SrvId, obj_id=ObjId}=State) ->
 -spec object_archive(state()) ->
     {ok, state()} | {error, term(), state()}.
 
-object_archive(#?STATE{srv_id=_SrvId, obj_id=_ObjId, obj=_Obj}=State) ->
+object_archive(#?STATE{srv_id=_SrvId}=State) ->
     {ok, State}.
 
 %%    {ok, State2} = call_module(object_restore, [], State),
@@ -534,6 +539,12 @@ object_archive(#?STATE{srv_id=_SrvId, obj_id=_ObjId, obj=_Obj}=State) ->
 %%            {error, Error, State2}
 %%    end.
 
+%% @doc Called when a linked process goes down
+-spec object_link_down(event|{child, nkdomain:obj_id()}|{usage, nklib_links:link()}, state()) ->
+    {ok, state()}.
+
+object_link_down(_Type, State) ->
+    {ok, State}.
 
 
 %% @doc
@@ -735,7 +746,12 @@ service_api_allow(#nkreq{cmd = <<"objects/", _/binary>>, user_id = <<>>}, State)
     {false, State};
 
 service_api_allow(#nkreq{cmd = <<"objects/", _/binary>>, req_state={_Type, Module, Cmd}}=Req, State) ->
-    nklib_util:apply(Module, object_api_allow, [Cmd, Req, State]);
+    case nklib_util:apply(Module, object_api_allow, [Cmd, Req, State]) of
+        not_exported ->
+            {true, State};
+        Other ->
+            Other
+    end;
 
 service_api_allow(#nkreq{cmd = <<"session", _/binary>>}, State) ->
     {true, State};
@@ -804,7 +820,7 @@ api_server_http_auth(#nkreq{cmd = <<"objects/user/login">>}, _HttpReq) ->
 api_server_http_auth(#nkreq{srv_id=SrvId}, HttpReq) ->
     Headers = nkapi_server_http:get_headers(HttpReq),
     Token = nklib_util:get_value(<<"x-netcomposer-auth">>, Headers, <<>>),
-    case nkdomain_util:get_http_auth(SrvId, Token) of
+    case nkdomain_user_obj:check_token(SrvId, Token) of
         {ok, UserId, Meta} ->
             {true, UserId, Meta, #{}};
         {error, Error} ->
@@ -845,16 +861,8 @@ plugin_config(Config, _Service) ->
 
 
 %% @private
-service_init(_Service, #{id:=SrvId}=State) ->
-    case SrvId:object_db_init(State) of
-        {ok, State2} ->
-%%            gen_server:cast(self(), nkdomain_load_domain),
-            {ok, State2};
-        {error, Error} ->
-            ?LLOG(warning, "could not start db store: ~p", [Error]),
-            {stop, Error}
-    end.
-
+service_init(_Service, State) ->
+    nkdomain_service:init(State).
 
 
 %% @private
@@ -893,22 +901,6 @@ service_handle_info({'DOWN', _Ref, process, Pid, _Reason}, State) ->
     end;
 service_handle_info(_Msg, _State) ->
     continue.
-
-
-%% ===================================================================
-%% NkMAIL
-%% ===================================================================
-
-nkmail_get_provider(SrvId, Id) ->
-    nkdomain_mail_provider_obj:get_provider(SrvId, Id).
-
-
-%% ===================================================================
-%% NkFILE
-%% ===================================================================
-
-nkfile_get_store(SrvId, Id) ->
-    nkdomain_file_store_obj:get_store(SrvId, Id).
 
 
 %% ===================================================================

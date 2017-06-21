@@ -24,9 +24,8 @@
 -behavior(nkdomain_obj).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([create/3, load_providers/0, get_provider/2, find/2, delete_all/2]).
--export([object_info/0, object_admin_info/0, object_parse/3,
-         object_api_syntax/2, object_api_allow/3, object_api_cmd/2]).
+-export([find/1, delete_all/1]).
+-export([object_info/0, object_admin_info/0, object_parse/3, object_es_mapping/0]).
 
 -include("nkdomain.hrl").
 -include_lib("nkmail/include/nkmail.hrl").
@@ -46,57 +45,14 @@
 %% ===================================================================
 
 
-%% @doc
--spec create(nkservice:id(), nkdomain:name(), nkdomain:obj()) ->
-    {ok, nkdomain_obj_lib:make_and_create_reply(), pid()} | {error, term()}.
-
-create(Srv, Name, Obj) ->
-    nkdomain_obj_lib:make_and_create(Srv, Name, Obj#{subtype=>?DOMAIN_CONFIG}, #{}).
-
-
-%% @doc
--spec load_providers() ->
-    ok.
-
-load_providers() ->
-    ProvIds = nkmail_app:get_provider_ids(),
-    lists:foreach(
-        fun(Id) ->
-            Provider = nkmail_app:get_provider(Id),
-            case create(root, Id, #{type=>?DOMAIN_MAIL_PROVIDER, parent_id=>root, ?DOMAIN_MAIL_PROVIDER=>Provider}) of
-                {ok, #{obj_id:=ObjId, path:=Path}, _Pid} ->
-                    ?LLOG(info, "Loaded provider ~s (~s)", [Path, ObjId]);
-                {error, object_already_exists} ->
-                    ?LLOG(info, "Provider ~s already loaded", [Id]);
-                {error, Error} ->
-                    ?LLOG(warning, "Could not load provider ~s: ~p", [Id, Error])
-            end
-        end,
-        ProvIds).
-
-
-%% @doc
-get_provider(SrvId, Id) ->
-    case nkdomain_lib:load(SrvId, Id) of
-        #obj_id_ext{pid=Pid} ->
-            case nkdomain_obj:get_obj(Pid) of
-                {ok, #{?DOMAIN_MAIL_PROVIDER:=Provider}} ->
-                    {ok, Provider};
-                {error, _} ->
-                    continue
-            end;
-        _ ->
-            continue
-    end.
-
 %% @private
-find(SrvId, Root) ->
-    nkdomain_domain_obj:find(SrvId, Root, #{filters=>#{type=>?DOMAIN_MAIL_PROVIDER}}).
+find(SrvId) ->
+    nkdomain_domain_obj:find(SrvId, <<"root">>, #{filters=>#{type=>?DOMAIN_MAIL_PROVIDER}}).
 
 
 %% @private
-delete_all(SrvId, Root) ->
-    nkdomain:delete_all_childs_type(SrvId, Root, ?DOMAIN_MAIL_PROVIDER).
+delete_all(SrvId) ->
+    nkdomain:delete_all_childs_type(SrvId, <<"root">>, ?DOMAIN_MAIL_PROVIDER).
 
 
 
@@ -122,9 +78,9 @@ object_admin_info() ->
     }.
 
 
-%%%% @private
-%%object_es_mapping() ->
-%%    #{}.
+%% @private
+object_es_mapping() ->
+    not_indexed.
 
 
 %% @private
@@ -136,21 +92,6 @@ object_parse(SrvId, _Mode, Obj) ->
         {error, Error} ->
             {error, Error}
     end.
-
-
-%% @private
-object_api_syntax(Cmd, Syntax) ->
-    nkdomain_obj_syntax:syntax(Cmd, ?DOMAIN_MAIL_PROVIDER, Syntax).
-
-
-%% @private
-object_api_allow(_Cmd, _Req, State) ->
-    {true, State}.
-
-
-object_api_cmd(Cmd, Req) ->
-    nkdomain_obj_api:api(Cmd, ?DOMAIN_MAIL_PROVIDER, Req).
-
 
 
 

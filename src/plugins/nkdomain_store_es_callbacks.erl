@@ -177,6 +177,9 @@ object_es_unparse(SrvId, #{type:=Type}=Obj) ->
     case SrvId:object_es_mapping(SrvId, Type) of
         not_exported ->
             BaseMap4#{Type => #{}};
+        not_indexed ->
+            ModData = maps:get(Type, Obj, #{}),
+            BaseMap4#{Type => ModData};
         Map when is_map(Map) ->
             case SrvId:object_apply(Type, object_es_unparse, [SrvId, Obj, BaseMap4]) of
                 not_exported ->
@@ -201,7 +204,7 @@ object_es_unparse(SrvId, #{type:=Type}=Obj) ->
 
 object_db_init(#{id:=SrvId}=State) ->
     case SrvId:config_nkdomain() of
-        {elastic, IndexOpts, EsOpts} ->
+        #nkdomain_cache{db_store={elastic, IndexOpts, EsOpts}} ->
             case nkdomain_store_es_util:db_init(IndexOpts, EsOpts) of
                 ok ->
                     {ok, State};
@@ -403,7 +406,7 @@ parse_clusters(SrvId, [#{class:=nkelastic}=Data|Rest], DbStore, Config) ->
                 refresh => true
             },
             % nkdomain_store will be captured by nkdomain and generate cache
-            Config2#{nkdomain_store=>{elastic, IndexOpts, EsOpts}};
+            Config2#{nkdomain_db_store=>{elastic, IndexOpts, EsOpts}};
         _ ->
             Config2
     end,

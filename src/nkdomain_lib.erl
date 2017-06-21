@@ -44,15 +44,29 @@
     #obj_id_ext{} | {error, object_not_found|term()}.
 
 find(SrvId, Id) ->
-    case find_loaded(SrvId, Id) of
+    Id2 = to_bin(Id),
+    case find_loaded(SrvId, Id2) of
         #obj_id_ext{}=ObjIdExt ->
             ObjIdExt;
         not_found ->
-            case SrvId:object_db_find_obj(SrvId, Id) of
+            case SrvId:object_db_find_obj(SrvId, Id2) of
                 {ok, Type, ObjId, Path} ->
                     #obj_id_ext{srv_id=SrvId, type=Type, obj_id=ObjId, path=Path};
-                {error, Error} ->
-                    {error, Error}
+                {error, object_not_found} ->
+                    case SrvId:object_db_search_alias(SrvId, Id2) of
+                        {ok, 0, []} ->
+                            {error, object_not_found};
+                        {ok, N, [{Type, ObjId, Path}|_]}->
+                            case N > 1 of
+                                true ->
+                                    lager:notice("NkDOMAIN: duplicated alias for ~s", [Id]);
+                                false ->
+                                    ok
+                            end,
+                            #obj_id_ext{srv_id=SrvId, type=Type, obj_id=ObjId, path=Path};
+                        {error, Error} ->
+                            {error, Error}
+                    end
             end
     end.
 

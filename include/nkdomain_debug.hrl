@@ -21,6 +21,8 @@
 -ifndef(NKDOMAIN_DEBUG_HRL_).
 -define(NKDOMAIN_DEBUG_HRL_, 1).
 
+-include("nkdomain.hrl").
+
 -define(DEBUG(Txt, Args, State),
     case erlang:get(object_debug) of
         true -> ?LLOG(debug, Txt, Args, State);
@@ -30,14 +32,14 @@
 -define(LLOG(Type, Txt, Args, State),
     lager:Type(
         [
-            {obj_id, State#?STATE.obj_id},
-            {type, State#?STATE.type},
-            {path, State#?STATE.path}
+            {obj_id, State#?STATE.id#obj_id_ext.obj_id},
+            {type, State#?STATE.id#obj_id_ext.type},
+            {path, State#?STATE.id#obj_id_ext.path}
         ],
         "NkDOMAIN Obj ~s (~s) " ++ Txt,
         [
-            State#?STATE.path,
-            State#?STATE.obj_id | Args
+            State#?STATE.id#obj_id_ext.path,
+            State#?STATE.id#obj_id_ext.obj_id | Args
         ]
     )).
 

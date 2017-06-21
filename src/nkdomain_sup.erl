@@ -42,13 +42,7 @@ start_link() ->
             permanent,
             5000,
             worker,
-            [nkdomain_all_types]},
-        {nkdomain_store,
-            {nkdomain_store, start_link, []},
-            permanent,
-            5000,
-            worker,
-            [nkdomain_store]}
+            [nkdomain_all_types]}
     ],
     supervisor:start_link({local, ?MODULE}, ?MODULE, {{one_for_one, 10, 60}, ChildsSpec}).
 

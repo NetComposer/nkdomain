@@ -33,21 +33,27 @@
 
 -define(STATE, nkstate_v1).
 
--record(nkstate_v1, {
+-record(obj_id_ext, {
     srv_id :: nkservice:id(),
+    type :: nkdomain:type(),
     obj_id :: nkdomain:obj_id(),
     path :: nkdomain:path(),
-    type :: nkdomain:type(),
+    pid :: pid() | undefined
+}).
+
+
+-record(nkstate_v1, {
+    srv_id :: nkservice:id(),
+    id :: #obj_id_ext{},
     module :: module(),
     parent_id :: nkdomain:obj_id(),
-    name :: nkdomain:name(),
+    obj_name :: nkdomain:name(),
     object_info :: nkdomain_obj:object_info(),
     obj :: nkdomain:obj(),
     is_dirty :: boolean(),
     is_enabled :: boolean(),
-    %is_created :: boolean(),
     started :: nklib_util:m_timestamp(),
-    childs1 :: #{nkdomain:obj_id() => {nkdomain:type(), pid()}},
+    childs :: #{nkdomain:obj_id() => {nkdomain:type(), pid()}},
     usage_links :: nklib_links:link(),
     event_links :: nklib_links:link(),
     status :: nkdomain_obj:status(),
@@ -64,14 +70,11 @@
 }).
 
 
--record(obj_id_ext, {
-    srv_id :: nkservice:id(),
-    type :: nkdomain:type(),
-    obj_id :: nkdomain:obj_id(),
-    path :: nkdomain:path(),
-    pid :: pid() | undefined
+-record(nkdomain_cache, {
+    db_store :: binary(),
+    file_store :: binary,
+    email_provider :: binary()
 }).
-
 
 
 

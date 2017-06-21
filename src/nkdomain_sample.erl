@@ -12,11 +12,11 @@
 %%-define(WS, "wss://v1.netc.io/s/v03/_api/ws").
 
 -define(SRV, sipstorm_v01).
-
+-define(ADMIN_PASS, "netcomposer").
 
 
 login() ->
-    login(admin, "netcomposer").
+    login(admin, ?ADMIN_PASS).
 
 login(User, Pass) ->
     Fun = fun ?MODULE:api_client_fun/2,
@@ -277,19 +277,19 @@ file_get(FileId) ->
     cmd(<<"objects/file/get">>, #{id=>FileId}).
 
 
-file_create_inline() ->
+file_create_inline(Name) ->
     File = #{content_type=><<"plain/text">>, body=>base64:encode(<<"1234">>)},
-    {ok, #{<<"obj_id">>:=Id}} = cmd(<<"objects/file/create">>, #{tags=>[a, b], file=>File}),
+    {ok, #{<<"obj_id">>:=Id}} = cmd(<<"objects/file/create">>, #{tags=>[a, b], name=>Name, file=>File}),
     Id.
 
-file_create_inline_secure() ->
+file_create_inline_secure(Name) ->
     File = #{content_type=><<"plain/text">>, body=>base64:encode(<<"1234">>), store_id=>"/file.stores/local_secure"},
-    {ok, #{<<"obj_id">>:=Id}} = cmd(<<"objects/file/create">>, #{tags=>[a, b], file=>File}),
+    {ok, #{<<"obj_id">>:=Id}} = cmd(<<"objects/file/create">>, #{name=>Name, file=>File}),
     Id.
 
-file_create_inline_s3_secure() ->
+file_create_inline_s3_secure(Name) ->
     File = #{content_type=><<"plain/text">>, body=>base64:encode(<<"1234">>), store_id=>"/file.stores/carlos.s3_secure"},
-    {ok, #{<<"obj_id">>:=Id}} = cmd(<<"objects/file/create">>, #{tags=>[a, b], file=>File}),
+    {ok, #{<<"obj_id">>:=Id}} = cmd(<<"objects/file/create">>, #{name=>Name, file=>File}),
     Id.
 
 
@@ -338,7 +338,7 @@ mail_config_create(_Id) ->
 
 mail_send1() ->
     Msg = #{
-        provider => <<"/mail.providers/info.netcomposer">>,
+        provider_id => <<"/mail.providers/info.netcomposer">>,
         % from => "My test <info.netcomposer@gmail.com>",
         to => <<"My dest <carlosj.gf@gmail.com>, <listas1@maycar.net>">>,
         subject => <<"sub2">>,
@@ -353,13 +353,13 @@ mail_send2() ->
     {ok, F2} = file:read_file(filename:join(Dir, "sample.pdf")),
 
     Msg = #{
-        provider => <<"/mail.providers/info.netcomposer">>,
+        provider_id => <<"/mail.providers/info.netcomposer">>,
         from => <<"My test <info.netcomposer@gmail.com>">>,
         to => <<"My dest <carlosj.gf@gmail.com>, <listas1@maycar.net>">>,
         subject => <<"sub3">>,
         content_type => <<"text/html">>,
         %%  body => "This is <strong>msg3</strong> øÿ áñ"
-        body => <<"This is <strong>msg3</strong> øÿ áéíóúñ">>,
+        body => <<"This is <strong>msg3</strong> øÿ áéíóúñ"/utf8>>,
         attachments => [
             #{
                 name => <<"File1">>,
@@ -416,7 +416,7 @@ cmd(Pid, Cmd, Data) ->
 http_login() ->
     Data = #{
         id => <<"admin">>,
-        password=> <<"1234">>,
+        password=> ?ADMIN_PASS,
         ttl => 60,
         meta => #{b=>2}
     },

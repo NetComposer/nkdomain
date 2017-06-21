@@ -36,25 +36,29 @@
 %% @doc WS login
 cmd(<<"login">>, #nkreq{conn_id=Pid, session_module=nkapi_server, user_meta=UserMeta}=Req) ->
     #nkreq{data=#{id:=User}=Data, srv_id=SrvId, session_id=SessId, session_meta=SessMeta} = Req,
+    Auth = #{password => maps:get(password, Data, <<>>)},
     case get_domain(Req) of
         {ok, DomainId} ->
-            LoginOpts1 = maps:with([local, remote], SessMeta),
-            LoginMeta = maps:get(meta, Data, #{}),
-            LoginOpts2 = LoginOpts1#{
-                session_id => SessId,
-                domain_id => DomainId,
-                password => maps:get(password, Data, <<>>),
-                login_meta => LoginMeta,
-                api_server_pid => Pid
-            },
-            case nkdomain_user_obj:login(SrvId, User, LoginOpts2) of
-                {ok, UserId, SessId} ->
-                    Reply = #{obj_id=>UserId, session_id=>SessId},
-                    UserMeta1 = UserMeta#{login_meta=>LoginMeta},
-                    UserMeta2 = nkdomain_api_util:add_id(?DOMAIN_DOMAIN, DomainId, UserMeta1),
-                    UserMeta3 = nkdomain_api_util:add_id(?DOMAIN_USER, UserId, UserMeta2),
-                    UserMeta4 = nkdomain_api_util:add_id(?DOMAIN_SESSION, SessId, UserMeta3),
-                    {login, Reply, UserId, UserMeta4};
+            case nkdomain_user_obj:auth(SrvId, User, Auth) of
+                {ok, UserId} ->
+                    LoginMeta = maps:get(meta, Data, #{}),
+                    SessOpts1 = maps:with([local, remote], SessMeta),
+                    SessOpts2 = SessOpts1#{
+                        session_id => SessId,
+                        login_meta => LoginMeta,
+                        api_server_pid => Pid
+                    },
+                    case nkdomain_session_obj:start(SrvId, DomainId, UserId, SessOpts2) of
+                        {ok, SessId, _Pid} ->
+                            Reply = #{user_id=>UserId, session_id=>SessId},
+                            UserMeta1 = UserMeta#{login_meta=>LoginMeta},
+                            UserMeta2 = nkdomain_api_util:add_id(?DOMAIN_DOMAIN, DomainId, UserMeta1),
+                            UserMeta3 = nkdomain_api_util:add_id(?DOMAIN_USER, UserId, UserMeta2),
+                            UserMeta4 = nkdomain_api_util:add_id(?DOMAIN_SESSION, SessId, UserMeta3),
+                            {login, Reply, UserId, UserMeta4};
+                        {error, Error} ->
+                            {error, Error}
+                    end;
                 {error, Error} ->
                     {error, Error}
             end;
@@ -65,22 +69,23 @@ cmd(<<"login">>, #nkreq{conn_id=Pid, session_module=nkapi_server, user_meta=User
 %% @doc HTTP login
 cmd(<<"login">>, #nkreq{session_module=nkapi_server_http}=Req) ->
     #nkreq{data=#{id:=User}=Data, srv_id=SrvId, session_id=SessId, session_meta=SessMeta} = Req,
+    Auth = #{password => maps:get(password, Data, <<>>)},
     case get_domain(Req) of
         {ok, DomainId} ->
-            LoginMeta1 = maps:with([local, remote], SessMeta),
-            LoginMeta2 = LoginMeta1#{
-                session_id => SessId,
-                domain_id => DomainId,
-                password => maps:get(password, Data, <<>>),
-                login_meta => maps:get(meta, Data, #{})
-            },
-            LoginMeta3 = case Data of
-                #{ttl:=TTL} -> LoginMeta2#{ttl=>TTL};
-                _ -> LoginMeta2
-            end,
-            case nkdomain_user_obj:token(SrvId, User, LoginMeta3) of
-                {ok, TokenId, TTL2} ->
-                    {ok, #{token_id=>TokenId, ttl=>TTL2}};
+            case nkdomain_user_obj:auth(SrvId, User, Auth) of
+                {ok, UserId} ->
+                    TokenData1 = maps:with([local, remote], SessMeta),
+                    TokenData2 = TokenData1#{
+                        session_id => SessId,
+                        login_meta => maps:get(meta, Data, #{})
+                    },
+                    TokenOpts = maps:with([ttl], Data),
+                    case nkdomain_user_obj:make_token(SrvId, DomainId, UserId, TokenOpts, TokenData2) of
+                        {ok, TokenId, TTL} ->
+                            {ok, #{token_id=>TokenId, ttl=>TTL}};
+                        {error, Error} ->
+                            {error, Error}
+                    end;
                 {error, Error} ->
                     {error, Error}
             end;

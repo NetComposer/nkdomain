@@ -38,14 +38,14 @@
 %% @doc
 get_opts(SrvId) ->
     case SrvId:config_nkdomain() of
-        {elastic, _IndexOpts, EsOpts} -> {ok, EsOpts};
+        #nkdomain_cache{db_store={elastic, _IndexOpts, EsOpts}} -> {ok, EsOpts};
         _ -> not_found
     end.
 
 
 %% @doc
 reload(SrvId) ->
-    {elastic, IndexOpts, EsOpts} = SrvId:config_nkdomain(),
+    #nkdomain_cache{db_store={elastic, IndexOpts, EsOpts}} = SrvId:config_nkdomain(),
     db_init(IndexOpts, EsOpts).
 
 
@@ -81,6 +81,8 @@ do_get_mappings(SrvId, [Module|Rest], Acc) ->
     #{type:=Type} = Module:object_info(),
     Mapping = case SrvId:object_es_mapping(SrvId, Type) of
         not_exported ->
+            #{enabled => false};
+        not_indexed ->
             #{enabled => false};
         Map when is_map(Map) ->
             #{

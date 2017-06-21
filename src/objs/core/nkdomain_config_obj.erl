@@ -26,7 +26,7 @@
 
 -export([find_configs/3]).
 -export([object_info/0, object_parse/3,
-         object_api_syntax/2, object_api_allow/3, object_api_cmd/2]).
+         object_api_syntax/2, object_api_cmd/2]).
 -export([object_admin_info/0]).
 
 -include("nkdomain.hrl").
@@ -109,9 +109,6 @@ object_api_syntax(Cmd, Syntax) ->
     nkdomain_obj_syntax:syntax(Cmd, ?DOMAIN_CONFIG, Syntax).
 
 
-%% @private
-object_api_allow(_Cmd, _Req, State) ->
-    {true, State}.
 
 
 %% @private

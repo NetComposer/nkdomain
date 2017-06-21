@@ -24,8 +24,8 @@
 -behavior(nkdomain_obj).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([object_info/0, object_admin_info/0, object_parse/3,
-         object_api_syntax/2, object_api_allow/3, object_api_cmd/2]).
+-export([object_info/0, object_admin_info/0, object_parse/3, object_es_mapping/0,
+         object_api_syntax/2, object_api_cmd/2]).
 
 -include_lib("nkdomain.hrl").
 -include_lib("nkservice/include/nkservice.hrl").
@@ -66,9 +66,9 @@ object_admin_info() ->
 
 
 
-%%%% @private
-%%object_es_mapping() ->
-%%    #{}.
+%% @private
+object_es_mapping() ->
+    not_indexed.
 
 
 %% @private
@@ -86,15 +86,15 @@ object_api_syntax(_Cmd, Syntax) ->
 
 
 %% @private
-object_api_allow(_Cmd, _Req, State) ->
-    {true, State}.
-
-
-%% @private
 object_api_cmd(<<"send">>, #nkreq{srv_id=SrvId, data=Data}) ->
-    case nkmail:send(SrvId, Data) of
-        {ok, Meta} ->
-            {ok, #{result=>Meta}};
+    case get_provider(SrvId, Data) of
+        {ok, _, Provider} ->
+            case nkmail:send(SrvId, Provider, Data) of
+                {ok, Meta} ->
+                    {ok, #{result=>Meta}};
+                {error, Error} ->
+                    {error, Error}
+            end;
         {error, Error} ->
             {error, Error}
     end;
@@ -108,6 +108,35 @@ object_api_cmd(_Cmd, _Req) ->
 %% ===================================================================
 %% Internal
 %% ===================================================================
+
+
+
+%% @private
+get_provider(SrvId, #{provider_id:=ProviderId}) ->
+    do_get_provider(SrvId, ProviderId);
+
+get_provider(SrvId, _Obj) ->
+    case SrvId:config_nkdomain() of
+        #nkdomain_cache{email_provider=ProviderId} ->
+            do_get_provider(SrvId, ProviderId);
+        _ ->
+            {error, provider_id_missing}
+    end.
+
+
+%% @private
+do_get_provider(SrvId, ProviderId) ->
+    case nkdomain_lib:load(SrvId, ProviderId) of
+        #obj_id_ext{obj_id=ProviderObjId, type = ?DOMAIN_MAIL_PROVIDER} ->
+            case nkdomain:get_obj_type(SrvId, ProviderObjId) of
+                {ok, Data} ->
+                    {ok, ProviderObjId, Data};
+                _ ->
+                    {error, provider_id_invalid}
+            end;
+        _ ->
+            {error, provider_id_invalid}
+    end.
 
 
 
