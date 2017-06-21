@@ -204,14 +204,15 @@ table_filter([{<<"created_time">>, Data}|Rest], Acc, #{timezone_offset:=Offset}=
     {_,{H,M,S}} = nklib_util:timestamp_to_gmt(SNow),
     Now = SNow - H*3600 - M*60 - S,
     OffsetSecs = Offset * 60,
-    io:format("Filter: ~w~nNow: ~w~n", [Data, Now]),
+    % Now is the server time for today at 00:00 in seconds
+    % OffsetSecs is difference between the client time and the server in seconds
     case Data of
         <<"today">> ->
-            Now2 = (Now - 24*60*60 + OffsetSecs)*1000,
+            Now2 = (Now + OffsetSecs)*1000,
             Filter = list_to_binary([">", nklib_util:to_binary(Now2)]);
         <<"yesterday">> ->
-            Now2 = (Now - 2*24*60*60 + OffsetSecs)*1000,
-            Now3 = (Now - 24*60*60 + OffsetSecs)*1000,
+            Now2 = (Now - 24*60*60 + OffsetSecs)*1000,
+            Now3 = (Now + OffsetSecs)*1000,
             Filter = list_to_binary(["<", nklib_util:to_binary(Now2), "-", nklib_util:to_binary(Now3),">"]);
         <<"last_7">> ->
             Now2 = (Now - 7*24*60*60 + OffsetSecs)*1000,
