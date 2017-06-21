@@ -36,11 +36,11 @@
 -export([get_index/1, get_archive_index/1, get_mappings/2, get_templates/1]).
 
 
--define(ES_INDEX, <<"nkobjects_v2">>).
+-define(ES_INDEX, <<"nkobjects_v3">>).
 -define(ES_ALIAS, <<"nkobjects">>).
 -define(ES_TYPE, <<"objs">>).
 -define(ES_LOG_TEMPLATE, <<"nkdomain_objs">>).
--define(ES_ARCHIVE_INDEX, <<"nkarchive_v1">>).
+-define(ES_ARCHIVE_INDEX, <<"nkarchive_v3">>).
 
 %%-define(LLOG(Type, Txt, Args),
 %%    lager:Type("NkDOMAIN Store ES "++Txt, Args)).
