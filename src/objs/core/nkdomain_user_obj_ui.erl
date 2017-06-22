@@ -103,11 +103,11 @@ table(Session) ->
         on_click => [
             #{
                 id => <<"fa-times">>,
-                type => enable
+                type => disable
             },
             #{
                 id => <<"fa-check">>,
-                type => disable
+                type => enable
             },
             #{
                 id => <<"fa-trash">>,
@@ -253,6 +253,10 @@ table_iter([Entry|Rest], Pos, Acc) ->
         true -> <<"fa-times">>;
         false -> <<"fa-check">>
     end,
+    Css = case maps:get(<<"enabled">>, Entry, true) of
+        true -> <<"">>;
+        false -> <<"webix_cell_disabled">>
+    end,
     {ok, Domain, _ShortName} = nkdomain_util:get_parts(?DOMAIN_USER, Path),
     Data = #{
         pos => Pos,
@@ -263,7 +267,8 @@ table_iter([Entry|Rest], Pos, Acc) ->
         email => Email,
         created_by => CreatedBy,
         created_time => CreatedTime,
-        enabled_icon => Enabled
+        enabled_icon => Enabled,
+        <<"$css">> => Css
     },
     table_iter(Rest, Pos+1, [Data|Acc]).
 
