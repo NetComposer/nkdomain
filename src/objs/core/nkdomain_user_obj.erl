@@ -241,7 +241,7 @@ object_mapping() ->
         },
         email => #{type => keyword},
         password => #{type => keyword},
-        avatar_t => #{type => binary, store => true},
+        %avatar_t => #{type => binary, store => true},
         phone_t => #{type => keyword},
         address_t => #{type => text}
     }.
@@ -254,7 +254,7 @@ object_parse(_SrvId, update, _Obj) ->
         surname => binary,
         password => fun ?MODULE:user_pass/1,
         email => binary,
-        avatar_t => binary,
+        %avatar_t => binary,
         phone_t => binary,
         address_t => binary
     };
