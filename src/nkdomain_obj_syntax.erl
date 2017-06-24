@@ -43,7 +43,7 @@ syntax(<<"create">>, Type, Syntax) ->
         aliases => {list, binary},
         icon_id => binary,
         Type => map,
-        '__mandatory' => [Type]
+        '__defaults' => #{Type => #{}}
     };
 
 syntax(<<"update">>, Type, Syntax) ->
@@ -56,6 +56,7 @@ syntax(<<"update">>, Type, Syntax) ->
         aliases => {list, binary},
         icon_id => binary,
         Type => map,
+        '__defaults' => #{Type => #{}},
         '__mandatory' => [id]
     };
 
@@ -69,6 +70,11 @@ syntax(<<"enable">>, _Type, Syntax) ->
         id => binary,
         enable => boolean,
         '__mandatory' => [enable]
+    };
+
+syntax(<<"stop">>, _Type, Syntax) ->
+    Syntax#{
+        id => binary
     };
 
 syntax(<<"delete">>, _Type, Syntax) ->

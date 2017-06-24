@@ -8,8 +8,8 @@
 -define(HTTP, "http://127.0.0.1:9304/s").
 -define(WS, "ws://127.0.0.1:9304/s/_api/ws").
 
-%%-define(HTTP, "https://v1.netc.io/s/v03").
-%%-define(WS, "wss://v1.netc.io/s/v03/_api/ws").
+%%-define(HTTP, "https://v1.netc.io/s/v02").
+%%-define(WS, "wss://v1.netc.io/s/v02/_api/ws").
 
 -define(SRV, sipstorm_v01).
 -define(ADMIN_PASS, "netcomposer").
@@ -305,6 +305,12 @@ file_post2(T) ->
     {ok, Bin} = file:read_file("/tmp/file1.png"),
     {ok, #{<<"obj_id">>:=FileId}} = upload(T, "/_file", "image/png", Bin),
     FileId.
+
+file_post3(T) ->
+    Bin = crypto:rand_bytes(10000000),
+    {ok, #{<<"obj_id">>:=FileId}} = upload(T, "/_file", "application/binary", Bin),
+    FileId.
+
 
 
 

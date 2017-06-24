@@ -212,8 +212,8 @@ get_domain_items([], [{_ObjName, Item}], Session) ->
 get_domain_items([], Acc, Session) ->
     {ok, [Item || {_ObjName, Item} <- lists:sort(Acc)], Session};
 
-get_domain_items([ObjId|Rest], Acc, Session) ->
-    case nkdomain_obj:get_name(ObjId) of
+get_domain_items([ObjId|Rest], Acc, #{srv_id:=SrvId}=Session) ->
+    case nkdomain:get_name(SrvId, ObjId) of
         {ok, #{
             name := Name,
             obj_name := ObjName,
@@ -409,7 +409,7 @@ get_session_items([Type|Rest], Acc, Session) ->
                     get_session_items(Rest, [{Weight, Item}|Acc], Session2);
                 error ->
                     #{srv_id:=SrvId, domain_path:=DomainPath} = Session,
-                    case SrvId:object_get_counter(Type, DomainPath) of
+                    case SrvId:object_get_counter(SrvId, Type, DomainPath) of
                         {ok, 0} ->
                             get_session_items(Rest, Acc, Session);
                         {ok, Counter} ->

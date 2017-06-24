@@ -58,7 +58,7 @@
     event_links :: nklib_links:link(),
     status :: nkdomain_obj:status(),
     meta :: map(),                      % Object load metadata
-    data :: term(),                     % Type-specific metadata
+    session :: term(),                  % Session-specific metadata
     stop_reason = false :: false | nkservice:error(),
     ttl :: permanent | {expires, nklib_util:m_timestamp()} | {ttl, integer()},
     timer :: reference(),

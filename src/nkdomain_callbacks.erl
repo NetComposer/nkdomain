@@ -105,6 +105,7 @@ error(object_parent_conflict) 	        -> "Object has conflicting parent";
 error(object_stopped) 		            -> "Object stopped";
 error(parent_not_found) 		        -> "Parent not found";
 error(parent_stopped) 		            -> "Parent stopped";
+error(parse_error)   		            -> "Object parse error";
 error(referred_not_found) 		        -> "Referred object not found";
 error(service_down)                     -> "Service is down";
 error(session_already_present)          -> "Session is already present";
@@ -237,8 +238,11 @@ object_syntax(update) ->
         aliases => {list, binary},
         icon_id => binary,
         icon_content_type => binary
-    }.
+    };
 
+object_syntax(create) ->
+    Base = (object_syntax(load))#{'__mandatory':=[]},
+    Base#{obj_name => binary}.
 
 
 %% ===================================================================
@@ -279,7 +283,12 @@ object_create(SrvId, DomainId, Type, UserId, Obj) ->
             },
             case erlang:function_exported(Module, object_create, 2) of
                 true ->
-                    Module:object_create(SrvId, Obj2);
+                    case SrvId:object_parse(SrvId, create, Obj2) of
+                        {ok, Obj3, _} ->
+                            Module:object_create(SrvId, Obj3);
+                        {error, Error} ->
+                            {error, Error}
+                    end;
                 false ->
                     nkdomain_obj_make:create(SrvId, Obj2)
             end
@@ -300,7 +309,12 @@ object_parse(SrvId, Mode, Map) ->
         undefined ->
             {error, {invalid_type, Type}};
         Module ->
-            case Module:object_parse(SrvId, Mode, Map) of
+            UserMode = case Mode of
+                create -> load;
+                load -> load;
+                update -> update
+            end,
+            case Module:object_parse(SrvId, UserMode, Map) of
                 {ok, Obj2, UnknownFields} ->
                     {ok, Obj2, UnknownFields};
                 {error, Error} ->
@@ -404,7 +418,7 @@ object_stop(Reason, State) ->
     call_module(object_stop, [Reason], State).
 
 
-%%  @doc Called when an event is sent
+%%  @doc Called to send an event
 -spec object_event(nkdomain_obj:event(), state()) ->
     {ok, state()} | continue().
 
@@ -412,26 +426,26 @@ object_event(Event, State) ->
     % The object module can use this callback to detect core events or its own events
     {ok, State2} = call_module(object_event, [Event], State),
     % Use this callback to generate the right external Event
-    case call_module(object_send_event, [Event], State) of
-        {ok, State2} ->
-            case nkdomain_obj_events:event(Event, State2) of
-                {ok, State3} ->
-                    {ok, State3};
-                {event, Type, Body, State3} ->
-                    nkdomain_obj_util:send_event(Type, Body, State3);
-                {event, Type, ObjId, Body, State3} ->
-                    nkdomain_obj_util:send_event(Type, ObjId, Body, State3);
-                {event, Type, ObjId, Path, Body, State3} ->
-                    nkdomain_obj_util:send_event(Type, ObjId, Path, Body, State3)
+    case call_module(object_send_event, [Event], State2) of
+        {ok, State3} ->
+            case nkdomain_obj_events:event(Event, State3) of
+                {ok, State4} ->
+                    {ok, State4};
+                {event, Type, Body, State4} ->
+                    nkdomain_obj_util:send_event(Type, Body, State4);
+                {event, Type, ObjId, Body, State4} ->
+                    nkdomain_obj_util:send_event(Type, ObjId, Body, State4);
+                {event, Type, ObjId, Path, Body, State4} ->
+                    nkdomain_obj_util:send_event(Type, ObjId, Path, Body, State4)
             end;
-        {event, Type, Body, State2} ->
-            nkdomain_obj_util:send_event(Type, Body, State2);
+        {event, Type, Body, State3} ->
+            nkdomain_obj_util:send_event(Type, Body, State3);
         {event, Type, ObjId, Body, State3} ->
             nkdomain_obj_util:send_event(Type, ObjId, Body, State3);
-        {event, Type, ObjId, Path, Body, State2} ->
-            nkdomain_obj_util:send_event(Type, ObjId, Path, Body, State2);
-        {ignore, State2} ->
-            {ok, State2}
+        {event, Type, ObjId, Path, Body, State3} ->
+            nkdomain_obj_util:send_event(Type, ObjId, Path, Body, State3);
+        {ignore, State3} ->
+            {ok, State3}
     end.
 
 
@@ -486,17 +500,17 @@ object_save(#?STATE{is_dirty=false}=State) ->
     {ok, State};
 
 object_save(#?STATE{srv_id=SrvId}=State) ->
-    {ok, State2} = call_module(object_restore, [], State),
-    case call_module(object_save, [], State2) of
-        {ok, #?STATE{obj=Obj3}=State3} ->
-            case SrvId:object_db_save(SrvId, Obj3) of
+    %{ok, State2} = call_module(object_restore, [], State),
+    case call_module(object_save, [], State) of
+        {ok, #?STATE{obj=Obj2}=State2} ->
+            case SrvId:object_db_save(SrvId, Obj2) of
                 {ok, Meta} ->
-                    {ok, State3#?STATE{is_dirty=false}, Meta};
+                    {ok, State2#?STATE{is_dirty=false}, Meta};
                 {error, Error} ->
-                    {error, Error, State3}
+                    {error, Error, State2}
             end;
         {error, Error} ->
-            {error, Error, State2}
+            {error, Error, State}
     end.
 
 
@@ -543,8 +557,8 @@ object_archive(#?STATE{srv_id=_SrvId}=State) ->
 -spec object_link_down(event|{child, nkdomain:obj_id()}|{usage, nklib_links:link()}, state()) ->
     {ok, state()}.
 
-object_link_down(_Type, State) ->
-    {ok, State}.
+object_link_down(Link, State) ->
+    call_module(object_link_down, [Link], State).
 
 
 %% @doc
@@ -742,7 +756,6 @@ service_api_allow(#nkreq{cmd = <<"objects/user/login">>, user_id = <<>>}, State)
     {true, State};
 
 service_api_allow(#nkreq{cmd = <<"objects/", _/binary>>, user_id = <<>>}, State) ->
-
     {false, State};
 
 service_api_allow(#nkreq{cmd = <<"objects/", _/binary>>, req_state={_Type, Module, Cmd}}=Req, State) ->

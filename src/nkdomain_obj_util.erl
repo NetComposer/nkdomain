@@ -25,8 +25,8 @@
 -export([event/2, status/2, search_syntax/1, get_name/1]).
 -export([send_event/3, send_event/4, send_event/5]).
 -export([call_type/3]).
--export([link_server_api/3, unlink_server_api/2]).
--export([get_obj_data/1, set_obj_data/2]).
+-export([link_to_api_server/3, unlink_from_api_server/2]).
+-export([get_obj_session/1, set_obj_session/2]).
 
 -include("nkdomain.hrl").
 -include("nkdomain_debug.hrl").
@@ -166,7 +166,7 @@ call_type(Fun, Args, Type) ->
 
 
 %% @doc
-link_server_api(Module, ApiPid, State) ->
+link_to_api_server(Module, ApiPid, State) ->
     % Stop the API Server if we fail abruptly
     ok = nkapi_server:register(ApiPid, {nkdomain_stop, Module, self()}),
     % Monitor the API server, reduce usage count if it fails
@@ -174,7 +174,7 @@ link_server_api(Module, ApiPid, State) ->
 
 
 %% @doc
-unlink_server_api(Module, State) ->
+unlink_from_api_server(Module, State) ->
     nkdomain_obj:links_iter(
         usage,
         fun
@@ -189,13 +189,13 @@ unlink_server_api(Module, State) ->
 
 
 %% @doc
-get_obj_data(#?STATE{data=Data}) ->
-    Data.
+get_obj_session(#?STATE{session=Session}) ->
+    Session.
 
 
 %% @doc
-set_obj_data(Data, State) ->
-    State#?STATE{data=Data}.
+set_obj_session(Session, State) ->
+    State#?STATE{session=Session}.
 
 
 

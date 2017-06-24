@@ -125,7 +125,7 @@ object_init(#?STATE{srv_id=SrvId, id=Id, obj=Obj, meta=#{api_server_pid:=ApiPid}
     #obj_id_ext{obj_id=SessId} = Id,
     #{created_by:=UserId} = Obj,
     ok = nkdomain_user_obj:register_session(SrvId, UserId, ?DOMAIN_SESSION, SessId, #{}),
-    {ok, nkdomain_obj_util:link_server_api(?MODULE, ApiPid, State)};
+    {ok, nkdomain_obj_util:link_to_api_server(?MODULE, ApiPid, State)};
 
 object_init(State) ->
     ?LLOG(warning, "started without meta", [], State),

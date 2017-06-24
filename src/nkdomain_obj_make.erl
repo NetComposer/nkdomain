@@ -25,7 +25,7 @@
 -module(nkdomain_obj_make).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([make/2, create/2, create/3]).
+-export([make/2, make_obj_id/1, make_name/1, create/2, create/3]).
 
 -include("nkdomain.hrl").
 
@@ -71,85 +71,99 @@ make(SrvId, Opts) ->
         parent_id := Domain,
         created_by := User
     } = Opts,
-    case nkdomain_lib:find(SrvId, Domain) of
-        #obj_id_ext{obj_id=DomainId, path=DomainPath} ->
-            case nkdomain_lib:find(SrvId, User) of
-                #obj_id_ext{obj_id=UserId} ->
-                    Type2 = to_bin(Type),
-                    UUID = nklib_util:luid(),
-                    ObjId = case Opts of
-                        #{obj_id:=ObjId0} ->
-                            to_bin(ObjId0);
-                        _ when Type2 == ?DOMAIN_TOKEN ->
-                            UUID;
-                        _ ->
-                            <<Type2/binary, $-, UUID/binary>>
-                    end,
-                    case do_make_name(UUID, maps:get(obj_name, Opts, <<>>)) of
-                        {ok, Name1} ->
-                            Name2 = case Type2 of
-                                ?DOMAIN_DOMAIN ->
-                                    Name1;
-                                _ ->
-                                    <<Type2/binary, "s/", Name1/binary>>
-                            end,
-                            BasePath = case DomainPath of
-                                <<"/">> -> <<>>;
-                                _ -> DomainPath
-                            end,
-                            Now = nkdomain_util:timestamp(),
-                            Obj1 = maps:without([obj_name, ttl], Opts),
-                            Obj2 = Obj1#{
-                                obj_id => ObjId,
-                                type => Type2,
-                                parent_id => DomainId,
-                                path => <<BasePath/binary, $/, Name2/binary>>,
-                                created_time => Now,
-                                created_by => UserId,
-                                updated_time => Now,
-                                updated_by => UserId
-                            },
-                            Obj3 = case Opts of
-                                #{ttl:=SecsTTL} ->
-                                    Expires = nkdomain_util:timestamp() + 1000*SecsTTL,
-                                    Obj2#{expires_time=>Expires};
-                                _ ->
-                                    Obj2
-                            end,
-                            case Opts of
-                                #{referred_id:=ReferId} ->
-                                    case nkdomain_lib:find(SrvId, ReferId) of
-                                        #obj_id_ext{obj_id=ReferObjId} ->
-                                            {ok, Obj3#{referred_id=>ReferObjId}};
-                                        {error, object_not_found} ->
-                                            {error, referred_not_found};
-                                        {error, Error} ->
-                                            {error, Error}
-                                    end;
-                                _ ->
-                                    {ok, Obj3}
-                            end;
-                        {error, Error} ->
-                            {error, Error}
-                    end;
-                {error, object_not_found} ->
-                    {error, {could_not_load_user, User}};
-                {error, Error} ->
-                    {error, Error}
-            end;
-        {error, object_not_found} ->
-            {error, {could_not_load_parent, Domain}};
-        {error, Error} ->
-            {error, Error}
+    try
+        {DomainId, DomainPath} = case nkdomain_lib:find(SrvId, Domain) of
+            #obj_id_ext{obj_id=DomainId0, path=DomainPath0} ->
+                {DomainId0, DomainPath0};
+            {error, object_not_found} ->
+                throw({could_not_load_parent, Domain});
+            {error, DomainError} ->
+                throw(DomainError)
+        end,
+        UserId = case nkdomain_lib:find(SrvId, User) of
+            #obj_id_ext{obj_id=UserId0} ->
+                UserId0;
+            {error, object_not_found} ->
+                throw({could_not_load_user, User});
+            {error, UserError} ->
+                throw(UserError)
+        end,
+        Type2 = to_bin(Type),
+        ObjId1 = make_obj_id(Type2),
+        ObjId2 = case Opts of
+            #{obj_id:=ObjId0} -> ObjId0;
+            _ -> ObjId1
+        end,
+        Name1 = case maps:get(obj_name, Opts, <<>>) of
+            <<>> -> make_name(ObjId1);
+            Name0 -> nkdomain_util:name(Name0)
+        end,
+        Name2 = case Type2 of
+            ?DOMAIN_DOMAIN ->
+                Name1;
+            _ ->
+                <<(nkdomain_util:class(Type2))/binary, "/", Name1/binary>>
+        end,
+        BasePath = case DomainPath of
+            <<"/">> -> <<>>;
+            _ -> DomainPath
+        end,
+        Now = nkdomain_util:timestamp(),
+        Obj1 = maps:without([obj_name, ttl], Opts),
+        Obj2 = maps:merge(#{Type2=>#{}}, Obj1),
+        Obj3 = Obj2#{
+            obj_id => ObjId2,
+            type => Type2,
+            parent_id => DomainId,
+            path => <<BasePath/binary, $/, Name2/binary>>,
+            created_time => Now,
+            created_by => UserId,
+            updated_time => Now,
+            updated_by => UserId
+        },
+        Obj4 = case Opts of
+            #{ttl:=SecsTTL} ->
+                Expires = nkdomain_util:timestamp() + 1000*SecsTTL,
+                Obj3#{expires_time=>Expires};
+            _ ->
+                Obj3
+        end,
+        case Opts of
+            #{referred_id:=ReferId} ->
+                case nkdomain_lib:find(SrvId, ReferId) of
+                    #obj_id_ext{obj_id=ReferObjId} ->
+                        {ok, Obj3#{referred_id=>ReferObjId}};
+                    {error, object_not_found} ->
+                        throw(referred_not_found);
+                    {error, Error} ->
+                        throw(Error)
+                end;
+            _ ->
+                {ok, Obj4}
+        end
+    catch
+        throw:Throw ->
+            {error, Throw}
     end.
 
 
 %% @private
-do_make_name(UUID, <<>>) ->
-    {ok, binary:part(UUID, 0, 7)};
+make_obj_id(Type) ->
+    UUID = nklib_util:luid(),
+    case Type of
+        ?DOMAIN_TOKEN -> UUID;
+        _ -> <<(to_bin(Type))/binary, $-, UUID/binary>>
+    end.
 
-do_make_name(_UUID, Name) ->
-    {ok, nkdomain_util:name(Name)}.
+
+%% @private
+make_name(ObjId) ->
+    UUID = case binary:split(ObjId, <<"-">>) of
+        [_, Rest] when byte_size(Rest) >= 7 -> Rest;
+        [Rest] when byte_size(Rest) >= 7 -> Rest;
+        _ -> nklib_util:luid()
+    end,
+    binary:part(UUID, 0, 7).
 
 
 %% @doc

@@ -69,7 +69,7 @@ register(Module, #obj_id_ext{pid=ObjPid}=ObjIdExt) when is_pid(ObjPid) ->
     {ok, integer()}.
 
 get_counter(SrvId, Module, Domain) ->
-    master_call(Module, {get_global_counters, SrvId, to_bin(Domain)}).
+    master_call(Module, {get_counter, SrvId, to_bin(Domain)}).
 
 
 
@@ -116,7 +116,7 @@ init([Module]) ->
     {noreply, #state{}} | {reply, term(), #state{}} |
     {stop, Reason::term(), #state{}} | {stop, Reason::term(), Reply::term(), #state{}}.
 
-handle_call({get_counters, SrvId, Domain}, _From, #state{counters=Counters}=State) ->
+handle_call({get_counter, SrvId, Domain}, _From, #state{counters=Counters}=State) ->
     {reply, {ok, maps:get({SrvId, Domain}, Counters, 0)}, State};
 
 handle_call(get_master, _From, #state{master=Master}=State) ->

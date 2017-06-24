@@ -26,8 +26,7 @@
 
 -export([http_post/3, http_get/3]).
 -export([find/1, delete_all/1]).
--export([object_info/0, object_es_mapping/0, object_create/2, object_parse/3,
-         object_api_syntax/2, object_api_cmd/2]).
+-export([object_info/0, object_es_mapping/0, object_parse/3, object_api_syntax/2, object_api_cmd/2]).
 -export([object_admin_info/0]).
 
 -include("nkdomain.hrl").
@@ -191,38 +190,19 @@ object_parse(_SrvId, update, _Obj) ->
     #{}.
 
 
-
-%% @doc Inside-WS file creation
--spec object_create(nkservice:id(), nkdomain:obj()) ->
-    {ok, #obj_id_ext{}, [Unknown::binary()]} | {error, term()}.
-
-object_create(SrvId, Obj) ->
-    case nklib_syntax:parse(Obj, inline_syntax()) of
-        {ok, #{?DOMAIN_FILE:=#{body:=Body}=File}, _} ->
-            File2 = maps:remove(body, File#{size=>byte_size(Body)}),
-            case get_store(SrvId, File2) of
-                {ok, StoreId, Store} ->
-                    FileId = make_file_id(),
-                    case upload(SrvId, StoreId, Store, FileId, Body) of
-                        {ok, FileMeta} ->
-                            File3 = File2#{store_id=>StoreId},
-                            Obj2 = Obj#{
-                                obj_id => FileId,
-                                ?DOMAIN_FILE := maps:merge(File3, FileMeta)
-                            },
-                            nkdomain_obj_make:create(SrvId, Obj2);
-                        {error, Error} ->
-                            {error, Error}
-                    end;
-                {error, Error} ->
-                    {error, Error}
-            end;
-        {error, Error} ->
-            {error, Error}
-    end.
-
-
 %% @private
+object_api_syntax(<<"create">>, Syntax) ->
+    Syntax#{
+        name => binary,
+        ?DOMAIN_FILE => #{
+            content_type => binary,
+            store_id => binary,
+            body => base64,
+            '__mandatory' => [content_type, body]
+        },
+        '__mandatory' => [name]
+    };
+
 object_api_syntax(<<"get_inline">>, Syntax) ->
     Syntax#{
         id => binary,
@@ -234,6 +214,42 @@ object_api_syntax(Cmd, Syntax) ->
 
 
 %% @private
+object_api_cmd(<<"create">>, #nkreq{srv_id=SrvId, data=Obj, user_id=UserId} = Req) ->
+    case nkdomain_api_util:get_id(?DOMAIN_DOMAIN, parent_id, Obj, Req) of
+        {ok, DomainId} ->
+            Obj2 = Obj#{
+                type => ?DOMAIN_FILE,
+                created_by => UserId,
+                parent_id => DomainId
+            },
+            #{?DOMAIN_FILE:=#{body:=Body} = File} = Obj2,
+            File2 = maps:remove(body, File#{size=>byte_size(Body)}),
+            case get_store(SrvId, File2) of
+                {ok, StoreId, Store} ->
+                    FileId = make_file_id(),
+                    case upload(SrvId, StoreId, Store, FileId, Body) of
+                        {ok, FileMeta} ->
+                            File3 = File2#{store_id=>StoreId},
+                            Obj3 = Obj2#{
+                                obj_id => FileId,
+                                ?DOMAIN_FILE := maps:merge(File3, FileMeta)
+                            },
+                            case nkdomain_obj_make:create(SrvId, Obj3) of
+                                {ok, ObjIdExt, Unknown} ->
+                                    {ok, nkdomain_obj_api:obj_id_reply(ObjIdExt, Unknown)};
+                                {error, Error} ->
+                                    {error, Error}
+                            end;
+                        {error, Error} ->
+                            {error, Error}
+                    end;
+                {error, Error} ->
+                    {error, Error}
+            end;
+        {error, Error} ->
+            {error, Error}
+    end;
+
 object_api_cmd(<<"get_inline">>, #nkreq{srv_id=SrvId, data=#{id:=Id}}) ->
     case nkdomain:get_obj(SrvId, Id) of
         {ok, #{obj_id:=FileId, ?DOMAIN_FILE:=File}=Obj} ->
@@ -263,18 +279,6 @@ object_api_cmd(Cmd, Req) ->
 
 make_file_id() ->
     <<"file-", (nklib_util:luid())/binary>>.
-
-inline_syntax() ->
-    #{
-        name => binary,
-        ?DOMAIN_FILE => #{
-            content_type => binary,
-            store_id => binary,
-            body => base64,
-            '__mandatory' => [content_type, body]
-        },
-        '__mandatory' => [name]
-    }.
 
 
 %% @private

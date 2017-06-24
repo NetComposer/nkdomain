@@ -283,7 +283,7 @@ init({loaded, SrvId, Obj, Meta}) ->
         status = init,
         meta = maps:get(meta, Meta, #{}),
         ttl = set_ttl(Obj, Info),
-        data = #{}
+        session = #{}
     },
     case do_init_common(State1) of
         {ok, State2} ->

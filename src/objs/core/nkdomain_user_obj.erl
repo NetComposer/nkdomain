@@ -368,13 +368,13 @@ object_async_op(_Op, _State) ->
 
 
 %% @private
-object_link_down({usage, {?MODULE, sesison, SessId}}=Link, State) ->
+object_link_down({usage, {?MODULE, session, SessId, _Pid}}, State) ->
     ?DEBUG("registered session down: ~s", [SessId], State),
     State2 = rm_session(SessId, State),
-    {continue, [Link, State2]};
+    {ok, State2};
 
-object_link_down(_Link, _State) ->
-    continue.
+object_link_down(_Link, State) ->
+    {ok, State}.
 
 
 
@@ -408,17 +408,6 @@ user_pass(Pass) ->
 
 %% @private
 check_email(SrvId, #{?DOMAIN_USER:=#{email:=Email}}=Obj) ->
-    check_email2(SrvId, Email, Obj);
-
-check_email(SrvId, #{?DOMAIN_USER:=#{<<"email">>:=Email}}=Obj) ->
-    check_email2(SrvId, Email, Obj);
-
-check_email(_SrvId, Obj) ->
-    {ok, Obj}.
-
-
-%% @private
-check_email2(SrvId, Email, Obj) ->
     Email2 = nklib_util:to_lower(Email),
     Spec = #{
         size => 0,
@@ -431,7 +420,10 @@ check_email2(SrvId, Email, Obj) ->
             {error, {email_duplicated, Email2}};
         {error, Error} ->
             {error, Error}
-    end.
+    end;
+
+check_email(_SrvId, Obj) ->
+    {ok, Obj}.
 
 
 %% @private
@@ -460,9 +452,9 @@ rm_session(SessId, State) ->
 
 %% @private
 get_obj_data(State) ->
-    nkdomain_obj_util:get_obj_data(State).
+    nkdomain_obj_util:get_obj_session(State).
 
 
 %% @private
 set_obj_data(Data, State) ->
-    nkdomain_obj_util:set_obj_data(Data, State).
+    nkdomain_obj_util:set_obj_session(Data, State).

@@ -21,7 +21,7 @@
 -module(nkdomain_obj_api).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([api/3]).
+-export([api/3, obj_id_reply/2]).
 
 -include("nkdomain.hrl").
 -include_lib("nkservice/include/nkservice.hrl").
@@ -50,6 +50,19 @@ api(<<"get">>, Type, #nkreq{data=Data, srv_id=SrvId}=Req) ->
     case nkdomain_api_util:get_id(Type, Data, Req) of
         {ok, Id} ->
             nkdomain:get_obj(SrvId, Id);
+        {error, Error} ->
+            {error, Error}
+    end;
+
+api(<<"stop">>, Type, #nkreq{data=Data, srv_id=SrvId}=Req) ->
+    case nkdomain_api_util:get_id(Type, Data, Req) of
+        {ok, Id} ->
+            case nkdomain:unload(SrvId, Id, user_stop) of
+                ok ->
+                    {ok, #{}};
+                {error, Error} ->
+                    {error, Error}
+            end;
         {error, Error} ->
             {error, Error}
     end;
