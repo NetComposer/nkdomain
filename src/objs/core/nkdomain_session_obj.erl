@@ -59,7 +59,8 @@
 start(SrvId, DomainId, UserId, Opts) ->
         Obj1 = #{
             type => ?DOMAIN_SESSION,
-            parent_id => DomainId,
+            domain_id => DomainId,
+            parent_id => UserId,
             created_by => UserId,
             active => true,
             ?DOMAIN_SESSION => maps:with([local, remote, login_meta], Opts)

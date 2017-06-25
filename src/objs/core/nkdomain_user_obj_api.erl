@@ -37,7 +37,7 @@
 cmd(<<"login">>, #nkreq{conn_id=Pid, session_module=nkapi_server, user_meta=UserMeta}=Req) ->
     #nkreq{data=#{id:=User}=Data, srv_id=SrvId, session_id=SessId, session_meta=SessMeta} = Req,
     Auth = #{password => maps:get(password, Data, <<>>)},
-    case get_domain(Req) of
+    case get_domain(User, Req) of
         {ok, DomainId} ->
             case nkdomain_user_obj:auth(SrvId, User, Auth) of
                 {ok, UserId} ->
@@ -70,7 +70,7 @@ cmd(<<"login">>, #nkreq{conn_id=Pid, session_module=nkapi_server, user_meta=User
 cmd(<<"login">>, #nkreq{session_module=nkapi_server_http}=Req) ->
     #nkreq{data=#{id:=User}=Data, srv_id=SrvId, session_id=SessId, session_meta=SessMeta} = Req,
     Auth = #{password => maps:get(password, Data, <<>>)},
-    case get_domain(Req) of
+    case get_domain(User, Req) of
         {ok, DomainId} ->
             case nkdomain_user_obj:auth(SrvId, User, Auth) of
                 {ok, UserId} ->
@@ -102,15 +102,25 @@ cmd(Cmd, Req) ->
 %% ===================================================================
 
 %% @private
-get_domain(#nkreq{data = #{domain_id:=Domain}, srv_id=SrvId}) ->
+get_domain(_User, #nkreq{data = #{domain_id:=Domain}, srv_id=SrvId}) ->
+    load_domain(SrvId, Domain);
+
+get_domain(User, #nkreq{srv_id=SrvId}) ->
+    case nkdomain_lib:find(SrvId, User) of
+        #obj_id_ext{path=Path} ->
+            {ok, Domain, _} = nkdomain_util:get_parts(?DOMAIN_USER, Path),
+            load_domain(SrvId, Domain);
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
+%% @private
+load_domain(SrvId, Domain) ->
     case nkdomain_lib:find(SrvId, Domain) of
         #obj_id_ext{obj_id=DomainId} ->
             {ok, DomainId};
         {error, _} ->
             {error, {domain_unknown, Domain}}
-    end;
-
-get_domain(_Req) ->
-    {ok, <<"root">>}.
-
+    end.
 

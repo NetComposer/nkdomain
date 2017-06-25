@@ -71,7 +71,7 @@ create_base() ->
         CREATE TABLE object (
             obj_id STRING PRIMARY KEY NOT NULL,
             path STRING UNIQUE NOT NULL,
-            parent_id STRING NOT NULL,
+            domain_id STRING NOT NULL,
             subtype STRING,
             created_by STRING,
             created_time INT,
@@ -92,7 +92,7 @@ create_base() ->
 
         CREATE TABLE aliases (
             obj_id STRING PRIMARY KEY NOT NULL,
-            referred_id STRING NOT NULL,
+            parent_id STRING NOT NULL,
             INDEX (obj_id)
         );
 
@@ -121,9 +121,9 @@ insert_obj(Id, Path, Parent, Alias, Type) ->
     S = [<<"
             --BEGIN;
 
-            INSERT INTO nkobjects.object (obj_id, path, parent_id, subtype) VALUES ">>, params([Id, Path, Parent, Type]), <<";
+            INSERT INTO nkobjects.object (obj_id, path, domain_id, subtype) VALUES ">>, params([Id, Path, Parent, Type]), <<";
 
-            INSERT INTO nkobjects.aliases (obj_id, referred_id) VALUES ">>, params([Alias, Id]), <<";
+            INSERT INTO nkobjects.aliases (obj_id, parent_id) VALUES ">>, params([Alias, Id]), <<";
 
             --COMMIT;
         ">>],

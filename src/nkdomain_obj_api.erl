@@ -34,7 +34,7 @@
 
 %% @doc
 api(<<"create">>, Type, #nkreq{data=Data, srv_id=SrvId, user_id=UserId}=Req) ->
-    case nkdomain_api_util:get_id(?DOMAIN_DOMAIN, parent_id, Data, Req) of
+    case nkdomain_api_util:get_id(?DOMAIN_DOMAIN, domain_id, Data, Req) of
         {ok, DomainId} ->
             case SrvId:object_create(SrvId, DomainId, Type, UserId, Data) of
                 {ok, ObjIdExt, Unknown} ->
@@ -140,12 +140,12 @@ api(<<"find_all">>, Type, #nkreq{data=Data, srv_id=SrvId}=Req) ->
             {error, Error}
     end;
 
-api(<<"make_token">>, Type, #nkreq{data=Data, srv_id=SrvId}=Req) ->
+api(<<"make_token">>, Type, #nkreq{data=Data, user_id=UserId, srv_id=SrvId}=Req) ->
     case nkdomain_api_util:get_id(?DOMAIN_DOMAIN, domain_id, Data, Req) of
         {ok, DomainId} ->
             case nkdomain_api_util:get_id(Type, Data, Req) of
                 {ok, Id} ->
-                    case nkdomain_token_obj:create(SrvId, DomainId, Id, Type, #{}, Data) of
+                    case nkdomain_token_obj:create(SrvId, DomainId, Id, UserId, Type, #{}, Data) of
                         {ok, ObjIdExt, TTL, Unknown} ->
                             Reply = obj_id_reply(ObjIdExt, Unknown),
                             {ok, Reply#{ttl=>TTL}};

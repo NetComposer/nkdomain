@@ -45,7 +45,7 @@ find(Srv, Id, Spec) ->
     case nkdomain_lib:find(Srv, Id) of
         #obj_id_ext{srv_id=SrvId, obj_id=ObjId} ->
             Filters1 = maps:get(filters, Spec, #{}),
-            Filters2 = Filters1#{parent_id=>ObjId},
+            Filters2 = Filters1#{domain_id=>ObjId},
             Spec2 = maps:remove(id, Spec#{filters=>Filters2}),
             nkdomain:search(SrvId, Spec2);
         {error, Error} ->

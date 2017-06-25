@@ -254,7 +254,7 @@ unload_all() ->
     {ok, state()} | {error, term()}.
 
 init({loaded, SrvId, Obj, Meta}) ->
-    #{type:=Type, obj_id:=ObjId, path:=Path, parent_id:=ParentId} = Obj,
+    #{type:=Type, obj_id:=ObjId, path:=Path, domain_id:=DomainId, parent_id:=ParentId} = Obj,
     Module = nkdomain_all_types:get_module(Type),
     false = Module==undefined,
     {ok, _Domain, ObjName} = nkdomain_util:get_parts(Type, Path),
@@ -270,6 +270,7 @@ init({loaded, SrvId, Obj, Meta}) ->
         srv_id = SrvId,
         id = ObjIdExt,
         module = Module,
+        domain_id = DomainId,
         parent_id = ParentId,
         obj_name = ObjName,
         object_info = Info,
@@ -614,15 +615,11 @@ do_sync_op({nkdomain_reg_child, ObjIdExt}, _From, State) ->
             reply({error, parent_is_disabled}, State);
         _ ->
             ?DEBUG("creating child ~s", [Path], State),
-            case do_check_child(ObjIdExt, State) of
-                ok ->
-                    State2 = do_rm_child(ObjId, State),
-                    State3 = do_add_child(ObjId, Type, Pid, State2),
-                    State4 = do_event({child_loaded, Type, ObjId}, State3),
-                    {reply, {ok, IsEnabled, self()}, State4};
-                {error, Error} ->
-                    reply({error, Error}, State)
-            end
+            %% Check do_check_child(ObjIdExt, State)
+            State2 = do_rm_child(ObjId, State),
+            State3 = do_add_child(ObjId, Type, Pid, State2),
+            State4 = do_event({child_loaded, Type, ObjId}, State3),
+            {reply, {ok, IsEnabled, self()}, State4}
     end;
 
 do_sync_op(Op, _From, State) ->
@@ -661,7 +658,6 @@ do_async_op(Op, State) ->
 do_init_common(State) ->
     #?STATE{
         id = #obj_id_ext{srv_id=SrvId, type=Type, obj_id=ObjId, path=Path},
-        parent_id = ParentId,
         ttl = TTL
     }= State,
     % If expired, do proper delete
@@ -679,8 +675,6 @@ do_init_common(State) ->
             State3 = register_type(State2),
             State4 = register_service(State3),
             {ok, State4};
-        {error, object_not_found} ->
-            {error, {could_not_load_parent, ParentId}};
         {error, Error} ->
             {error, Error}
     end.
@@ -704,12 +698,13 @@ register_parent(#?STATE{id=#obj_id_ext{obj_id = <<"root">>, type = ?DOMAIN_DOMAI
     {ok, State};
 
 register_parent(#?STATE{srv_id=SrvId, id=ObjIdExt, parent_id=ParentId}=State) ->
-    Op = {nkdomain_reg_child, ObjIdExt},
-    case sync_op(SrvId, ParentId, Op) of
-        {ok, ParentEnabled, DomainPid} ->
-            monitor(process, DomainPid),
-            State2 = do_enabled(ParentEnabled, State#?STATE{parent_pid=DomainPid}),
+    case sync_op(SrvId, ParentId, {nkdomain_reg_child, ObjIdExt}) of
+        {ok, ParentEnabled, ParentPid} ->
+            monitor(process, ParentPid),
+            State2 = do_enabled(ParentEnabled, State#?STATE{parent_pid=ParentPid}),
             {ok, State2};
+        {error, object_not_found} ->
+            {error, {could_not_load_parent, ParentId}};
         {error, Error} ->
             {error, Error}
     end.
@@ -849,17 +844,17 @@ do_stop2(_Reason, State) ->
     State.
 
 
-%% @private Checks has correct path and not loaded
-do_check_child(#obj_id_ext{type=Type, path=Path}, #?STATE{id=#obj_id_ext{path=Base}}=State) ->
-    case nkdomain_util:get_parts(Type, Path) of
-        {ok, Base, _Name} ->
-            ok;
-        {ok, Base2, _Name} ->
-            ?LLOG(notice, "cannnot load child, invalid base ~s", [Base2], State),
-            {error, {invalid_object_path, Path}};
-        {error, Error} ->
-            {error, Error}
-    end.
+%%%% @private Checks has correct path and not loaded
+%%do_check_child(#obj_id_ext{type=Type, path=Path}, #?STATE{id=#obj_id_ext{path=Base}}=State) ->
+%%    case nkdomain_util:get_parts(Type, Path) of
+%%        {ok, Base, _Name} ->
+%%            ok;
+%%        {ok, Base2, _Name} ->
+%%            ?LLOG(notice, "cannnot load child, invalid base ~s", [Base2], State),
+%%            {error, {invalid_object_path, Path}};
+%%        {error, Error} ->
+%%            {error, Error}
+%%    end.
 
 
 %% @private

@@ -80,7 +80,7 @@ http_post(SrvId, Domain, Req) ->
                                     Obj = #{
                                         obj_id => FileId,
                                         type => ?DOMAIN_FILE,
-                                        parent_id => DomainId,
+                                        domain_id => DomainId,
                                         created_by => UserId,
                                         name => Name,
                                         ?DOMAIN_FILE => maps:merge(File3, FileMeta)
@@ -215,12 +215,12 @@ object_api_syntax(Cmd, Syntax) ->
 
 %% @private
 object_api_cmd(<<"create">>, #nkreq{srv_id=SrvId, data=Obj, user_id=UserId} = Req) ->
-    case nkdomain_api_util:get_id(?DOMAIN_DOMAIN, parent_id, Obj, Req) of
+    case nkdomain_api_util:get_id(?DOMAIN_DOMAIN, domain_id, Obj, Req) of
         {ok, DomainId} ->
             Obj2 = Obj#{
                 type => ?DOMAIN_FILE,
                 created_by => UserId,
-                parent_id => DomainId
+                domain_id => DomainId
             },
             #{?DOMAIN_FILE:=#{body:=Body} = File} = Obj2,
             File2 = maps:remove(body, File#{size=>byte_size(Body)}),

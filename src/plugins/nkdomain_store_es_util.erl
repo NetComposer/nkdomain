@@ -22,7 +22,8 @@
 -module(nkdomain_store_es_util).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([get_opts/1, reload/1, db_init/2, normalize/1]).
+-export([get_opts/1, db_init/2, normalize/1]).
+-export([reload_index/1, delete_index/1]).
 
 -define(LLOG(Type, Txt, Args),
     lager:Type("NkDOMAIN Store ES "++Txt, Args)).
@@ -41,13 +42,6 @@ get_opts(SrvId) ->
         #nkdomain_cache{db_store={elastic, _IndexOpts, EsOpts}} -> {ok, EsOpts};
         _ -> not_found
     end.
-
-
-%% @doc
-reload(SrvId) ->
-    #nkdomain_cache{db_store={elastic, IndexOpts, EsOpts}} = SrvId:config_nkdomain(),
-    db_init(IndexOpts, EsOpts).
-
 
 
 %% @doc
@@ -105,6 +99,7 @@ db_init_root(Opts) ->
                 type => ?DOMAIN_DOMAIN,
                 obj_id => <<"root">>,
                 path => <<"/">>,
+                domain_id => <<>>,
                 parent_id => <<>>,
                 description => <<"NetComposer">>,
                 created_time => Now,
@@ -132,6 +127,7 @@ db_init_admin(Opts) ->
                 type => ?DOMAIN_USER,
                 obj_id => <<"admin">>,
                 path => <<"/users/admin">>,
+                domain_id => <<"root">>,
                 parent_id => <<"root">>,
                 description => <<"Admin User">>,
                 created_time => Now,
@@ -155,6 +151,19 @@ db_init_admin(Opts) ->
 %% @doc
 normalize(Text) ->
     nklib_parse:normalize(Text, #{unrecognized=>keep}).
+
+
+%% @doc
+reload_index(SrvId) ->
+    {ok, _} = SrvId:object_db_init(#{id=>SrvId}),
+    ok.
+
+
+%% @doc CAUTION!
+delete_index(SrvId) ->
+    {ok, EsOpts} = nkdomain_store_es_util:get_opts(SrvId),
+    nkelastic:delete_index(EsOpts).
+
 
 
 %% ===================================================================

@@ -38,11 +38,11 @@
 -type make_opts() ::
     #{
         type => nkdomain:type(),                        % Mandatory
-        parent_id => binary(),                          % Mandatory
+        domain_id => binary(),                          % Mandatory
         created_by => binary(),                         % Mandatory
         name => binary(),
         expires_time => nklib_util:m_timestamp(),
-        referred_id => nkdomain:obj_id(),
+        parent_id => nkdomain:obj_id(),
         active => boolean(),
         description => binary(),
         aliases => [binary()],
@@ -61,24 +61,33 @@
 %% ===================================================================
 
 
-%% @doc Adds type, obj_id, parent_id, path, created_time
+%% @doc
 -spec make(nkservice:id(), make_opts()) ->
     {ok, nkdomain:obj()} | {error, term()}.
 
 make(SrvId, Opts) ->
     #{
         type := Type,
-        parent_id := Domain,
+        domain_id := Domain,
         created_by := User
     } = Opts,
+    Parent = maps:get(parent_id, Opts, Domain),
     try
         {DomainId, DomainPath} = case nkdomain_lib:find(SrvId, Domain) of
             #obj_id_ext{obj_id=DomainId0, path=DomainPath0} ->
                 {DomainId0, DomainPath0};
             {error, object_not_found} ->
-                throw({could_not_load_parent, Domain});
+                throw({could_not_load_domain, Domain});
             {error, DomainError} ->
                 throw(DomainError)
+        end,
+        ParentId = case nkdomain_lib:find(SrvId, Parent) of
+            #obj_id_ext{obj_id=ParentId0} ->
+                ParentId0;
+            {error, object_not_found} ->
+                throw({could_not_load_parent, Parent});
+            {error, ParentError} ->
+                throw(ParentError)
         end,
         UserId = case nkdomain_lib:find(SrvId, User) of
             #obj_id_ext{obj_id=UserId0} ->
@@ -114,10 +123,11 @@ make(SrvId, Opts) ->
         Obj3 = Obj2#{
             obj_id => ObjId2,
             type => Type2,
-            parent_id => DomainId,
+            domain_id => DomainId,
             path => <<BasePath/binary, $/, Name2/binary>>,
             created_time => Now,
             created_by => UserId,
+            parent_id => ParentId,
             updated_time => Now,
             updated_by => UserId
         },
@@ -128,19 +138,7 @@ make(SrvId, Opts) ->
             _ ->
                 Obj3
         end,
-        case Opts of
-            #{referred_id:=ReferId} ->
-                case nkdomain_lib:find(SrvId, ReferId) of
-                    #obj_id_ext{obj_id=ReferObjId} ->
-                        {ok, Obj3#{referred_id=>ReferObjId}};
-                    {error, object_not_found} ->
-                        throw(referred_not_found);
-                    {error, Error} ->
-                        throw(Error)
-                end;
-            _ ->
-                {ok, Obj4}
-        end
+        {ok, Obj4}
     catch
         throw:Throw ->
             {error, Throw}

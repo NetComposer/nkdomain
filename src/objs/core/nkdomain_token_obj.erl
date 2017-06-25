@@ -24,7 +24,7 @@
 -behavior(nkdomain_obj).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([create/6]).
+-export([create/7]).
 -export([object_info/0, object_parse/3, object_send_event/2,
          object_sync_op/3, object_async_op/2]).
 -export([object_admin_info/0]).
@@ -46,16 +46,17 @@
 %% ===================================================================
 
 %% @doc
--spec create(nkservice:id(), nkdomain:id(), nkdomain:id(), nkdomain:subtype(),
+-spec create(nkservice:id(), nkdomain:id(), nkdomain:id(), nkdomain:id(), nkdomain:subtype(),
              nkdomain_obj_make:make_opts(), map()) ->
     {ok, #obj_id_ext{}, integer(), [Unknown::binary()]} | {error, term()}.
 
-create(SrvId, DomainId, UserId, SubType, Opts, Data) ->
+create(SrvId, DomainId, ParentId, UserId, SubType, Opts, Data) ->
     case check_ttl(SubType, Opts) of
         {ok, SecsTTL} ->
             Obj = Opts#{
                 type => ?DOMAIN_TOKEN,
-                parent_id => DomainId,
+                domain_id => DomainId,
+                parent_id => ParentId,
                 created_by => UserId,
                 subtype => SubType,
                 ttl => SecsTTL,

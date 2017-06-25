@@ -49,7 +49,7 @@ test_basic_1(Pid) ->
         #{
             <<"type">> := <<"user">>,
             <<"obj_id">> := <<"admin">>,
-            <<"parent_id">> := <<"root">>,
+            <<"domain_id">> := <<"root">>,
             <<"path">> := <<"/users/admin">>,
             <<"created_time">> := _,
             <<"user">> := #{
@@ -69,7 +69,7 @@ test_basic_1(Pid) ->
         #{
             <<"type">> := ?DOMAIN_DOMAIN,
             <<"obj_id">> := <<"root">>,
-            <<"parent_id">> := <<>>,
+            <<"domain_id">> := <<>>,
             <<"path">> := <<"/">>,
             <<"created_time">> := _,
             <<"description">> := _
@@ -102,7 +102,7 @@ test_create_user(Pid) ->
         #{
             <<"type">> := <<"user">>,
             <<"obj_id">> := U2Id,
-            <<"parent_id">> := <<"root">>,
+            <<"domain_id">> := <<"root">>,
             <<"path">> := <<"/users/tuser1">>,
             <<"created_time">> := CT,
             <<"user">> := #{
@@ -140,7 +140,7 @@ test_create_user(Pid) ->
         #{
             <<"type">> := <<"user">>,
             <<"obj_id">> := U2Id,
-            <<"parent_id">> := <<"root">>,
+            <<"domain_id">> := <<"root">>,
             <<"path">> := <<"/users/tuser1">>,
             <<"created_time">> := CT,
             <<"user">> := #{
@@ -161,7 +161,7 @@ test_session1(Pid) ->
     {ok, Pid2, SessId} = login("/users/tuser1", pass2),
     {ok, #{<<"type">>:=<<"user">>, <<"path">>:=<<"/users/tuser1">>, <<"obj_id">>:=UId}} = cmd(Pid2, <<"objects/user/get">>, #{}),
     {ok, #{<<"type">>:=<<"user">>, <<"path">>:=<<"/users/admin">>}} = cmd(Pid, <<"objects/user/get">>, #{}),
-    {ok, <<"session">>, SessId, <<"/users/tuser1/sessions/", _/binary>>, SPid} = nkdomain:find(?SRV, SessId),
+    {ok, <<"session">>, SessId, <<"/sessions/", _/binary>>, SPid} = nkdomain:find(?SRV, SessId),
     true = is_pid(SPid),
 
     % Object has active childs, we cannot delete it
@@ -178,7 +178,7 @@ test_session1(Pid) ->
         <<"parent_id">> := UId,
         <<"active">> := true,
         <<"created_time">> := _,
-        <<"path">> := <<"/users/tuser1/sessions/", _/binary>>,
+        <<"path">> := <<"/sessions/", _/binary>>,
         <<"created_by">> := UId,
         <<"session">> := #{
             <<"local">> := <<"ws:0.0.0.0:", _/binary>>,
@@ -209,14 +209,13 @@ test_session2(Pid) ->
     {ok, #{<<"obj_id">>:=SessId}} = cmd(Pid, <<"objects/session/get">>, #{}),
     {ok, <<"session">>, SessId, Path, SessPid} = nkdomain:find(?SRV, SessId),
     {ok, Childs} = nkdomain_obj:sync_op(?SRV, <<"admin">>, get_childs),
-    {ok, _Base, _SessName} = nkdomain_util:get_parts(<<"session">>, Path),
     true = maps:is_key(SessId, Childs),
 
     % If we kill the session, admin notices and the web socket is closed
     % We link with admin so that it is not unloaded after stopping its childs for 10 secs
     spawn_link(
         fun() ->
-            ok = nkdomain_obj:sync_op(?SRV, <<"admin">>, {register, usage, {dont_stop, self()}}),
+            ok = nkdomain_obj:sync_op(?SRV, <<"admin">>, {register, usage, {please_dont_stop, self()}}),
             timer:sleep(10000)
         end),
     timer:sleep(50),
@@ -226,15 +225,12 @@ test_session2(Pid) ->
     false = maps:is_key(SessId, Childs2),
     {ok, <<"session">>, SessId, Path, undefined} = nkdomain:find(?SRV, SessId),
 
-    % Object has not active childs, but the child is still found on disk
-    {error, object_has_childs} = nkdomain:delete(?SRV, <<"admin">>),
-
     % If we force a clean of the database, the stale object is deleted and archived
     {ok, #{inactive:=N}} = nkdomain:clean(?SRV),
     true = N >= 1,
     {error, object_not_found} = nkdomain:find(?SRV, SessId),
     % Archive has a 1-second refresh time
-    timer:sleep(1100),
+%%    timer:sleep(1100),
 %%    {1, [#{<<"destroyed_code">>:=<<"object_clean_process">>}]} = find_archive(SessId),
     ok.
 
@@ -243,7 +239,7 @@ test_session2(Pid) ->
 test_session3(Admin) ->
     % Do login over tuser1, check the session is created and loaded
     {ok, Pid, SessId} = login("/users/tuser1", pass2),
-    {ok, <<"session">>, SessId, <<"/users/tuser1/sessions/", _/binary>>, SPid} = nkdomain:find(?SRV, SessId),
+    {ok, <<"session">>, SessId, <<"/sessions/", _/binary>>, SPid} = nkdomain:find(?SRV, SessId),
     true = is_pid(SPid),
 
     {ok, #{<<"path">>:=<<"/users/tuser1">>}} = cmd(Pid, <<"objects/user/get">>, #{}),
@@ -288,9 +284,9 @@ test_basic_2(Pid) ->
 
     % Create /stest1/stest2 and check we cannot create a child with missing father
     {ok, #{<<"obj_id">>:=S2Id, <<"path">>:=<<"/stest1/stest2">>}} =
-        cmd(Pid, <<"objects/domain/create">>, #{obj_name=>stest2, parent_id=>"/stest1", description=><<"Test Sub2">>, domain=>#{}}),
-    {error,{<<"could_not_load_parent">>, <<"Object could not load parent '/stest2'">>}} =
-        cmd(Pid, <<"objects/domain/create">>, #{obj_name=>stest2, parent_id=>"/stest2", description=><<"Test Sub2B">>, domain=>#{}}),
+        cmd(Pid, <<"objects/domain/create">>, #{obj_name=>stest2, domain_id=>"/stest1", description=><<"Test Sub2">>, domain=>#{}}),
+    {error,{<<"could_not_load_domain">>, <<"Object could not load domain '/stest2'">>}} =
+        cmd(Pid, <<"objects/domain/create">>, #{obj_name=>stest2, domain_id=>"/stest2", description=><<"Test Sub2B">>, domain=>#{}}),
 
     % Check the created objects
     {ok,
@@ -300,7 +296,7 @@ test_basic_2(Pid) ->
             <<"path">> := <<"/stest1">>,
             <<"created_time">> := _CT1,
             <<"description">> := <<"Test Sub1">>,
-            <<"parent_id">> := <<"root">>,
+            <<"domain_id">> := <<"root">>,
             <<"_is_enabled">> := true
         }} =
         cmd(Pid, <<"objects/domain/get">>, #{id=>"/stest1"}),
@@ -312,7 +308,7 @@ test_basic_2(Pid) ->
             <<"path">> := <<"/stest1/stest2">>,
             <<"created_time">> := CT2,
             <<"description">> := <<"Test Sub2">>,
-            <<"parent_id">> := S1Id,
+            <<"domain_id">> := S1Id,
             <<"_is_enabled">> := true
         }} =
         cmd(Pid, <<"objects/domain/get">>, #{id=>"/stest1/stest2"}),
@@ -327,23 +323,23 @@ test_basic_2(Pid) ->
             <<"path">> := <<"/stest1/stest2">>,
             <<"created_time">> := CT2,
             <<"description">> := <<"Test-Sub2">>,
-            <<"parent_id">> := S1Id
+            <<"domain_id">> := S1Id
         }} =
         cmd(Pid, <<"objects/domain/get">>, #{id=>S2Id}),
 
     % Create /stest1/users/u1
     U1 = #{name=>n1, surname=>s1, email=>"u1@sub1"},
     {ok, #{<<"obj_id">>:=U1Id, <<"path">>:=<<"/stest1/users/u1">>}} =
-        cmd(Pid, <<"objects/user/create">>, #{parent_id=>S1Id, obj_name=>u1, user=>U1}),
+        cmd(Pid, <<"objects/user/create">>, #{domain_id=>S1Id, obj_name=>u1, user=>U1}),
     {error,{<<"email_duplicated">>, _}} =
-        cmd(Pid, <<"objects/user/create">>, #{parent_id=>S1Id, obj_name=>u1, user=>U1}),
+        cmd(Pid, <<"objects/user/create">>, #{domain_id=>S1Id, obj_name=>u1, user=>U1}),
     {error,{<<"object_already_exists">>, _}} =
-        cmd(Pid, <<"objects/user/create">>, #{parent_id=>S1Id, obj_name=>u1, user=>U1#{email:="kk"}}),
+        cmd(Pid, <<"objects/user/create">>, #{domain_id=>S1Id, obj_name=>u1, user=>U1#{email:="kk"}}),
 
     % Create /stest1/stest2/users/u1
     U2 = #{name=>n2, surname=>s2, email=>"n2@sub1.sub2"},
     {ok, #{<<"obj_id">>:=U2Id, <<"path">>:=<<"/stest1/stest2/users/u1">>}} =
-        cmd(Pid, <<"objects/user/create">>, #{parent_id=>S2Id, obj_name=>u1, user=>U2}),
+        cmd(Pid, <<"objects/user/create">>, #{domain_id=>S2Id, obj_name=>u1, user=>U2}),
     % {ok, _} = cmd(Pid, <<"objects/user/wait_for_save">>, #{id=>U2Id}),
 
 
@@ -528,7 +524,7 @@ p1() ->
         type => user,
         obj_id => a,
         path => "/",
-        parent_id => p1,
+        domain_id => p1,
         created_time => 0,
         <<"user">> => #{name => n1}
     },

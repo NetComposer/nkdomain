@@ -61,12 +61,7 @@
     {ok, #obj_id_ext{}, [Unknown::binary()]} | {error, term()}.
 
 create(SrvId, Obj) ->
-    case check_email(SrvId, Obj) of
-        {ok, Obj2} ->
-            nkdomain_obj_make:create(SrvId, Obj2#{type=>?DOMAIN_USER});
-        {error, Error} ->
-            {error, Error}
-    end.
+    object_create(SrvId, Obj).
 
 
 %% @doc
@@ -91,7 +86,7 @@ auth(SrvId, UserId, #{password:=Pass}) ->
     {ok, nkdomain:obj_id(), integer()} | {error, term()}.
 
 make_token(SrvId, DomainId, UserId, TokenOpts, TokenData) ->
-    case nkdomain_token_obj:create(SrvId, DomainId, UserId, ?DOMAIN_USER, TokenOpts, TokenData) of
+    case nkdomain_token_obj:create(SrvId, DomainId, UserId, UserId, ?DOMAIN_USER, TokenOpts, TokenData) of
         {ok, TokenId, TTL, _Unknown} ->
             {ok, TokenId, TTL};
         {error, Error} ->
@@ -103,7 +98,7 @@ make_token(SrvId, DomainId, UserId, TokenOpts, TokenData) ->
 check_token(SrvId, Token) ->
     case nkdomain:get_obj(SrvId, Token) of
         {ok, #{type:=?DOMAIN_SESSION, ?DOMAIN_SESSION:=Data}=Obj} ->
-            #{parent_id:=DomainId, created_by:=UserId} = Obj,
+            #{domain_id:=DomainId, created_by:=UserId} = Obj,
             UserMeta1 = #{login_meta=>maps:get(login_meta, Data)},
             UserMeta2 = nkdomain_api_util:add_id(?DOMAIN_DOMAIN, DomainId, UserMeta1),
             UserMeta3 = nkdomain_api_util:add_id(?DOMAIN_USER, UserId, UserMeta2),
@@ -112,7 +107,7 @@ check_token(SrvId, Token) ->
         {ok, #{type:=?DOMAIN_TOKEN, subtype:=SubTypes, ?DOMAIN_TOKEN:=Data}=Obj} ->
             case lists:member(?DOMAIN_USER, SubTypes) of
                 true ->
-                    #{parent_id:=DomainId, created_by:=UserId} = Obj,
+                    #{domain_id:=DomainId, created_by:=UserId} = Obj,
                     UserMeta1 = #{login_meta=>maps:get(login_meta, Data)},
                     UserMeta2 = nkdomain_api_util:add_id(?DOMAIN_DOMAIN, DomainId, UserMeta1),
                     UserMeta3 = nkdomain_api_util:add_id(?DOMAIN_USER, UserId, UserMeta2),
@@ -164,20 +159,6 @@ get_name(Srv, Id) ->
     nkdomain_obj:sync_op(Srv, Id, {?MODULE, get_name}).
 
 
-%%%% @doc
-%%-spec send_push(nkservice:id(), nkdomain:id(), nkevent:event()) ->
-%%    ok | {error, term()}.
-%%
-%%send_push(Srv, Id, Event) ->
-%%    lager:error("SEND USER PUSH"),
-%%    case nkdomain_lib:load(Srv, Id) of
-%%        #obj_id_ext{pid=Pid} ->
-%%            nkdomain_obj:async_op(Pid, {?MODULE, send_push, Event});
-%%        {error, Error} ->
-%%            {error, Error}
-%%    end.
-
-
 %% @doc
 register_session(SrvId, Id, Type, SessId, Meta) ->
     nkdomain_obj:sync_op(SrvId, Id, {?MODULE, register_session, Type, SessId, Meta, self()}).
@@ -217,9 +198,15 @@ object_admin_info() ->
         get_tree_detail => fun nkdomain_user_obj_ui:table/1
     }.
 
+
 %% @doc
 object_create(SrvId, Obj) ->
-    create(SrvId, Obj).
+    case check_email(SrvId, Obj) of
+        {ok, Obj2} ->
+            nkdomain_obj_make:create(SrvId, Obj2#{type=>?DOMAIN_USER});
+        {error, Error} ->
+            {error, Error}
+    end.
 
 
 %% @private
@@ -282,8 +269,6 @@ object_parse(SrvId, load, Obj) ->
 %% @private
 object_api_syntax(Cmd, Syntax) ->
     nkdomain_user_obj_syntax:api(Cmd, Syntax).
-
-
 
 
 %% @private

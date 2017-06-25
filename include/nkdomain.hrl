@@ -46,6 +46,7 @@
     srv_id :: nkservice:id(),
     id :: #obj_id_ext{},
     module :: module(),
+    domain_id :: nkdomain:obj_id(),
     parent_id :: nkdomain:obj_id(),
     obj_name :: nkdomain:name(),
     object_info :: nkdomain_obj:object_info(),

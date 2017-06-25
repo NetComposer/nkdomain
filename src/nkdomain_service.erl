@@ -202,7 +202,7 @@ load_file_stores(SrvId, [{Id, Data}|Rest]) ->
     Obj = #{
         obj_name => Id,
         type => ?DOMAIN_FILE_STORE,
-        parent_id => <<"root">>,
+        domain_id => <<"root">>,
         created_by => <<"admin">>,
         ?DOMAIN_FILE_STORE => Data
     },
@@ -279,7 +279,7 @@ load_mail_providers(SrvId, [{Id, Data}|Rest]) ->
     Obj = #{
         obj_name => Id,
         type => ?DOMAIN_MAIL_PROVIDER,
-        parent_id => <<"root">>,
+        domain_id => <<"root">>,
         created_by => <<"admin">>,
         ?DOMAIN_MAIL_PROVIDER => Data
     },

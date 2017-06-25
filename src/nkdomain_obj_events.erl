@@ -40,8 +40,8 @@
 
 
 %% @private
-event(created, #?STATE{obj=#{parent_id:=ParentId}}=Session) ->
-    {event, created, #{parent_id=>ParentId}, Session};
+event(created, #?STATE{obj=#{domain_id:=DomainId}}=Session) ->
+    {event, created, #{domain_id=>DomainId}, Session};
 
 event(loaded, Session) ->
     {event, loaded, #{}, Session};

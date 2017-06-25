@@ -439,7 +439,7 @@ filter_childs(Id, Spec, EsOpts) ->
 %% @private
 parent_filter(Id, Spec) ->
     Filters1 = maps:get(filters, Spec, #{}),
-    Filters2 = Filters1#{parent_id=>Id},
+    Filters2 = Filters1#{domain_id=>Id},
     Spec#{filters=>Filters2}.
 
 

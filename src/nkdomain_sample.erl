@@ -67,7 +67,7 @@ user_get(Id) ->
 user_create(Domain, Name, Surname) ->
     Data = #{
         obj_name => to_bin(Name),
-        parent_id => to_bin(Domain),
+        domain_id => to_bin(Domain),
         user => #{
             name => to_bin(Name),
             surname => to_bin(Surname),
@@ -85,7 +85,7 @@ user_create(Domain, Name, Surname, Password, Email) ->
 user_create(Domain, ObjName, Password, Name, Surname, Email) ->
     Data = #{
         obj_name => to_bin(ObjName),
-        parent_id => to_bin(Domain),
+        domain_id => to_bin(Domain),
         user => #{
             name => to_bin(Name),
             password => to_bin(Password),
@@ -101,7 +101,7 @@ user_create(Domain, ObjName, Password, Name, Surname, Email) ->
 user_create2(Domain, Name, Surname, Avatar, Phone, Address) ->
     Data = #{
         obj_name => to_bin(Name),
-        parent_id => to_bin(Domain),
+        domain_id => to_bin(Domain),
         user => #{
             name => to_bin(Name),
             surname => to_bin(Surname),
@@ -158,7 +158,7 @@ domain_get(Id) ->
 domain_create(Domain, ObjName, Name, Desc) ->
     Data = #{
         obj_name => ObjName,
-        parent_id => Domain,
+        domain_id => Domain,
         name => Name,
         description => Desc,
         domain => #{}
@@ -307,7 +307,7 @@ file_post2(T) ->
     FileId.
 
 file_post3(T) ->
-    Bin = crypto:rand_bytes(10000000),
+    Bin = crypto:strong_rand_bytes(10000000),
     {ok, #{<<"obj_id">>:=FileId}} = upload(T, "/_file", "application/binary", Bin),
     FileId.
 

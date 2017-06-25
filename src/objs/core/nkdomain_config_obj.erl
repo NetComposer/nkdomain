@@ -48,11 +48,11 @@
 %% @doc
 find_configs(Srv, SubType, Parent) ->
     case nkdomain_lib:load(Srv, Parent) of
-        #obj_id_ext{obj_id=ParentId} ->
+        #obj_id_ext{obj_id=DomainId} ->
             Search = #{
                 filters => #{
                     type => ?DOMAIN_CONFIG,
-                    parent_id => ParentId,
+                    domain_id => DomainId,
                     subtype => SubType
                 },
                 fields => [created_time, ?DOMAIN_CONFIG],

@@ -72,6 +72,7 @@
 %% @doc
 error({body_too_large, Size, Max})      -> {"Body too large (size is ~p, max is ~p)", [Size, Max]};
 error({could_not_load_parent, Id})      -> {"Object could not load parent '~s'", [Id]};
+error({could_not_load_domain, Id})      -> {"Object could not load domain '~s'", [Id]};
 error(domain_unknown)                   -> "Unknown domain";
 error({domain_unknown, D})              -> {"Unknown domain '~s'", [D]};
 error({email_duplicated, E})            -> {"Duplicated email '~s'", [E]};
@@ -106,7 +107,6 @@ error(object_stopped) 		            -> "Object stopped";
 error(parent_not_found) 		        -> "Parent not found";
 error(parent_stopped) 		            -> "Parent stopped";
 error(parse_error)   		            -> "Object parse error";
-error(referred_not_found) 		        -> "Referred object not found";
 error(service_down)                     -> "Service is down";
 error(session_already_present)          -> "Session is already present";
 error(session_not_found)                -> "Session not found";
@@ -204,8 +204,8 @@ object_syntax(load) ->
         obj_id => binary,
         type => binary,
         path => binary,
+        domain_id => binary,
         parent_id => binary,
-        referred_id => binary,
         subtype => {list, binary},
         created_by => binary,
         created_time => integer,
@@ -225,7 +225,7 @@ object_syntax(load) ->
         icon_id => binary,
         icon_content_type => binary,
         '_store_vsn' => any,
-        '__mandatory' => [type, obj_id, parent_id, path, created_time]
+        '__mandatory' => [type, obj_id, domain_id, path, created_time]
     };
 
 object_syntax(update) ->
@@ -279,7 +279,7 @@ object_create(SrvId, DomainId, Type, UserId, Obj) ->
             Obj2 = Obj#{
                 type => Type,
                 created_by => UserId,
-                parent_id => DomainId
+                domain_id => DomainId
             },
             case erlang:function_exported(Module, object_create, 2) of
                 true ->

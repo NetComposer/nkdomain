@@ -37,7 +37,7 @@ create() ->
         type => ?DOMAIN_DOMAIN,
         obj_id => <<"root">>,
         path => <<"/">>,
-        parent_id => <<>>,
+        domain_id => <<>>,
         description => <<"NetComposer">>,
         created_time => nkdomain_util:timestamp()
     },
@@ -112,7 +112,7 @@ stop() ->
 admin_create() ->
     Obj = #{
         obj_id => <<"admin">>,
-        parent_id => <<"root">>,
+        domain_id => <<"root">>,
         type => ?DOMAIN_USER,
         ?DOMAIN_USER => #{
             name => <<"Admin">>,

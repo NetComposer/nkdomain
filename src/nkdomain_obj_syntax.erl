@@ -35,6 +35,7 @@
 syntax(<<"create">>, Type, Syntax) ->
     Syntax#{
         obj_name => binary,
+        domain_id => binary,
         parent_id => binary,
         enabled => boolean,
         name => binary,

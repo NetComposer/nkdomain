@@ -95,8 +95,8 @@ event(#nkevent{type = <<"created">>, subclass=ObjType, obj_id=ObjId, body=Body}=
     {Updates2, Session2} = update_resource(ObjType, Updates, Session),
     {Updates3, Session3} = case ObjType of
         ?DOMAIN_DOMAIN ->
-            #{parent_id:=ParentId} = Body,
-            created_domain(ObjId, ParentId, Updates2, Session2);
+            #{domain_id:=DomainId} = Body,
+            created_domain(ObjId, DomainId, Updates2, Session2);
         _ ->
             {Updates2, Session2}
     end,
@@ -237,14 +237,14 @@ get_domain_id(ObjId) ->
 
 
 %% @private
-created_domain(ObjId, ParentId, Updates, #{domain_id:=ParentId}=Session) ->
+created_domain(ObjId, DomainId, Updates, #{domain_id:=DomainId}=Session) ->
     #{domain_ids:=DomList1} = nkadmin_util:get_key_data(?DOMAINS_ALL, Session),
     DomList2 = nklib_util:store_value(ObjId, DomList1),
     Session2 = nkadmin_util:set_key_data(?DOMAINS_ALL, #{domain_ids=>DomList2}, Session),
     {ok, Item, Session3} = get_domains(DomList2, Session2),
     {[Item|Updates], Session3};
 
-created_domain(_ObjId, _ParentId, Updates, Session) ->
+created_domain(_ObjId, _DomainId, Updates, Session) ->
     {Updates, Session}.
 
 
