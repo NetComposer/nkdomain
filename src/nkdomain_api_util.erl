@@ -21,10 +21,33 @@
 -module(nkdomain_api_util).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
+-export([session_login/4, token_login/3]).
 -export([search/1, get_id/3, get_id/4, add_id/3]).
 
 -include("nkdomain.hrl").
 -include_lib("nkservice/include/nkservice.hrl").
+
+
+%% ===================================================================
+%% Types
+%% ===================================================================
+
+-type login_data() ::
+    #{
+        id => binary(),
+        password => binary(),
+        domain_id => binary(),
+        meta => map()
+    }.
+
+
+-type session_meta() ::
+    #{
+        session_id => binary(),
+        local => binary(),
+        remote => binary(),
+        monitor => {module(), pid()}
+    }.
 
 
 
@@ -32,6 +55,84 @@
 %% Public
 %% ===================================================================
 
+%% @doc
+-spec session_login(nkservice:id(), login_data(), session_meta(), map()) ->
+    {ok, UserId::nkdomain:obj_id(), SessId::nkdomain:obj_id(), pid(), UserMeta::map()} | {error, term()}.
+
+session_login(SrvId, Data, SessMeta, UserMeta) ->
+    #{id:=User} = Data,
+    Auth = #{password => maps:get(password, Data, <<>>)},
+    case get_domain(SrvId, Data) of
+        {ok, DomainId} ->
+            case nkdomain_user_obj:auth(SrvId, User, Auth) of
+                {ok, UserId} ->
+                    LoginMeta = maps:get(meta, Data, #{}),
+                    SessOpts1 = maps:with([session_id, local, remote, monitor], SessMeta),
+                    SessOpts2 = SessOpts1#{login_meta => LoginMeta},
+                    case nkdomain_session_obj:start(SrvId, DomainId, UserId, SessOpts2) of
+                        {ok, SessId, Pid} ->
+                            UserMeta1 = UserMeta#{login_meta=>LoginMeta},
+                            UserMeta2 = nkdomain_api_util:add_id(?DOMAIN_DOMAIN, DomainId, UserMeta1),
+                            UserMeta3 = nkdomain_api_util:add_id(?DOMAIN_USER, UserId, UserMeta2),
+                            UserMeta4 = nkdomain_api_util:add_id(?DOMAIN_SESSION, SessId, UserMeta3),
+                            {ok, UserId, SessId, Pid, UserMeta4};
+                        {error, Error} ->
+                            {error, Error}
+                    end;
+                {error, Error} ->
+                    {error, Error}
+            end;
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
+%% @doc
+-spec token_login(nkservice:id(), login_data()|#{ttl=>integer()}, session_meta()) ->
+    {ok, TokenId::nkdomain:obj_id(), TTLSecs::integer()} | {error, term()}.
+
+token_login(SrvId, Data, SessMeta) ->
+    #{id:=User} = Data,
+    Auth = #{password => maps:get(password, Data, <<>>)},
+    case get_domain(SrvId, Data) of
+        {ok, DomainId} ->
+            case nkdomain_user_obj:auth(SrvId, User, Auth) of
+                {ok, UserId} ->
+                    LoginMeta = maps:get(meta, Data, #{}),
+                    TokenData1 = maps:with([session_id, local, remote], SessMeta),
+                    TokenData2 = TokenData1#{login_meta => LoginMeta},
+                    TokenOpts = maps:with([ttl], Data),
+                    nkdomain_user_obj:make_token(SrvId, DomainId, UserId, TokenOpts, TokenData2);
+                {error, Error} ->
+                    {error, Error}
+            end;
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
+%% @private
+get_domain(SrvId, #{domain_id:=Domain}) ->
+    load_domain(SrvId, Domain);
+
+get_domain(SrvId, #{id:=User}) ->
+    case nkdomain_lib:find(SrvId, User) of
+        #obj_id_ext{path=Path} ->
+            {ok, Domain, _} = nkdomain_util:get_parts(?DOMAIN_USER, Path),
+            load_domain(SrvId, Domain);
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
+%% @private
+load_domain(SrvId, Domain) ->
+    case nkdomain_lib:find(SrvId, Domain) of
+        #obj_id_ext{obj_id=DomainId} ->
+            {ok, DomainId};
+        {error, _} ->
+            {error, {domain_unknown, Domain}}
+    end.
 
 %% @doc
 search({ok, Total, List}) ->

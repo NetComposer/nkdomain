@@ -25,13 +25,14 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([start/4]).
--export([object_info/0, object_es_mapping/0, object_parse/3,
+-export([object_info/0, object_es_mapping/0, object_parse/3, object_api_syntax/2, object_api_cmd/2,
          object_init/1, object_stop/2, object_event/2]).
 -export([object_admin_info/0]).
 -export([object_check_active/2]).
 
 -include("nkdomain.hrl").
 -include("nkdomain_debug.hrl").
+-include_lib("nkservice/include/nkservice.hrl").
 
 
 %% ===================================================================
@@ -41,10 +42,10 @@
 -type create_opts() ::
     #{
         session_id => binary(),
-        api_server_pid => pid(),
         login_meta => map(),
         local => binary(),
-        remote => binary()
+        remote => binary(),
+        monitor => {module(), pid()}
     }.
 
 
@@ -71,8 +72,13 @@ start(SrvId, DomainId, UserId, Opts) ->
             _ ->
                 Obj1
         end,
-        #{api_server_pid:=ApiPid} = Opts,
-        case nkdomain_obj_make:create(SrvId, Obj2, #{meta=>#{api_server_pid=>ApiPid}}) of
+        CreateOpts = case Opts of
+            #{monitor:={ApiMod, ApiPid}=Mon} when is_atom(ApiMod), is_pid(ApiPid) ->
+                #{meta=>#{monitor=>Mon}};
+            _ ->
+                #{}
+        end,
+        case nkdomain_obj_make:create(SrvId, Obj2, CreateOpts) of
             {ok, #obj_id_ext{obj_id=SessId2, pid=Pid}, _} ->
                 {ok, SessId2, Pid};
             {error, Error} ->
@@ -121,17 +127,18 @@ object_parse(_SrvId, _Mode, _Obj) ->
 
 
 %% @private
-object_init(#?STATE{srv_id=SrvId, id=Id, obj=Obj, meta=#{api_server_pid:=ApiPid}}=State) ->
+object_init(#?STATE{srv_id=SrvId, id=Id, obj=Obj, meta=Meta}=State) ->
     %% TODO Link again if moved process
     #obj_id_ext{obj_id=SessId} = Id,
     #{created_by:=UserId} = Obj,
     ok = nkdomain_user_obj:register_session(SrvId, UserId, ?DOMAIN_SESSION, SessId, #{}),
-    {ok, nkdomain_obj_util:link_to_api_server(?MODULE, ApiPid, State)};
-
-object_init(State) ->
-    ?LLOG(warning, "started without meta", [], State),
-    {ok, State}.
-
+    State2 = case Meta of
+        #{monitor:={ApiMod, ApiPid}} ->
+            nkdomain_obj_util:link_to_api_server(?MODULE, ApiMod, ApiPid, State);
+        _ ->
+            State
+    end,
+    {ok, State2}.
 
 
 %% @private
@@ -143,6 +150,56 @@ object_stop(_Reason, #?STATE{meta=#{api_server_pid:=ApiPid}}=State) ->
 object_stop(_Reason, State) ->
     {ok, State}.
 
+
+%% @private
+
+%% @doc
+object_api_syntax(<<"start">>, Syntax) ->
+    Syntax#{
+        id => binary,
+        password => binary,
+        domain_id => binary,
+        meta => map,
+        '__mandatory' => [id]
+    };
+
+object_api_syntax(Cmd, Syntax) ->
+    nkdomain_obj_syntax:syntax(Cmd, ?DOMAIN_SESSION, Syntax).
+
+
+%%%% @private
+%%object_send_event(Event, State) ->
+%%    nkdomain_user_obj_events:event(Event, State).
+
+
+%% @private
+object_api_cmd(<<"start">>, Req) ->
+    #nkreq{
+        srv_id = SrvId,
+        data = Data,
+        session_id = SessId,
+        session_pid = SessPid,
+        session_module = Module,
+        session_meta = SessMeta,
+        user_meta = UserMeta
+    } = Req,
+    case catch Module:type() of
+        session ->
+            SessMeta2 = maps:with([local, remote, monitor], SessMeta),
+            SessMeta3 = SessMeta2#{session_id=>SessId, monitor=>{Module, SessPid}},
+            case nkdomain_api_util:session_login(SrvId, Data, SessMeta3, UserMeta) of
+                {ok, UserId, SessId, _SessPid, UserMeta2} ->
+                    Reply = #{user_id=>UserId, session_id=>SessId},
+                    {login, Reply, UserId, UserMeta2};
+                {error, Error} ->
+                    {error, Error}
+            end;
+        _ ->
+            {error, session_type_unsupported}
+    end;
+
+object_api_cmd(Cmd, Req) ->
+    nkdomain_obj_api:api(Cmd, ?DOMAIN_SESSION, Req).
 
 
 %% @private

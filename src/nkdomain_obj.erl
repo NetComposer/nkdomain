@@ -525,7 +525,6 @@ do_sync_op(get_obj, _From, State) ->
     #obj_id_ext{obj_id=_ObjId, type=Type, path=Path} = ObjIdExt,
     {ok, Domain, ObjName} = nkdomain_util:get_parts(Type, Path),
     Obj2 = Obj#{
-        '_domain' => Domain,
         '_obj_name' => ObjName,
         '_module' => Module,
         '_status' => Status,
@@ -614,7 +613,7 @@ do_sync_op({nkdomain_reg_child, ObjIdExt}, _From, State) ->
         {false, #{dont_create_childs_on_disabled:=true}} ->
             reply({error, parent_is_disabled}, State);
         _ ->
-            ?DEBUG("creating child ~s", [Path], State),
+            ?DEBUG("registering child ~s", [Path], State),
             %% Check do_check_child(ObjIdExt, State)
             State2 = do_rm_child(ObjId, State),
             State3 = do_add_child(ObjId, Type, Pid, State2),

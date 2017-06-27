@@ -76,6 +76,7 @@ error({could_not_load_domain, Id})      -> {"Object could not load domain '~s'",
 error(domain_unknown)                   -> "Unknown domain";
 error({domain_unknown, D})              -> {"Unknown domain '~s'", [D]};
 error({email_duplicated, E})            -> {"Duplicated email '~s'", [E]};
+error({file_not_found, F})              -> {"File '~s' not found", [F]};
 error(invalid_content_type)             -> "Invalid Content-Type";
 error({invalid_name, N})                -> {"Invalid name '~s'", [N]};
 error(invalid_object_id)                -> "Invalid object id";
@@ -88,6 +89,7 @@ error(invalid_token)                    -> "Invalid token";
 error(invalid_token_ttl)                -> "Invalid token TTL";
 error(member_already_present)           -> "Member is already present";
 error(member_not_found)                 -> "Member not found";
+error(member_invalid)                   -> "Invalid member";
 error(missing_auth_header)              -> "Missing authentication header";
 error({module_failed, Module})          -> {"Module '~s' failed", [Module]};
 error(object_already_exists)            -> "Object already exists";
@@ -111,6 +113,7 @@ error(service_down)                     -> "Service is down";
 error(session_already_present)          -> "Session is already present";
 error(session_not_found)                -> "Session not found";
 error(session_is_disabled)              -> "Session is disabled";
+error(session_type_unsupported)         -> "Session type not supported";
 error(store_id_invalid)                 -> "Invalid Store Id";
 error(store_id_missing)                 -> "Missing Store Id";
 error(user_is_disabled) 		        -> "User is disabled";
@@ -305,6 +308,7 @@ object_parse(SrvId, Mode, Map) ->
         #{type:=Type0} -> Type0;
         _ -> <<>>
     end,
+    SynOpts = #{domain_srv_id=>SrvId, domain_mode=> Mode},
     case nkdomain_all_types:get_module(Type) of
         undefined ->
             {error, {invalid_type, Type}};
@@ -321,7 +325,7 @@ object_parse(SrvId, Mode, Map) ->
                     {error, Error};
                 {type_obj, TypeObj, UnknownFields1} ->
                     BaseSyn = SrvId:object_syntax(Mode),
-                    case nklib_syntax:parse(Map, BaseSyn#{Type=>ignore}) of
+                    case nklib_syntax:parse(Map, BaseSyn#{Type=>ignore}, SynOpts) of
                         {ok, Obj, UnknownFields2} ->
                             {ok, Obj#{Type=>TypeObj}, UnknownFields1++UnknownFields2};
                         {error, Error} ->
@@ -329,7 +333,7 @@ object_parse(SrvId, Mode, Map) ->
                     end;
                 Syntax when Syntax==any; is_map(Syntax) ->
                     BaseSyn = SrvId:object_syntax(Mode),
-                    nklib_syntax:parse(Map, BaseSyn#{Type=>Syntax})
+                    nklib_syntax:parse(Map, BaseSyn#{Type=>Syntax}, SynOpts)
             end
     end.
 
@@ -752,7 +756,10 @@ service_api_syntax(_Syntax, _Req) ->
 
 
 %% @doc
-service_api_allow(#nkreq{cmd = <<"objects/user/login">>, user_id = <<>>}, State) ->
+service_api_allow(#nkreq{cmd = <<"objects/session/start">>, user_id = <<>>}, State) ->
+    {true, State};
+
+service_api_allow(#nkreq{cmd = <<"objects/user/get_token">>, user_id = <<>>}, State) ->
     {true, State};
 
 service_api_allow(#nkreq{cmd = <<"objects/", _/binary>>, user_id = <<>>}, State) ->
@@ -827,7 +834,7 @@ api_server_reg_down(_Link, _Reason, _State) ->
     continue.
 
 %% @doc
-api_server_http_auth(#nkreq{cmd = <<"objects/user/login">>}, _HttpReq) ->
+api_server_http_auth(#nkreq{cmd = <<"objects/user/get_token">>}, _HttpReq) ->
     {true, <<>>, #{}, #{}};
 
 api_server_http_auth(#nkreq{srv_id=SrvId}, HttpReq) ->
