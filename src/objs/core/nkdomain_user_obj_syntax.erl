@@ -33,6 +33,10 @@
 
 
 %% @doc
+%% TODO to remove
+api(<<"login">>, Syntax) ->
+    nkdomain_session_obj:object_api_syntax(<<"start">>, Syntax);
+
 api(<<"get_token">>, Syntax) ->
     Syntax#{
         id => binary,

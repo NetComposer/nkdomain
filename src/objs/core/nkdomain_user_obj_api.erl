@@ -34,6 +34,9 @@
 %% ===================================================================
 
 %% @doc
+cmd(<<"login">>, Req) ->
+    nkdomain_session_obj:object_api_cmd(<<"start">>, Req);
+
 cmd(<<"get_token">>, Req) ->
     #nkreq{
         srv_id = SrvId,

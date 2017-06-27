@@ -756,6 +756,10 @@ service_api_syntax(_Syntax, _Req) ->
 
 
 %% @doc
+%% TODO to remove
+service_api_allow(#nkreq{cmd = <<"objects/user/login">>, user_id = <<>>}, State) ->
+    {true, State};
+
 service_api_allow(#nkreq{cmd = <<"objects/session/start">>, user_id = <<>>}, State) ->
     {true, State};
 
