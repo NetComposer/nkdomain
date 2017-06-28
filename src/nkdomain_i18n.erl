@@ -28,8 +28,9 @@
 i18n() -> #{
     en => #{
         logout => "Logout",
-        domain_refresh => "Refresh",
+        domain_refresh => "REFRESH",
         domain_show_subdomains => "Show subdomains",
+        domain_real_time => "REAL TIME",
 
         domain_tree_overview => "Overview",
         domain_tree_overview_dashboard => "Dashboard",
@@ -54,17 +55,19 @@ i18n() -> #{
 
         domain_column_pos => "#",
         domain_column_domain => "DOMAIN",
+        domain_column_path => "PATH",
         domain_column_name => "NAME",
         domain_column_firstname => "FIRSTNAME",
         domain_column_lastname => "LASTNAME",
         domain_column_email => "EMAIL",
-        domain_column_created_by => "CREATOR",
-        domain_column_created_time => "CREATED"
+        domain_column_created_by => "CREATED BY",
+        domain_column_created_time => "CREATED DATE"
     },
     es => #{
         logout => "Salir",
-        domain_refresh => "Refrescar",
+        domain_refresh => "REFRESCAR",
         domain_show_subdomains => "Mostrar subdominios",
+        domain_real_time => "TIEMPO REAL",
 
         domain_tree_overview => "General",
         domain_tree_overview_dashboard => <<"Información"/utf8>>,
@@ -89,11 +92,12 @@ i18n() -> #{
 
         domain_column_pos => "#",
         domain_column_domain => "DOMINIO",
+        domain_column_path => "RUTA",
         domain_column_firstname => "NOMBRE",
         domain_column_lastname => "APELLIDOS",
         domain_column_email => "EMAIL",
-        domain_column_created_by => "CREADOR",
-        domain_column_created_time => <<"CREACIÓN"/utf8>>
+        domain_column_created_by => "CREADO POR",
+        domain_column_created_time => <<"FECHA CREACIÓN"/utf8>>
     }
 }.
 
