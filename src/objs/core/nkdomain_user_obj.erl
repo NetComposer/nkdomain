@@ -24,7 +24,7 @@
 -behavior(nkdomain_obj).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([create/2, auth/3, make_token/5, check_token/2, get_name/2]).
+-export([create/2, auth/3, make_token/5, get_name/2]).
 -export([object_info/0, object_admin_info/0, object_create/2, object_es_mapping/0, object_es_unparse/3,
          object_parse/3, object_api_syntax/2, object_api_cmd/2, object_send_event/2]).
 -export([object_init/1, object_sync_op/3, object_async_op/2, object_link_down/2]).
@@ -36,6 +36,7 @@
 
 -include("nkdomain.hrl").
 -include("nkdomain_debug.hrl").
+-include_lib("nkservice/include/nkservice.hrl").
 
 -define(LLOG(Type, Txt, Args),
     lager:Type("NkDOMAIN User "++Txt, Args)).
@@ -91,47 +92,6 @@ make_token(SrvId, DomainId, UserId, TokenOpts, TokenData) ->
             {ok, TokenId, TTL};
         {error, Error} ->
             {error, Error}
-    end.
-
-
-%% @doc
-check_token(SrvId, Token) ->
-    case nkdomain:get_obj(SrvId, Token) of
-        {ok, #{type:=?DOMAIN_SESSION, ?DOMAIN_SESSION:=Data}=Obj} ->
-            #{domain_id:=DomainId, created_by:=UserId} = Obj,
-            UserMeta1 = #{login_meta=>maps:get(login_meta, Data)},
-            UserMeta2 = nkdomain_api_util:add_id(?DOMAIN_DOMAIN, DomainId, UserMeta1),
-            UserMeta3 = nkdomain_api_util:add_id(?DOMAIN_USER, UserId, UserMeta2),
-            UserMeta4 = nkdomain_api_util:add_id(?DOMAIN_SESSION, Token, UserMeta3),
-            {ok, UserId, UserMeta4};
-        {ok, #{type:=?DOMAIN_TOKEN, subtype:=SubTypes, ?DOMAIN_TOKEN:=Data}=Obj} ->
-            case lists:member(?DOMAIN_USER, SubTypes) of
-                true ->
-                    #{domain_id:=DomainId, created_by:=UserId} = Obj,
-                    UserMeta1 = #{login_meta=>maps:get(login_meta, Data)},
-                    UserMeta2 = nkdomain_api_util:add_id(?DOMAIN_DOMAIN, DomainId, UserMeta1),
-                    UserMeta3 = nkdomain_api_util:add_id(?DOMAIN_USER, UserId, UserMeta2),
-                    {ok, UserId, UserMeta3};
-                _ ->
-                    {error, invalid_token}
-            end;
-        _ ->
-            case catch base64:decode(Token) of
-                Bin when is_binary(Bin) ->
-                    case binary:split(Bin, <<":">>) of
-                        [Login, Pass] ->
-                            case auth(SrvId, Login, #{password=>Pass}) of
-                                {ok, UserId} ->
-                                    {ok, UserId, #{}};
-                                {error, Error} ->
-                                    {error, Error}
-                            end;
-                        _ ->
-                            {error, invalid_token}
-                    end;
-                _ ->
-                    {error, invalid_token}
-            end
     end.
 
 

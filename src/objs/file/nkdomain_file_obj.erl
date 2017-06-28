@@ -24,7 +24,7 @@
 -behavior(nkdomain_obj).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([http_post/3, http_get/3]).
+-export([http_post/2, http_get/2]).
 -export([find/1, delete_all/1]).
 -export([object_info/0, object_es_mapping/0, object_parse/3, object_api_syntax/2, object_api_cmd/2]).
 -export([object_admin_info/0]).
@@ -46,10 +46,10 @@
 
 
 %% @doc Creates a file over HTTP
-http_post(SrvId, Domain, Req) ->
+http_post(Domain, #nkreq{srv_id=SrvId}=Req) ->
     Headers = nkservice_rest_http:get_headers(Req),
     Token = nklib_util:get_value(<<"x-netcomposer-auth">>, Headers, <<>>),
-    case nkdomain_user_obj:check_token(SrvId, Token) of
+    case nkdomain_api_util:check_token(Token, Req) of
         {ok, UserId, _Meta} ->
             CT = nkservice_rest_http:get_ct(Req),
             Qs = nkservice_rest_http:get_qs(Req),
@@ -101,7 +101,7 @@ http_post(SrvId, Domain, Req) ->
 
 
 %% @doc
-http_get(SrvId, FileId, Req) ->
+http_get(FileId, #nkreq{srv_id=SrvId}=Req) ->
     Headers = nkservice_rest_http:get_headers(Req),
     Qs = nkservice_rest_http:get_qs(Req),
     Token = case nklib_util:get_value(<<"x-netcomposer-auth">>, Headers, <<>>) of
@@ -110,7 +110,7 @@ http_get(SrvId, FileId, Req) ->
         Auth0 ->
             Auth0
     end,
-    case nkdomain_user_obj:check_token(SrvId, Token) of
+    case nkdomain_api_util:check_token(Token, Req) of
         {ok, _UserId, _Meta} ->
             case nkdomain:get_obj(SrvId, FileId) of
                 {ok, #{obj_id:=FileObjId, ?DOMAIN_FILE:=File}} ->

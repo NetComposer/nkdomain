@@ -24,7 +24,7 @@
 -export([error/1]).
 -export([object_apply/3]).
 
--export([nkservice_rest_http/5]).
+-export([nkservice_rest_http/4]).
 -export([admin_tree_categories/2, admin_tree_get_category/2, admin_event/3,
          admin_element_action/5, admin_get_data/3]).
 -export([object_admin_info/1, object_get_counter/3]).
@@ -40,7 +40,7 @@
          object_db_search_childs/3, object_db_search_all_childs/3,
          object_db_delete_all_childs/3, object_db_clean/1]).
 -export([plugin_deps/0, plugin_syntax/0, plugin_config/2]).
--export([service_api_syntax/2, service_api_allow/2, service_api_cmd/2]).
+-export([service_api_syntax/2, service_api_allow/1, service_api_cmd/1]).
 -export([api_server_http_auth/2, api_server_reg_down/3]).
 -export([service_init/2, service_handle_cast/2, service_handle_info/2]).
 
@@ -166,19 +166,19 @@ admin_get_data(ElementId, Spec, Session) ->
 
 
 %% @doc
-nkservice_rest_http(SrvId, get, [<<"_file">>, FileId], Req, State) ->
-    case nkdomain_file_obj:http_get(SrvId, FileId, Req) of
+nkservice_rest_http(get, [<<"_file">>, FileId], Req, State) ->
+    case nkdomain_file_obj:http_get(FileId, Req) of
         {ok, CT, Bin} ->
             {http, 200, [{<<"Content-Type">>, CT}], Bin, State};
         {error, Error} ->
             nkservice_rest_http:reply_json({error, Error}, Req, State)
     end;
 
-nkservice_rest_http(SrvId, post, File, Req, State) ->
+nkservice_rest_http(post, File, Req, State) ->
     case lists:reverse(File) of
         [<<"_file">>|Rest] ->
             Domain = nklib_util:bjoin(lists:reverse(Rest), <<"/">>),
-            case nkdomain_file_obj:http_post(SrvId, Domain, Req) of
+            case nkdomain_file_obj:http_post(Domain, Req) of
                 {ok, #obj_id_ext{obj_id=ObjId, path=Path}, _Unknown} ->
                     Reply = #{obj_id=>ObjId, path=>Path},
                     nkservice_rest_http:reply_json({ok, Reply}, Req, State);
@@ -189,7 +189,7 @@ nkservice_rest_http(SrvId, post, File, Req, State) ->
             continue
     end;
 
-nkservice_rest_http(_SrvId, _Method, _Path, _Req, _State) ->
+nkservice_rest_http(_Method, _Path, _Req, _State) ->
     continue.
 
 
@@ -757,76 +757,73 @@ service_api_syntax(_Syntax, _Req) ->
 
 %% @doc
 %% TODO to remove
-service_api_allow(#nkreq{cmd = <<"objects/user/login">>, user_id = <<>>}, State) ->
-    {true, State};
+service_api_allow(#nkreq{cmd = <<"objects/user/login">>, user_id = <<>>}) ->
+    true;
 
-service_api_allow(#nkreq{cmd = <<"objects/session/start">>, user_id = <<>>}, State) ->
-    {true, State};
+service_api_allow(#nkreq{cmd = <<"objects/session/start">>, user_id = <<>>}) ->
+    true;
 
-service_api_allow(#nkreq{cmd = <<"objects/user/get_token">>, user_id = <<>>}, State) ->
-    {true, State};
+service_api_allow(#nkreq{cmd = <<"objects/user/get_token">>, user_id = <<>>}) ->
+    true;
 
-service_api_allow(#nkreq{cmd = <<"objects/", _/binary>>, user_id = <<>>}, State) ->
-    {false, State};
+service_api_allow(#nkreq{cmd = <<"objects/", _/binary>>, user_id = <<>>}) ->
+    false;
 
-service_api_allow(#nkreq{cmd = <<"objects/", _/binary>>, req_state={_Type, Module, Cmd}}=Req, State) ->
-    case nklib_util:apply(Module, object_api_allow, [Cmd, Req, State]) of
+service_api_allow(#nkreq{cmd = <<"objects/", _/binary>>, req_state={_Type, Module, Cmd}}=Req) ->
+    case nklib_util:apply(Module, object_api_allow, [Cmd, Req]) of
         not_exported ->
-            {true, State};
+            true;
         Other ->
             Other
     end;
 
-service_api_allow(#nkreq{cmd = <<"session", _/binary>>}, State) ->
-    {true, State};
+service_api_allow(#nkreq{cmd = <<"session", _/binary>>}) ->
+    true;
 
-service_api_allow(#nkreq{cmd = <<"event", _/binary>>}, State) ->
-    {true, State};
+service_api_allow(#nkreq{cmd = <<"event", _/binary>>}) ->
+    true;
 
-service_api_allow(#nkreq{cmd = <<"nkadmin", _/binary>>}, State) ->
-    {true, State};
+service_api_allow(#nkreq{cmd = <<"nkadmin", _/binary>>}) ->
+    true;
 
-service_api_allow(_Req, _State) ->
+service_api_allow(_Req) ->
     continue.
 
 
 %% @doc
-service_api_cmd(#nkreq{cmd = <<"objects/", _/binary>>, req_state={Type, Module, Cmd}}=Req, State) ->
-    #nkreq{session_module=Mod, tid=TId} = Req,
-    Self = self(),
-    Pid = spawn_link(
-        fun() ->
-            Reply = case erlang:function_exported(Module, object_api_cmd, 2) of
+service_api_cmd(#nkreq{cmd = <<"objects/", _/binary>>, req_state={Type, Module, Cmd}}=Req) ->
+    #nkreq{session_module=Mod, timeout_pending=Pending} = Req,
+    case Pending of
+        true ->
+            Pid = spawn_link(
+                fun() ->
+                    Reply = case erlang:function_exported(Module, object_api_cmd, 2) of
+                        true ->
+                            apply(Module, object_api_cmd, [Cmd, Req]);
+                        false ->
+                            nkdomain_obj_api:api(Cmd, Type, Req)
+                    end,
+                    Reply2 = case Reply of
+                        {ok, UserReply} ->
+                            {ok, UserReply, Req};
+                        {error, Error} ->
+                            {error, Error, Req};
+                        Other ->
+                            Other
+                    end,
+                    Mod:reply(Reply2)
+                end),
+            {ack, Pid, Req};
+        false ->
+            case erlang:function_exported(Module, object_api_cmd, 2) of
                 true ->
                     apply(Module, object_api_cmd, [Cmd, Req]);
                 false ->
                     nkdomain_obj_api:api(Cmd, Type, Req)
-            end,
-            Mod:reply(Self, TId, Reply)
-        end),
-    {ack, Pid, State};
+            end
+    end;
 
-%%service_api_cmd(#nkreq{cmd = <<"objects/", _/binary>>, req_state={Type, Module, Cmd}}=Req, State) ->
-%%    #nkreq{session_module=Mod, tid=TId} = Req,
-%%    Reply = case erlang:function_exported(Module, object_api_cmd, 2) of
-%%        true ->
-%%            apply(Module, object_api_cmd, [Cmd, Req]);
-%%        false ->
-%%            nkdomain_obj_api:api(Cmd, Type, Req)
-%%    end,
-%%    case Reply of
-%%        {login, R, U, M} ->
-%%            {login, R, U, M, State};
-%%        {ok, R} ->
-%%            {ok, R, State};
-%%        {ok, R, S} ->
-%%            {ok, R, S, State};
-%%        {error, E} ->
-%%            {error, E, State}
-%%    end;
-
-
-service_api_cmd(_Req, _State) ->
+service_api_cmd(_Req) ->
     continue.
 
 
@@ -841,15 +838,10 @@ api_server_reg_down(_Link, _Reason, _State) ->
 api_server_http_auth(#nkreq{cmd = <<"objects/user/get_token">>}, _HttpReq) ->
     {true, <<>>, #{}, #{}};
 
-api_server_http_auth(#nkreq{srv_id=SrvId}, HttpReq) ->
+api_server_http_auth(#nkreq{}=Req, HttpReq) ->
     Headers = nkapi_server_http:get_headers(HttpReq),
     Token = nklib_util:get_value(<<"x-netcomposer-auth">>, Headers, <<>>),
-    case nkdomain_user_obj:check_token(SrvId, Token) of
-        {ok, UserId, Meta} ->
-            {true, UserId, Meta, #{}};
-        {error, Error} ->
-            {error, Error}
-    end.
+    nkdomain_api_util:check_token(Token, Req).
 
 %%%% @doc
 %%api_server_handle_info({nkdist, {sent_link_down, Link}}, State) ->

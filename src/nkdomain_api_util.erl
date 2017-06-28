@@ -21,8 +21,9 @@
 -module(nkdomain_api_util).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([session_login/4, token_login/3]).
--export([search/1, get_id/3, get_id/4, add_id/3]).
+-export([session_login/1, token_login/1, check_token/2]).
+-export([search/1, get_id/3, get_id/4, add_id/3, add_meta/3, remove_meta/2]).
+-export_type([login_data/0, session_meta/0]).
 
 -include("nkdomain.hrl").
 -include_lib("nkservice/include/nkservice.hrl").
@@ -55,11 +56,11 @@
 %% Public
 %% ===================================================================
 
-%% @doc
--spec session_login(nkservice:id(), login_data(), session_meta(), map()) ->
-    {ok, UserId::nkdomain:obj_id(), SessId::nkdomain:obj_id(), pid(), UserMeta::map()} | {error, term()}.
+%% @doc Uses login_data() and session_meta()
+-spec session_login(#nkreq{}) ->
+    {ok, UserId::nkdomain:obj_id(), SessId::nkdomain:obj_id(), pid(), #nkreq{}} | {error, term()}.
 
-session_login(SrvId, Data, SessMeta, UserMeta) ->
+session_login(#nkreq{srv_id=SrvId, data=Data, session_meta=SessMeta}=Req) ->
     #{id:=User} = Data,
     Auth = #{password => maps:get(password, Data, <<>>)},
     case get_domain(SrvId, Data) of
@@ -71,11 +72,11 @@ session_login(SrvId, Data, SessMeta, UserMeta) ->
                     SessOpts2 = SessOpts1#{login_meta => LoginMeta},
                     case nkdomain_session_obj:start(SrvId, DomainId, UserId, SessOpts2) of
                         {ok, SessId, Pid} ->
-                            UserMeta1 = UserMeta#{login_meta=>LoginMeta},
-                            UserMeta2 = nkdomain_api_util:add_id(?DOMAIN_DOMAIN, DomainId, UserMeta1),
-                            UserMeta3 = nkdomain_api_util:add_id(?DOMAIN_USER, UserId, UserMeta2),
-                            UserMeta4 = nkdomain_api_util:add_id(?DOMAIN_SESSION, SessId, UserMeta3),
-                            {ok, UserId, SessId, Pid, UserMeta4};
+                            Req2 = add_meta(login_meta, LoginMeta, Req),
+                            Req3 = add_id(?DOMAIN_DOMAIN, DomainId, Req2),
+                            Req4 = add_id(?DOMAIN_USER, UserId, Req3),
+                            Req5 = add_id(?DOMAIN_SESSION, SessId, Req4),
+                            {ok, UserId, SessId, Pid, Req5#nkreq{user_id=UserId}};
                         {error, Error} ->
                             {error, Error}
                     end;
@@ -88,10 +89,10 @@ session_login(SrvId, Data, SessMeta, UserMeta) ->
 
 
 %% @doc
--spec token_login(nkservice:id(), login_data()|#{ttl=>integer()}, session_meta()) ->
+-spec token_login(#nkreq{}) ->
     {ok, TokenId::nkdomain:obj_id(), TTLSecs::integer()} | {error, term()}.
 
-token_login(SrvId, Data, SessMeta) ->
+token_login(#nkreq{srv_id=SrvId, data=Data, session_meta=SessMeta}) ->
     #{id:=User} = Data,
     Auth = #{password => maps:get(password, Data, <<>>)},
     case get_domain(SrvId, Data) of
@@ -109,6 +110,50 @@ token_login(SrvId, Data, SessMeta) ->
         {error, Error} ->
             {error, Error}
     end.
+
+
+%% @doc
+check_token(Token, #nkreq{srv_id=SrvId}=Req) ->
+    case nkdomain:get_obj(SrvId, Token) of
+        {ok, #{type:=?DOMAIN_SESSION, ?DOMAIN_SESSION:=Data}=Obj} ->
+            #{domain_id:=DomainId, created_by:=UserId} = Obj,
+            LoginMeta = maps:get(login_meta, Data, #{}),
+            Req2 = add_meta(login_meta, LoginMeta, Req),
+            Req3 = add_id(?DOMAIN_DOMAIN, DomainId, Req2),
+            Req4 = add_id(?DOMAIN_USER, UserId, Req3),
+            Req5 = add_id(?DOMAIN_SESSION, Token, Req4),
+            {ok, UserId, Req5};
+        {ok, #{type:=?DOMAIN_TOKEN, subtype:=SubTypes, ?DOMAIN_TOKEN:=Data}=Obj} ->
+            case lists:member(?DOMAIN_USER, SubTypes) of
+                true ->
+                    #{domain_id:=DomainId, created_by:=UserId} = Obj,
+                    UserMeta1 = #{login_meta=>maps:get(login_meta, Data)},
+                    UserMeta2 = add_id(?DOMAIN_DOMAIN, DomainId, UserMeta1),
+                    UserMeta3 = add_id(?DOMAIN_USER, UserId, UserMeta2),
+                    {ok, UserId, UserMeta3};
+                _ ->
+                    {error, invalid_token}
+            end;
+        _ ->
+            case catch base64:decode(Token) of
+                Bin when is_binary(Bin) ->
+                    case binary:split(Bin, <<":">>) of
+                        [Login, Pass] ->
+                            case nkdomain_user_obj:auth(SrvId, Login, #{password=>Pass}) of
+                                {ok, UserId} ->
+                                    {ok, UserId, #{}};
+                                {error, Error} ->
+                                    {error, Error}
+                            end;
+                        _ ->
+                            {error, invalid_token}
+                    end;
+                _ ->
+                    {error, invalid_token}
+            end
+    end.
+
+
 
 
 %% @private
@@ -155,12 +200,12 @@ get_id(Type, Data, Req) ->
 
 
 %% @doc
-get_id(Type, Field, Data, #nkreq{user_meta=Meta}) ->
+get_id(Type, Field, Data, #nkreq{user_state=UserState}) ->
     case maps:find(Field, Data) of
         {ok, Id} ->
             {ok, Id};
         error ->
-            ObjIds = maps:get(nkdomain_obj_ids, Meta, #{}),
+            ObjIds = maps:get(nkdomain_obj_ids, UserState, #{}),
             case maps:find(Type, ObjIds) of
                 {ok, Id} ->
                     {ok, Id};
@@ -171,12 +216,26 @@ get_id(Type, Field, Data, #nkreq{user_meta=Meta}) ->
     end.
 
 
-%% @doc Adds 'logged in' information to the state
-add_id(Type, Id, #nkreq{user_meta=Meta}) ->
-    add_id(Type, Id, Meta);
 
-add_id(Type, Id, Meta) ->
-    ObjIds = maps:get(nkdomain_obj_ids, Meta, #{}),
-    Meta#{nkdomain_obj_ids=>ObjIds#{Type => Id}}.
+
+
+
+%% @doc Adds 'logged in' information to the state
+add_id(Type, Id, #nkreq{user_state=UserState}=Req) ->
+    ObjIds = maps:get(nkdomain_obj_ids, UserState, #{}),
+    UserState2 = UserState#{nkdomain_obj_ids=>ObjIds#{Type => Id}},
+    Req#nkreq{user_state=UserState2}.
+
+
+%% @doc Adds 'logged in' information to the state
+add_meta(Type, Id, #nkreq{user_state=UserState}=Req) ->
+    UserState2 = UserState#{Type => Id},
+    Req#nkreq{user_state=UserState2}.
+
+
+%% @doc Adds 'logged in' information to the state
+remove_meta(Type, #nkreq{user_state=UserState}=Req) ->
+    UserState2 = maps:remove(Type, UserState),
+    Req#nkreq{user_state=UserState2}.
 
 

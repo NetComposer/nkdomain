@@ -175,22 +175,20 @@ object_api_syntax(Cmd, Syntax) ->
 %% @private
 object_api_cmd(<<"start">>, Req) ->
     #nkreq{
-        srv_id = SrvId,
-        data = Data,
         session_id = SessId,
         session_pid = SessPid,
         session_module = Module,
-        session_meta = SessMeta,
-        user_meta = UserMeta
+        session_meta = SessMeta
     } = Req,
     case catch Module:type() of
         session ->
             SessMeta2 = maps:with([local, remote, monitor], SessMeta),
             SessMeta3 = SessMeta2#{session_id=>SessId, monitor=>{Module, SessPid}},
-            case nkdomain_api_util:session_login(SrvId, Data, SessMeta3, UserMeta) of
-                {ok, UserId, SessId, _SessPid, UserMeta2} ->
+            Req2 = Req#nkreq{session_meta=SessMeta3},
+            case nkdomain_api_util:session_login(Req2) of
+                {ok, UserId, SessId, _SessPid, Req3} ->
                     Reply = #{user_id=>UserId, session_id=>SessId},
-                    {login, Reply, UserId, UserMeta2};
+                    {ok, Reply, Req3};
                 {error, Error} ->
                     {error, Error}
             end;
