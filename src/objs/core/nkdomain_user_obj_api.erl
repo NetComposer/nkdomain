@@ -47,7 +47,7 @@ cmd(<<"get_token">>, Req) ->
     Req2 = Req#nkreq{session_meta = SessMeta3},
     case nkdomain_api_util:token_login(Req2) of
         {ok, TokenId, TTL} ->
-            {ok, #{token_id=>TokenId, ttl=>TTL}};
+            {ok, #{<<"token_id">>=>TokenId, <<"ttl">>=>TTL}};
         {error, Error} ->
             {error, Error}
     end;

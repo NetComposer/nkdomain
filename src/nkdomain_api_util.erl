@@ -182,8 +182,8 @@ load_domain(SrvId, Domain) ->
 %% @doc
 search({ok, Total, List}) ->
     Data = #{
-        total => Total,
-        data =>
+        <<"total">> => Total,
+        <<"data">> =>
             lists:map(
                 fun({Type, ObjId, Path}) -> #{type=>Type, obj_id=>ObjId, path=>Path} end,
                 List)

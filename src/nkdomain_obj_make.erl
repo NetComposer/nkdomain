@@ -173,7 +173,7 @@ create(SrvId, MakeOpts) ->
 
 
 %% @doc
--spec create(nkservice:id(), make_opts(), nkdomain:start_pts()) ->
+-spec create(nkservice:id(), make_opts(), nkdomain:start_ots()) ->
     {ok, #obj_id_ext{}, [Unknown::binary()]} | {error, term()}.
 
 create(SrvId, MakeOpts, Opts) ->

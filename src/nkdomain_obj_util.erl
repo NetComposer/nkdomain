@@ -43,18 +43,14 @@
 %% Calls SrvId:object_event() and SrvId:object_reg_event(), that
 %% normally call send_event/N here
 
-event(Event, #?STATE{event_links=Links}=State) ->
-    {ok, #?STATE{}=State2} = do_event(Links, Event, State),
-    State2.
-
-
-%% @private
-do_event([], Event, #?STATE{id=#obj_id_ext{srv_id=SrvId}}=State) ->
-    {ok, #?STATE{}} = SrvId:object_event(Event, State);
-
-do_event([Link|Rest], Event, #?STATE{id=#obj_id_ext{srv_id=SrvId}}=State) ->
-    {ok, State2} = SrvId:object_reg_event(Link, Event, State),
-    do_event(Rest, Event,  State2).
+event(Event, #?STATE{srv_id=SrvId, event_links=Links}=State) ->
+    Fun = fun(Link, Data, Acc) ->
+        {ok, Acc2} = SrvId:object_reg_event(Link, Data, Event, Acc),
+        Acc2
+    end,
+    State2 = nklib_links:fold_values(Fun, State, Links),
+    {ok, State3} = SrvId:object_event(Event, State2),
+    State3.
 
 
 %% @doc Sends events inside an object process directly to the event server
@@ -80,28 +76,18 @@ send_event(EvType, ObjId, ObjPath, Body, #?STATE{id=#obj_id_ext{srv_id=SrvId, ty
         body = Body
     },
     ?DEBUG("event sent to listeners: ~p", [Event], State),
-    send_direct_event(Event, State),
+    send_session_event(Event, State),
     nkevent:send(Event),
     {ok, State}.
 
 
 %% @private
-send_direct_event(#nkevent{type=Type, body=Body}=Event, #?STATE{meta=Meta}) ->
-    case Meta of
-        #{session_events:=Events, session_id:=ConnId} ->
-            case lists:member(Type, Events) of
-                true ->
-                    Event2 = case Meta of
-                        #{session_events_body:=Body2} ->
-                            Event#nkevent{body=maps:merge(Body, Body2)};
-                        _ ->
-                            Event
-                    end,
-                    nkapi_server:event(ConnId, Event2);
-                false ->
-                    ok
-            end;
-        _ ->
+send_session_event(#nkevent{type=Type}=Event, State) ->
+    #?STATE{srv_id=SrvId, session_events=Events, session_id=Id} = State,
+    case lists:member(Type, Events) of
+        true ->
+            SrvId:object_session_event(Id, Event, State);
+        false ->
             ok
     end.
 

@@ -58,6 +58,8 @@
     usage_links :: nklib_links:link(),
     event_links :: nklib_links:link(),
     status :: nkdomain_obj:status(),
+    session_events :: [binary()],
+    session_id :: term(),
     meta :: map(),                      % Object load metadata
     session :: term(),                  % Session-specific metadata
     stop_reason = false :: false | nkservice:error(),

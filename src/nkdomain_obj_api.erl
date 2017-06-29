@@ -21,7 +21,7 @@
 -module(nkdomain_obj_api).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([api/3, obj_id_reply/2]).
+-export([api/3]).
 
 -include("nkdomain.hrl").
 -include_lib("nkservice/include/nkservice.hrl").
@@ -38,7 +38,9 @@ api(<<"create">>, Type, #nkreq{data=Data, srv_id=SrvId, user_id=UserId}=Req) ->
         {ok, DomainId} ->
             case SrvId:object_create(SrvId, DomainId, Type, UserId, Data) of
                 {ok, ObjIdExt, Unknown} ->
-                    {ok, obj_id_reply(ObjIdExt, Unknown)};
+                    #obj_id_ext{obj_id=ObjId, path=Path} = ObjIdExt,
+                    Req2 = nkservice_api:add_unknown(Unknown, Req),
+                    {ok, #{<<"obj_id">>=>ObjId, <<"path">>=>Path}, Req2};
                 {error, Error} ->
                     {error, Error}
             end;
@@ -84,10 +86,9 @@ api(<<"update">>, Type, #nkreq{data=Data, srv_id=SrvId}=Req) ->
     case nkdomain_api_util:get_id(Type, Data, Req) of
         {ok, Id} ->
             case nkdomain:update(SrvId, Id, maps:remove(id, Data)) of
-                {ok, []} ->
-                    {ok, #{}};
-                {ok, UnknownFields} ->
-                    {ok, #{unknown_fields=>UnknownFields}};
+                {ok, Unknown} ->
+                    Req2 = nkservice_api:add_unknown(Unknown, Req),
+                    {ok, #{}, Req2};
                 {error, Error} ->
                     {error, Error}
             end;
@@ -116,7 +117,7 @@ api(<<"find">>, Type, #nkreq{data=Data, srv_id=SrvId}=Req) ->
             Data2 = Data#{filters=>Filters2},
             case nkdomain_domain_obj:find(SrvId, DomainId, Data2) of
                 {ok, Total, List, _Meta} ->
-                    {ok, #{total=>Total, data=>List}};
+                    {ok, #{<<"total">>=>Total, <<"data">>=>List}};
                 {error, Error} ->
                     {error, Error}
             end;
@@ -132,7 +133,7 @@ api(<<"find_all">>, Type, #nkreq{data=Data, srv_id=SrvId}=Req) ->
             Data2 = Data#{filters=>Filters2},
             case nkdomain_domain_obj:find_all(SrvId, DomainId, Data2) of
                 {ok, Total, List, _Meta} ->
-                    {ok, #{total=>Total, data=>List}};
+                    {ok, #{<<"total">>=>Total, <<"data">>=>List}};
                 {error, Error} ->
                     {error, Error}
             end;
@@ -147,8 +148,9 @@ api(<<"make_token">>, Type, #nkreq{data=Data, user_id=UserId, srv_id=SrvId}=Req)
                 {ok, Id} ->
                     case nkdomain_token_obj:create(SrvId, DomainId, Id, UserId, Type, #{}, Data) of
                         {ok, ObjIdExt, TTL, Unknown} ->
-                            Reply = obj_id_reply(ObjIdExt, Unknown),
-                            {ok, Reply#{ttl=>TTL}};
+                            #obj_id_ext{obj_id=ObjId, path=Path} = ObjIdExt,
+                            Req2 = nkservice_api:add_unknown(Unknown, Req),
+                            {ok, #{<<"obj_id">>=>ObjId, <<"path">>=>Path, <<"ttl">>=>TTL}, Req2};
                         {error, Error} ->
                             {error, Error}
                     end;
@@ -168,18 +170,18 @@ api(_Cmd, _Type, _Req) ->
 %% Private
 %% ===================================================================
 
-
-%% @private
-obj_id_reply(#obj_id_ext{obj_id=ObjId, path=Path}, Unknown) ->
-    Base = #{
-        obj_id => ObjId,
-        path => Path
-    },
-    case Unknown of
-        [] ->
-            Base;
-        _ ->
-            Base#{unknown_fields=>Unknown}
-    end.
-
+%%
+%%%% @private
+%%obj_id_reply(#obj_id_ext{obj_id=ObjId, path=Path}, Unknown) ->
+%%    Base = #{
+%%        obj_id => ObjId,
+%%        path => Path
+%%    },
+%%    case Unknown of
+%%        [] ->
+%%            Base;
+%%        _ ->
+%%            Base#{unknown_fields=>Unknown}
+%%    end.
+%%
 

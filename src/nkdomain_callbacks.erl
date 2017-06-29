@@ -31,7 +31,7 @@
 -export([object_create/5, object_check_active/3, object_do_expired/2]).
 -export([object_syntax/1, object_parse/3]).
 -export([object_init/1, object_terminate/2, object_stop/2,
-         object_event/2, object_reg_event/3, object_sync_op/3, object_async_op/2,
+         object_event/2, object_reg_event/4, object_session_event/3, object_sync_op/3, object_async_op/2,
          object_save/1, object_delete/1, object_archive/1, object_link_down/2,
          object_handle_call/3, object_handle_cast/2, object_handle_info/2]).
 -export([object_db_init/1, object_db_read/2, object_db_save/2, object_db_delete/2]).
@@ -454,11 +454,25 @@ object_event(Event, State) ->
 
 
 %% @doc Called when an event is sent, for each registered process to the session
--spec object_reg_event(nklib:link(), nkdomain_obj:event(), state()) ->
+%% The events are 'erlang' events (tuples usually)
+-spec object_reg_event(nklib:link(), term(), nkdomain_obj:event(), state()) ->
     {ok, state()} | continue().
 
-object_reg_event(Link, Event, State) ->
-    call_module(object_reg_event, [Link, Event], State).
+object_reg_event(Link, Data, Event, State) ->
+    call_module(object_reg_event, [Link, Data, Event], State).
+
+
+%% @doc If the object was started with session_events and session_id parameters,
+%% this function will be called when the object sends a matching event
+%% If SessId is {nkdomain_session, Mod, Pid}, its send method will be called
+-spec object_session_event(term(), #nkevent{}, state()) ->
+    ok.
+
+object_session_event({nkdomain_session, Mod, Pid}, Event, _State) ->
+    Mod:event(Pid, Event);
+
+object_session_event(_SessId, _Event, _State) ->
+    ok.
 
 
 %% @doc

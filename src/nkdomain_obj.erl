@@ -101,6 +101,8 @@
     #{
         enabled => boolean(),
         is_created => boolean(),
+        session_events => [binary()],       % Will send this event types directly to session
+        session_id => term(),
         meta => map()
     }.
 
@@ -282,6 +284,8 @@ init({loaded, SrvId, Obj, Meta}) ->
         usage_links = nklib_links:new(),
         event_links = nklib_links:new(),
         status = init,
+        session_events = maps:get(session_events, Meta, []),
+        session_id = maps:get(session_id, Meta, undefined),
         meta = maps:get(meta, Meta, #{}),
         ttl = set_ttl(Obj, Info),
         session = #{}
@@ -300,7 +304,7 @@ init({loaded, SrvId, Obj, Meta}) ->
                                     State3
                             end,
                             State5 = do_event(loaded, State4),
-                            State6 = do_refresh(State5),
+                            #?STATE{}= State6 = do_refresh(State5),
                             {ok, State6};
                         {error, Error} ->
                             {stop, Error}
@@ -523,7 +527,7 @@ do_sync_op(get_obj, _From, State) ->
         obj = Obj
     } = State,
     #obj_id_ext{obj_id=_ObjId, type=Type, path=Path} = ObjIdExt,
-    {ok, Domain, ObjName} = nkdomain_util:get_parts(Type, Path),
+    {ok, _Domain, ObjName} = nkdomain_util:get_parts(Type, Path),
     Obj2 = Obj#{
         '_obj_name' => ObjName,
         '_module' => Module,
@@ -841,19 +845,6 @@ do_stop2(Reason, #?STATE{srv_id=SrvId, stop_reason=false, timelog=Log, object_in
 
 do_stop2(_Reason, State) ->
     State.
-
-
-%%%% @private Checks has correct path and not loaded
-%%do_check_child(#obj_id_ext{type=Type, path=Path}, #?STATE{id=#obj_id_ext{path=Base}}=State) ->
-%%    case nkdomain_util:get_parts(Type, Path) of
-%%        {ok, Base, _Name} ->
-%%            ok;
-%%        {ok, Base2, _Name} ->
-%%            ?LLOG(notice, "cannnot load child, invalid base ~s", [Base2], State),
-%%            {error, {invalid_object_path, Path}};
-%%        {error, Error} ->
-%%            {error, Error}
-%%    end.
 
 
 %% @private
