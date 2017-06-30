@@ -40,7 +40,7 @@ api(<<"create">>, Type, #nkreq{data=Data, srv_id=SrvId, user_id=UserId}=Req) ->
                 {ok, ObjIdExt, Unknown} ->
                     #obj_id_ext{obj_id=ObjId, path=Path} = ObjIdExt,
                     Req2 = nkservice_api:add_unknown(Unknown, Req),
-                    {ok, #{<<"obj_id">>=>ObjId, <<"path">>=>Path}, Req2};
+                    {ok, #{obj_id=>ObjId, path=>Path}, Req2};
                 {error, Error} ->
                     {error, Error}
             end;
@@ -52,6 +52,14 @@ api(<<"get">>, Type, #nkreq{data=Data, srv_id=SrvId}=Req) ->
     case nkdomain_api_util:get_id(Type, Data, Req) of
         {ok, Id} ->
             nkdomain:get_obj(SrvId, Id);
+        {error, Error} ->
+            {error, Error}
+    end;
+
+api(<<"get_name">>, Type, #nkreq{data=Data, srv_id=SrvId}=Req) ->
+    case nkdomain_api_util:get_id(Type, Data, Req) of
+        {ok, Id} ->
+            nkdomain:get_name(SrvId, Id);
         {error, Error} ->
             {error, Error}
     end;
@@ -150,7 +158,7 @@ api(<<"make_token">>, Type, #nkreq{data=Data, user_id=UserId, srv_id=SrvId}=Req)
                         {ok, ObjIdExt, TTL, Unknown} ->
                             #obj_id_ext{obj_id=ObjId, path=Path} = ObjIdExt,
                             Req2 = nkservice_api:add_unknown(Unknown, Req),
-                            {ok, #{<<"obj_id">>=>ObjId, <<"path">>=>Path, <<"ttl">>=>TTL}, Req2};
+                            {ok, #{obj_id=>ObjId, path=>Path, ttl=>TTL}, Req2};
                         {error, Error} ->
                             {error, Error}
                     end;

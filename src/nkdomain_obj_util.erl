@@ -121,14 +121,21 @@ search_syntax(Base) ->
 %% @doc
 get_name(#?STATE{id=#obj_id_ext{type=Type, obj_id=ObjId, path=Path}, obj=Obj}) ->
     {ok, _, ObjName} = nkdomain_util:get_parts(Type, Path),
-    #{
-        obj_id => ObjId,
-        obj_name => ObjName,
-        path => Path,
-        name => maps:get(name, Obj, ObjName),
-        description => maps:get(description, Obj, <<>>),
-        icon_id => maps:get(icon_id, Obj, <<>>)
-    }.
+    List = [
+        {obj_id, ObjId},
+        {obj_name, ObjName},
+        {path, Path},
+        {name, maps:get(name, Obj, ObjName)},
+        case maps:get(description, Obj, <<>>) of
+            <<>> -> [];
+            Desc -> {description, Desc}
+        end,
+        case maps:get(icon_id, Obj, <<>>) of
+            <<>> -> [];
+            IconId-> {icon_id, IconId}
+        end
+    ],
+    maps:from_list(lists:flatten(List)).
 
 
 %% @private
