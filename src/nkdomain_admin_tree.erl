@@ -173,7 +173,7 @@ element_action(_Id, _Action, _Value, _Updates, _Session) ->
 %% @private
 get_dashboards(Session) ->
     Session2 = nkadmin_util:set_url_key(<<"/dashboard">>, ?DASHBOARD, Session),
-    {ok, nkadmin_util:menu_item(?DASHBOARD, menuEntry, #{}, Session), Session2}.
+    {ok, nkadmin_util:menu_item(?DASHBOARD, menuEntry, #{icon => <<"img/dashboard.png">>}, Session), Session2}.
 
 
 
@@ -199,7 +199,7 @@ find_domains(#{srv_id:=SrvId, domain_id:=DomainId}) ->
 get_domains(DomainList, Session) ->
     {ok, Items, Session2} = get_domain_items(DomainList, [], Session),
     Items2 = Items ++ [nkadmin_util:menu_item(?DOMAINS_ALL, menuEntry, #{}, Session2)],
-    Element = nkadmin_util:menu_item(?DOMAINS, menuGroup, #{items=>Items2}, Session2),
+    Element = nkadmin_util:menu_item(?DOMAINS, menuGroup, #{items=>Items2, icon=><<"img/domains_and_groups.png">>}, Session2),
     Session3 = nkadmin_util:set_key_data(?DOMAINS_ALL, #{domain_ids=>DomainList}, Session2),
     Session4 = nkadmin_util:set_url_key(<<"/domains">>, ?DOMAINS_ALL, Session3),
     {ok, Element, Session4}.
@@ -293,7 +293,7 @@ selected_domain(ObjId, Updates, #{srv_id:=SrvId}=Session) ->
 %% @private
 get_alerts(Session) ->
     Session2 = nkadmin_util:set_url_key(<<"/alerts">>, ?DASHBOARD, Session),
-    Item = nkadmin_util:menu_item(?ALERTS, menuEntry, #{badge=>3}, Session),
+    Item = nkadmin_util:menu_item(?ALERTS, menuEntry, #{icon=><<"img/alerts.png">>, badge=>3}, Session),
     {ok, Item, Session2}.
 
 
@@ -330,7 +330,7 @@ get_resource_items([Type|Rest], Acc, Session) ->
         {true, Info} ->
             Weight = maps:get(weight, Info, 9000),
             Key = << ?RESOURCES/binary, $_, Type/binary>>,
-            Item = nkadmin_util:menu_item(Key, menuEntry, #{}, Session),
+            Item = nkadmin_util:menu_item(Key, menuEntry, #{icon=><<"img/",Type/binary,"s.png">>}, Session),
             #{resources:=Resources} = Session,
             Session2 = case lists:member(Type, Resources) of
                 true ->
@@ -403,7 +403,7 @@ get_session_items([Type|Rest], Acc, Session) ->
                 {ok, 0} ->
                     get_session_items(Rest, Acc, Session);
                 {ok, Counter} ->
-                    Item = nkadmin_util:menu_item(Key, menuEntry, #{counter=>Counter}, Session),
+                    Item = nkadmin_util:menu_item(Key, menuEntry, #{icon=><<"img/",Type/binary,"s.png">>, counter=>Counter}, Session),
                     Class = nkdomain_util:class(Type),
                     Session2 = nkadmin_util:set_url_key(<<$/, Class/binary>>, Key, Session),
                     get_session_items(Rest, [{Weight, Item}|Acc], Session2);
@@ -413,7 +413,7 @@ get_session_items([Type|Rest], Acc, Session) ->
                         {ok, 0} ->
                             get_session_items(Rest, Acc, Session);
                         {ok, Counter} ->
-                            Item = nkadmin_util:menu_item(Key, menuEntry, #{counter=>Counter}, Session),
+                            Item = nkadmin_util:menu_item(Key, menuEntry, #{icon=><<"img/",Type/binary,"s.png">>, counter=>Counter}, Session),
                             Class = nkdomain_util:class(Type),
                             Session2 = nkadmin_util:add_to_session(sessions, Sessions#{Type=>Counter}, Session),
                             Session3 = nkadmin_util:set_url_key(<<$/, Class/binary>>, Key, Session2),

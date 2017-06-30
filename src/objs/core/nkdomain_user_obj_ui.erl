@@ -42,24 +42,36 @@ table(Session) ->
         subdomains_id => ?ID_SUBDOMAINS,
         filters => [?ID_SUBDOMAINS],
         columns => [
+%            #{
+%                id => pos,
+%                type => pos,
+%                name => domain_column_pos
+%            },
             #{
-                id => pos,
-                type => pos,
-                name => domain_column_pos
+                id => checkbox,
+                type => checkbox
             },
             #{
                 id => domain,
                 type => text,
                 name => domain_column_domain,
+                fillspace => 0.6,
                 sort => true,
                 options => DomainOptions
+            },
+            #{
+                id => path,
+                type => text,
+                name => domain_column_path,
+%                fillspace => 1.5,
+                sort => true
             },
             #{
                 id => name,
                 type => text,
                 header_colspan => 2,
                 filter_colspan => 2,
-                fillspace => <<"0.5">>,
+                fillspace => 0.3,
                 name => domain_column_name,
                 sort => true,
                 editor => text
@@ -67,6 +79,7 @@ table(Session) ->
             #{
                 id => surname,
                 type => text,
+                fillspace => 0.7,
                 sort => true,
                 editor => text
             },
@@ -88,31 +101,31 @@ table(Session) ->
                 type => date,
                 name => domain_column_created_time,
                 sort => true
-            },
-            #{
-                id => enabled_icon,
-                type => {icon, <<"enabled_icon">>}
-            },
-            #{
-                id => delete,
-                type => {fixed_icon, <<"fa-trash">>}
+%            },
+%            #{
+%                id => enabled_icon,
+%                type => {icon, <<"enabled_icon">>}
+%            },
+%            #{
+%                id => delete,
+%                type => {fixed_icon, <<"fa-trash">>}
             }
         ],
         left_split => 1,
-        right_split => 2,
+%        right_split => 2,
         on_click => [
-            #{
-                id => <<"fa-times">>,
-                type => enable
-            },
-            #{
-                id => <<"fa-check">>,
-                type => disable
-            },
-            #{
-                id => <<"fa-trash">>,
-                type => delete
-            }
+%            #{
+%                id => <<"fa-times">>,
+%                type => disable
+%            },
+%            #{
+%                id => <<"fa-check">>,
+%                type => enable
+%            },
+%            #{
+%                id => <<"fa-trash">>,
+%                type => delete
+%            }
         ]},
     Table = #{
         id => ?ID,
@@ -177,6 +190,10 @@ table_filter([{_, <<>>}|Rest], Acc, Info) ->
 
 table_filter([{<<"domain">>, Data}|Rest], Acc, Info) ->
     Acc2 = Acc#{<<"path">> => nkdomain_admin_detail:search_spec(<<Data/binary, "user">>)},
+    table_filter(Rest, Acc2, Info);
+
+table_filter([{<<"path">>, Data}|Rest], Acc, Info) ->
+    Acc2 = Acc#{<<"path">> => nkdomain_admin_detail:search_spec(Data)},
     table_filter(Rest, Acc2, Info);
 
 table_filter([{<<"email">>, Data}|Rest], Acc, Info) ->
@@ -253,17 +270,24 @@ table_iter([Entry|Rest], Pos, Acc) ->
         true -> <<"fa-times">>;
         false -> <<"fa-check">>
     end,
+    Css = case maps:get(<<"enabled">>, Entry, true) of
+        true -> <<"">>;
+        false -> <<"webix_cell_disabled">>
+    end,
     {ok, Domain, _ShortName} = nkdomain_util:get_parts(?DOMAIN_USER, Path),
     Data = #{
+        checkbox => <<"0">>,
         pos => Pos,
         id => ObjId,
         domain => Domain,
+        path => Path,
         name => Name,
         surname => Surname,
         email => Email,
         created_by => CreatedBy,
         created_time => CreatedTime,
-        enabled_icon => Enabled
+        enabled_icon => Enabled,
+        <<"$css">> => Css
     },
     table_iter(Rest, Pos+1, [Data|Acc]).
 

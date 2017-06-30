@@ -139,6 +139,12 @@ user_update(Id, Name) ->
     },
     cmd(<<"objects/user/update">>, Data).
 
+user_update_icon(Id, IconId) ->
+    Data = #{
+        id => to_bin(Id),
+        icon_id => IconId
+    },
+    cmd(<<"objects/user/update">>, Data).
 
 user_make_token() ->
     cmd(<<"objects/user/make_token">>, #{ttl=>30}).
@@ -178,6 +184,12 @@ domain_update(Id, Name, Desc) ->
     },
     cmd(<<"objects/domain/update">>, Data).
 
+domain_update_icon(Id, IconId) ->
+    Data = #{
+        id => to_bin(Id),
+        icon_id => IconId
+    },
+    cmd(<<"objects/domain/update">>, Data).
 
 domain_find() ->
     cmd(<<"objects/domain/find">>, #{}).
