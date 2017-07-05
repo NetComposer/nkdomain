@@ -88,6 +88,8 @@ start(_Type, _Args) ->
     case nklib_config:load_env(?APP, Syntax) of
         {ok, _} ->
             {ok, Pid} = nkdomain_sup:start_link(),
+            lager:info("waiting for nkdist"),
+            nkdist:wait_for_service(),
             %% ok = riak_core_ring_events:add_guarded_handler(nkdomain_ring_handler, []),
             {ok, Vsn} = application:get_key(nkdomain, vsn),
             lager:info("NkDOMAIN v~s has started.", [Vsn]),
