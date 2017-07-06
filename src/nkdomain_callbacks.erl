@@ -34,7 +34,7 @@
          object_event/2, object_reg_event/4, object_session_event/3, object_sync_op/3, object_async_op/2,
          object_save/1, object_delete/1, object_archive/1, object_link_down/2,
          object_handle_call/3, object_handle_cast/2, object_handle_info/2]).
--export([object_db_init/1, object_db_read/2, object_db_save/2, object_db_delete/2]).
+-export([object_db_init/1, object_db_start/1, object_db_read/2, object_db_save/2, object_db_delete/2]).
 -export([object_db_find_obj/2, object_db_search/2, object_db_search_alias/2,
          object_db_search_types/3, object_db_search_all_types/3,
          object_db_search_childs/3, object_db_search_all_childs/3,
@@ -634,6 +634,14 @@ object_handle_info(Msg, State) ->
 
 object_db_init(_State) ->
     {error, db_not_defined}.
+
+
+%% @doc Once the database is initialized, apps can add their own starting objects
+-spec object_db_start(nkservice:id()) ->
+    ok | {error, term()}.
+
+object_db_start(_SrvId) ->
+    ok.
 
 
 %% @doc Reads and parses object from database, using ObjId

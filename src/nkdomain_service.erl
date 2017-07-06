@@ -126,8 +126,13 @@ init(#{id:=SrvId}=State) ->
         {ok, State2} ->
             ok = load_file_stores(SrvId),
             ok = load_mail_providers(SrvId),
-            %%            gen_server:cast(self(), nkdomain_load_domain),
-            {ok, State2};
+            case SrvId:object_db_start(SrvId) of
+                ok ->
+                    %% gen_server:cast(self(), nkdomain_load_domain),
+                    {ok, State2};
+                {error, Error} ->
+                    {stop, Error}
+            end;
         {error, Error} ->
             lager:error("NkDOMAIN: could not start db store: ~p", [Error]),
             {stop, Error}

@@ -220,3 +220,4 @@ delete_all_childs_type(SrvId, Id, Type) ->
 clean(SrvId) ->
     SrvId:object_db_clean(SrvId).
 
+
