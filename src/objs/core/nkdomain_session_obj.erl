@@ -41,11 +41,11 @@
 
 -type create_opts() ::
     #{
+        session_link => {module(), pid()},
         session_id => binary(),
         login_meta => map(),
         local => binary(),
-        remote => binary(),
-        monitor => {module(), pid()}
+        remote => binary()
     }.
 
 
@@ -72,12 +72,7 @@ start(SrvId, DomainId, UserId, Opts) ->
             _ ->
                 Obj1
         end,
-        CreateOpts = case Opts of
-            #{monitor:={ApiMod, ApiPid}=Mon} when is_atom(ApiMod), is_pid(ApiPid) ->
-                #{meta=>#{monitor=>Mon}};
-            _ ->
-                #{}
-        end,
+        CreateOpts = maps:with([session_link], Opts),
         case nkdomain_obj_make:create(SrvId, Obj2, CreateOpts) of
             {ok, #obj_id_ext{obj_id=SessId2, pid=Pid}, _} ->
                 {ok, SessId2, Pid};
@@ -127,24 +122,19 @@ object_parse(_SrvId, _Mode, _Obj) ->
 
 
 %% @private
-object_init(#?STATE{srv_id=SrvId, id=Id, obj=Obj, meta=Meta}=State) ->
+object_init(#?STATE{srv_id=SrvId, id=Id, obj=Obj}=State) ->
     %% TODO Link again if moved process
     #obj_id_ext{obj_id=SessId} = Id,
     #{created_by:=UserId} = Obj,
     ok = nkdomain_user_obj:register_session(SrvId, UserId, ?DOMAIN_SESSION, SessId, #{}),
-    State2 = case Meta of
-        #{monitor:={ApiMod, ApiPid}} ->
-            nkdomain_obj_util:link_to_api_server(?MODULE, ApiMod, ApiPid, State);
-        _ ->
-            State
-    end,
+    State2 = nkdomain_obj_util:link_to_api_server(?MODULE, State),
     {ok, State2}.
 
 
 %% @private
-object_stop(_Reason, #?STATE{meta=#{api_server_pid:=ApiPid}}=State) ->
+object_stop(_Reason, #?STATE{session_link={Mod, Pid}}=State) ->
     % When the session stops, we stop the WS
-    nkapi_server:stop(ApiPid, nkdomain_session_stop),
+    Mod:stop_session(Pid, nkdomain_session_stop),
     {ok, State};
 
 object_stop(_Reason, State) ->
@@ -173,27 +163,21 @@ object_api_syntax(Cmd, Syntax) ->
 
 
 %% @private
-object_api_cmd(<<"start">>, Req) ->
+object_api_cmd(<<"start">>, #nkreq{session_module=nkapi_server}=Req) ->
     #nkreq{
         session_id = SessId,
         session_pid = SessPid,
-        session_module = Module,
         session_meta = SessMeta
     } = Req,
-    case catch Module:type() of
-        session ->
-            SessMeta2 = maps:with([local, remote, monitor], SessMeta),
-            SessMeta3 = SessMeta2#{session_id=>SessId, monitor=>{Module, SessPid}},
-            Req2 = Req#nkreq{session_meta=SessMeta3},
-            case nkdomain_api_util:session_login(Req2) of
-                {ok, UserId, SessId, _SessPid, Req3} ->
-                    Reply = #{user_id=>UserId, session_id=>SessId},
-                    {ok, Reply, Req3};
-                {error, Error} ->
-                    {error, Error}
-            end;
-        _ ->
-            {error, session_type_unsupported}
+    SessMeta2 = maps:with([local, remote], SessMeta),
+    SessMeta3 = SessMeta2#{session_id=>SessId, session_link=>{nkapi_server, SessPid}},
+    Req2 = Req#nkreq{session_meta=SessMeta3},
+    case nkdomain_api_util:session_login(Req2) of
+        {ok, UserId, SessId, _SessPid, Req3} ->
+            Reply = #{user_id=>UserId, session_id=>SessId},
+            {ok, Reply, Req3};
+        {error, Error} ->
+            {error, Error}
     end;
 
 object_api_cmd(Cmd, Req) ->

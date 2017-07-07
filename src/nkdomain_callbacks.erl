@@ -468,8 +468,8 @@ object_reg_event(Link, Data, Event, State) ->
 -spec object_session_event(term(), #nkevent{}, state()) ->
     ok.
 
-object_session_event({nkdomain_session, Mod, Pid}, Event, _State) ->
-    Mod:event(Pid, Event);
+object_session_event({Mod, Pid}, Event, _State) when is_atom(Mod), is_pid(Pid)->
+    Mod:send_event(Pid, Event);
 
 object_session_event(_SessId, _Event, _State) ->
     ok.
@@ -778,7 +778,7 @@ service_api_syntax(_Syntax, _Req) ->
 
 
 %% @doc
-%% TODO to remove
+%% TODO to remove (after admin)
 service_api_allow(#nkreq{cmd = <<"objects/user/login">>, user_id = <<>>}) ->
     true;
 
@@ -814,26 +814,27 @@ service_api_allow(_Req) ->
 
 %% @doc
 service_api_cmd(#nkreq{cmd = <<"objects/", _/binary>>, req_state={Type, Module, Cmd}}=Req) ->
-    #nkreq{session_module=Mod, timeout_pending=Pending} = Req,
+    #nkreq{timeout_pending=Pending} = Req,
     case Pending of
         true ->
             Pid = spawn_link(
                 fun() ->
+                    Req2 = Req#nkreq{timeout_pending=false},
                     Reply = case erlang:function_exported(Module, object_api_cmd, 2) of
                         true ->
-                            apply(Module, object_api_cmd, [Cmd, Req]);
+                            apply(Module, object_api_cmd, [Cmd, Req2]);
                         false ->
-                            nkdomain_obj_api:api(Cmd, Type, Req)
+                            nkdomain_obj_api:api(Cmd, Type, Req2)
                     end,
                     Reply2 = case Reply of
                         {ok, UserReply} ->
-                            {ok, UserReply, Req};
+                            {ok, UserReply, Req2};
                         {error, Error} ->
-                            {error, Error, Req};
+                            {error, Error, Req2};
                         Other ->
                             Other
                     end,
-                    Mod:reply(Reply2)
+                    nkservice_api:reply(Reply2)
                 end),
             {ack, Pid, Req};
         false ->

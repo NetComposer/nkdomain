@@ -68,7 +68,7 @@ session_login(#nkreq{srv_id=SrvId, data=Data, session_meta=SessMeta}=Req) ->
             case nkdomain_user_obj:auth(SrvId, User, Auth) of
                 {ok, UserId} ->
                     LoginMeta = maps:get(meta, Data, #{}),
-                    SessOpts1 = maps:with([session_id, local, remote, monitor], SessMeta),
+                    SessOpts1 = maps:with([session_id, session_link, local, remote], SessMeta),
                     SessOpts2 = SessOpts1#{login_meta => LoginMeta},
                     case nkdomain_session_obj:start(SrvId, DomainId, UserId, SessOpts2) of
                         {ok, SessId, Pid} ->

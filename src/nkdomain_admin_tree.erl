@@ -214,15 +214,21 @@ get_domain_items([], Acc, Session) ->
 
 get_domain_items([ObjId|Rest], Acc, #{srv_id:=SrvId}=Session) ->
     case nkdomain:get_name(SrvId, ObjId) of
-        {ok, #{
-            name := Name,
-            obj_name := ObjName,
-            description := Desc,
-            path := Path
-        }} ->
+        {ok, Map} ->
+             #{
+                name := Name,
+                obj_name := ObjName,
+                path := Path
+            } = Map,
+            Value1 = #{label=>Name, path=>Path},
+            Value2 = case Map of
+                 #{description:=Desc} ->
+                     Value1#{tooltip=>Desc};
+                _ ->
+                    Value1
+            end,
             Id = get_domain_id(ObjId),
-            Value = #{label=>Name, tooltip=>Desc, path=>Path},
-            Item = nkadmin_util:menu_item(Id, menuEntry, Value, Session),
+            Item = nkadmin_util:menu_item(Id, menuEntry, Value2, Session),
             Session2 = nkadmin_util:set_url_key(<<$/, Name/binary>>, Id, Session),
             get_domain_items(Rest, [{ObjName, Item}|Acc], Session2);
         {error, Error} ->

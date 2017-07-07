@@ -25,7 +25,7 @@
 -export([event/2, status/2, search_syntax/1, get_name/1]).
 -export([send_event/3, send_event/4, send_event/5]).
 -export([call_type/3]).
--export([link_to_api_server/4, unlink_from_api_server/2]).
+-export([link_to_api_server/2, unlink_from_api_server/2]).
 -export([get_obj_session/1, set_obj_session/2]).
 
 -include("nkdomain.hrl").
@@ -83,10 +83,10 @@ send_event(EvType, ObjId, ObjPath, Body, #?STATE{id=#obj_id_ext{srv_id=SrvId, ty
 
 %% @private
 send_session_event(#nkevent{type=Type}=Event, State) ->
-    #?STATE{srv_id=SrvId, session_events=Events, session_id=Id} = State,
+    #?STATE{srv_id=SrvId, session_events=Events, session_link=Link} = State,
     case lists:member(Type, Events) of
         true ->
-            SrvId:object_session_event(Id, Event, State);
+            SrvId:object_session_event(Link, Event, State);
         false ->
             ok
     end.
@@ -159,20 +159,20 @@ call_type(Fun, Args, Type) ->
 
 
 %% @doc
-link_to_api_server(Module, ApiMod, ApiPid, State) ->
+link_to_api_server(Module, #?STATE{session_link={Mod, Pid}}=State) when is_atom(Mod), is_pid(Pid) ->
     % Stop the API Server if we fail abruptly
-    ok = ApiMod:register(ApiPid, {nkdomain_stop, Module, self()}),
+    ok = Mod:register(Pid, {nkdomain_stop, Module, self()}),
     % Monitor the API server, reduce usage count if it fails
-    nkdomain_obj:links_add(usage, {nkdomain_api_server, ApiPid}, State).
+    nkdomain_obj:links_add(usage, {nkdomain_api_server, Pid}, State).
 
 
 %% @doc
-unlink_from_api_server(Module, State) ->
+unlink_from_api_server(Module, #?STATE{session_link={Mod, _Pid}}=State) when is_atom(Mod) ->
     nkdomain_obj:links_iter(
         usage,
         fun
-            ({nkdomain_api_server, ApiPid}, _Acc) ->
-                nkapi_server:unregister(ApiPid, {nkdomain_stop, Module, self()});
+            ({nkdomain_api_server, Pid}, _Acc) ->
+                Mod:unregister(Pid, {nkdomain_stop, Module, self()});
             (_, _Acc) ->
                 ok
         end,

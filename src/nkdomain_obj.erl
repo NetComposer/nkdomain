@@ -102,7 +102,7 @@
         enabled => boolean(),
         is_created => boolean(),
         session_events => [binary()],       % Will send this event types directly to session
-        session_id => term(),
+        session_link => nklib_links:link(),
         meta => map()
     }.
 
@@ -285,7 +285,7 @@ init({loaded, SrvId, Obj, Meta}) ->
         event_links = nklib_links:new(),
         status = init,
         session_events = maps:get(session_events, Meta, []),
-        session_id = maps:get(session_id, Meta, undefined),
+        session_link = maps:get(session_link, Meta, undefined),
         meta = maps:get(meta, Meta, #{}),
         ttl = set_ttl(Obj, Info),
         session = #{}
