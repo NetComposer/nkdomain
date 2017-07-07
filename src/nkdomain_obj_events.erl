@@ -40,54 +40,54 @@
 
 
 %% @private
-event(created, #?STATE{obj=#{domain_id:=DomainId}}=Session) ->
-    {event, created, #{domain_id=>DomainId}, Session};
+event(created, #?STATE{obj=#{domain_id:=DomainId}}=State) ->
+    {event, {created, #{domain_id=>DomainId}}, State};
 
-event(loaded, Session) ->
-    {event, loaded, #{}, Session};
+event(loaded, State) ->
+    {event, loaded, State};
 
-event({status, Status}, Session) when is_atom(Status); is_binary(Status) ->
-    {event, updated_status, #{status=>Status}, Session};
+event({status, Status}, State) when is_atom(Status); is_binary(Status) ->
+    {event, {updated_status, #{status=>Status}}, State};
 
-event({status, {Status, Reason}}, Session) when is_atom(Status); is_binary(Status) ->
-    #?STATE{srv_id=SrvId} = Session,
+event({status, {Status, Reason}}, State) when is_atom(Status); is_binary(Status) ->
+    #?STATE{srv_id=SrvId} = State,
     {Code, Txt} = nkservice_util:error(SrvId, Reason),
-    {event, updated_status, #{status=>Code, reason=>Txt}, Session};
+    {event, {updated_status, #{status=>Code, reason=>Txt}}, State};
 
-event(saved, Session) ->
-    {event, saved, #{}, Session};
+event(saved, State) ->
+    {event, saved, State};
 
-event({updated, Update}, Session) ->
-    {event, updated, #{update=>Update}, Session};
+event({updated, Update}, State) ->
+    {event, {updated, #{update=>Update}}, State};
 
-event(deleted, Session) ->
-    {event, deleted, #{}, Session};
+event(deleted, State) ->
+    {event, deleted, State};
 
-event({info, Info, Body}, Session) when is_map(Body) ->
-    {event, object_info, Body#{info=>Info}, Session};
+event({info, Info, Body}, State) when is_map(Body) ->
+    {event, {object_info, Body#{info=>Info}}, State};
 
-event({event, Event, Body}, Session) when is_map(Body) ->
-    {event, Event, Body, Session};
+event({event, Event, Body}, State) when is_map(Body) ->
+    {event, {Event, Body}, State};
 
-event({enabled, Enabled}, Session) ->
-    {event, object_enabled, #{enabled=>Enabled}, Session};
+event({enabled, Enabled}, State) ->
+    {event, {object_enabled, #{enabled=>Enabled}}, State};
 
-event({child_created, Type, ObjId}, Session) ->
-    {event, child_created, #{type=>Type, obj_id=>ObjId}, Session};
+event({child_created, Type, ObjId}, State) ->
+    {event, {child_created, #{type=>Type, obj_id=>ObjId}}, State};
 
-event({child_loaded, Type, ObjId}, Session) ->
-    {event, child_loaded, #{type=>Type, obj_id=>ObjId}, Session};
+event({child_loaded, Type, ObjId}, State) ->
+    {event, {child_loaded, #{type=>Type, obj_id=>ObjId}}, State};
 
-event({child_unloaded, Type, ObjId}, Session) ->
-    {event, child_unloaded, #{type=>Type, obj_id=>ObjId}, Session};
+event({child_unloaded, Type, ObjId}, State) ->
+    {event, {child_unloaded, #{type=>Type, obj_id=>ObjId}}, State};
 
-event({unloaded, Reason}, Session) ->
-    #?STATE{srv_id=SrvId} = Session,
+event({unloaded, Reason}, State) ->
+    #?STATE{srv_id=SrvId} = State,
     {Code, Txt} = nkservice_util:error(SrvId, Reason),
-    {event, unloaded, #{code=>Code, reason=>Txt}, Session};
+    {event, {unloaded, #{code=>Code, reason=>Txt}}, State};
 
-event(_Event, Session) ->
-    {ok, Session}.
+event(_Event, State) ->
+    {ok, State}.
 
 
 

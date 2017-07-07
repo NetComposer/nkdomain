@@ -23,7 +23,7 @@
 -module(nkdomain_obj_util).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -export([event/2, status/2, search_syntax/1, get_name/1]).
--export([send_event/3, send_event/4, send_event/5]).
+-export([send_event/1, send_event/3, send_event/4, send_event/5]).
 -export([call_type/3]).
 -export([link_to_api_server/2, unlink_from_api_server/2]).
 -export([get_obj_session/1, set_obj_session/2]).
@@ -51,6 +51,33 @@ event(Event, #?STATE{srv_id=SrvId, event_links=Links}=State) ->
     State2 = nklib_links:fold_values(Fun, State, Links),
     {ok, State3} = SrvId:object_event(Event, State2),
     State3.
+
+
+%% @doc Event sending using specs
+send_event({event, Type, State}) when is_atom(Type) ->
+    send_event(Type, #{}, State);
+
+send_event({event, {Type, Body}, State}) ->
+    send_event(Type, Body, State);
+
+send_event({event, {Type, ObjId, Body}, State}) ->
+    send_event(Type, ObjId, Body, State);
+
+send_event({event, {Type, ObjId, Path, Body}, State}) ->
+    send_event(Type, ObjId, Path, Body, State);
+
+send_event({event, [], State}) ->
+    {ok, State};
+
+send_event({event, [Ev|Rest], State}) ->
+    {ok, State2} = send_event({event, Ev, State}),
+    send_event({event, Rest, State2});
+
+send_event({ok, State3}) ->
+    {ok, State3};
+
+send_event({ignore, State3}) ->
+    {ok, State3}.
 
 
 %% @doc Sends events inside an object process directly to the event server

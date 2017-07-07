@@ -34,11 +34,11 @@
 
 
 %% @private
-event({login, SessId, Meta}, Session) ->
-    {event, login, #{session_id=>SessId, meta=>Meta}, Session};
+event({login, SessId, Meta}, State) ->
+    {event, {login, #{session_id=>SessId, meta=>Meta}}, State};
 
-event(_Event, Session) ->
-    {ok, Session}.
+event(_Event, State) ->
+    {ok, State}.
 
 
 

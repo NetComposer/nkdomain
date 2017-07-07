@@ -437,24 +437,10 @@ object_event(Event, State) ->
     % Use this callback to generate the right external Event
     case call_module(object_send_event, [Event], State2) of
         {ok, State3} ->
-            case nkdomain_obj_events:event(Event, State3) of
-                {ok, State4} ->
-                    {ok, State4};
-                {event, Type, Body, State4} ->
-                    nkdomain_obj_util:send_event(Type, Body, State4);
-                {event, Type, ObjId, Body, State4} ->
-                    nkdomain_obj_util:send_event(Type, ObjId, Body, State4);
-                {event, Type, ObjId, Path, Body, State4} ->
-                    nkdomain_obj_util:send_event(Type, ObjId, Path, Body, State4)
-            end;
-        {event, Type, Body, State3} ->
-            nkdomain_obj_util:send_event(Type, Body, State3);
-        {event, Type, ObjId, Body, State3} ->
-            nkdomain_obj_util:send_event(Type, ObjId, Body, State3);
-        {event, Type, ObjId, Path, Body, State3} ->
-            nkdomain_obj_util:send_event(Type, ObjId, Path, Body, State3);
-        {ignore, State3} ->
-            {ok, State3}
+            EvSpec = nkdomain_obj_events:event(Event, State3),
+            nkdomain_obj_util:send_event(EvSpec);
+        EvSpec ->
+            nkdomain_obj_util:send_event(EvSpec)
     end.
 
 
