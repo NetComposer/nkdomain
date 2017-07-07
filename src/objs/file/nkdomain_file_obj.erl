@@ -177,17 +177,17 @@ object_es_mapping() ->
 
 
 %% @private
-object_parse(_SrvId, load, _Obj) ->
+object_parse(_SrvId, update, _Obj) ->
+    #{};
+
+object_parse(_SrvId, _Mode, _Obj) ->
      #{
         content_type => binary,
         store_id => binary,
         size => integer,
         password => binary,
         '__mandatory' => [content_type, store_id, size]
-    };
-
-object_parse(_SrvId, update, _Obj) ->
-    #{}.
+    }.
 
 
 %% @private

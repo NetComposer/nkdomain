@@ -29,10 +29,9 @@
          admin_element_action/5, admin_get_data/3]).
 -export([object_admin_info/1, object_get_counter/3]).
 -export([object_create/5, object_check_active/3, object_do_expired/2]).
--export([object_syntax/1, object_parse/3]).
+-export([object_syntax/2, object_parse/3]).
 -export([object_init/1, object_terminate/2, object_stop/2,
-         object_event/2, object_reg_event/4, object_session_event/3, object_sync_op/3, object_async_op/2,
-         object_save/1, object_delete/1, object_archive/1, object_link_down/2,
+         object_event/2, object_reg_event/4, object_session_event/3, object_sync_op/3, object_async_op/2, object_save/1, object_delete/1, object_archive/1, object_link_down/2,
          object_handle_call/3, object_handle_cast/2, object_handle_info/2]).
 -export([object_db_init/1, object_db_start/1, object_db_read/2, object_db_save/2, object_db_delete/2]).
 -export([object_db_find_obj/2, object_db_search/2, object_db_search_alias/2,
@@ -200,10 +199,11 @@ nkservice_rest_http(_Method, _Path, _Req, _State) ->
 
 
 %% @doc Object syntax
--spec object_syntax(load|update) -> nklib_syntax:syntax().
+-spec object_syntax(nkservice:id(), load|update|create) ->
+    {nklib_syntax:syntax(), nklib_syntax:parse_opts()}.
 
-object_syntax(load) ->
-    #{
+object_syntax(SrvId, load) ->
+    Syntax = #{
         obj_id => binary,
         type => binary,
         path => binary,
@@ -229,10 +229,13 @@ object_syntax(load) ->
         icon_content_type => binary,
         '_store_vsn' => any,
         '__mandatory' => [type, obj_id, domain_id, path, created_time]
-    };
+    },
+    % Some parsers need to now the server_id
+    Opts = #{domain_srv_id=>SrvId},
+    {Syntax, Opts};
 
-object_syntax(update) ->
-    #{
+object_syntax(SrvId, update) ->
+    Syntax = #{
         type => ignore,             % Do not count as unknown is updates
         enabled => boolean,
         name => binary,
@@ -241,11 +244,14 @@ object_syntax(update) ->
         aliases => {list, binary},
         icon_id => binary,
         icon_content_type => binary
-    };
+    },
+    % Some parsers need to now the server_id
+    Opts = #{domain_srv_id=>SrvId},
+    {Syntax, Opts};
 
-object_syntax(create) ->
-    Base = (object_syntax(load))#{'__mandatory':=[]},
-    Base#{obj_name => binary}.
+object_syntax(SrvId, create) ->
+    {Base, Opts} = object_syntax(SrvId, load),
+    {Base#{obj_name => binary, '__mandatory':=[]}, Opts}.
 
 
 %% ===================================================================
@@ -299,6 +305,11 @@ object_create(SrvId, DomainId, Type, UserId, Obj) ->
 
 
 %% @doc Called to parse an object's syntax from a map
+%% create: called when creating an object, all fields are allowed but no mandatory,
+%%         since the creation functions will fill in all mandatory fields
+%% load:   used when loading an object from disk
+%% update: used when updating an object, only fields allowed to be updated
+%%         must be included
 -spec object_parse(srv_id(), load|update, map()) ->
     {ok, nkdomain:obj(), Unknown::[binary()]} | {error, term()}.
 
@@ -308,32 +319,26 @@ object_parse(SrvId, Mode, Map) ->
         #{type:=Type0} -> Type0;
         _ -> <<>>
     end,
-    SynOpts = #{domain_srv_id=>SrvId, domain_mode=> Mode},
     case nkdomain_all_types:get_module(Type) of
         undefined ->
             {error, {invalid_type, Type}};
         Module ->
-            UserMode = case Mode of
-                create -> load;
-                load -> load;
-                update -> update
-            end,
-            case Module:object_parse(SrvId, UserMode, Map) of
+            case Module:object_parse(SrvId, Mode, Map) of
                 {ok, Obj2, UnknownFields} ->
                     {ok, Obj2, UnknownFields};
                 {error, Error} ->
                     {error, Error};
                 {type_obj, TypeObj, UnknownFields1} ->
-                    BaseSyn = SrvId:object_syntax(Mode),
-                    case nklib_syntax:parse(Map, BaseSyn#{Type=>ignore}, SynOpts) of
+                    {BaseSyn, Opts} = SrvId:object_syntax(SrvId, Mode),
+                    case nklib_syntax:parse(Map, BaseSyn#{Type=>ignore}, Opts) of
                         {ok, Obj, UnknownFields2} ->
                             {ok, Obj#{Type=>TypeObj}, UnknownFields1++UnknownFields2};
                         {error, Error} ->
                             {error, Error}
                     end;
                 Syntax when Syntax==any; is_map(Syntax) ->
-                    BaseSyn = SrvId:object_syntax(Mode),
-                    nklib_syntax:parse(Map, BaseSyn#{Type=>Syntax}, SynOpts)
+                    {BaseSyn, Opts} = SrvId:object_syntax(SrvId, Mode),
+                    nklib_syntax:parse(Map, BaseSyn#{Type=>Syntax}, Opts)
             end
     end.
 
@@ -509,21 +514,16 @@ object_async_op(Op, State) ->
     end.
 
 
-
 %% @doc Called to save the object to disk
 -spec object_save(state()) ->
     {ok, state(), Meta::map()} | {error, term(), state()}.
 
-object_save(#?STATE{is_dirty=false}=State) ->
-    {ok, State};
-
 object_save(#?STATE{srv_id=SrvId}=State) ->
-    %{ok, State2} = call_module(object_restore, [], State),
     case call_module(object_save, [], State) of
         {ok, #?STATE{obj=Obj2}=State2} ->
             case SrvId:object_db_save(SrvId, Obj2) of
                 {ok, Meta} ->
-                    {ok, State2#?STATE{is_dirty=false}, Meta};
+                    {ok, State2, Meta};
                 {error, Error} ->
                     {error, Error, State2}
             end;

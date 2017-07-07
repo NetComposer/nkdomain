@@ -187,6 +187,7 @@ object_es_mapping() ->
 
 %% @private
 object_es_unparse(_SrvId, Obj, Base) ->
+    FullName = maps:get(name, Obj),
     User = maps:get(?DOMAIN_USER, Obj),
     Name = maps:get(name, User, <<>>),
     NameNorm = nkdomain_store_es_util:normalize(Name),
@@ -201,7 +202,6 @@ object_es_unparse(_SrvId, Obj, Base) ->
         surname_norm => SurNameNorm,
         surname_sort => SurNameNorm
     },
-    FullName = nklib_util:bjoin([Name, SurName], <<" ">>),
     FullNameNorm = nkdomain_store_es_util:normalize(FullName),
     Base#{
         name => FullName,
@@ -221,12 +221,22 @@ object_parse(_SrvId, update, _Obj) ->
         address_t => binary
     };
 
-object_parse(SrvId, load, Obj) ->
-    Base = object_parse(SrvId, update, Obj),
-    Base#{'__mandatory' => [name, surname]}.
+object_parse(SrvId, Mode, Obj) ->
+    {BaseSyn, Opts} = SrvId:object_syntax(SrvId, Mode),
+    Syntax1 = object_parse(SrvId, update, Obj),
+    Syntax2 = Syntax1#{'__mandatory' => [name, surname]},
+    case nklib_syntax:parse(Obj, BaseSyn#{?DOMAIN_USER=>Syntax2}, Opts) of
+        {ok, Obj2, Unknown} ->
+            #{?DOMAIN_USER:=#{name:=Name, surname:=SurName}} = Obj2,
+            FullName = <<Name/binary, " ", SurName/binary>>,
+            Obj3 = Obj2#{name=>FullName},
+            {ok, Obj3, Unknown};
+        {error, Error} ->
+            {error, Error}
+    end.
 
 
-%% @private
+% @private
 object_api_syntax(Cmd, Syntax) ->
     nkdomain_user_obj_syntax:api(Cmd, Syntax).
 
@@ -249,7 +259,7 @@ object_init(State) ->
     {ok, set_obj_data(ObjData, State)}.
 
 
-%% @private
+% @private
 object_sync_op({?MODULE, check_pass, _Pass}, _From, #?STATE{is_enabled=false}=State) ->
     {reply, {error, object_is_disabled}, State};
 
@@ -326,7 +336,6 @@ object_link_down(_Link, State) ->
 %% ===================================================================
 %% Internal
 %% ===================================================================
-
 
 %% @private
 fun_user_pass(Pass) ->

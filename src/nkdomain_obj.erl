@@ -290,6 +290,7 @@ init({loaded, SrvId, Obj, Meta}) ->
         ttl = set_ttl(Obj, Info),
         session = #{}
     },
+    ?DEBUG("started (~p)", [self()], State1),
     case do_init_common(State1) of
         {ok, State2} ->
             case register(SrvId, Type, ObjId, Path, #{}) of
@@ -304,8 +305,7 @@ init({loaded, SrvId, Obj, Meta}) ->
                                     State3
                             end,
                             State5 = do_event(loaded, State4),
-                            #?STATE{}= State6 = do_refresh(State5),
-                            {ok, State6};
+                            {ok, do_refresh(State5)};
                         {error, Error} ->
                             {stop, Error}
                     end;
@@ -353,12 +353,12 @@ handle_call({nkdomain_sync_op, Op}, From, State) ->
         {reply, Reply, #?STATE{}=State2} ->
             reply(Reply, do_refresh(State2));
         {reply_and_save, Reply, #?STATE{}=State2} ->
-            {_, State3} = do_save(State2),
+            {_, State3} = do_save(user_op, State2),
             reply(Reply, do_refresh(State3));
         {noreply, #?STATE{}=State2} ->
             noreply(do_refresh(State2));
         {noreply_and_save, #?STATE{}=State2} ->
-            {_, State3} = do_save(State2),
+            {_, State3} = do_save(user_op, State2),
             noreply(do_refresh(State3));
         {stop, Reason, Reply, #?STATE{}=State2} ->
             gen_server:reply(From, Reply),
@@ -388,7 +388,7 @@ handle_cast({nkdomain_async_op, Op}, State) ->
         {noreply, #?STATE{}=State2} ->
             noreply(do_refresh(State2));
         {noreply_and_save, #?STATE{}=State2} ->
-            {_, State3} = do_save(State2),
+            {_, State3} = do_save(user_op, State2),
             noreply(do_refresh(State3));
         {stop, Reason, #?STATE{}=State2} ->
             do_stop(Reason, State2);
@@ -559,7 +559,7 @@ do_sync_op(get_time, _From, State) ->
     reply({ok, get_timer(State)}, State);
 
 do_sync_op(save, _From, State) ->
-    {Reply, State2} = do_save(State),
+    {Reply, State2} = do_save(user_order, State),
     reply(Reply, State2);
 
 do_sync_op(delete, From, #?STATE{is_enabled=IsEnabled, object_info=Info}=State) ->
@@ -743,14 +743,14 @@ set_ttl(Obj, Info) ->
 
 
 %% @private
-do_save(#?STATE{is_dirty=false}=State) ->
+do_save(_Reason, #?STATE{is_dirty=false}=State) ->
     {ok, State};
 
-do_save(State) ->
-    ?DEBUG("save object", [], State),
+do_save(Reason, State) ->
+    ?DEBUG("save object (~p)", [Reason], State),
     case handle(object_save, [], State) of
         {ok, State2, _Meta} ->
-            {ok, do_event(saved, State2)};
+            {ok, do_event(saved, State2#?STATE{is_dirty=false})};
         {error, Error, State2} ->
             ?LLOG(warning, "object save error: ~p", [Error], State),
             {{error, Error}, State2}
@@ -759,15 +759,16 @@ do_save(State) ->
 
 %% @private
 do_delete(#?STATE{childs=Childs}=State) when map_size(Childs)==0 ->
-    case handle(object_delete, [], State) of
-        {ok, State2, _Meta} ->
-            ?DEBUG("object deleted", [], State2),
-            {ok, do_event(deleted, State2)};
-        {error, object_has_childs, State2} ->
-            {{error, object_has_childs}, State2};
-        {error, Error, State2} ->
-            ?LLOG(warning, "object could not be deleted: ~p", [Error], State2),
-            {{error, Error}, State2}
+    {_, State2} = do_save(pre_delete, State),
+    case handle(object_delete, [], State2) of
+        {ok, State3, _Meta} ->
+            ?DEBUG("object deleted", [], State3),
+            {ok, do_event(deleted, State3)};
+        {error, object_has_childs, State3} ->
+            {{error, object_has_childs}, State3};
+        {error, Error, State3} ->
+            ?LLOG(warning, "object could not be deleted: ~p", [Error], State3),
+            {{error, Error}, State3}
     end;
 
 do_delete(State) ->
@@ -831,7 +832,7 @@ do_stop2(Reason, #?STATE{srv_id=SrvId, stop_reason=false, timelog=Log, object_in
     {ok, State2} = handle(object_stop, [Reason], State#?STATE{stop_reason=Reason}),
     {Code, Txt} = nkservice_util:error(SrvId, Reason),
     State3 = do_add_timelog(#{msg=>stopped, code=>Code, reason=>Txt}, State2),
-    {_, State4} = do_save(State3),
+    {_, State4} = do_save(object_stopped, State3),
     State5 = do_event({unloaded, Reason}, State4),
     State6 = do_event({record, lists:reverse(Log)}, State5),
     case Info of
@@ -882,11 +883,12 @@ do_update(Update, #?STATE{id=Id, obj=Obj}=State) ->
                             Time = nkdomain_util:timestamp(),
                             Obj5 = ?ADD_TO_OBJ(updated_time, Time, Obj4),
                             Obj6 = maps:merge(#{updated_by => <<>>}, Obj5),
-                            case do_save(State#?STATE{obj=Obj6, is_dirty=true}) of
-                                {ok, State2} ->
-                                    {ok, UnknownFields, do_event({updated, Update3}, State2)};
-                                {{error, Error}, State2} ->
-                                    {error, Error, State2}
+                            State2 = State#?STATE{obj=Obj6, is_dirty=true},
+                            case do_save(object_updated, State2) of
+                                {ok, State3} ->
+                                    {ok, UnknownFields, do_event({updated, Update3}, State3)};
+                                {{error, Error}, State3} ->
+                                    {error, Error, State3}
                             end;
                         {error, Error} ->
                             {error, Error, State}

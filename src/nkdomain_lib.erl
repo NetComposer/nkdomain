@@ -63,7 +63,12 @@ find(SrvId, Id) ->
                                 false ->
                                     ok
                             end,
-                            #obj_id_ext{srv_id=SrvId, type=Type, obj_id=ObjId, path=Path};
+                            case find_loaded(SrvId, ObjId) of
+                                #obj_id_ext{}=ObjIdExt ->
+                                    ObjIdExt;
+                                not_found ->
+                                    #obj_id_ext{srv_id=SrvId, type=Type, obj_id=ObjId, path=Path}
+                            end;
                         {error, Error} ->
                             {error, Error}
                     end
