@@ -298,36 +298,43 @@ file_get_inline(Id) ->
 
 
 file_post(T) ->
-    {ok, #{<<"obj_id">>:=FileId}} = upload(T, "/_file", "text/plain", "1,2,3,4"),
+    Url = list_to_binary([?HTTP, "/_file"]),
+    {ok, #{<<"obj_id">>:=FileId}} = upload(T, Url, "text/plain", "1,2,3,4"),
     FileId.
 
 file_post2(T) ->
     {ok, Bin} = file:read_file("/tmp/file1.png"),
-    {ok, #{<<"obj_id">>:=FileId}} = upload(T, "/_file", "image/png", Bin),
+    Url = list_to_binary([?HTTP, "/_file"]),
+    {ok, #{<<"obj_id">>:=FileId}} = upload(T, Url, "image/png", Bin),
     FileId.
 
 file_post3(T) ->
     Bin = crypto:strong_rand_bytes(10000000),
-    {ok, #{<<"obj_id">>:=FileId}} = upload(T, "/_file", "application/binary", Bin),
+    Url = list_to_binary([?HTTP, "/_file"]),
+    {ok, #{<<"obj_id">>:=FileId}} = upload(T, Url, "application/binary", Bin),
     FileId.
 
 
 
 
 file_post_secure(T) ->
-    {ok, #{<<"obj_id">>:=FileId}} = upload(T, "/_file?store_id=/file.stores/local_secure", "text/plain", "1234"),
+    Url = list_to_binary([?HTTP, "/_file?store_id=/file.stores/local_secure"]),
+    {ok, #{<<"obj_id">>:=FileId}} = upload(T, Url, "text/plain", "1234"),
     FileId.
 
 file_post_s3_secure(T) ->
-    {ok, #{<<"obj_id">>:=FileId}} = upload(T, "/_file?store_id=/file.stores/carlos.s3_secure", "text/plain", "1234"),
+    Url = list_to_binary([?HTTP, "/_file?store_id=/file.stores/carlos.s3_secure"]),
+    {ok, #{<<"obj_id">>:=FileId}} = upload(T, Url, "text/plain", "1234"),
     FileId.
 
 
 file_download(T, FileId) ->
-    download(T, FileId).
+    Url = list_to_binary([?HTTP, "/_file/", FileId]),
+    download(T, Url).
 
 file_download2(T, FileId) ->
-    {ok, _, Body} = download(T, FileId),
+    Url = list_to_binary([?HTTP, "/_file/", FileId]),
+    {ok, _, Body} = download(T, Url),
     ok = file:write_file(filename:join("/tmp", FileId), Body).
 
 
@@ -456,8 +463,7 @@ http(Token, Cmd, Data) ->
 
 upload(T, Url, CT, Body) ->
     Hds = [{"X-NetComposer-Auth", nklib_util:to_list(T)}],
-    Url2 = list_to_binary([?HTTP, Url]),
-    case httpc:request(post, {to_list(Url2), Hds, to_list(CT), Body}, [], []) of
+    case httpc:request(post, {to_list(Url), Hds, to_list(CT), Body}, [], []) of
         {ok, {{_, 200, _}, _Hs, B}} ->
             {ok, nklib_json:decode(B)};
         {ok, {{_, 400, _}, _Hs, B}} ->
@@ -466,26 +472,14 @@ upload(T, Url, CT, Body) ->
 
 
 
-download(T, File) ->
+download(T, Url) ->
     Hds = [{"X-NetComposer-Auth", nklib_util:to_list(T)}],
-    Url = list_to_binary([?HTTP, "/_file/", File]),
     case httpc:request(get, {to_list(Url), Hds}, [], []) of
         {ok, {{_, 200, _}, Hs, B}} ->
             {ok, Hs, B};
         {ok, {{_, 400, _}, _Hs, B}} ->
             {error, nklib_json:decode(B)}
     end.
-
-
-%%upload_icon(Id) ->
-%%    {ok, {_, _, B1}} = httpc:request("https://www.flatpyramid.com/uploads/3d-models/samples/other/popeye_3d-3d-model-sample-22266-87323.gif"),
-%%    Url = binary_to_list(<< ?FILES, "/icon/", (to_bin(Id))/binary>>),
-%%    httpc:request(post, {Url, [], "image/gif", B1}, [], []).
-%%
-%%download_icon(Id) ->
-%%    Url = binary_to_list(<< ?FILES, "/icon/", (to_bin(Id))/binary>>),
-%%    httpc:request(get, {Url, []}, [], []).
-%%
 
 
 
