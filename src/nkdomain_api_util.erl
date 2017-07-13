@@ -21,7 +21,7 @@
 -module(nkdomain_api_util).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([session_login/1, token_login/1, check_token/2]).
+-export([session_login/1, token_login/1, check_token/2, check_raw_token/2]).
 -export([search/1, get_id/3, get_id/4, add_id/3, add_meta/3, remove_meta/2]).
 -export_type([login_data/0, session_meta/0]).
 
@@ -66,7 +66,7 @@ session_login(#nkreq{srv_id=SrvId, data=Data, session_meta=SessMeta}=Req) ->
     case get_domain(SrvId, Data) of
         {ok, DomainId} ->
             case nkdomain_user_obj:auth(SrvId, User, Auth) of
-                {ok, UserId} ->
+                {ok, UserId, _UserDomainId} ->
                     LoginMeta = maps:get(meta, Data, #{}),
                     SessOpts1 = maps:with([session_id, session_link, local, remote], SessMeta),
                     SessOpts2 = SessOpts1#{login_meta => LoginMeta},
@@ -98,7 +98,7 @@ token_login(#nkreq{srv_id=SrvId, data=Data, session_meta=SessMeta}) ->
     case get_domain(SrvId, Data) of
         {ok, DomainId} ->
             case nkdomain_user_obj:auth(SrvId, User, Auth) of
-                {ok, UserId} ->
+                {ok, UserId, _UserDomainId} ->
                     LoginMeta = maps:get(meta, Data, #{}),
                     TokenData1 = maps:with([session_id, local, remote], SessMeta),
                     TokenData2 = TokenData1#{login_meta => LoginMeta},
@@ -114,23 +114,34 @@ token_login(#nkreq{srv_id=SrvId, data=Data, session_meta=SessMeta}) ->
 
 %% @doc
 check_token(Token, #nkreq{srv_id=SrvId}=Req) ->
+    case check_raw_token(SrvId, Token) of
+        {ok, UserId, DomainId, LoginMeta, SessId} ->
+            Req2 = add_meta(login_meta, LoginMeta, Req),
+            Req3 = add_id(?DOMAIN_DOMAIN, DomainId, Req2),
+            Req4 = add_id(?DOMAIN_USER, UserId, Req3),
+            Req5 = case SessId of
+                <<>> -> Req4;
+                _ -> add_id(?DOMAIN_SESSION, SessId, Req4)
+            end,
+            {ok, UserId, Req5};
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
+%% @doc
+check_raw_token(SrvId, Token) ->
     case nkdomain:get_obj(SrvId, Token) of
         {ok, #{type:=?DOMAIN_SESSION, ?DOMAIN_SESSION:=Data}=Obj} ->
             #{domain_id:=DomainId, created_by:=UserId} = Obj,
             LoginMeta = maps:get(login_meta, Data, #{}),
-            Req2 = add_meta(login_meta, LoginMeta, Req),
-            Req3 = add_id(?DOMAIN_DOMAIN, DomainId, Req2),
-            Req4 = add_id(?DOMAIN_USER, UserId, Req3),
-            Req5 = add_id(?DOMAIN_SESSION, Token, Req4),
-            {ok, UserId, Req5};
+            {ok, UserId, DomainId, LoginMeta, Token};
         {ok, #{type:=?DOMAIN_TOKEN, subtype:=SubTypes, ?DOMAIN_TOKEN:=Data}=Obj} ->
             case lists:member(?DOMAIN_USER, SubTypes) of
                 true ->
                     #{domain_id:=DomainId, created_by:=UserId} = Obj,
-                    UserMeta1 = #{login_meta=>maps:get(login_meta, Data)},
-                    UserMeta2 = add_id(?DOMAIN_DOMAIN, DomainId, UserMeta1),
-                    UserMeta3 = add_id(?DOMAIN_USER, UserId, UserMeta2),
-                    {ok, UserId, UserMeta3};
+                    LoginMeta = maps:get(login_meta, Data, #{}),
+                    {ok, UserId, DomainId, LoginMeta, <<>>};
                 _ ->
                     {error, invalid_token}
             end;
@@ -140,8 +151,8 @@ check_token(Token, #nkreq{srv_id=SrvId}=Req) ->
                     case binary:split(Bin, <<":">>) of
                         [Login, Pass] ->
                             case nkdomain_user_obj:auth(SrvId, Login, #{password=>Pass}) of
-                                {ok, UserId} ->
-                                    {ok, UserId, #{}};
+                                {ok, UserId, DomainId} ->
+                                    {ok, UserId, DomainId, #{}, <<>>};
                                 {error, Error} ->
                                     {error, Error}
                             end;
@@ -152,8 +163,6 @@ check_token(Token, #nkreq{srv_id=SrvId}=Req) ->
                     {error, invalid_token}
             end
     end.
-
-
 
 
 %% @private

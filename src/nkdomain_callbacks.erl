@@ -24,7 +24,7 @@
 -export([error/1]).
 -export([object_apply/3]).
 
--export([nkservice_rest_http/4]).
+-export([nkservice_rest_http/3]).
 -export([admin_tree_categories/2, admin_tree_get_category/2, admin_event/3,
          admin_element_action/5, admin_get_data/3]).
 -export([object_admin_info/1, object_get_counter/3]).
@@ -165,30 +165,28 @@ admin_get_data(ElementId, Spec, Session) ->
 
 
 %% @doc
-nkservice_rest_http(get, [<<"_file">>, FileId], Req, State) ->
+nkservice_rest_http(get, [<<"_file">>, FileId], Req) ->
     case nkdomain_file_obj:http_get(FileId, Req) of
         {ok, CT, Bin} ->
-            {http, 200, [{<<"Content-Type">>, CT}], Bin, State};
+            {http, 200, [{<<"Content-Type">>, CT}], Bin};
         {error, Error} ->
-            nkservice_rest_http:reply_json({error, Error}, Req, State)
+            nkservice_rest_http:reply_json({error, Error}, Req)
     end;
 
-nkservice_rest_http(post, File, Req, State) ->
-    case lists:reverse(File) of
-        [<<"_file">>|Rest] ->
-            Domain = nklib_util:bjoin(lists:reverse(Rest), <<"/">>),
-            case nkdomain_file_obj:http_post(Domain, Req) of
-                {ok, #obj_id_ext{obj_id=ObjId, path=Path}, _Unknown} ->
-                    Reply = #{obj_id=>ObjId, path=>Path},
-                    nkservice_rest_http:reply_json({ok, Reply}, Req, State);
-                {error, Error} ->
-                    nkservice_rest_http:reply_json({error, Error}, Req, State)
-            end;
-        _ ->
-            continue
+nkservice_rest_http(post, [<<"_file">>], Req) ->
+    Qs = nkservice_rest_http:get_qs(Req),
+    Name = nklib_util:get_value(<<"name">>, Qs, <<>>),
+    Domain = nklib_util:get_value(<<"domain">>, Qs, <<"/">>),
+    StoreId = nklib_util:get_value(<<"store_id">>, Qs, <<>>),
+    case nkdomain_file_obj:http_post(Domain, StoreId, Name, Req) of
+        {ok, #obj_id_ext{obj_id=ObjId, path=Path}, _Unknown} ->
+            Reply = #{obj_id=>ObjId, path=>Path},
+            nkservice_rest_http:reply_json({ok, Reply}, Req);
+        {error, Error} ->
+            nkservice_rest_http:reply_json({error, Error}, Req)
     end;
 
-nkservice_rest_http(_Method, _Path, _Req, _State) ->
+nkservice_rest_http(_Method, _Path, _Req) ->
     continue.
 
 
@@ -844,13 +842,18 @@ api_server_reg_down(_Link, _Reason, _State) ->
     continue.
 
 %% @doc
-api_server_http_auth(#nkreq{cmd = <<"objects/user/get_token">>}, _HttpReq) ->
-    {true, <<>>, #{}, #{}};
+api_server_http_auth(#nkreq{cmd = <<"objects/user/get_token">>}=NkReq, _HttpReq) ->
+    {true, <<>>, NkReq};
 
 api_server_http_auth(#nkreq{}=Req, HttpReq) ->
     Headers = nkapi_server_http:get_headers(HttpReq),
     Token = nklib_util:get_value(<<"x-netcomposer-auth">>, Headers, <<>>),
-    nkdomain_api_util:check_token(Token, Req).
+    case nkdomain_api_util:check_token(Token, Req) of
+        {ok, UserId, UserMeta} ->
+            {true, UserId, Req#nkreq{user_state=UserMeta}};
+        {error, _Error} ->
+            false
+    end.
 
 %%%% @doc
 %%api_server_handle_info({nkdist, {sent_link_down, Link}}, State) ->

@@ -67,14 +67,14 @@ create(SrvId, Obj) ->
 
 %% @doc
 -spec auth(nkservice:id(), User::binary(), auth_opts()) ->
-    {ok, UserId::nkdomain:obj_id(), SessId::nkdomain:obj_id()} |
+    {ok, UserId::nkdomain:obj_id(), DomainId::nkdomain:obj_id()} |
     {error, user_not_found|term()}.
 
 auth(SrvId, UserId, #{password:=Pass}) ->
     Pass2 = user_pass(Pass),
     case nkdomain_obj:sync_op(SrvId, UserId, {?MODULE, check_pass, Pass2}) of
-        {ok, {true, ObjId}} ->
-            {ok, ObjId};
+        {ok, {true, ObjId, DomainId}} ->
+            {ok, ObjId, DomainId};
         {ok, false} ->
             timer:sleep(?INVALID_PASSWORD_TIME),
             {error, invalid_password};
@@ -265,9 +265,9 @@ object_sync_op({?MODULE, check_pass, _Pass}, _From, #?STATE{is_enabled=false}=St
 
 object_sync_op({?MODULE, check_pass, Pass}, _From, #?STATE{id=Id, obj=Obj}=State) ->
     case Obj of
-        #{?DOMAIN_USER:=#{password:=Pass}} ->
+        #{domain_id:=DomainId, ?DOMAIN_USER:=#{password:=Pass}} ->
             #obj_id_ext{obj_id=ObjId} = Id,
-            {reply, {ok, {true, ObjId}}, State};
+            {reply, {ok, {true, ObjId, DomainId}}, State};
         _ ->
             {reply, {ok, false}, State}
     end;
