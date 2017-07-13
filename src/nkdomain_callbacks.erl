@@ -91,6 +91,7 @@ error(member_not_found)                 -> "Member not found";
 error(member_invalid)                   -> "Invalid member";
 error(missing_auth_header)              -> "Missing authentication header";
 error({module_failed, Module})          -> {"Module '~s' failed", [Module]};
+error(object_access_not_allowed)        -> "Object access is not allowed";
 error(object_already_exists)            -> "Object already exists";
 error(object_clean_process)             -> "Object cleaned (process stopped)";
 error(object_clean_expire)              -> "Object cleaned (expired)";
