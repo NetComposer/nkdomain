@@ -43,9 +43,15 @@
     #{
         session_link => {module(), pid()},
         session_id => binary(),
-        login_meta => map(),
-        local => binary(),
-        remote => binary()
+        data => #{
+            login_meta => map(),
+            local => binary(),
+            remote => binary(),
+            device_id => binary(),
+            push_id => binary(),
+            platform_id => binary(),
+            platform_version => binary()
+        }
     }.
 
 
@@ -64,7 +70,7 @@ start(SrvId, DomainId, UserId, Opts) ->
             parent_id => UserId,
             created_by => UserId,
             active => true,
-            ?DOMAIN_SESSION => maps:with([local, remote, login_meta], Opts)
+            ?DOMAIN_SESSION => maps:get(data, Opts, #{})
         },
         Obj2 = case Opts of
             #{session_id:=SessId} ->
@@ -108,6 +114,10 @@ object_es_mapping() ->
     #{
         local => #{type => keyword},
         remote => #{type => keyword},
+        device_id => #{type => keyword},
+        push_id => #{type => keyword},
+        platform_id => #{type => keyword},
+        platform_version => #{type => keyword},
         login_meta => #{enabled => false}
     }.
 
@@ -117,6 +127,10 @@ object_parse(_SrvId, _Mode, _Obj) ->
     #{
         local => binary,
         remote => binary,
+        device_id => binary,
+        push_id => binary,
+        platform_id => binary,
+        platform_version => binary,
         login_meta => any
     }.
 
@@ -149,6 +163,10 @@ object_api_syntax(<<"start">>, Syntax) ->
         id => binary,
         password => binary,
         domain_id => binary,
+        device_id => binary,
+        push_id => binary,
+        platform_id => binary,
+        platform_version => binary,
         meta => map,
         '__mandatory' => [id]
     };

@@ -21,7 +21,7 @@
 -module(nkdomain_util).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([is_path/1, get_parts/2, class/1, name/1, field/2]).
+-export([is_path/1, get_parts/2, class/1, name/1, field/2, fields/2]).
 -export([add_destroyed/3]).
 -export([timestamp/0]).
 -export_type([error/0]).
@@ -129,6 +129,10 @@ name(Name) ->
 %% @doc
 field(Type, Field) ->
     list_to_binary([Type, $., Field]).
+
+%% @doc
+fields(Type, Fields) ->
+    [field(Type, Field) || Field <- Fields].
 
 
 %% @doc

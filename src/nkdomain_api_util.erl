@@ -67,9 +67,12 @@ session_login(#nkreq{srv_id=SrvId, data=Data, session_meta=SessMeta}=Req) ->
         {ok, DomainId} ->
             case nkdomain_user_obj:auth(SrvId, User, Auth) of
                 {ok, UserId, _UserDomainId} ->
+                    SessData1 = maps:with([device_id, push_id, platform_id, platform_version], Data),
+                    SessData2 = maps:with([local, remote], SessMeta),
                     LoginMeta = maps:get(meta, Data, #{}),
-                    SessOpts1 = maps:with([session_id, session_link, local, remote], SessMeta),
-                    SessOpts2 = SessOpts1#{login_meta => LoginMeta},
+                    SessData3 = maps:merge(SessData1, SessData2#{login_meta => LoginMeta}),
+                    SessOpts1 = maps:with([session_id, session_link], SessMeta),
+                    SessOpts2 = SessOpts1#{data=>SessData3},
                     case nkdomain_session_obj:start(SrvId, DomainId, UserId, SessOpts2) of
                         {ok, SessId, Pid} ->
                             Req2 = add_meta(login_meta, LoginMeta, Req),
