@@ -159,8 +159,8 @@ test_create_user(Pid) ->
 test_session1(Pid) ->
     % Do login over tuser1, check the session is created and loaded
     {ok, Pid2, SessId} = login("/users/tuser1", pass2),
-    {ok, #{<<"type">>:=<<"user">>, <<"path">>:=<<"/users/tuser1">>, <<"obj_id">>:=UId}} = cmd(Pid2, <<"objects/user/get">>, #{}),
-    {ok, #{<<"type">>:=<<"user">>, <<"path">>:=<<"/users/admin">>}} = cmd(Pid, <<"objects/user/get">>, #{}),
+    {ok, #{<<"path">>:=<<"/users/tuser1">>, <<"obj_id">>:=UId}} = cmd(Pid2, <<"objects/user/get">>, #{}),
+    {ok, #{<<"path">>:=<<"/users/admin">>}} = cmd(Pid, <<"objects/user/get">>, #{}),
     {ok, <<"session">>, SessId, <<"/sessions/", _/binary>>, SPid} = nkdomain:find(?SRV, SessId),
     true = is_pid(SPid),
 

@@ -21,7 +21,7 @@
 -module(nkdomain_util).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([is_path/1, get_parts/2, class/1, name/1]).
+-export([is_path/1, get_parts/2, class/1, name/1, field/2]).
 -export([add_destroyed/3]).
 -export([timestamp/0]).
 -export_type([error/0]).
@@ -126,7 +126,9 @@ class(Type) ->
 name(Name) ->
     nklib_parse:normalize(Name, #{space=>$_, allowed=>[$-, $., $_]}).
 
-
+%% @doc
+field(Type, Field) ->
+    list_to_binary([Type, $., Field]).
 
 
 %% @doc

@@ -22,7 +22,7 @@
 %% @doc Basic Obj utilities
 -module(nkdomain_obj_util).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
--export([event/2, status/2, search_syntax/1, get_name/1]).
+-export([event/2, status/2, search_syntax/1, get_obj_info/1, get_obj_name/1]).
 -export([send_event/1, send_event/3, send_event/4, send_event/5]).
 -export([call_type/3]).
 -export([link_to_api_server/2, unlink_from_api_server/2]).
@@ -146,9 +146,11 @@ search_syntax(Base) ->
 
 
 %% @doc
-get_name(#?STATE{id=#obj_id_ext{type=Type, obj_id=ObjId, path=Path}, obj=Obj}) ->
-    {ok, _, ObjName} = nkdomain_util:get_parts(Type, Path),
+get_obj_info(#?STATE{id=#obj_id_ext{obj_id=ObjId, path=Path}, obj=Obj}) ->
     #{
+        domain_id := DomainId,
+        parent_id := ParentId,
+        obj_name := ObjName,
         created_by := CreatedBy,
         created_time := CreatedTime,
         updated_by := UpdatedBy,
@@ -158,6 +160,8 @@ get_name(#?STATE{id=#obj_id_ext{type=Type, obj_id=ObjId, path=Path}, obj=Obj}) -
         {obj_id, ObjId},
         {obj_name, ObjName},
         {path, Path},
+        {domain_id, DomainId},
+        {parent_id, ParentId},
         {name, maps:get(name, Obj, ObjName)},
         {created_by, CreatedBy},
         {created_time, CreatedTime},
@@ -181,6 +185,29 @@ get_name(#?STATE{id=#obj_id_ext{type=Type, obj_id=ObjId, path=Path}, obj=Obj}) -
         end
     ],
     maps:from_list(lists:flatten(List)).
+
+
+%% @doc
+get_obj_name(#?STATE{id=#obj_id_ext{obj_id=ObjId, path=Path}, obj=Obj}) ->
+    #{
+        obj_name := ObjName
+    } = Obj,
+    List = [
+        {obj_id, ObjId},
+        {obj_name, ObjName},
+        {path, Path},
+        {name, maps:get(name, Obj, ObjName)},
+        case maps:get(description, Obj, <<>>) of
+            <<>> -> [];
+            Desc -> {description, Desc}
+        end,
+        case maps:get(icon_id, Obj, <<>>) of
+            <<>> -> [];
+            IconId-> {icon_id, IconId}
+        end
+    ],
+    maps:from_list(lists:flatten(List)).
+
 
 
 %% @private

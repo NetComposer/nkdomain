@@ -101,6 +101,7 @@ object_es_mapping() ->
         obj_id => #{type => keyword},
         type => #{type => keyword},
         path => #{type => keyword},
+        obj_name => #{type => keyword},
         domain_id => #{type => keyword},
         parent_id => #{type => keyword},
         subtype => #{type => keyword},

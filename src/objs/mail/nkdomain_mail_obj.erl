@@ -128,8 +128,8 @@ get_provider(SrvId, _Obj) ->
 do_get_provider(SrvId, ProviderId) ->
     case nkdomain_lib:load(SrvId, ProviderId) of
         #obj_id_ext{obj_id=ProviderObjId, type = ?DOMAIN_MAIL_PROVIDER} ->
-            case nkdomain:get_obj_type(SrvId, ProviderObjId) of
-                {ok, Data} ->
+            case nkdomain:get_obj(SrvId, ProviderObjId) of
+                {ok, #{?DOMAIN_MAIL_PROVIDER:=Data}} ->
                     {ok, ProviderObjId, Data};
                 _ ->
                     {error, provider_id_invalid}

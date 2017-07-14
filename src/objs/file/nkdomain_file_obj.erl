@@ -313,8 +313,8 @@ get_store(SrvId, _Obj) ->
 do_get_store(SrvId, StoreId) ->
     case nkdomain_lib:load(SrvId, StoreId) of
         #obj_id_ext{obj_id=StoreObjId, type = ?DOMAIN_FILE_STORE} ->
-            case nkdomain:get_obj_type(SrvId, StoreObjId) of
-                {ok, Data} ->
+            case nkdomain:get_obj(SrvId, StoreObjId) of
+                {ok, #{?DOMAIN_FILE_STORE:=Data}} ->
                     {ok, StoreObjId, Data};
                 _ ->
                     {error, store_id_invalid}

@@ -107,10 +107,10 @@
     }.
 
 -type sync_op() ::
+
     get_obj |
-    get_obj_type |
-    get_name |
-    get_obj_name_type |
+    get_obj_info |
+    get_obj_name |
     get_state |
     get_childs|
     get_time |
@@ -257,10 +257,16 @@ unload_all() ->
     {ok, state()} | {error, term()}.
 
 init({loaded, SrvId, Obj, Meta}) ->
-    #{type:=Type, obj_id:=ObjId, path:=Path, domain_id:=DomainId, parent_id:=ParentId} = Obj,
+    #{
+        type := Type,
+        obj_id := ObjId,
+        path := Path,
+        obj_name := ObjName,
+        domain_id := DomainId,
+        parent_id := ParentId
+    } = Obj,
     Module = nkdomain_all_types:get_module(Type),
     false = Module==undefined,
-    {ok, _Domain, ObjName} = nkdomain_util:get_parts(Type, Path),
     Enabled = case maps:find(enabled, Meta) of
         {ok, false} ->
             false;
@@ -518,40 +524,29 @@ terminate(Reason, State) ->
 %% ===================================================================
 
 %% @private
+do_sync_op(get_obj_info, _From, State) ->
+    Reply = nkdomain_obj_util:get_obj_info(State),
+    reply({ok, Reply}, do_refresh(State));
+
+do_sync_op(get_obj_name, _From, State) ->
+    Reply = nkdomain_obj_util:get_obj_name(State),
+    reply({ok, Reply}, do_refresh(State));
+
 do_sync_op(get_obj, _From, State) ->
     #?STATE{
-        id = ObjIdExt,
         module = Module,
         status = Status,
         started = Started,
         is_enabled = Enabled,
         obj = Obj
     } = State,
-    #obj_id_ext{obj_id=_ObjId, type=Type, path=Path} = ObjIdExt,
-    {ok, _Domain, ObjName} = nkdomain_util:get_parts(Type, Path),
     Obj2 = Obj#{
-        '_obj_name' => ObjName,
         '_module' => Module,
         '_status' => Status,
         '_started' => Started,
         '_is_enabled' => Enabled
     },
     reply({ok, Obj2}, State);
-
-do_sync_op(get_name, _From, State) ->
-    Reply = nkdomain_obj_util:get_name(State),
-    reply({ok, Reply}, do_refresh(State));
-
-do_sync_op(get_obj_type, _From, #?STATE{id=IdExt, obj=Obj}=State) ->
-    #obj_id_ext{type=Type} = IdExt,
-    ObjType = maps:get(Type, Obj, #{}),
-    reply({ok, ObjType}, do_refresh(State));
-
-do_sync_op(get_obj_name_type, _From, #?STATE{id=IdExt, obj=Obj}=State) ->
-    #obj_id_ext{type=Type} = IdExt,
-    ObjType = maps:get(Type, Obj, #{}),
-    Base = nkdomain_obj_util:get_name(State),
-    reply({ok, Base#{Type=>ObjType}}, do_refresh(State));
 
 do_sync_op(get_state, _From, State) ->
     reply({ok, State}, State);

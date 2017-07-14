@@ -124,7 +124,8 @@ make(SrvId, Opts) ->
             obj_id => ObjId2,
             type => Type2,
             domain_id => DomainId,
-            path => <<BasePath/binary, $/, Name2/binary>>,
+            path => <<BasePath/binary, $/, Name2/binary>>,  % Must be unique
+            obj_name => Name1,
             created_time => Now,
             created_by => UserId,
             parent_id => ParentId,

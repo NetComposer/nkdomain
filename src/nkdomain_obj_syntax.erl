@@ -66,6 +66,11 @@ syntax(<<"get">>, _Type, Syntax) ->
         id => binary
     };
 
+syntax(<<"get_info">>, _Type, Syntax) ->
+    Syntax#{
+        id => binary
+    };
+
 syntax(<<"get_name">>, _Type, Syntax) ->
     Syntax#{
         id => binary

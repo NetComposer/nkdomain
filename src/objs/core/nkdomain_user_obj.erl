@@ -273,17 +273,14 @@ object_sync_op({?MODULE, check_pass, Pass}, _From, #?STATE{id=Id, obj=Obj}=State
     end;
 
 object_sync_op({?MODULE, get_name}, _From, #?STATE{obj=Obj}=State) ->
-    Base = nkdomain_obj_util:get_name(State),
+    Base = nkdomain_obj_util:get_obj_name(State),
     #{name:=UserName, surname:=UserSurName} = User = maps:get(?DOMAIN_USER, Obj),
     Data = Base#{
-        ?DOMAIN_USER => #{
-            name => UserName,
-            surname => UserSurName,
-            email => maps:get(email, User, <<>>),
-            % avatar_t => maps:get(avatar_t, User, <<>>),
-            phone_t => maps:get(phone_t, User, <<>>),
-            address_t => maps:get(address_t, User, <<>>)
-        }
+        name => UserName,
+        surname => UserSurName,
+        email => maps:get(email, User, <<>>),
+        phone_t => maps:get(phone_t, User, <<>>),
+        address_t => maps:get(address_t, User, <<>>)
     },
     {reply, {ok, Data}, State};
 

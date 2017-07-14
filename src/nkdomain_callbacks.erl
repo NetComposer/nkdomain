@@ -206,6 +206,7 @@ object_syntax(SrvId, load) ->
         obj_id => binary,
         type => binary,
         path => binary,
+        obj_name => binary,
         domain_id => binary,
         parent_id => binary,
         subtype => {list, binary},

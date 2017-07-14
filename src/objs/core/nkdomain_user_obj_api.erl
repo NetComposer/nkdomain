@@ -37,6 +37,14 @@
 cmd(<<"login">>, Req) ->
     nkdomain_session_obj:object_api_cmd(<<"start">>, Req);
 
+cmd(<<"get_name">>, #nkreq{data=Data, srv_id=SrvId}=Req) ->
+    case nkdomain_api_util:get_id(?DOMAIN_USER, Data, Req) of
+        {ok, Id} ->
+            nkdomain_user_obj:get_name(SrvId, Id);
+        {error, Error} ->
+            {error, Error}
+    end;
+
 cmd(<<"get_token">>, Req) ->
     #nkreq{
         session_id = SessId,
