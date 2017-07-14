@@ -51,7 +51,7 @@ api(<<"create">>, Type, #nkreq{data=Data, srv_id=SrvId, user_id=UserId}=Req) ->
 api(<<"get">>, Type, #nkreq{data=Data, srv_id=SrvId}=Req) ->
     case nkdomain_api_util:get_id(Type, Data, Req) of
         {ok, Id} ->
-            nkdomain:get_obj(SrvId, Id);
+            nkdomain:get_obj_name_type(SrvId, Id);
         {error, Error} ->
             {error, Error}
     end;

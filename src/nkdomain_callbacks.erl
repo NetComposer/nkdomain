@@ -225,7 +225,7 @@ object_syntax(SrvId, load) ->
         tags => {list, binary},
         aliases => {list, binary},
         icon_id => binary,
-        icon_content_type => binary,
+        %icon_content_type => binary,
         '_store_vsn' => any,
         '__mandatory' => [type, obj_id, domain_id, path, created_time]
     },
@@ -241,8 +241,8 @@ object_syntax(SrvId, update) ->
         description => binary,
         tags => {list, binary},
         aliases => {list, binary},
-        icon_id => binary,
-        icon_content_type => binary
+        icon_id => binary
+        %icon_content_type => binary
     },
     % Some parsers need to now the server_id
     Opts = #{domain_srv_id=>SrvId},

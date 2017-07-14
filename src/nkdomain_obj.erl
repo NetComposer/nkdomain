@@ -110,6 +110,7 @@
     get_obj |
     get_obj_type |
     get_name |
+    get_obj_name_type |
     get_state |
     get_childs|
     get_time |
@@ -537,14 +538,20 @@ do_sync_op(get_obj, _From, State) ->
     },
     reply({ok, Obj2}, State);
 
+do_sync_op(get_name, _From, State) ->
+    Reply = nkdomain_obj_util:get_name(State),
+    reply({ok, Reply}, do_refresh(State));
+
 do_sync_op(get_obj_type, _From, #?STATE{id=IdExt, obj=Obj}=State) ->
     #obj_id_ext{type=Type} = IdExt,
     ObjType = maps:get(Type, Obj, #{}),
     reply({ok, ObjType}, do_refresh(State));
 
-do_sync_op(get_name, _From, State) ->
-    Reply = nkdomain_obj_util:get_name(State),
-    reply({ok, Reply}, do_refresh(State));
+do_sync_op(get_obj_name_type, _From, #?STATE{id=IdExt, obj=Obj}=State) ->
+    #obj_id_ext{type=Type} = IdExt,
+    ObjType = maps:get(Type, Obj, #{}),
+    Base = nkdomain_obj_util:get_name(State),
+    reply({ok, Base#{Type=>ObjType}}, do_refresh(State));
 
 do_sync_op(get_state, _From, State) ->
     reply({ok, State}, State);

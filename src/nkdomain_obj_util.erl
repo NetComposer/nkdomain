@@ -148,14 +148,32 @@ search_syntax(Base) ->
 %% @doc
 get_name(#?STATE{id=#obj_id_ext{type=Type, obj_id=ObjId, path=Path}, obj=Obj}) ->
     {ok, _, ObjName} = nkdomain_util:get_parts(Type, Path),
+    #{
+        created_by := CreatedBy,
+        created_time := CreatedTime,
+        updated_by := UpdatedBy,
+        updated_time := UpdatedTime
+    } = Obj,
     List = [
         {obj_id, ObjId},
         {obj_name, ObjName},
         {path, Path},
         {name, maps:get(name, Obj, ObjName)},
+        {created_by, CreatedBy},
+        {created_time, CreatedTime},
+        {updated_by, UpdatedBy},
+        {updated_time, UpdatedTime},
         case maps:get(description, Obj, <<>>) of
             <<>> -> [];
             Desc -> {description, Desc}
+        end,
+        case maps:get(tags, Obj, []) of
+            [] -> [];
+            Tags -> {tags, Tags}
+        end,
+        case maps:get(aliases, Obj, []) of
+            [] -> [];
+            Tags -> {tags, Tags}
         end,
         case maps:get(icon_id, Obj, <<>>) of
             <<>> -> [];

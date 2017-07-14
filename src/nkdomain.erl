@@ -23,7 +23,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 
--export([find/2, load/2, unload/2, unload/3, get_obj/2, get_obj_type/2, get_name/2]).
+-export([find/2, load/2, unload/2, unload/3, get_obj/2, get_obj_type/2, get_obj_name_type/2, get_name/2]).
 -export([enable/3, update/3, delete/2, send_info/4]).
 -export([search/2, delete_all_childs/2, delete_all_childs_type/3]).
 -export([clean/1]).
@@ -106,6 +106,14 @@ get_obj(SrvId, Id) ->
 
 get_obj_type(SrvId, Id) ->
     nkdomain_obj:sync_op(SrvId, Id, get_obj_type).
+
+
+%% @doc
+-spec get_obj_name_type(nkservice:id(), id()) ->
+    {ok, obj()} | {error, term()}.
+
+get_obj_name_type(SrvId, Id) ->
+    nkdomain_obj:sync_op(SrvId, Id, get_obj_name_type).
 
 
 %% @doc
