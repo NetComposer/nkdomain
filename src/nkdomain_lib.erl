@@ -100,7 +100,14 @@ load(SrvId, Id) ->
         #obj_id_ext{obj_id=ObjId}=ObjIdExt ->
             case SrvId:object_db_read(SrvId, ObjId) of
                 {ok, Obj, _Meta} ->
-                    case nkdomain_obj:start(SrvId, Obj, #{}) of
+                    Obj2 = case Obj of
+                        #{obj_name:=_} ->
+                            Obj;
+                        #{path:=Path, type:=Type} ->
+                            {ok, _, ObjName} = nkdomain_util:get_parts(Type, Path),
+                            Obj#{obj_name=>ObjName}
+                    end,
+                    case nkdomain_obj:start(SrvId, Obj2, #{}) of
                         {ok, Pid} ->
                             ObjIdExt#obj_id_ext{pid=Pid};
                         {error, Error} ->
