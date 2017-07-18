@@ -50,7 +50,7 @@
 
 -type search_spec() :: map().
 
-
+-type timestamp() :: nklib_util:m_timestamp().
 
 %% ===================================================================
 %% Public

@@ -176,7 +176,7 @@ start_link() ->
     operation :: operation(),
     obj_id :: nkdomain:obj_id(),
     obj :: nkdomain:obj(),
-    expire :: nklib_util:m_timestamp()
+    expire :: nkdomain:timestamp()
 }).
 
 -record(state, {
