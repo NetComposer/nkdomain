@@ -30,7 +30,7 @@
 -export([object_init/1, object_sync_op/3, object_async_op/2, object_link_down/2]).
 -export([fun_user_pass/1, user_pass/1]).
 -export([get_sessions/2, get_sessions/3]).
--export([register_session/5, unregister_session/3]).
+-export([register_session/5, unregister_session/3, update_status/4]).
 
 -export_type([events/0]).
 
@@ -97,7 +97,7 @@ make_token(SrvId, DomainId, UserId, TokenOpts, TokenData) ->
 
 %% @doc
 -spec get_sessions(nkservice:id(), nkdomain:id()) ->
-    {ok, #{nkdomain:obj_id() => session()}} | {error, term()}.
+    {ok, map()} | {error, term()}.
 
 get_sessions(SrvId, UserId) ->
     nkdomain_obj:sync_op(SrvId, UserId, {?MODULE, get_sessions}).
@@ -129,16 +129,26 @@ unregister_session(SrvId, Id, SessId) ->
     nkdomain_obj:async_op(SrvId, Id, {?MODULE, unregister_session, SessId}).
 
 
+%% @doc
+update_status(SrvId, Id, SessId, Status) ->
+    nkdomain_obj:async_op(SrvId, Id, {?MODULE, update_status, SessId, Status}).
 
 
 %% ===================================================================
 %% nkdomain_obj behaviour
 %% ===================================================================
 
--type session() :: {Type::nkdomain:type(), Meta::map(), pid()}.
+-record(user_session, {
+    id :: nkdomain:obj_id(),
+    type :: nkdomain:type(),
+    meta = #{} :: map(),
+    status = <<>> :: binary(),
+    status_time = 0 :: nklib_util:m_timestamp(),
+    pid :: pid()
+}).
 
--record(obj_data, {
-    sessions = #{} :: #{nkdomain:obj_id() => session()}
+-record(session, {
+    user_sessions = [] :: [#user_session{}]
 }).
 
 
@@ -255,8 +265,8 @@ object_api_cmd(Cmd, Req) ->
 %% @private
 %% We initialize soon in case of early terminate
 object_init(State) ->
-    ObjData = #obj_data{},
-    {ok, set_obj_data(ObjData, State)}.
+    ObjData = #session{},
+    {ok, set_session(ObjData, State)}.
 
 
 % @private
@@ -285,26 +295,28 @@ object_sync_op({?MODULE, get_name}, _From, #?STATE{obj=Obj}=State) ->
     {reply, {ok, Data}, State};
 
 object_sync_op({?MODULE, register_session, Type, SessId, Meta, Pid}, _From, State) ->
-    #obj_data{sessions=Sessions} = get_obj_data(State),
-    case maps:find(SessId, Sessions) of
-        error ->
-            {reply, ok, add_session(Type, SessId, Meta, Pid, State)};
+    case find_session(SessId, State) of
         {ok, _} ->
             State2 = rm_session(SessId, State),
-            {reply, ok, add_session(Type, SessId, Meta, Pid, State2)}
+            {reply, ok, add_session(Type, SessId, Meta, Pid, State2)};
+        not_found ->
+            {reply, ok, add_session(Type, SessId, Meta, Pid, State)}
     end;
 
 object_sync_op({?MODULE, get_sessions}, _From, State) ->
-    #obj_data{sessions=Sessions} = get_obj_data(State),
-    {reply, {ok, Sessions}, State};
+    #session{user_sessions=UserSessions} = get_obj_session(State),
+    Reply = lists:map(
+        fun(UserSession) -> export_session(UserSession) end,
+        UserSessions),
+    {reply, {ok, Reply}, State};
 
 object_sync_op({?MODULE, get_sessions, Type}, _From, State) ->
-    #obj_data{sessions=Sessions} = get_obj_data(State),
-    Sessions2 = [
-        {SessId, Meta, Pid} ||
-        {SessId, {T, Meta, Pid}} <- maps:to_list(Sessions), T==Type
-    ],
-    {reply, {ok, Sessions2}, State};
+    #session{user_sessions=UserSessions1} = get_obj_session(State),
+    UserSessions2 = [US || #user_session{type=T}=US <- UserSessions1, T==Type],
+    Reply = lists:map(
+        fun(UserSession) -> export_session(UserSession) end,
+        UserSessions2),
+    {reply, {ok, Reply}, State};
 
 object_sync_op(_Op, _From, _State) ->
     continue.
@@ -315,15 +327,32 @@ object_async_op({?MODULE, unregister_session, SessId}, State) ->
     State2 = rm_session(SessId, State),
     {noreply, State2};
 
+object_async_op({?MODULE, update_status, SessId, Status}, State) ->
+    case find_session(SessId, State) of
+        {ok, #user_session{type=Type}=UserSession} ->
+            Now = nkdomain_util:timestamp(),
+            UserSession2 = UserSession#user_session{status=Status, status_time=Now},
+            State2 = nkdomain_obj_util:event({session_status_updated, Type, SessId, Status}, State),
+            State3 = store_session(UserSession2, State2),
+            {noreply, State3};
+        not_found ->
+            {noreply, State}
+    end;
+
 object_async_op(_Op, _State) ->
     continue.
 
 
 %% @private
 object_link_down({usage, {?MODULE, session, SessId, _Pid}}, State) ->
-    ?DEBUG("registered session down: ~s", [SessId], State),
-    State2 = rm_session(SessId, State),
-    {ok, State2};
+    case find_session(SessId, State) of
+        {ok, #user_session{type=Type}} ->
+            State2 = nkdomain_obj_util:event({session_stopped, Type, SessId}, State),
+            ?DEBUG("registered session down: ~s", [SessId], State),
+            {ok, rm_session(SessId, State)};
+        not_found ->
+            {ok, State}
+    end;
 
 object_link_down(_Link, State) ->
     {ok, State}.
@@ -378,34 +407,68 @@ check_email(_SrvId, Obj) ->
 
 
 %% @private
+find_session(SessId, State) ->
+    #session{user_sessions=UserSessions} = get_obj_session(State),
+    case lists:keyfind(SessId, #user_session.id, UserSessions) of
+        #user_session{} = UserSession ->
+            {ok, UserSession};
+        false ->
+            not_found
+    end.
+
+
+%% @private
 add_session(Type, SessId, Meta, Pid, State) ->
-    #obj_data{sessions=Sessions} = ObjData = get_obj_data(State),
-    Sessions2 = Sessions#{SessId => {Type, Meta, Pid}},
-    ObjData2 = ObjData#obj_data{sessions=Sessions2},
+    UserSession = #user_session{
+        id = SessId,
+        type = Type,
+        meta = Meta,
+        pid = Pid
+    },
     State2 = nkdomain_obj:links_add(usage, {?MODULE, session, SessId, Pid}, State),
     State3 = nkdomain_obj_util:event({session_started, Type, SessId}, State2),
-    set_obj_data(ObjData2, State3).
+    store_session(UserSession, State3).
 
 
 %% @private
 rm_session(SessId, State) ->
-    #obj_data{sessions=Sessions} = ObjData = get_obj_data(State),
-    case maps:find(SessId, Sessions) of
-        {ok, {_Type, _Meta, Pid}} ->
-            Sessions2 = maps:remove(SessId, Sessions),
-            ObjData2 = ObjData#obj_data{sessions=Sessions2},
+    #session{user_sessions=UserSessions} = Session = get_obj_session(State),
+    case lists:keytake(SessId, #user_session.id, UserSessions) of
+        {value, #user_session{pid=Pid}, UserSessions2} ->
             State2 = nkdomain_obj:links_remove(usage, {?MODULE, session, SessId, Pid}, State),
-            set_obj_data(ObjData2, State2);
+            Session2 = Session#session{user_sessions=UserSessions2},
+            set_session(Session2, State2);
         error ->
             State
     end.
 
 
 %% @private
-get_obj_data(State) ->
+store_session(#user_session{id=SessId}=UserSession, State) ->
+    #session{user_sessions=UserSessions} = Session = get_obj_session(State),
+    UserSessions2 = lists:keystore(SessId, #user_session.id, UserSessions, UserSession),
+    Session2 = Session#session{user_sessions=UserSessions2},
+    set_session(Session2, State).
+
+
+
+%% @private
+export_session(#user_session{id=Id, type=Type, status=Status, status_time=Time, meta=Meta, pid=Pid}) ->
+    #{
+        session_id => Id,
+        type => Type,
+        status => Status,
+        status_time => Time,
+        meta => Meta,
+        pid => Pid
+    }.
+
+
+%% @private
+get_obj_session(State) ->
     nkdomain_obj_util:get_obj_session(State).
 
 
 %% @private
-set_obj_data(Data, State) ->
+set_session(Data, State) ->
     nkdomain_obj_util:set_obj_session(Data, State).
