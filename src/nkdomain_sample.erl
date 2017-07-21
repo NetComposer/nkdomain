@@ -147,8 +147,6 @@ user_make_token() ->
 
 
 
-
-
 domain_get() ->
     cmd(<<"objects/domain/get"/utf8>>, #{}).
 

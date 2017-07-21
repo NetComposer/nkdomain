@@ -27,10 +27,12 @@
 -export([create/2, auth/3, make_token/5, get_name/2]).
 -export([object_info/0, object_admin_info/0, object_create/2, object_es_mapping/0, object_es_unparse/3,
          object_parse/3, object_api_syntax/2, object_api_cmd/2, object_send_event/2]).
--export([object_init/1, object_sync_op/3, object_async_op/2, object_link_down/2]).
+-export([object_init/1, object_save/1, object_sync_op/3, object_async_op/2, object_link_down/2, object_handle_info/2]).
 -export([fun_user_pass/1, user_pass/1]).
 -export([get_sessions/2, get_sessions/3]).
--export([register_session/5, unregister_session/3, update_status/4]).
+-export([register_session/6, unregister_session/3, update_status/4]).
+-export([create_notify/6, remove_notify/3]).
+-export([add_push_device/6, remove_push_device/3]).
 
 -export_type([events/0]).
 
@@ -43,6 +45,8 @@
 
 -define(INVALID_PASSWORD_TIME, 500).
 
+-define(MAX_EXPIRE, 60).    % Secs
+
 %% ===================================================================
 %% Types
 %% ===================================================================
@@ -52,6 +56,30 @@
 
 -type auth_opts() :: #{password=>binary()}.
 
+-type sess_opts() ::
+    #{
+        notify_fun => notify_fun(),
+        term() => term()
+    }.
+
+-type notify_opts() ::
+    #{
+        ttl => integer()        % Secs
+    }.
+
+-type notify_msg() :: map() | binary().     % Special msg is <<"removed">>
+
+-type notify_id() :: binary().
+
+-type notify_fun() ::
+    fun((SessId::nkdomain:obj_id(), Pid::pid(), notify_id(), notify_msg()) -> ok).
+
+-type push_data() ::
+    #{
+        push_id => binary(),
+        platform_id => binary(),
+        platform_version => binary()
+    }.
 
 %% ===================================================================
 %% API
@@ -120,8 +148,12 @@ get_name(Srv, Id) ->
 
 
 %% @doc
-register_session(SrvId, Id, Type, SessId, Meta) ->
-    nkdomain_obj:sync_op(SrvId, Id, {?MODULE, register_session, Type, SessId, Meta, self()}).
+-spec register_session(nkservice:id(), nkdomain:id(), nkdomain:id(), nkdomain:type(),
+                       nkdomain:obj_id(), sess_opts()) ->
+    ok | {error, term()}.
+
+register_session(SrvId, Id, DomainId, Type, SessId, Opts) ->
+    nkdomain_obj:sync_op(SrvId, Id, {?MODULE, register_session, DomainId, Type, SessId, Opts, self()}).
 
 
 %% @doc
@@ -134,6 +166,34 @@ update_status(SrvId, Id, SessId, Status) ->
     nkdomain_obj:async_op(SrvId, Id, {?MODULE, update_status, SessId, Status}).
 
 
+%% @doc
+-spec create_notify(nkservice:id(), nkdomain:obj_id(), nkdomain:obj_id(), nkdomain:type(),
+                    notify_msg(), notify_opts()) ->
+    {ok, NotifyId::binary()} | {error, term()}.
+
+create_notify(SrvId, Id, DomainId, SessType, NotifyMsg, Opts) when is_map(NotifyMsg), is_map(Opts) ->
+    nkdomain_obj:sync_op(SrvId, Id, {?MODULE, create_notify, DomainId, SessType, NotifyMsg, Opts}).
+
+
+%% @doc
+-spec remove_notify(nkservice:id(), nkdomain:obj_id(), nkdomain:obj_id()) ->
+    ok.
+
+remove_notify(SrvId, Id, NotifyId) ->
+    nkdomain_obj:sync_op(SrvId, Id, {?MODULE, remove_notify, NotifyId}).
+
+
+%% @doc
+add_push_device(SrvId, Id, DomainId, Type, DeviceId, PushData) ->
+    nkdomain_obj:async_op(SrvId, Id, {?MODULE, add_push_device, DomainId, Type, DeviceId, PushData}).
+
+
+%% @doc
+remove_push_device(SrvId, Id, DeviceId) ->
+    nkdomain_obj:async_op(SrvId, Id, {?MODULE, remove_push_device, DeviceId}).
+
+
+
 %% ===================================================================
 %% nkdomain_obj behaviour
 %% ===================================================================
@@ -141,14 +201,37 @@ update_status(SrvId, Id, SessId, Status) ->
 -record(user_session, {
     id :: nkdomain:obj_id(),
     type :: nkdomain:type(),
-    meta = #{} :: map(),
+    domain_id :: nkdomain:obj_id(),
+    opts = #{} :: sess_opts(),
     status = <<>> :: binary(),
-    status_time = 0 :: nklib_util:m_timestamp(),
+    status_time = 0 :: nkdomain:timestamp(),
+    notify_fun :: fun(),
     pid :: pid()
 }).
 
+-record(notify_msg, {
+    id :: binary(),
+    session_type :: binary(),
+    domain_id :: nkdomain:obj_id(),
+    msg :: map(),
+    created_time :: integer(),
+    expires_time :: binary(),
+    timer :: reference()
+}).
+
+-record(push_device, {
+    session_type :: binary(),
+    domain_id :: nkdomain:obj_id(),
+    device_id :: binary(),
+    push_data :: push_data(),
+    updated_time :: binary()
+}).
+
+
 -record(session, {
-    user_sessions = [] :: [#user_session{}]
+    user_sessions = [] :: [#user_session{}],
+    notify_msgs = [] :: [#notify_msg{}],
+    push_devices = [] :: [#push_device{}]
 }).
 
 
@@ -191,7 +274,30 @@ object_es_mapping() ->
         email => #{type => keyword},
         password => #{type => keyword},
         phone_t => #{type => keyword},
-        address_t => #{type => text}
+        address_t => #{type => text},
+        notifies => #{
+            type => object,
+            dynamic => false,
+            properties => #{
+                domain_id => #{type => keyword},
+                session_type => #{type => keyword},
+                notify_id => #{type => keyword},
+                msg => #{enabled => false},
+                created_time => #{type => date},
+                expires_time => #{type => date}
+            }
+        },
+        push => #{
+            type => object,
+            dynamic => false,
+            properties => #{
+                domain_id => #{type => keyword},
+                session_type => #{type => keyword},
+                device_id => #{type => keyword},
+                push_data => #{enabled => false},
+                updated_time => #{type => date}
+            }
+        }
     }.
 
 
@@ -228,7 +334,28 @@ object_parse(_SrvId, update, _Obj) ->
         password => fun ?MODULE:fun_user_pass/1,
         email => lower,
         phone_t => binary,
-        address_t => binary
+        address_t => binary,
+        notifies => {list,
+             #{
+                domain_id => binary,
+                session_type => binary,
+                notify_id => binary,
+                msg => map,
+                created_time => integer,
+                expires_time => integer,
+                '__mandatory' => [domain_id, session_type, notify_id, msg, created_time]
+             }
+        },
+        push => {list,
+            #{
+                domain_id => binary,
+                session_type => binary,
+                device_id => binary,
+                push_data => map,
+                updated_time => integer,
+                '__mandatory' => [domain_id, session_type, device_id, push_data, updated_time]
+             }
+        }
     };
 
 object_parse(SrvId, Mode, Obj) ->
@@ -264,9 +391,61 @@ object_api_cmd(Cmd, Req) ->
 
 %% @private
 %% We initialize soon in case of early terminate
-object_init(State) ->
+object_init(#?STATE{obj=#{?DOMAIN_USER:=User}}=State) ->
     ObjData = #session{},
-    {ok, set_session(ObjData, State)}.
+    State2 = set_session(ObjData, State),
+    Notifies = maps:get(notifies, User, []),
+    State3 = load_notifies(Notifies, State2),
+    Push = maps:get(push, User, []),
+    State4 = load_push(Push, State3),
+    {ok, State4}.
+
+
+%% @private Prepare the object for saving
+object_save(#?STATE{obj=Obj, session=Session}=State) ->
+    #session{notify_msgs=Msgs, push_devices=Devices} = Session,
+    Notify = lists:map(
+        fun(NotifyMsg) ->
+            #notify_msg{
+                domain_id = DomainId,
+                session_type = Type,
+                id = Id,
+                msg = Msg,
+                created_time = Created,
+                expires_time = Expires
+            } = NotifyMsg,
+            #{
+                domain_id => DomainId,
+                session_type => Type,
+                notify_id => Id,
+                msg => Msg,
+                created_time => Created,
+                expires_time => Expires
+            }
+        end,
+        Msgs),
+    Push = lists:map(
+        fun({DeviceId, PushDevice}) ->
+            #push_device{
+                domain_id = DomainId,
+                session_type = Type,
+                device_id = DeviceId,
+                push_data = Data,
+                updated_time = Time
+            } = PushDevice,
+            #{
+                domain_id => DomainId,
+                session_type => Type,
+                device_id => DeviceId,
+                push_data => Data,
+                updated_time => Time
+            }
+        end,
+        maps:to_list(Devices)),
+    #{?DOMAIN_USER:=User} = Obj,
+    User2 = User#{notifies=>Notify, push=>Push},
+    Obj2 = ?ADD_TO_OBJ(?DOMAIN_USER, User2, Obj),
+    {ok, State#?STATE{obj = Obj2}}.
 
 
 % @private
@@ -294,13 +473,13 @@ object_sync_op({?MODULE, get_name}, _From, #?STATE{obj=Obj}=State) ->
     },
     {reply, {ok, Data}, State};
 
-object_sync_op({?MODULE, register_session, Type, SessId, Meta, Pid}, _From, State) ->
+object_sync_op({?MODULE, register_session, DomainId, Type, SessId, Opts, Pid}, _From, State) ->
     case find_session(SessId, State) of
         {ok, _} ->
             State2 = rm_session(SessId, State),
-            {reply, ok, add_session(Type, SessId, Meta, Pid, State2)};
+            {reply, ok, add_session(DomainId, Type, SessId, Opts, Pid, State2)};
         not_found ->
-            {reply, ok, add_session(Type, SessId, Meta, Pid, State)}
+            {reply, ok, add_session(DomainId, Type, SessId, Opts, Pid, State)}
     end;
 
 object_sync_op({?MODULE, get_sessions}, _From, State) ->
@@ -317,6 +496,14 @@ object_sync_op({?MODULE, get_sessions, Type}, _From, State) ->
         fun(UserSession) -> export_session(UserSession) end,
         UserSessions2),
     {reply, {ok, Reply}, State};
+
+object_sync_op({?MODULE, create_notify, DomainId, SessType, Msg, Opts}, _From, State) ->
+    {NotifyId, State2} = create_notify(DomainId, SessType, Msg, Opts, State),
+    {reply, {ok, NotifyId}, State2};
+
+object_sync_op({?MODULE, remove_notify, NotifyId}, _From, State) ->
+    State2 = remove_notify(NotifyId, State),
+    {reply, ok, State2};
 
 object_sync_op(_Op, _From, _State) ->
     continue.
@@ -339,7 +526,25 @@ object_async_op({?MODULE, update_status, SessId, Status}, State) ->
             {noreply, State}
     end;
 
+object_async_op({?MODULE, add_push_device, DomainId, Type, DeviceId, PushData}, State) ->
+    State2 = add_push(DomainId, Type, DeviceId, PushData, State),
+    {noreply, State2};
+
+object_async_op({?MODULE, remove_push_device, DeviceId}, State) ->
+    State2 = remove_push(DeviceId, State),
+    {noreply, State2};
+
 object_async_op(_Op, _State) ->
+    continue.
+
+
+%% @private
+object_handle_info({?MODULE, expired_notify, NotifyId}, State) ->
+    %% lager:warning("NKLOG Expired ~p", [NotifyId]),
+    State2 = remove_notify(NotifyId, State),
+    {noreply, State2};
+
+object_handle_info(_Info, _State) ->
     continue.
 
 
@@ -348,8 +553,8 @@ object_link_down({usage, {?MODULE, session, SessId, _Pid}}, State) ->
     case find_session(SessId, State) of
         {ok, #user_session{type=Type}} ->
             State2 = nkdomain_obj_util:event({session_stopped, Type, SessId}, State),
-            ?DEBUG("registered session down: ~s", [SessId], State),
-            {ok, rm_session(SessId, State)};
+            ?DEBUG("registered session down: ~s", [SessId], State2),
+            {ok, rm_session(SessId, State2)};
         not_found ->
             {ok, State}
     end;
@@ -418,16 +623,21 @@ find_session(SessId, State) ->
 
 
 %% @private
-add_session(Type, SessId, Meta, Pid, State) ->
-    UserSession = #user_session{
+add_session(DomainId, Type, SessId, Opts, Pid, State) ->
+    Fun = maps:get(notify_fun, Opts, none),
+    UserSessionTuple = #user_session{
         id = SessId,
+        domain_id = DomainId,
         type = Type,
-        meta = Meta,
+        opts = Opts,
+        notify_fun = Fun,
         pid = Pid
     },
+    UserSession = UserSessionTuple,
     State2 = nkdomain_obj:links_add(usage, {?MODULE, session, SessId, Pid}, State),
     State3 = nkdomain_obj_util:event({session_started, Type, SessId}, State2),
-    store_session(UserSession, State3).
+    State4 = store_session(UserSession, State3),
+    notify_session(DomainId, Type, SessId, Pid, Fun, State4).
 
 
 %% @private
@@ -451,17 +661,213 @@ store_session(#user_session{id=SessId}=UserSession, State) ->
     set_session(Session2, State).
 
 
-
 %% @private
-export_session(#user_session{id=Id, type=Type, status=Status, status_time=Time, meta=Meta, pid=Pid}) ->
+export_session(#user_session{id=Id, type=Type, status=Status, opts=Opts, status_time=Time, pid=Pid}) ->
     #{
         session_id => Id,
         type => Type,
         status => Status,
         status_time => Time,
-        meta => Meta,
+        opts => Opts,
         pid => Pid
     }.
+
+
+%% @private
+create_notify(DomainId, SessType, Msg, Opts, State) ->
+    Id = nklib_util:luid(),
+    Now = nkdomain_util:timestamp(),
+    Expires1 = 1000 * maps:get(ttl, Opts, 0),
+    Expires2 = case Expires1 > 0 andalso Expires1 < (1000 * ?MAX_EXPIRE) of
+        true ->
+            Expires1;
+        false ->
+            1000 * ?MAX_EXPIRE
+    end,
+    Timer = erlang:send_after(Expires2, self(), {?MODULE, expired_notify, Id}),
+    Notify = #notify_msg{
+        domain_id = DomainId,
+        session_type = SessType,
+        id = Id,
+        msg = Msg,
+        created_time = Now,
+        expires_time = Now+Expires2,
+        timer = Timer
+    },
+    #?STATE{session=Session1} = State,
+    #session{notify_msgs=Msgs} = Session1,
+    Session2 = Session1#session{notify_msgs=[Notify|Msgs]},
+    State2 = State#?STATE{session=Session2, is_dirty=true},
+    notify_sessions(DomainId, SessType, Id, Msg, State2),
+    {Id, State2}.
+
+
+%% @doc
+remove_notify(NotifyId, #?STATE{session=Session}=State) ->
+    #session{notify_msgs=Msgs1} = Session,
+    case lists:keytake(NotifyId, #notify_msg.id, Msgs1) of
+        {value, #notify_msg{session_type=Type, domain_id=DomainId, timer=Timer}, Msgs2} ->
+            nklib_util:cancel_timer(Timer),
+            notify_sessions(DomainId, Type, NotifyId, <<"removed">>, State),
+            Session2 = Session#session{notify_msgs=Msgs2},
+            State#?STATE{session=Session2, is_dirty=true};
+        false ->
+            State
+    end.
+
+
+%% @private
+notify_sessions(DomainId, Type, NotifyId, Msg, State) ->
+    #session{user_sessions=UserSessions} = get_obj_session(State),
+    Num = lists:foldl(
+        fun(#user_session{id=SessId, pid=Pid, notify_fun=Fun, type=T, domain_id=D}, Acc) ->
+            case T==Type andalso D==DomainId andalso is_function(Fun, 4) of
+                true ->
+                    Fun(SessId, Pid, NotifyId, Msg),
+                    Acc+1;
+                false ->
+                    Acc
+            end
+        end,
+        0,
+        UserSessions),
+    case Num > 0 of
+        true ->
+            ok;
+        false ->
+            send_push(DomainId, Type, Msg, State)
+    end.
+
+
+%% @private
+notify_session(DomainId, Type, SessId, Pid, Fun, State) when is_function(Fun, 4) ->
+    #?STATE{session=#session{notify_msgs=Msgs}} = State,
+    lists:foreach(
+        fun(#notify_msg{id=Id, msg=Msg, session_type=T, domain_id=D}) ->
+            case T==Type andalso D==DomainId of
+                true ->
+                    Fun(SessId, Pid, Id, Msg);
+                false ->
+                    ok
+            end
+        end,
+        Msgs),
+    State;
+
+notify_session(_DomainId, _Type, _SessId, _Pid, _Fun, State) ->
+    State.
+
+
+%% @private
+load_notifies(Notifies, State) ->
+    Now = nkdomain_util:timestamp(),
+    do_load_notifies(Notifies, Now, [], State).
+
+
+%% @private
+do_load_notifies([], _Now, Acc, State) ->
+    #?STATE{session=Session} = State,
+    Session2 = Session#session{notify_msgs=Acc},
+    State#?STATE{session=Session2};
+
+do_load_notifies([Notify|Rest], Now, Acc, State) ->
+    #{
+        domain_id := DomainId,
+        session_type := Type,
+        notify_id := Id,
+        msg := Msg,
+        created_time := Created,
+        expires_time := Expires
+    } = Notify,
+    case Now >= Expires of
+        true ->
+            lager:warning("NKLOG Expiring loaded ~s", [Id]),
+            do_load_notifies(Rest, Now, Acc, State#?STATE{is_dirty=true});
+        false ->
+            Timer = erlang:send_after(Expires-Now, self(), {?MODULE, expired_notify, Id}),
+            NotifyMsg = #notify_msg{
+                domain_id = DomainId,
+                session_type = Type,
+                id = Id,
+                msg = Msg,
+                created_time = Created,
+                expires_time = Expires,
+                timer = Timer
+            },
+            do_load_notifies(Rest, Now, [NotifyMsg|Acc], State)
+    end.
+
+
+%% @private
+load_push(Push, #?STATE{session=Session}=State) ->
+    PushDevices = do_load_push(Push, []),
+    Session2 = Session#session{push_devices=PushDevices},
+    State#?STATE{session=Session2}.
+
+
+%% @private
+do_load_push([], Acc) ->
+    Acc;
+
+do_load_push([Push|Rest], Acc) ->
+    #{
+        domain_id := DomainId,
+        session_type := Type,
+        device_id := DeviceId,
+        push_data := Data,
+        updated_time := Time
+    } = Push,
+    PushDevice = #push_device{
+        domain_id = DomainId,
+        session_type = Type,
+        device_id = DeviceId,
+        push_data = Data,
+        updated_time = Time
+    },
+    do_load_push(Rest, [PushDevice|Acc]).
+
+
+
+%% @private
+add_push(DomainId, Type, DeviceId, PushData, State) ->
+    #?STATE{session=Session} = State,
+    #session{push_devices=PushDevices1} = Session,
+    PushDevice = #push_device{
+        domain_id = DomainId,
+        session_type = Type,
+        device_id = DeviceId,
+        push_data = PushData,
+        updated_time = nkdomain_util:timestamp()
+    },
+    PushDevices2 = lists:keystore(DeviceId, #push_device.device_id, PushDevices1, PushDevice),
+    Session2 = Session#session{push_devices = PushDevices2},
+    State#?STATE{session=Session2, is_dirty=true}.
+
+
+%% @private
+remove_push(DeviceId, State) ->
+    #?STATE{session=Session} = State,
+    #session{push_devices=PushDevices1} = Session,
+    PushDevices2 = lists:keydelete(DeviceId, #push_device.device_id, PushDevices1),
+    Session2 = Session#session{push_devices = PushDevices2},
+    State#?STATE{session=Session2, is_dirty=true}.
+
+
+%% @doc
+send_push(DomainId, Type, Push, #?STATE{session=Session}) ->
+    #session{push_devices=Devices} = Session,
+    lists:foreach(
+        fun(#push_device{domain_id=D, session_type=T, device_id=Device, push_data=PushData}) ->
+            case D==DomainId andalso T==Type of
+                true ->
+                    lager:warning("NKLOG Sending PUSH to ~s:~s device ~s: ~p (~p)",
+                                  [DomainId, Type, Device, Push, PushData]);
+                false ->
+                    ok
+            end
+        end,
+        Devices).
+
 
 
 %% @private
