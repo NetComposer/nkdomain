@@ -28,6 +28,7 @@
 -export([search/2, delete_all_childs/2, delete_all_childs_type/3]).
 -export([clean/1]).
 -export_type([obj_id/0, name/0, obj/0, path/0, id/0, type/0]).
+-export_type([timestamp/0]).
 
 -include("nkdomain.hrl").
 

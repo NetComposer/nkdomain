@@ -947,7 +947,7 @@ do_check_timeout(#?STATE{usage_links=[]}=State) ->
     do_stop(no_usages, State);
 
 do_check_timeout(State) ->
-    noreply(State).
+    noreply(do_refresh(State)).
 
 do_nkdist({must_move, Node}, #?STATE{timer=Timer}=State) ->
     nklib_util:cancel_timer(Timer),

@@ -19,10 +19,11 @@
 %% -------------------------------------------------------------------
 
 %% @doc Elasticsearch plugin
-%%
-%% Objects can implement:
-%% - object_es_mapping/0
-%% - object_es_unparse
+
+%% Low level operations
+%% {ok, E} = nkdomain_store_es_util:get_opts(SrvId).
+%% nkelastic:delete(ObjId, E).
+
 
 
 -module(nkdomain_store_es).
