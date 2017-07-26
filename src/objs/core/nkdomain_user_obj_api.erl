@@ -69,34 +69,34 @@ cmd(<<"update_status">>, #nkreq{srv_id=SrvId, data=Data}=Req) ->
             {error, Error}
     end;
 
-cmd(<<"create_notification">>, #nkreq{srv_id=SrvId, data=Data}=Req) ->
-    case nkdomain_api_util:get_id(?DOMAIN_USER, Data, Req) of
-        {ok, Id} ->
-            case nkdomain_api_util:get_id(?DOMAIN_DOMAIN, domain_id, Data, Req) of
-                {ok, DomainId} ->
-                    #{session_type:=Type, msg:=Msg} = Data,
-                    Opts = maps:with([ttl, only_push], Data),
-                    case nkdomain_user_obj:create_notification(SrvId, Id, DomainId, Type, Msg, Opts) of
-                        {ok, NotifyId} ->
-                            {ok, #{<<"notification_id">> => NotifyId}};
-                        {error, Error} ->
-                            {error, Error}
-                    end;
-                {error, Error} ->
-                    {error, Error}
-            end;
-        {error, Error} ->
-            {error, Error}
-    end;
+%%cmd(<<"create_notification">>, #nkreq{srv_id=SrvId, data=Data}=Req) ->
+%%    case nkdomain_api_util:get_id(?DOMAIN_USER, Data, Req) of
+%%        {ok, Id} ->
+%%            case nkdomain_api_util:get_id(?DOMAIN_DOMAIN, domain_id, Data, Req) of
+%%                {ok, DomainId} ->
+%%                    #{session_type:=Type, msg:=Msg} = Data,
+%%                    Opts = maps:with([ttl, only_push], Data),
+%%                    case nkdomain_user_obj:create_notification(SrvId, Id, DomainId, Type, Msg, Opts) of
+%%                        {ok, NotifyId} ->
+%%                            {ok, #{<<"notification_id">> => NotifyId}};
+%%                        {error, Error} ->
+%%                            {error, Error}
+%%                    end;
+%%                {error, Error} ->
+%%                    {error, Error}
+%%            end;
+%%        {error, Error} ->
+%%            {error, Error}
+%%    end;
 
-cmd(<<"remove_notification">>, #nkreq{srv_id=SrvId, data=Data}=Req) ->
-    case nkdomain_api_util:get_id(?DOMAIN_USER, Data, Req) of
-        {ok, Id} ->
-            #{notification_id:=NotifyId} = Data,
-            nkdomain_user_obj:remove_notification(SrvId, Id, NotifyId);
-       {error, Error} ->
-            {error, Error}
-    end;
+%%cmd(<<"remove_notification">>, #nkreq{srv_id=SrvId, data=Data}=Req) ->
+%%    case nkdomain_api_util:get_id(?DOMAIN_USER, Data, Req) of
+%%        {ok, Id} ->
+%%            #{notification_id:=NotifyId} = Data,
+%%            nkdomain_user_obj:remove_notification(SrvId, Id, NotifyId);
+%%       {error, Error} ->
+%%            {error, Error}
+%%    end;
 
 cmd(<<"add_push_device">>, #nkreq{srv_id=SrvId, data=Data}=Req) ->
     case nkdomain_api_util:get_id(?DOMAIN_USER, Data, Req) of

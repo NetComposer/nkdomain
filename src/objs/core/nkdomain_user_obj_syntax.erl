@@ -56,24 +56,6 @@ api(<<"update_status">>, Syntax) ->
         '__mandatory' => [session_id, status]
     };
 
-api(<<"create_notification">>, Syntax) ->
-    Syntax#{
-        id => binary,
-        domain_id => binary,
-        session_type => binary,
-        msg => map,
-        ttl => {integer, 1, none},
-        only_push => boolean,
-        '__mandatory' => [session_type, msg]
-    };
-
-api(<<"remove_notification">>, Syntax) ->
-    Syntax#{
-        id => binary,
-        notification_id => binary,
-        '__mandatory' => [notification_id]
-    };
-
 api(<<"add_push_device">>, Syntax) ->
     Syntax#{
         id => binary,

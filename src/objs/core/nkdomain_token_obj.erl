@@ -28,6 +28,7 @@
 -export([object_info/0, object_parse/3, object_send_event/2,
          object_sync_op/3, object_async_op/2]).
 -export([object_admin_info/0]).
+-export([get_token_data/2, consume_token/2]).
 
 -include("nkdomain.hrl").
 -include("nkdomain_debug.hrl").
@@ -76,7 +77,12 @@ create(SrvId, DomainId, ParentId, UserId, SubType, Opts, Data) ->
 %% @doc
 check_ttl(Type, Opts) ->
     Mod = nkdomain_all_types:get_module(Type),
-    Info = Mod:object_info(),
+    Info = case erlang:function_exported(Mod, object_info, 0) of
+        true ->
+            Mod:object_admin_info();
+        false ->
+            #{}
+    end,
     DefTTL = maps:get(default_token_ttl, Info, ?DEF_TOKEN_TTL),
     MaxTTL = maps:get(max_token_ttl, Info, ?MAX_TOKEN_TTL),
     case maps:get(ttl, Opts, DefTTL) of
@@ -85,6 +91,15 @@ check_ttl(Type, Opts) ->
         _ ->
             {error, invalid_token_ttl}
     end.
+
+
+%% @doc
+consume_token(SrvId, Id) ->
+    nkdomain_obj:sync_op(SrvId, Id, {?MODULE, consume}).
+
+%% @doc
+get_token_data(SrvId, Id) ->
+    nkdomain_obj:sync_op(SrvId, Id, {?MODULE, get_token_data}).
 
 
 
@@ -114,20 +129,37 @@ object_parse(_SrvId, _Mode, _Obj) ->
     any.
 
 
+%% @private
+object_send_event(_Event, State) ->
+    {ok, State}.
 
 
 %% @private
-object_send_event(_Event, Session) ->
-    {ok, Session}.
-
+object_sync_op({?MODULE, get_token_data}, _From, State) ->
+    #?STATE{domain_id=DomainId, obj=Obj} = State,
+    #{?DOMAIN_TOKEN:=TokenData} = Obj,
+    Reply = #{
+        domain_id => DomainId,
+        data => TokenData
+    },
+    {reply, {ok, Reply}, State};
 
 %% @private
-object_sync_op(_Op, _From, _Session) ->
+object_sync_op({?MODULE, consume}, _From, State) ->
+    #?STATE{domain_id=DomainId, obj=Obj} = State,
+    #{?DOMAIN_TOKEN:=TokenData} = Obj,
+    Reply = #{
+        domain_id => DomainId,
+        data => TokenData
+    },
+    {stop, object_consumed, {ok, Reply}, State};
+
+object_sync_op(_Op, _From, _State) ->
     continue.
 
 
 %% @private
-object_async_op(_Op, _Session) ->
+object_async_op(_Op, _State) ->
     continue.
 
 

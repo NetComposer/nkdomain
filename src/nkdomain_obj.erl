@@ -87,7 +87,7 @@
     {updated, map()} |
     deleted |
     {enabled, boolean()} |
-    {child_loaded, nkdomain:type(), nkdomain:obj_id()} |
+    {child_loaded, nkdomain:type(), nkdomain:obj_id(), pid()} |
     {child_unloaded, nkdomain:type(), nkdomain:obj_id()} |
     {info, info(), map()} |
     {unloaded, nkservice:error()}.
@@ -623,7 +623,7 @@ do_sync_op({nkdomain_reg_child, ObjIdExt}, _From, State) ->
             %% Check do_check_child(ObjIdExt, State)
             State2 = do_rm_child(ObjId, State),
             State3 = do_add_child(ObjId, Type, Pid, State2),
-            State4 = do_event({child_loaded, Type, ObjId}, State3),
+            State4 = do_event({child_loaded, Type, ObjId, Pid}, State3),
             {reply, {ok, IsEnabled, self()}, State4}
     end;
 

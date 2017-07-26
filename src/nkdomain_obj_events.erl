@@ -75,7 +75,7 @@ event({enabled, Enabled}, State) ->
 event({child_created, Type, ObjId}, State) ->
     {event, {child_created, #{type=>Type, obj_id=>ObjId}}, State};
 
-event({child_loaded, Type, ObjId}, State) ->
+event({child_loaded, Type, ObjId, _Pid}, State) ->
     {event, {child_loaded, #{type=>Type, obj_id=>ObjId}}, State};
 
 event({child_unloaded, Type, ObjId}, State) ->
