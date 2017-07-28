@@ -264,7 +264,7 @@ object_admin_info() ->
     #{
         class => resource,
         weight => 100,
-        get_tree_detail => fun nkdomain_user_obj_ui:table/1
+        type_view_mod => nkdomain_user_obj_type_view
     }.
 
 
@@ -389,7 +389,6 @@ object_init(#?STATE{obj=#{?DOMAIN_USER:=User}}=State) ->
     State2 = set_session(ObjData, State),
     Push = maps:get(push, User, []),
     State3 = load_push(Push, State2),
-    load_notifies(State3),
     {ok, State3}.
 
 
@@ -482,22 +481,6 @@ object_sync_op({?MODULE, get_sessions, Type}, _From, State) ->
         fun(UserSession) -> export_session(UserSession) end,
         UserSessions2),
     {reply, {ok, Reply}, State};
-
-%%object_sync_op({?MODULE, create_notification, DomainId, SessType, Msg, Opts}, _From, State) ->
-%%    case Opts of
-%%        #{only_push:=true} ->
-%%            NotifyId = nklib_util:luid(),
-%%            send_push(DomainId, SessType, Msg, State),
-%%            {reply, {ok, NotifyId}, State};
-%%        _ ->
-%%            {NotifyId, State2} = create_notification(DomainId, SessType, Msg, Opts, State),
-%%            {reply, {ok, NotifyId}, State2}
-%%    end;
-
-%%object_sync_op({?MODULE, remove_notification, TokenId}, _From, State) ->
-%%    State2 = remove_notification(TokenId, State),
-%%    {reply, ok, State2};
-
 
 object_sync_op({?MODULE, add_notification_op, SessType, _Opts, Base}, _From, State) ->
     #?STATE{id=#obj_id_ext{obj_id=UserId}} = State,
@@ -768,53 +751,6 @@ notify_session(DomainId, Type, SessId, Pid, Fun, State) when is_function(Fun, 5)
 
 notify_session(_DomainId, _Type, _SessId, _Pid, _Fun, State) ->
     State.
-
-
-%% @private
-load_notifies(#?STATE{srv_id=SrvId, id=#obj_id_ext{obj_id=UserId}}) ->
-    Spec = #{
-        filters => #{
-            parent_id => UserId,
-            type => ?DOMAIN_TOKEN
-        },
-        fields => []
-    },
-    R = nkdomain:search(SrvId, Spec),
-    lager:warning("NKLOG R ~p", [R]).
-
-
-%%%% @private
-%%do_load_notifies([], _Now, Acc, State) ->
-%%    #?STATE{session=Session} = State,
-%%    Session2 = Session#session{notify_msgs=Acc},
-%%    State#?STATE{session=Session2};
-%%
-%%do_load_notifies([Notify|Rest], Now, Acc, State) ->
-%%    #{
-%%        domain_id := DomainId,
-%%        session_type := Type,
-%%        notification_id := Id,
-%%        msg := Msg,
-%%        created_time := Created,
-%%        expires_time := Expires
-%%    } = Notify,
-%%    case Now >= Expires of
-%%        true ->
-%%            lager:warning("NKLOG Expiring loaded ~s", [Id]),
-%%            do_load_notifies(Rest, Now, Acc, State#?STATE{is_dirty=true});
-%%        false ->
-%%            Timer = erlang:send_after(Expires-Now, self(), {?MODULE, expired_notify, Id}),
-%%            NotifyMsg = #notify_msg{
-%%                domain_id = DomainId,
-%%                session_type = Type,
-%%                id = Id,
-%%                msg = Msg,
-%%                created_time = Created,
-%%                expires_time = Expires,
-%%                timer = Timer
-%%            },
-%%            do_load_notifies(Rest, Now, [NotifyMsg|Acc], State)
-%%    end.
 
 
 %% @private

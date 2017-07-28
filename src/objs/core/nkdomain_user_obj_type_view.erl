@@ -20,24 +20,25 @@
 
 %% @doc User Object
 
--module(nkdomain_user_obj_ui).
+-module(nkdomain_user_obj_type_view).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([table/1, table_data/2]).
+-export([view/1, table_data/2]).
 
 -include("nkdomain.hrl").
+-include_lib("nkadmin/include/nkadmin.hrl").
 
 -define(ID, <<"domain_detail_user_table">>).
 -define(ID_SUBDOMAINS, <<"domain_detail_user_table_subdomains">>).
 
 %% @doc
-table(Session) ->
+view(Session) ->
     DomainOptions = [
         #{ id => <<"">>, value => <<"">> },
         #{ id => <<"/">>, value => <<"/">> },
         #{ id => <<"/chattest/">>, value => <<"/chattest">> }
     ],
-    Spec = Session#{
+    Spec = #{
         table_id => ?ID,
         subdomains_id => ?ID_SUBDOMAINS,
         filters => [?ID_SUBDOMAINS],
@@ -117,7 +118,7 @@ table(Session) ->
     Table = #{
         id => ?ID,
         class => webix_ui,
-        value => nkadmin_webix_datatable:datatable(Spec)
+        value => nkadmin_webix_datatable:datatable(Spec, Session)
     },
     KeyData = #{data_fun => fun ?MODULE:table_data/2},
     Session2 = nkadmin_util:set_key_data(?ID, KeyData, Session),
@@ -125,7 +126,7 @@ table(Session) ->
 
 
 %% @doc
-table_data(#{start:=Start, size:=Size, sort:=Sort, filter:=Filter}, #{srv_id:=SrvId, domain_id:=DomainId}) ->
+table_data(#{start:=Start, size:=Size, sort:=Sort, filter:=Filter}, #admin_session{srv_id=SrvId, domain_id=DomainId}) ->
     SortSpec = case Sort of
         {<<"domain">>, Order} ->
             <<Order/binary, ":path">>;

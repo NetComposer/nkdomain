@@ -24,15 +24,16 @@
 -export([categories/2, get_category/2, event/3, element_action/5]).
 
 -include("nkdomain.hrl").
+-include_lib("nkadmin/include/nkadmin.hrl").
 -include_lib("nkevent/include/nkevent.hrl").
 
--define(LLOG(Type, Txt, Args), lager:Type("NkDOMAN Admin " ++ Txt, Args)).
+-define(LLOG(Type, Txt, Args, Session),
+    lager:Type("NkDOMAN Admin (~s) " ++ Txt, [Session#admin_session.session_id|Args])).
 
 -define(OVERVIEW,       <<"domain_tree_overview">>).
 -define(DASHBOARD,      <<"domain_tree_overview_dashboard">>).
 -define(DOMAINS,        <<"domain_tree_overview_domains">>).
 -define(DOMAINS_ID,     <<"domain_tree_overview_domains_id">>).
--define(DOMAINS_ID2,      "domain_tree_overview_domains_id").
 -define(DOMAINS_ALL,    <<"domain_tree_overview_domains_all">>).
 -define(ALERTS,         <<"domain_tree_overview_alerts">>).
 -define(RESOURCES,      <<"domain_tree_resources">>).
@@ -71,10 +72,11 @@ get_category(overview, Session) ->
             {error, Error, Session}
     end;
 
-get_category(resources, #{types:=Types}=Session) ->
+get_category(resources, #admin_session{db_types=Types}=Session) ->
     get_resources_category(Types, Session);
 
-get_category(sessions, #{types:=Types}=Session) ->
+get_category(sessions, Session) ->
+    Types = nkdomain_all_types:get_all_types(),
     get_sessions_category(Types, Session);
 
 get_category(_Category, _Session) ->
@@ -82,7 +84,8 @@ get_category(_Category, _Session) ->
 
 
 %% @doc
-event(#nkevent{type = <<"counter_updated">>, obj_id=ObjId}=Event, Updates, #{domain_path:=ObjId}=Session) ->
+%% The counter_updated event is sent multiple times to the domain and all parent domains (in obj_id)
+event(#nkevent{type = <<"counter_updated">>, obj_id=ObjId}=Event, Updates, #admin_session{domain_path=ObjId}=Session) ->
     #nkevent{subclass=ObjType, body=#{counter:=Counter}}=Event,
     case update_session(ObjType, Counter, Session) of
         {true, Item, Session2} ->
@@ -124,44 +127,47 @@ event(Event, Updates, Session) ->
     {continue, [Event, Updates, Session]}.
 
 
-
 %% @doc
-element_action(?DASHBOARD, selected, Value, Updates, Session) ->
-    {Updates2, Session2} = nkadmin_util:update_detail(<<"dashboard">>, #{}, Updates, Session),
-    {continue, [?DASHBOARD, selected, Value, Updates2, Session2]};
+element_action([?DASHBOARD], selected, Value, Updates, Session) ->
+    {Updates2, Session2} = nkadmin_util:update_detail(<<"/dashboard">>, #{}, Updates, Session),
+    {continue, [[?DASHBOARD], selected, Value, Updates2, Session2]};
 
-element_action(<<?DOMAINS_ID2, $_, ObjId/binary>>=Key, selected, Value, Updates, Session) ->
+element_action([?DOMAINS], selected, _Value, _Updates, _Session) ->
+    continue;
+
+element_action([?DOMAINS_ALL], selected, Value, Updates, Session) ->
+    {Updates2, Session2} = nkadmin_util:update_detail(<<"/domains">>, #{}, Updates, Session),
+    {continue, [[?DOMAINS_ALL], selected, Value, Updates2, Session2]};
+
+element_action([?DOMAINS_ID, ObjId]=Parts, selected, Value, Updates, Session) ->
     {Updates2, Session2} = selected_domain(ObjId, Updates, Session),
-    {continue, [Key, selected, Value, Updates2, Session2]};
+    {continue, [Parts, selected, Value, Updates2, Session2]};
 
-element_action(?DOMAINS_ALL, selected, Value, Updates, Session) ->
-    {Updates2, Session2} = nkadmin_util:update_detail(<<"domains">>, #{}, Updates, Session),
-    {continue, [?DOMAINS_ALL, selected, Value, Updates2, Session2]};
+element_action([?ALERTS], selected, Value, Updates, Session) ->
+    {Updates2, Session2} = nkadmin_util:update_detail(<<"/alerts">>, #{}, Updates, Session),
+    {continue, [[?ALERTS], selected, Value, Updates2, Session2]};
 
-element_action(?ALERTS, selected, Value, Updates, Session) ->
-    {Updates2, Session2} = nkadmin_util:update_detail(<<"alerts">>, #{}, Updates, Session),
-    {continue, [?ALERTS, selected, Value, Updates2, Session2]};
-
-element_action(<<"domain_tree_resources_", Type/binary>>=Key, selected, Value, Updates, Session) ->
+element_action([?RESOURCES, Type]=Parts, selected, Value, Updates, Session) ->
     {true, Info} = is_resource(Type, Session),
-    Class = nkdomain_util:class(Type),
+    Path = <<$/, (nkdomain_util:class(Type))/binary>>,
     case Info of
-        #{get_tree_detail:=Fun} ->
-            {Detail, Session2} = Fun(Session),
-            {Updates3, Session3} = nkadmin_util:update_detail(Class, Detail, Updates, Session2),
-            {continue, [Key, selected, Value, Updates3, Session3]};
+        #{type_view_mod:=Mod} ->
+            {Detail, Session2} = Mod:view(Session),
+            {Updates3, Session3} = nkadmin_util:update_detail(Path, Detail, Updates, Session2),
+            {continue, [Parts, selected, Value, Updates3, Session3]};
         _ ->
-            lager:notice("Type with no supported table: ~s", [Type]),
-            {Updates2, Session2} = nkadmin_util:update_detail(Class, #{}, Updates, Session),
-            {continue, [Key, selected, Value, Updates2, Session2]}
+            ?LLOG(notice, "type with no supported view: ~s", [Type], Session),
+            {Updates2, Session2} = nkadmin_util:update_detail(Path, #{}, Updates, Session),
+            {continue, [Parts, selected, Value, Updates2, Session2]}
     end;
 
-element_action(<<"domain_tree_sessions_", Type/binary>>=Key, selected, Value, Updates, Session) ->
-    Class = nkdomain_util:class(Type),
-    {Updates2, Session2} = nkadmin_util:update_detail(Class, #{}, Updates, Session),
+element_action([?SESSIONS, Type]=Key, selected, Value, Updates, Session) ->
+    Path = <<$/, (nkdomain_util:class(Type))/binary>>,
+    {Updates2, Session2} = nkadmin_util:update_detail(Path, #{}, Updates, Session),
     {continue, [Key, selected, Value, Updates2, Session2]};
 
 element_action(_Id, _Action, _Value, _Updates, _Session) ->
+    ?LLOG(notice, "unsupported action ~s (~p)", [_Action, _Id], _Session),
     continue.
 
 
@@ -183,7 +189,7 @@ get_dashboards(Session) ->
 
 
 %% @private
-find_domains(#{srv_id:=SrvId, domain_id:=DomainId}) ->
+find_domains(#admin_session{srv_id=SrvId, domain_id=DomainId}) ->
     Spec = #{
         filters => #{type => ?DOMAIN_DOMAIN}
     },
@@ -212,7 +218,7 @@ get_domain_items([], [{_ObjName, Item}], Session) ->
 get_domain_items([], Acc, Session) ->
     {ok, [Item || {_ObjName, Item} <- lists:sort(Acc)], Session};
 
-get_domain_items([ObjId|Rest], Acc, #{srv_id:=SrvId}=Session) ->
+get_domain_items([ObjId|Rest], Acc, #admin_session{srv_id=SrvId}=Session) ->
     case nkdomain:get_name(SrvId, ObjId) of
         {ok, Map} ->
              #{
@@ -227,23 +233,18 @@ get_domain_items([ObjId|Rest], Acc, #{srv_id:=SrvId}=Session) ->
                 _ ->
                     Value1
             end,
-            Id = get_domain_id(ObjId),
+            Id = << ?DOMAINS_ID/binary, "__", ObjId/binary>>,
             Item = nkadmin_util:menu_item(Id, menuEntry, Value2, Session),
-            Session2 = nkadmin_util:set_url_key(<<$/, Name/binary>>, Id, Session),
+            Session2 = nkadmin_util:set_url_key(<<$/, ObjName/binary>>, Id, Session),
             get_domain_items(Rest, [{ObjName, Item}|Acc], Session2);
         {error, Error} ->
-            ?LLOG(warning, "could not load domain ~s: ~p", [ObjId, Error]),
+            ?LLOG(warning, "could not load domain ~s: ~p", [ObjId, Error], Session),
             get_domain_items(Rest, Acc, Session)
     end.
 
 
 %% @private
-get_domain_id(ObjId) ->
-    << ?DOMAINS_ID/binary, $_, ObjId/binary>>.
-
-
-%% @private
-created_domain(ObjId, DomainId, Updates, #{domain_id:=DomainId}=Session) ->
+created_domain(ObjId, DomainId, Updates, #admin_session{domain_id=DomainId}=Session) ->
     #{domain_ids:=DomList1} = nkadmin_util:get_key_data(?DOMAINS_ALL, Session),
     DomList2 = nklib_util:store_value(ObjId, DomList1),
     Session2 = nkadmin_util:set_key_data(?DOMAINS_ALL, #{domain_ids=>DomList2}, Session),
@@ -281,13 +282,13 @@ deleted_domain(ObjId, Updates, Session) ->
 
 
 %% @private
-selected_domain(ObjId, Updates, #{srv_id:=SrvId}=Session) ->
+selected_domain(ObjId, Updates, #admin_session{srv_id=SrvId}=Session) ->
     case nkdomain_lib:load(SrvId, ObjId) of
         #obj_id_ext{path=Path} ->
-            {Updates2, Session2} = nkadmin_util:update_path_absolute(Path, Updates, Session),
+            {Updates2, Session2} = nkadmin_util:update_detail(Path, #{}, Updates, Session),
             {Updates2, Session2};
         {error, Error} ->
-            lager:error("NKLOG SHOW VIEW ERROR: ~p", [Error]),
+            ?LLOG(notice, "could not load domain ~s: ~p", [ObjId, Error], Session),
             {Updates, Session}
     end.
 
@@ -315,7 +316,7 @@ get_resources_category(Types, Session) ->
 
 
 %% @private
-is_resource(Type, #{srv_id:=SrvId}) ->
+is_resource(Type, #admin_session{srv_id=SrvId}) ->
     case SrvId:object_admin_info(Type) of
         #{class:=resource} = Info ->
             {true, Info};
@@ -335,14 +336,14 @@ get_resource_items([Type|Rest], Acc, Session) ->
     case is_resource(Type, Session) of
         {true, Info} ->
             Weight = maps:get(weight, Info, 9000),
-            Key = << ?RESOURCES/binary, $_, Type/binary>>,
+            Key = << ?RESOURCES/binary, "__", Type/binary>>,
             Item = nkadmin_util:menu_item(Key, menuEntry, #{}, Session),
-            #{resources:=Resources} = Session,
+            #admin_session{resources=Resources} = Session,
             Session2 = case lists:member(Type, Resources) of
                 true ->
                     Session;
                 false ->
-                    nkadmin_util:add_to_session(resources, [Type|Resources], Session)
+                    Session#admin_session{resources=[Type|Resources]}
             end,
             Class = nkdomain_util:class(Type),
             Session3 = nkadmin_util:set_url_key(<<$/, Class/binary>>, Key, Session2),
@@ -353,7 +354,7 @@ get_resource_items([Type|Rest], Acc, Session) ->
 
 
 %% @private
-update_resource(Type, Updates, #{resources:=Resources}=Session) ->
+update_resource(Type, Updates, #admin_session{resources=Resources}=Session) ->
     case lists:member(Type, Resources) of
         true ->
             {Updates, Session};
@@ -383,7 +384,7 @@ get_sessions_category(Types, Session) ->
 
 
 %% @private
-is_session(Type, #{srv_id:=SrvId}) ->
+is_session(Type, #admin_session{srv_id=SrvId}) ->
     case SrvId:object_admin_info(Type) of
         #{class:=session} = Info ->
             {true, Info};
@@ -400,31 +401,21 @@ get_session_items([], Acc, Session) ->
     {ok, [Item || {_Weigth, Item} <- lists:keysort(1, Acc)], Session};
 
 get_session_items([Type|Rest], Acc, Session) ->
+    #admin_session{srv_id=SrvId, domain_path=DomainPath} = Session,
     case is_session(Type, Session) of
         {true, Info} ->
-            Weight = maps:get(weight, Info, 9000),
-            Key = <<?SESSIONS/binary, $_, Type/binary>>,
-            #{sessions:=Sessions} = Session,
-            case maps:find(Type, Sessions) of
+            case SrvId:object_get_counter(SrvId, Type, DomainPath) of
                 {ok, 0} ->
                     get_session_items(Rest, Acc, Session);
                 {ok, Counter} ->
+                    Weight = maps:get(weight, Info, 9000),
+                    Key = <<?SESSIONS/binary, "__", Type/binary>>,
                     Item = nkadmin_util:menu_item(Key, menuEntry, #{counter=>Counter}, Session),
                     Class = nkdomain_util:class(Type),
-                    Session2 = nkadmin_util:set_url_key(<<$/, Class/binary>>, Key, Session),
-                    get_session_items(Rest, [{Weight, Item}|Acc], Session2);
-                error ->
-                    #{srv_id:=SrvId, domain_path:=DomainPath} = Session,
-                    case SrvId:object_get_counter(SrvId, Type, DomainPath) of
-                        {ok, 0} ->
-                            get_session_items(Rest, Acc, Session);
-                        {ok, Counter} ->
-                            Item = nkadmin_util:menu_item(Key, menuEntry, #{counter=>Counter}, Session),
-                            Class = nkdomain_util:class(Type),
-                            Session2 = nkadmin_util:add_to_session(sessions, Sessions#{Type=>Counter}, Session),
-                            Session3 = nkadmin_util:set_url_key(<<$/, Class/binary>>, Key, Session2),
-                            get_session_items(Rest, [{Weight, Item}|Acc], Session3)
-                    end
+                    #admin_session{sessions=Sessions} = Session,
+                    Session2 = Session#admin_session{sessions=Sessions#{Type=>Counter}},
+                    Session3 = nkadmin_util:set_url_key(<<$/, Class/binary>>, Key, Session2),
+                    get_session_items(Rest, [{Weight, Item}|Acc], Session3)
             end;
         _ ->
             get_session_items(Rest, Acc, Session)
@@ -432,22 +423,22 @@ get_session_items([Type|Rest], Acc, Session) ->
 
 
 %% @private
-update_session(Type, Counter, #{sessions:=Sessions}=Session) ->
+update_session(Type, Counter, #admin_session{sessions=Sessions}=Session) ->
     case maps:is_key(Type, Sessions) of
         true when Counter > 0 ->
-            Session2 = Session#{sessions:=Sessions#{Type=>Counter}},
+            Session2 = Session#admin_session{sessions=Sessions#{Type=>Counter}},
             {ok, [Item], Session3} = get_session_items([Type], [], Session2),
             {true, Item, Session3};
         true ->
             Sessions2 = maps:remove(Type, Sessions),
-            Session2 = Session#{sessions:=Sessions2},
+            Session2 = Session#admin_session{sessions=Sessions2},
             {ok, Category, Session3} = get_sessions_category(maps:keys(Sessions2), Session2),
             {true, Category, Session3};
         false when Counter > 0 ->
             case is_session(Type, Session) of
                 {true, _} ->
                     Sessions2 = Sessions#{Type=>Counter},
-                    Session2 = Session#{sessions:=Sessions2},
+                    Session2 = Session#admin_session{sessions=Sessions2},
                     {ok, Category, Session3} = get_sessions_category(maps:keys(Sessions2), Session2),
                     {true, Category, Session3};
                 false ->

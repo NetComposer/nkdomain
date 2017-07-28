@@ -141,7 +141,7 @@ object_init(#?STATE{srv_id=SrvId, domain_id=DomainId, id=Id, obj=Obj}=State) ->
     #obj_id_ext{obj_id=SessId} = Id,
     #{created_by:=UserId} = Obj,
     ok = nkdomain_user_obj:register_session(SrvId, UserId, DomainId, ?DOMAIN_SESSION, SessId, #{}),
-    State2 = nkdomain_obj_util:link_to_api_server(?MODULE, State),
+    State2 = nkdomain_obj_util:link_to_session_server(?MODULE, State),
     {ok, State2}.
 
 

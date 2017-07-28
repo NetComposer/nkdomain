@@ -86,7 +86,10 @@ config(DomCfg, Config) ->
     end,
     Config3 = case Admin of
         true ->
-            Config2#{admin_url => <<BaseHttp/binary, "/_admin">>};
+            Config2#{
+                admin_url_web => <<BaseHttp/binary, "/_admin">>,
+                admin_url_ws => <<BaseWs/binary, "/_admin/_ws">>
+            };
         false ->
             Config2
     end,

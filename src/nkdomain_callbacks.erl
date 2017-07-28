@@ -153,8 +153,8 @@ admin_event(_Event, _Updates, _Session) ->
 
 
 %% @doc
-admin_element_action(ElementId, Action, Value, Updates, Session) ->
-    nkdomain_admin_tree:element_action(ElementId, Action, Value, Updates, Session).
+admin_element_action(ElementIdParts, Action, Value, Updates, Session) ->
+    nkdomain_admin_tree:element_action(ElementIdParts, Action, Value, Updates, Session).
 
 
 %% @doc
@@ -455,9 +455,8 @@ object_reg_event(Link, Data, Event, State) ->
     call_module(object_reg_event, [Link, Data, Event], State).
 
 
-%% @doc If the object was started with session_events and session_id parameters,
+%% @doc If the object was started with session_events and session_link parameters,
 %% this function will be called when the object sends a matching event
-%% If SessId is {nkdomain_session, Mod, Pid}, its send method will be called
 -spec object_session_event(term(), #nkevent{}, state()) ->
     ok.
 

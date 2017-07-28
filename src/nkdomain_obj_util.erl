@@ -25,7 +25,7 @@
 -export([event/2, status/2, search_syntax/1, get_obj_info/1, get_obj_name/1]).
 -export([send_event/1, send_event/3, send_event/4, send_event/5]).
 -export([call_type/3]).
--export([link_to_api_server/2, unlink_from_api_server/2]).
+-export([link_to_session_server/2, unlink_from_session_server/2]).
 -export([get_obj_session/1, set_obj_session/2]).
 
 -include("nkdomain.hrl").
@@ -231,7 +231,7 @@ call_type(Fun, Args, Type) ->
 
 
 %% @doc
-link_to_api_server(Module, #?STATE{session_link={Mod, Pid}}=State) when is_atom(Mod), is_pid(Pid) ->
+link_to_session_server(Module, #?STATE{session_link={Mod, Pid}} = State) when is_atom(Mod), is_pid(Pid) ->
     % Stop the API Server if we fail abruptly
     ok = Mod:register(Pid, {nkdomain_stop, Module, self()}),
     % Monitor the API server, reduce usage count if it fails
@@ -239,7 +239,7 @@ link_to_api_server(Module, #?STATE{session_link={Mod, Pid}}=State) when is_atom(
 
 
 %% @doc
-unlink_from_api_server(Module, #?STATE{session_link={Mod, _Pid}}=State) when is_atom(Mod) ->
+unlink_from_session_server(Module, #?STATE{session_link={Mod, _Pid}} = State) when is_atom(Mod) ->
     nkdomain_obj:links_iter(
         usage,
         fun

@@ -49,7 +49,7 @@
 %% @doc
 -spec create(nkservice:id(), nkdomain:id(), nkdomain:id(), nkdomain:id(), nkdomain:subtype(),
              nkdomain_obj_make:make_opts(), map()) ->
-    {ok, #obj_id_ext{}, integer(), [Unknown::binary()]} | {error, term()}.
+    {ok, TokenId::nkdomain:obj_id(), integer(), [Unknown::binary()]} | {error, term()}.
 
 create(SrvId, DomainId, ParentId, UserId, SubType, Opts, Data) ->
     case check_ttl(SubType, Opts) of

@@ -35,6 +35,6 @@
     #{
         class => resouce | session,
         weight => integer(),
-        get_tree_detail => fun((Session::map()) -> {Detail::map(), Session::map()}),
+        type_view_mod => module(),
         tree_id => binary()
     }.
