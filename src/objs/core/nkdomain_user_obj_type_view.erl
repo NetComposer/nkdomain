@@ -36,7 +36,7 @@ view(Session) ->
     DomainOptions = [
         #{ id => <<"">>, value => <<"">> },
         #{ id => <<"/">>, value => <<"/">> },
-        #{ id => <<"/chattest/">>, value => <<"/chattest">> }
+        #{ id => <<"/c4/">>, value => <<"/c4">> }
     ],
     Spec = #{
         table_id => ?ID,
@@ -51,9 +51,17 @@ view(Session) ->
             #{
                 id => domain,
                 type => text,
+                fillspace => <<"0.5">>,
                 name => domain_column_domain,
                 sort => true,
                 options => DomainOptions
+            },
+            #{
+                id => html_id,
+                type => text,
+                name => domain_column_id,
+                sort => false,
+                is_html => true % Will allow us to return HTML inside the column data
             },
             #{
                 id => name,
@@ -82,7 +90,8 @@ view(Session) ->
                 id => created_by,
                 type => text,
                 name => domain_column_created_by,
-                sort => true
+                sort => true,
+                is_html => true % Will allow us to return HTML inside the column data
             },
             #{
                 id => created_time,
@@ -253,15 +262,17 @@ table_iter([Entry|Rest], Pos, Acc) ->
         true -> <<"fa-times">>;
         false -> <<"fa-check">>
     end,
+    DomainUsers = nkdomain_util:class(?DOMAIN_USER),
     {ok, Domain, _ShortName} = nkdomain_util:get_parts(?DOMAIN_USER, Path),
     Data = #{
         pos => Pos,
         id => ObjId,
+        html_id => <<"<a href=\"#/", DomainUsers/binary, "/", ObjId/binary, "\">", ObjId/binary, "</a>">>,
         domain => Domain,
         name => Name,
         surname => Surname,
         email => Email,
-        created_by => CreatedBy,
+        created_by => <<"<a href=\"#/", DomainUsers/binary, "/", CreatedBy/binary, "\">", CreatedBy/binary, "</a>">>,
         created_time => CreatedTime,
         enabled_icon => Enabled
     },
