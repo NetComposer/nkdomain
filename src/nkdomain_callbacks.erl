@@ -118,6 +118,7 @@ error(session_is_disabled)              -> "Session is disabled";
 error(session_type_unsupported)         -> "Session type not supported";
 error(store_id_invalid)                 -> "Invalid Store Id";
 error(store_id_missing)                 -> "Missing Store Id";
+error(url_unknown)      		        -> "Unknown url";
 error(user_is_disabled) 		        -> "User is disabled";
 error(user_unknown)                     -> "Unknown user";
 
