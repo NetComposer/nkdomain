@@ -481,6 +481,21 @@ download(T, Url) ->
 
 
 
+create_users(SrvId, N) ->
+    nkdomain:delete_all_childs(SrvId, "/name_test"),
+    {ok, _, _Pid1} = login(),
+    _ = nkdomain_sample:domain_create("/", name_test, "NameTest", "Name Test"),
+    lists:foreach(
+        fun(_) ->
+            {N1, N2, N3} = get_name(),
+            S = list_to_binary([N2, <<" ">>, N3]),
+            Id = nklib_util:uid(),
+            Email = <<Id/binary, "@test">>,
+            {ok, _} = user_create("/name_test", Id, "1234", N1, S, Email)
+        end,
+        lists:seq(1, N)).
+
+
 
 %% ===================================================================
 %% OBJECTS

@@ -165,13 +165,13 @@ object_es_unparse(SrvId, #{type:=Type}=Obj) ->
     end,
     BaseMap3 = case BaseMap2 of
         #{name:=Name} ->
-            BaseMap2#{name_norm=>nkdomain_store_es_util:normalize(Name)};
+            BaseMap2#{name_norm=>nkdomain_store_es_util:normalize_multi(Name)};
         _ ->
             BaseMap2
     end,
     BaseMap4 = case BaseMap3 of
         #{description:=Desc} ->
-            BaseMap3#{description_norm=>nkdomain_store_es_util:normalize(Desc)};
+            BaseMap3#{description_norm=>nkdomain_store_es_util:normalize_multi(Desc)};
         _ ->
             BaseMap3
     end,

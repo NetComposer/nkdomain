@@ -283,11 +283,10 @@ object_create(SrvId, Obj) ->
 object_es_mapping() ->
     #{
         name => #{type => text},
-        name_norm => #{type => text},
-        name_sort => #{type => keyword},
         surname => #{type => text},
-        surname_norm =>  #{type => text},
+        name_sort => #{type => keyword},
         surname_sort =>  #{type => keyword},
+        fullname_norm => #{type => keyword},
         email => #{type => keyword},
         password => #{type => keyword},
         phone_t => #{type => keyword},
@@ -308,25 +307,18 @@ object_es_mapping() ->
 
 %% @private
 object_es_unparse(_SrvId, Obj, Base) ->
-    FullName = maps:get(name, Obj),
     User = maps:get(?DOMAIN_USER, Obj),
     Name = maps:get(name, User, <<>>),
-    NameNorm = nkdomain_store_es_util:normalize(Name),
-    nklib_parse:normalize(Name),
     SurName = maps:get(surname, User, <<>>),
-    SurNameNorm = nkdomain_store_es_util:normalize(SurName),
+    FullName = <<Name/binary, " ", SurName/binary>>,
     UserKeys = maps:keys(object_es_mapping()),
     UserMap = maps:with(UserKeys, User),
     UserMap2 = UserMap#{
-        name_norm => NameNorm,
-        name_sort => NameNorm,
-        surname_norm => SurNameNorm,
-        surname_sort => SurNameNorm
+        name_sort => nkdomain_store_es_util:normalize(Name),
+        surname_sort => nkdomain_store_es_util:normalize(SurName),
+        fullname_norm =>  nkdomain_store_es_util:normalize_multi(FullName)
     },
-    FullNameNorm = nkdomain_store_es_util:normalize(FullName),
     Base#{
-        name => FullName,
-        name_norm => FullNameNorm,
         ?DOMAIN_USER => UserMap2
     }.
 

@@ -21,7 +21,7 @@
 %% @doc NkDomain service callback module
 -module(nkdomain_admin_detail).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
--export([get_data/3, search_spec/1]).
+-export([get_data/3, search_spec/1, time/1]).
 
 -include("nkdomain.hrl").
 -include_lib("nkevent/include/nkevent.hrl").
@@ -83,6 +83,30 @@ search_spec(<<">", _/binary>>=Data) -> Data;
 search_spec(<<"<", _/binary>>=Data) -> Data;
 search_spec(<<"!", _/binary>>=Data) -> Data;
 search_spec(Data) -> <<"prefix:", Data/binary>>.
+
+
+%% @doc
+time(Spec) ->
+    Now = nklib_util:timestamp(),
+    {{Y, M, D}, _} = nklib_util:timestamp_to_local(Now),
+    TodayS = 1000*nklib_util:local_to_timestamp({{Y, M, D}, {0, 0, 0}}),
+    TodayE = 1000*nklib_util:local_to_timestamp({{Y, M, D}, {23, 59, 59}}) + 999,
+    {S, E} = case Spec of
+        today ->
+            {TodayS, TodayE};
+        yesterday ->
+            Sub = 24*60*60*1000,
+            {TodayS-Sub, TodayE-Sub};
+        last7 ->
+            Sub = 7*24*60*60*1000,
+            {TodayS-Sub, TodayE};
+        last30 ->
+            Sub = 30*24*60*60*1000,
+            {TodayS-Sub, TodayE}
+    end,
+    list_to_binary(["<", nklib_util:to_binary(S), "-", nklib_util:to_binary(E),">"]).
+
+
 
 %% @private
 to_bin(K) -> nklib_util:to_binary(K).
