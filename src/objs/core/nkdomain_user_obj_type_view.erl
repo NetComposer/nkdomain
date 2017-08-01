@@ -43,10 +43,14 @@ view(Session) ->
         subdomains_id => ?ID_SUBDOMAINS,
         filters => [?ID_SUBDOMAINS],
         columns => [
+%            #{
+%                id => pos,
+%                type => pos,
+%                name => domain_column_pos
+%            },
             #{
-                id => pos,
-                type => pos,
-                name => domain_column_pos
+                id => checkbox,
+                type => checkbox
             },
             #{
                 id => domain,
@@ -60,7 +64,7 @@ view(Session) ->
                 id => html_id,
                 type => text,
                 name => domain_column_id,
-                sort => false,
+                sort => true,
                 is_html => true % Will allow us to return HTML inside the column data
             },
             #{
@@ -98,31 +102,23 @@ view(Session) ->
                 type => date,
                 name => domain_column_created_time,
                 sort => true
-            },
-            #{
-                id => enabled_icon,
-                type => {icon, <<"enabled_icon">>}
-            },
-            #{
-                id => delete,
-                type => {fixed_icon, <<"fa-trash">>}
             }
         ],
         left_split => 1,
-        right_split => 2,
+%        right_split => 2,
         on_click => [
-            #{
-                id => <<"fa-times">>,
-                type => enable
-            },
-            #{
-                id => <<"fa-check">>,
-                type => disable
-            },
-            #{
-                id => <<"fa-trash">>,
-                type => delete
-            }
+%            #{
+%                id => <<"fa-times">>,
+%                type => enable
+%            },
+%            #{
+%                id => <<"fa-check">>,
+%                type => disable
+%            },
+%            #{
+%                id => <<"fa-trash">>,
+%                type => delete
+%            }
         ]},
     Table = #{
         id => ?ID,
@@ -137,12 +133,14 @@ view(Session) ->
 %% @doc
 table_data(#{start:=Start, size:=Size, sort:=Sort, filter:=Filter}, #admin_session{srv_id=SrvId, domain_id=DomainId}) ->
     SortSpec = case Sort of
+        {<<"html_id">>, Order} ->
+            <<Order/binary, ":obj_id">>;
         {<<"domain">>, Order} ->
             <<Order/binary, ":path">>;
         {<<"name">>, Order} ->
-            <<Order/binary, ":user.name.keyword">>;
+            <<Order/binary, ":user.name_sort">>;
         {<<"surname">>, Order} ->
-            <<Order/binary, ":user.surname.keyword">>;
+            <<Order/binary, ":user.surname_sort">>;
         {<<"email">>, Order} ->
             <<Order/binary, ":user.email">>;
         {Field, Order} when Field==<<"created_by">>; Field==<<"created_time">> ->
@@ -185,6 +183,10 @@ table_filter([], Acc, _) ->
 table_filter([{_, <<>>}|Rest], Acc, Info) ->
     table_filter(Rest, Acc, Info);
 
+table_filter([{<<"html_id">>, Data}|Rest], Acc, Info) ->
+    Acc2 = Acc#{<<"obj_id">> => nkdomain_admin_detail:search_spec(Data)},
+    table_filter(Rest, Acc2, Info);
+
 table_filter([{<<"domain">>, Data}|Rest], Acc, Info) ->
     Acc2 = Acc#{<<"path">> => nkdomain_admin_detail:search_spec(<<Data/binary, "user">>)},
     table_filter(Rest, Acc2, Info);
@@ -194,12 +196,7 @@ table_filter([{<<"email">>, Data}|Rest], Acc, Info) ->
     table_filter(Rest, Acc2, Info);
 
 table_filter([{<<"name">>, Data}|Rest], Acc, Info) ->
-    Acc2 = Acc#{
-        <<"or">> => [
-            #{ <<"user.name">> => nkdomain_admin_detail:search_spec(Data) },
-            #{ <<"user.surname">> => nkdomain_admin_detail:search_spec(Data) }
-        ]
-    },
+    Acc2 = Acc#{<<"name_norm">> => nkdomain_admin_detail:search_spec(Data)},
     table_filter(Rest, Acc2, Info);
 
 table_filter([{<<"created_by">>, Data}|Rest], Acc, Info) ->
@@ -265,6 +262,7 @@ table_iter([Entry|Rest], Pos, Acc) ->
     DomainUsers = nkdomain_util:class(?DOMAIN_USER),
     {ok, Domain, _ShortName} = nkdomain_util:get_parts(?DOMAIN_USER, Path),
     Data = #{
+        checkbox => <<"0">>,
         pos => Pos,
         id => ObjId,
         html_id => <<"<a href=\"#/", DomainUsers/binary, "/", ObjId/binary, "\">", ObjId/binary, "</a>">>,
