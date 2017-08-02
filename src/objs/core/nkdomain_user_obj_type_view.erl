@@ -33,14 +33,14 @@
 
 %% @doc
 view(Session) ->
-    DomainOptions = [
+    _DomainOptions = [
         #{ id => <<"">>, value => <<"">> },
         #{ id => <<"/">>, value => <<"/">> },
         #{ id => <<"/c4/">>, value => <<"/c4">> }
     ],
     Spec = #{
         table_id => ?ID,
-        subdomains_id => ?ID_SUBDOMAINS,
+        % subdomains_id => ?ID_SUBDOMAINS,
         filters => [?ID_SUBDOMAINS],
         columns => [
 %            #{
@@ -57,8 +57,14 @@ view(Session) ->
                 type => text,
                 fillspace => <<"0.5">>,
                 name => domain_column_domain,
-                sort => true,
-                options => DomainOptions
+                sort => true
+                %options => DomainOptions
+            },
+            #{
+                id => obj_name,
+                type => text,
+                name => domain_column_id,
+                sort => true
             },
             #{
                 id => html_id,
@@ -143,18 +149,20 @@ table_data(#{start:=Start, size:=Size, sort:=Sort, filter:=Filter}, #admin_sessi
             <<Order/binary, ":user.surname_sort">>;
         {<<"email">>, Order} ->
             <<Order/binary, ":user.email">>;
-        {Field, Order} when Field==<<"created_by">>; Field==<<"created_time">> ->
+        {Field, Order} when Field==<<"created_time">> ->
             <<Order/binary, $:, Field/binary>>;
         _ ->
             <<"desc:path">>
     end,
     %% Get the timezone_offset from the filter list and pass it to table_filter
     ClientTimeOffset = maps:get(<<"timezone_offset">>, Filter, <<"0">>),
-    case table_filter(maps:to_list(Filter), #{type=>user}, #{timezone_offset => ClientTimeOffset}) of
+    case table_filter(maps:to_list(Filter), #{timezone_offset => ClientTimeOffset}, #{type=>user}) of
         {ok, Filters} -> 
+            lager:warning("NKLOG Filters ~s", [nklib_json:encode_pretty(Filters)]),
+
             FindSpec = #{
                 filters => Filters,
-                fields => [<<"path">>, <<"created_by">>, <<"created_time">>,
+                fields => [<<"path">>, <<"created_time">>,
                            <<"user.name">>, <<"user.surname">>, <<"user.email">>],
                 sort => SortSpec,
                 from => Start,
@@ -177,65 +185,88 @@ table_data(#{start:=Start, size:=Size, sort:=Sort, filter:=Filter}, #admin_sessi
 
 
 %% @private
-table_filter([], Acc, _) ->
+table_filter([], _Info, Acc) ->
     {ok, Acc};
 
-table_filter([{_, <<>>}|Rest], Acc, Info) ->
-    table_filter(Rest, Acc, Info);
+table_filter([{_, <<>>}|Rest], Info, Acc) ->
+    table_filter(Rest, Info, Acc);
 
 table_filter([{<<"html_id">>, Data}|Rest], Acc, Info) ->
     Acc2 = Acc#{<<"obj_id">> => nkdomain_admin_detail:search_spec(Data)},
     table_filter(Rest, Acc2, Info);
 
-table_filter([{<<"domain">>, Data}|Rest], Acc, Info) ->
-    Acc2 = Acc#{<<"path">> => nkdomain_admin_detail:search_spec(<<Data/binary, "user">>)},
-    table_filter(Rest, Acc2, Info);
+table_filter([{<<"domain">>, Data}|Rest], Info, Acc) ->
+    Acc2 = Acc#{<<"path">> => nkdomain_admin_detail:search_spec(Data)},
+    table_filter(Rest, Info, Acc2);
 
-table_filter([{<<"email">>, Data}|Rest], Acc, Info) ->
+table_filter([{<<"obj_name">>, Data}|Rest], Info, Acc) ->
+    Acc2 = Acc#{<<"obj_name">> => nkdomain_admin_detail:search_spec(Data)},
+    table_filter(Rest, Info, Acc2);
+
+table_filter([{<<"email">>, Data}|Rest], Info, Acc) ->
     Acc2 = Acc#{<<"user.email">> => nkdomain_admin_detail:search_spec(Data)},
-    table_filter(Rest, Acc2, Info);
+    table_filter(Rest, Info, Acc2);
 
-table_filter([{<<"name">>, Data}|Rest], Acc, Info) ->
-    Acc2 = Acc#{<<"name_norm">> => nkdomain_admin_detail:search_spec(Data)},
-    table_filter(Rest, Acc2, Info);
+table_filter([{<<"name">>, Data}|Rest], Info, Acc) ->
+    Acc2 = Acc#{<<"user.fullname_norm">> => nkdomain_admin_detail:search_spec(Data)},
+    table_filter(Rest, Info, Acc2);
 
-table_filter([{<<"created_by">>, Data}|Rest], Acc, Info) ->
+table_filter([{<<"created_by">>, Data}|Rest], Info, Acc) ->
     Acc2 = Acc#{<<"created_by">> => nkdomain_admin_detail:search_spec(Data)},
-    table_filter(Rest, Acc2, Info);
+    table_filter(Rest, Info, Acc2);
 
 table_filter([{<<"created_time">>, <<"custom">>}|_Rest], _Acc, _Info) ->
     {error, date_needs_more_data};
 
-table_filter([{<<"created_time">>, Data}|Rest], Acc, #{timezone_offset:=Offset}=Info) ->
-    SNow = nklib_util:timestamp(),
-    {_,{H,M,S}} = nklib_util:timestamp_to_gmt(SNow),
-    Now = SNow - H*3600 - M*60 - S,
-    OffsetSecs = Offset * 60,
-    io:format("Filter: ~w~nNow: ~w~n", [Data, Now]),
-    case Data of
+%%table_filter([{<<"created_time">>, Data}|Rest], #{timezone_offset:=Offset}=Info, Acc) ->
+%%    lager:error("NKLOG IFF ~p", [Offset]),
+%%    SNow = nklib_util:timestamp(),
+%%    {_,{H,M,S}} = nklib_util:timestamp_to_gmt(SNow),
+%%    Now = SNow - H*3600 - M*60 - S,
+%%    OffsetSecs = Offset * 60,
+%%    io:format("Filter: ~w~nNow: ~w~n", [Data, Now]),
+%%    case Data of
+%%        <<"today">> ->
+%%            Now2 = (Now - 24*60*60 + OffsetSecs)*1000,
+%%            Filter = list_to_binary([">", nklib_util:to_binary(Now2)]);
+%%        <<"yesterday">> ->
+%%            Now2 = (Now - 2*24*60*60 + OffsetSecs)*1000,
+%%            Now3 = (Now - 24*60*60 + OffsetSecs)*1000,
+%%            Filter = list_to_binary(["<", nklib_util:to_binary(Now2), "-", nklib_util:to_binary(Now3),">"]);
+%%        <<"last_7">> ->
+%%            Now2 = (Now - 7*24*60*60 + OffsetSecs)*1000,
+%%            Filter = list_to_binary([">", nklib_util:to_binary(Now2)]);
+%%        <<"last_30">> ->
+%%            Now2 = (Now - 30*24*60*60 + OffsetSecs)*1000,
+%%            Filter = list_to_binary([">", nklib_util:to_binary(Now2)]);
+%%        <<"custom">> ->
+%%            Filter = <<"">>;
+%%        _ ->
+%%            Filter = <<"">>
+%%    end,
+%%    Acc2 = Acc#{<<"created_time">> => Filter},
+%%    table_filter(Rest, Info, Acc2);
+
+table_filter([{<<"created_time">>, Data}|Rest], #{timezone_offset:=_Offset} = Info, Acc) ->
+    Filter = case Data of
         <<"today">> ->
-            Now2 = (Now - 24*60*60 + OffsetSecs)*1000,
-            Filter = list_to_binary([">", nklib_util:to_binary(Now2)]);
+            nkdomain_admin_detail:time(today);
         <<"yesterday">> ->
-            Now2 = (Now - 2*24*60*60 + OffsetSecs)*1000,
-            Now3 = (Now - 24*60*60 + OffsetSecs)*1000,
-            Filter = list_to_binary(["<", nklib_util:to_binary(Now2), "-", nklib_util:to_binary(Now3),">"]);
+            nkdomain_admin_detail:time(yesterday);
         <<"last_7">> ->
-            Now2 = (Now - 7*24*60*60 + OffsetSecs)*1000,
-            Filter = list_to_binary([">", nklib_util:to_binary(Now2)]);
+            nkdomain_admin_detail:time(last7);
         <<"last_30">> ->
-            Now2 = (Now - 30*24*60*60 + OffsetSecs)*1000,
-            Filter = list_to_binary([">", nklib_util:to_binary(Now2)]);
+            nkdomain_admin_detail:time(last30);
         <<"custom">> ->
-            Filter = <<"">>;
+            <<"">>;
         _ ->
-            Filter = <<"">>
+            <<"">>
     end,
     Acc2 = Acc#{<<"created_time">> => Filter},
-    table_filter(Rest, Acc2, Info);
+    table_filter(Rest, Info, Acc2);
 
-table_filter([_|Rest], Acc, Info) ->
-    table_filter(Rest, Acc, Info).
+table_filter([_|Rest], Info, Acc) ->
+    table_filter(Rest, Info, Acc).
 
 
 
@@ -254,18 +285,18 @@ table_iter([Entry|Rest], Pos, Acc) ->
         } = User
     } = Entry,
     Email = maps:get(<<"email">>, User, <<>>),
-    CreatedBy = maps:get(<<"created_by">>, Entry, <<>>),
     Enabled = case maps:get(<<"enabled">>, Entry, true) of
         true -> <<"fa-times">>;
         false -> <<"fa-check">>
     end,
     DomainUsers = nkdomain_util:class(?DOMAIN_USER),
-    {ok, Domain, _ShortName} = nkdomain_util:get_parts(?DOMAIN_USER, Path),
+    {ok, Domain, ShortName} = nkdomain_util:get_parts(?DOMAIN_USER, Path),
     Data = #{
         checkbox => <<"0">>,
         pos => Pos,
         id => ObjId,
         html_id => <<"<a href=\"#/", DomainUsers/binary, "/", ObjId/binary, "\">", ObjId/binary, "</a>">>,
+        obj_name => ShortName,
         domain => Domain,
         name => Name,
         surname => Surname,

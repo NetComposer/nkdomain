@@ -22,7 +22,7 @@
 -module(nkdomain_store_es_util).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([get_opts/1, db_init/2, normalize/1]).
+-export([get_opts/1, db_init/2, normalize/1, normalize_multi/1]).
 -export([reload_index/1, delete_index/1]).
 
 -define(LLOG(Type, Txt, Args),
@@ -150,9 +150,38 @@ db_init_admin(Opts) ->
     end.
 
 
-%% @doc
+%% @private
 normalize(Text) ->
     nklib_parse:normalize(Text, #{unrecognized=>keep}).
+
+
+%% @doc
+normalize_multi(Text) ->
+    norm_multi(nklib_util:to_list(Text), [], []).
+
+
+%% @private
+norm_multi([Ch|Rest], Chars, Words) when Ch==32; Ch==$-; Ch==$_; Ch==$/;
+                                        Ch==$(; Ch==$); Ch==$,; Ch==$;; Ch==$: ->
+    case Chars of
+        [] ->
+            norm_multi(Rest, [], Words);
+        _ ->
+            Word = normalize(lists:reverse(Chars)),
+            norm_multi(Rest, [], [Word|Words])
+    end;
+
+norm_multi([Ch|Rest], Chars, Words) ->
+    norm_multi(Rest, [Ch|Chars], Words);
+
+norm_multi([], Chars, Words) ->
+    case Chars of
+        [] ->
+            lists:reverse(Words);
+        _ ->
+            Word = normalize(lists:reverse(Chars)),
+            lists:reverse([Word|Words])
+    end.
 
 
 %% @doc
