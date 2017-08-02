@@ -53,7 +53,6 @@ i18n() -> #{
         "domain_tree_services" => "Services",
 
         "domain_column_pos" => "#",
-        "domain_column_id" => "ID",
         "domain_column_domain" => "DOMAIN",
         "domain_column_id" => "ID",
         "domain_column_name" => "NAME",
@@ -90,7 +89,6 @@ i18n() -> #{
         "domain_tree_services" => "Servicios",
 
         "domain_column_pos" => "#",
-        "domain_column_id" => "ID",
         "domain_column_domain" => "DOMINIO",
         "domain_column_id" => "ID",
         "domain_column_firstname" => "NOMBRE",
