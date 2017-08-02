@@ -278,6 +278,7 @@ table_iter([Entry|Rest], Pos, Acc) ->
     #{
         <<"obj_id">> := ObjId,
         <<"path">> := Path,
+        <<"created_by">> := CreatedBy,
         <<"created_time">> := CreatedTime,
         <<"user">> := #{
             <<"name">> := Name,
