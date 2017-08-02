@@ -64,12 +64,6 @@ view(Session) ->
                 id => obj_name,
                 type => text,
                 name => domain_column_id,
-                sort => true
-            },
-            #{
-                id => html_id,
-                type => text,
-                name => domain_column_id,
                 sort => true,
                 is_html => true % Will allow us to return HTML inside the column data
             },
@@ -139,8 +133,8 @@ view(Session) ->
 %% @doc
 table_data(#{start:=Start, size:=Size, sort:=Sort, filter:=Filter}, #admin_session{srv_id=SrvId, domain_id=DomainId}) ->
     SortSpec = case Sort of
-        {<<"html_id">>, Order} ->
-            <<Order/binary, ":obj_id">>;
+        {<<"obj_name">>, Order} ->
+            <<Order/binary, ":path">>;
         {<<"domain">>, Order} ->
             <<Order/binary, ":path">>;
         {<<"name">>, Order} ->
@@ -162,7 +156,10 @@ table_data(#{start:=Start, size:=Size, sort:=Sort, filter:=Filter}, #admin_sessi
 
             FindSpec = #{
                 filters => Filters,
-                fields => [<<"path">>, <<"created_time">>,
+                fields => [<<"path">>,
+                           <<"obj_name">>,
+                           <<"created_time">>,
+                           <<"created_by">>,
                            <<"user.name">>, <<"user.surname">>, <<"user.email">>],
                 sort => SortSpec,
                 from => Start,
@@ -190,10 +187,6 @@ table_filter([], _Info, Acc) ->
 
 table_filter([{_, <<>>}|Rest], Info, Acc) ->
     table_filter(Rest, Info, Acc);
-
-table_filter([{<<"html_id">>, Data}|Rest], Acc, Info) ->
-    Acc2 = Acc#{<<"obj_id">> => nkdomain_admin_detail:search_spec(Data)},
-    table_filter(Rest, Acc2, Info);
 
 table_filter([{<<"domain">>, Data}|Rest], Info, Acc) ->
     Acc2 = Acc#{<<"path">> => nkdomain_admin_detail:search_spec(Data)},
@@ -296,8 +289,7 @@ table_iter([Entry|Rest], Pos, Acc) ->
         checkbox => <<"0">>,
         pos => Pos,
         id => ObjId,
-        html_id => <<"<a href=\"#/", DomainUsers/binary, "/", ObjId/binary, "\">", ObjId/binary, "</a>">>,
-        obj_name => ShortName,
+        obj_name => <<"<a href=\"#/", DomainUsers/binary, "/", ObjId/binary, "\">", ShortName/binary, "</a>">>,
         domain => Domain,
         name => Name,
         surname => Surname,
