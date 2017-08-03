@@ -14,6 +14,7 @@
         nkelastic,
         nkmail,
         nkfile,
+        nkadmin,
         p1_pgsql
     ]},
     {env, [
