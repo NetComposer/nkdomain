@@ -53,6 +53,7 @@
     session_link => {module(), pid()},
     session_events => [binary()],
     domain_id => binary(),
+    http_auth_id => binary(),
     url => binary()
 }.
 
@@ -78,7 +79,8 @@ start(SrvId, DomainId, UserId, Opts) ->
         ?DOMAIN_SESSION => #{}
     },
     Opts2 = maps:with([session_link, session_events], Opts),
-    case nkdomain_obj_make:create(SrvId, Obj, Opts2) of
+    Opts3 = Opts2#{meta => maps:with([languaje, http_auth_id], Opts)},
+    case nkdomain_obj_make:create(SrvId, Obj, Opts3) of
         {ok, #obj_id_ext{obj_id=SessId, pid=Pid}, _} ->
             AdminDomainId = maps:get(domain_id, Opts, DomainId),
             Url = maps:get(url, Opts, <<>>),
@@ -168,9 +170,11 @@ object_send_event(Event, State) ->
 object_init(#?STATE{srv_id=SrvId, domain_id=DomainId, id=Id, obj=Obj, meta=Meta}=State) ->
     #obj_id_ext{obj_id=SessId} = Id,
     #{created_by:=UserId} = Obj,
+    lager:error("NKLOG META ~p", [Meta]),
     Session = #admin_session{
         srv_id = SrvId,
         session_id = SessId,
+        http_auth_id = maps:get(http_auth_id, Meta, <<>>),
         domain_id = DomainId,
         user_id = UserId,
         language = maps:get(language, Meta, <<"en">>)

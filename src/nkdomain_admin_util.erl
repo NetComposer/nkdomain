@@ -21,13 +21,14 @@
 %% @doc NkDomain service callback module
 -module(nkdomain_admin_util).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
--export([get_data/3, search_spec/1, time/1]).
+-export([get_data/3, search_spec/1, time/2, get_file/2]).
 
 -include("nkdomain.hrl").
 -include_lib("nkevent/include/nkevent.hrl").
+-include_lib("nkadmin/include/nkadmin.hrl").
+
 
 -define(LLOG(Type, Txt, Args), lager:Type("NkDOMAN Admin " ++ Txt, Args)).
-
 
 
 %% ===================================================================
@@ -86,11 +87,11 @@ search_spec(Data) -> <<"prefix:", Data/binary>>.
 
 
 %% @doc
-time(Spec) ->
+time(Spec, _Offset) ->
     Now = nklib_util:timestamp(),
-    {{Y, M, D}, _} = nklib_util:timestamp_to_local(Now),
-    TodayS = 1000*nklib_util:local_to_timestamp({{Y, M, D}, {0, 0, 0}}),
-    TodayE = 1000*nklib_util:local_to_timestamp({{Y, M, D}, {23, 59, 59}}) + 999,
+    {{Y, M, D}, _} = nklib_util:timestamp_to_gmt(Now),
+    TodayS = 1000*nklib_util:gmt_to_timestamp({{Y, M, D}, {0, 0, 0}}),
+    TodayE = 1000*nklib_util:gmt_to_timestamp({{Y, M, D}, {23, 59, 59}}) + 999,
     {S, E} = case Spec of
         today ->
             {TodayS, TodayE};
@@ -106,6 +107,10 @@ time(Spec) ->
     end,
     list_to_binary(["<", nklib_util:to_binary(S), "-", nklib_util:to_binary(E),">"]).
 
+
+%% @doc
+get_file(FileId, #admin_session{http_auth_id=AuthId}) ->
+    <<"/_file/", FileId/binary, "?auth=", AuthId/binary>>.
 
 
 %% @private

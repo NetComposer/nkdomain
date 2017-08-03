@@ -35,7 +35,7 @@
 view(Session) ->
     Spec = #{
         table_id => ?ID,
-        % subdomains_id => ?ID_SUBDOMAINS,
+        subdomains_id => ?ID_SUBDOMAINS,
         filters => [?ID_SUBDOMAINS],
         columns => [
             #{
@@ -45,7 +45,6 @@ view(Session) ->
             #{
                 id => domain,
                 type => text,
-                fillspace => <<"0.5">>,
                 name => domain_column_domain,
                 sort => true,
                 options => get_domains(Session)
@@ -53,6 +52,7 @@ view(Session) ->
             #{
                 id => obj_name,
                 type => text,
+                fillspace => <<"0.5">>,
                 name => domain_column_id,
                 sort => true,
                 is_html => true % Will allow us to return HTML inside the column data
@@ -197,7 +197,7 @@ table_data(#{start:=Start, size:=Size, sort:=Sort, filter:=Filter}, #admin_sessi
             <<"desc:path">>
     end,
     %% Get the timezone_offset from the filter list and pass it to table_filter
-    ClientTimeOffset = maps:get(<<"timezone_offset">>, Filter, <<"0">>),
+    ClientTimeOffset = maps:get(<<"timezone_offset">>, Filter, 0),
     case table_filter(maps:to_list(Filter), #{timezone_offset => ClientTimeOffset}, #{type=>user}) of
         {ok, Filters} -> 
             lager:warning("NKLOG Filters ~s", [nklib_json:encode_pretty(Filters)]),
@@ -265,16 +265,17 @@ table_filter([{<<"created_by">>, Data}|Rest], Info, Acc) ->
 table_filter([{<<"created_time">>, <<"custom">>}|_Rest], _Acc, _Info) ->
     {error, date_needs_more_data};
 
-table_filter([{<<"created_time">>, Data}|Rest], #{timezone_offset:=_Offset} = Info, Acc) ->
+table_filter([{<<"created_time">>, Data}|Rest], #{timezone_offset:=Offset} = Info, Acc) ->
+    Secs = Offset * 60,
     Filter = case Data of
         <<"today">> ->
-            nkdomain_admin_util:time(today);
+            nkdomain_admin_util:time(today, Offset);
         <<"yesterday">> ->
-            nkdomain_admin_util:time(yesterday);
+            nkdomain_admin_util:time(yesterday, Offset);
         <<"last_7">> ->
-            nkdomain_admin_util:time(last7);
+            nkdomain_admin_util:time(last7, Offset);
         <<"last_30">> ->
-            nkdomain_admin_util:time(last30);
+            nkdomain_admin_util:time(last30, Offset);
         <<"custom">> ->
             <<"">>;
         _ ->
@@ -308,7 +309,6 @@ table_iter([Entry|Rest], Pos, Acc) ->
         true -> <<"fa-times">>;
         false -> <<"fa-check">>
     end,
-    DomainUsers = nkdomain_util:class(?DOMAIN_USER),
     {ok, Domain, ShortName} = nkdomain_util:get_parts(?DOMAIN_USER, Path),
     Data = #{
         checkbox => <<"0">>,

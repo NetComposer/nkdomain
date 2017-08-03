@@ -47,14 +47,15 @@ cmd(<<"find">>, _Req) ->
 cmd(<<"create">>, Req) ->
     cmd(<<"start">>, Req);
 
-cmd(<<"start">>, #nkreq{session_module=nkapi_server}=Req) ->
+cmd(<<"start">>, #nkreq{session_module=nkapi_server, session_id=WsSessId}=Req) ->
     #nkreq{data=Data, session_pid=Pid, user_id=UserId, srv_id=SrvId} = Req,
     case nkdomain_api_util:get_id(?DOMAIN_DOMAIN, domain_id, Data, Req) of
         {ok, DomainId} ->
             Opts1 = maps:with([domain_id, url, language], Data),
             Opts2 = Opts1#{
                 session_link => {nkapi_server, Pid},
-                session_events => maps:get(session_events, Data, ?ADMIN_DEF_EVENT_TYPES)
+                session_events => maps:get(session_events, Data, ?ADMIN_DEF_EVENT_TYPES),
+                http_auth_id => WsSessId
             },
             case nkadmin_session_obj:start(SrvId, DomainId, UserId, Opts2) of
                 {ok, SessId, _Pid, Updates} ->
