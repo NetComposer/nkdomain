@@ -170,7 +170,6 @@ object_send_event(Event, State) ->
 object_init(#?STATE{srv_id=SrvId, domain_id=DomainId, id=Id, obj=Obj, meta=Meta}=State) ->
     #obj_id_ext{obj_id=SessId} = Id,
     #{created_by:=UserId} = Obj,
-    lager:error("NKLOG META ~p", [Meta]),
     Session = #admin_session{
         srv_id = SrvId,
         session_id = SessId,
@@ -292,7 +291,7 @@ do_switch_domain(Domain, Url, #?STATE{srv_id=SrvId, session=Session}=State) ->
                             #admin_session{domain_path=OldPath} = Session,
                             subscribe_domain(OldPath, Session3),
                             State3 = State#?STATE{session=Session3},
-                            io:format("UPDATES:\n\n~p\n", [Updates]),
+                            % io:format("UPDATES:\n\n~p\n", [Updates]),
                             {ok, #{elements=>lists:reverse(Updates)}, State3};
                         {error, Error, #admin_session{}=Session3} ->
                             State3 = State#?STATE{session=Session3},

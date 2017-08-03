@@ -21,7 +21,8 @@
 %% @doc NkDomain service callback module
 -module(nkdomain_admin_util).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
--export([get_data/3, search_spec/1, time/2, time2/2, get_file_url/2]).
+-export([get_data/3, get_agg/3, table_filter_time/3, obj_url/2]).
+-export([search_spec/1, time/2, time2/2, get_file_url/2]).
 
 -include("nkdomain.hrl").
 -include_lib("nkevent/include/nkevent.hrl").
@@ -77,6 +78,65 @@ get_data(Key, Spec, Session) ->
         _ ->
             {error, object_not_found, Session}
     end.
+
+
+%% @private
+get_agg(Field, Type, #admin_session{srv_id=SrvId, domain_id=DomainId}) ->
+    Spec = #{
+        filters => #{type => Type},
+        size => 50
+    },
+    case nkdomain:search_agg_field(SrvId, DomainId, Field, Spec, true) of
+        {ok, _N, Data, #{agg_sum_other:=SumOther}} ->
+            Base = case SumOther of
+                0 ->
+                    [];
+                _ ->
+                    [#{id => <<"...">>, value => <<>>}]
+            end,
+            Data2 = lists:foldl(
+                fun({ObjId, _Num}, Acc) ->
+                    case nkdomain:get_name(SrvId, ObjId) of
+                        {ok, #{name:=Name}} ->
+                            [#{ id => ObjId, value => Name} | Acc];
+                        _ ->
+                            Acc
+                    end
+                end,
+                Base,
+                lists:reverse(Data)),
+            [#{id => <<>>, value => <<>>} | Data2];
+        {error, _Error} ->
+            #{}
+    end.
+
+
+%% @private
+table_filter_time(<<"custom">>, _Filter, _Acc) ->
+    {error, date_needs_more_data};
+
+table_filter_time(Data, Filter, Acc) ->
+    Secs = 60 * maps:get(<<"timezone_offset">>, Filter, 0),
+    TimeFilter = case Data of
+        <<"today">> ->
+            nkdomain_admin_util:time(today, Secs);
+        <<"yesterday">> ->
+            nkdomain_admin_util:time(yesterday, Secs);
+        <<"last_7">> ->
+            nkdomain_admin_util:time(last7, Secs);
+        <<"last_30">> ->
+            nkdomain_admin_util:time(last30, Secs);
+        <<"custom">> ->
+            <<"">>;
+        _ ->
+            <<"">>
+    end,
+    {ok, Acc#{<<"created_time">> => TimeFilter}}.
+
+
+%% @doc
+obj_url(ObjId, Name) ->
+    <<"<a href=\"#_id/", ObjId/binary, "\">", Name/binary, "</a>">>.
 
 
 %% @private

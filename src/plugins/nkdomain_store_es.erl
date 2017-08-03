@@ -189,6 +189,8 @@ search_all_childs(Id, Spec, EsOpts) ->
     {ok, integer(), [{nkdomain:type(), integer()}], meta()} | {error, term()}.
 
 search_agg_field(Id, Field, Spec, SubChilds, EsOpts) ->
+    lager:error("NKLOG AGG ~p ~p ~p", [Id, Field, Spec]),
+
     case filter_childs(Id, Spec, SubChilds, EsOpts) of
         {ok, Spec2} ->
             Spec3 = Spec2#{
