@@ -49,6 +49,7 @@ syntax() ->
         file_stores => {list, BaseFile#{id=>binary}},
         default_mail_provider => binary,
         mail_providers => {list, mail_syntax()},
+        push_providers => {list, push_syntax()},
         '__defaults' => #{
             listen_ip => <<"127.0.0.1">>,
             listen_port => 9301,
@@ -155,6 +156,15 @@ mail_syntax() ->
         config => map,
         '__madatory' => [id, class, from, config]
     }.
+
+push_syntax() ->
+    #{
+        id => binary,
+        class => binary,
+        url => binary,
+        '__madatory' => [id, class, url]
+    }.
+
 
 
 %% @private
