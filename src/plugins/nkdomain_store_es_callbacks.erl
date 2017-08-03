@@ -27,7 +27,7 @@
 -export([object_db_init/1, object_db_read/2, object_db_save/2, object_db_delete/2,
          object_db_find_obj/2, object_db_search/2, object_db_search_alias/2,
          object_db_search_childs/3, object_db_search_all_childs/3,
-         object_db_search_types/3, object_db_search_all_types/3,
+         object_db_search_types/3, object_db_search_all_types/3, object_db_search_agg_field/5,
          object_db_delete_all_childs/3, object_db_clean/1]).
 -export([plugin_deps/0, plugin_syntax/0, plugin_config/2]).
 
@@ -374,6 +374,20 @@ object_db_clean(SrvId) ->
     case nkdomain_store_es_util:get_opts(SrvId) of
         {ok, EsOpts} ->
             nkdomain_store_es:clean(EsOpts);
+        _ ->
+            continue
+    end.
+
+
+%% @doc
+-spec object_db_search_agg_field(nkservice:id(), nkdomain:id(), binary(),
+                                 nkdomain:search_spec(), SubChilds::boolean()) ->
+    {ok, Total::integer(), [{nkdomain:type(), integer()}], Map::map()} | {error, term()}.
+
+object_db_search_agg_field(SrvId, Id, Field, Spec, SubChilds) ->
+    case nkdomain_store_es_util:get_opts(SrvId) of
+        {ok, EsOpts} ->
+            nkdomain_store_es:search_agg_field(Id, Field, Spec, SubChilds, EsOpts);
         _ ->
             continue
     end.

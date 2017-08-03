@@ -30,6 +30,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([read_obj/2, save_obj/3, delete_obj/2, find_obj/2]).
+-export([search_agg_field/5]).
 -export([search_types/3, search_all_types/3, search_childs/3, search_all_childs/3, search/2, search_obj_alias/2]).
 -export([delete_all_childs/3]).
 -export([clean/1]).
@@ -178,6 +179,49 @@ search_all_childs(Id, Spec, EsOpts) ->
     case filter_all_childs(Id, Spec, EsOpts) of
         {ok, Spec2} ->
             do_search_objs(Spec2, EsOpts);
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
+%% @doc Finds types
+-spec search_agg_field(nkdomain:obj_id(), binary(), nkdomain:search_spec(), boolean(), nkelastic:opts()) ->
+    {ok, integer(), [{nkdomain:type(), integer()}], meta()} | {error, term()}.
+
+search_agg_field(Id, Field, Spec, SubChilds, EsOpts) ->
+    case filter_childs(Id, Spec, SubChilds, EsOpts) of
+        {ok, Spec2} ->
+            Spec3 = Spec2#{
+                aggs => #{
+                    my_fields => #{
+                        terms => #{
+                            field => Field,
+                            size => maps:get(size, Spec, 1)
+                        }
+                    }
+                },
+                size => 0
+            },
+            case do_search(Spec3, EsOpts) of
+                {ok, N, [], #{<<"my_fields">>:=MyFields}, Meta} ->
+                    #{
+                        <<"buckets">> := Buckets,
+                        <<"doc_count_error_upper_bound">> := Error,
+                        <<"sum_other_doc_count">> := SumOther
+                    } = MyFields,
+                    Meta2 = Meta#{
+                        agg_error => Error,
+                        agg_sum_other => SumOther
+                    },
+                    Data = lists:map(
+                        fun(#{<<"key">>:=Key, <<"doc_count">>:=Count}) -> {Key, Count} end,
+                        Buckets),
+                    {ok, N, Data, Meta2};
+                {ok, 0, [], _Agg, Meta} ->
+                    {ok, 0, [], Meta};
+                {error, Error} ->
+                    {error, Error}
+            end;
         {error, Error} ->
             {error, Error}
     end.
@@ -420,6 +464,15 @@ iterate(Spec, Fun, Acc0, EsOpts) ->
             ?LLOG(warning, "query error ~p: ~p", [Spec, Error]),
             {error, internal_error}
     end.
+
+
+
+%% @private
+filter_childs(Id, Spec, true, EsOpts) ->
+    filter_all_childs(Id, Spec, EsOpts);
+
+filter_childs(Id, Spec, false, EsOpts) ->
+    filter_childs(Id, Spec, EsOpts).
 
 
 %% @private
