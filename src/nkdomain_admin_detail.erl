@@ -44,7 +44,7 @@ element_action([?TYPE_VIEW, Type], updated, Value, Updates, Session) ->
         <<"obj_id">> := ObjId,
         <<"value">> := ObjValue
     } = Value,
-    {ok, Mod} = get_view_mod(Type, Session),
+    {ok, Mod} = get_type_view_mod(Type, Session),
     case Mod:element_updated(ObjId, ObjValue, Session) of
         {ok, Update} ->
             #admin_session{srv_id=SrvId} = Session,
@@ -57,6 +57,25 @@ element_action([?TYPE_VIEW, Type], updated, Value, Updates, Session) ->
             end
     end;
 
+element_action([<<"obj">>, Type, Path], selected, _Value, Updates, Session) ->
+    case get_obj_view_mod(Type, Session) of
+        {ok, Mod} ->
+            #admin_session{srv_id=SrvId} = Session,
+            case nkdomain_lib:load(SrvId, Path) of
+                #obj_id_ext{}=ObjIdExt ->
+                    {Detail, Session2} = Mod:view(ObjIdExt, Session),
+                    {Updates3, Session3} = nkadmin_util:update_detail(Path, Detail, Updates, Session2),
+                    {ok, Updates3, Session3};
+                {error, Error} ->
+                    ?LLOG(notice, "error loading object ~s: ~p", [Path, Error]),
+                    {error, object_load_error, Session}
+            end;
+        not_found ->
+            ?LLOG(notice, "type with no supported view: ~s", [Type]),
+            {Updates2, Session2} = nkadmin_util:update_detail(Path, #{}, Updates, Session),
+            {ok, Updates2, Session2}
+    end;
+
 element_action(_Elements, _Action, _Value, Updates, Session) ->
     {ok, Updates, Session}.
 
@@ -65,10 +84,19 @@ element_action(_Elements, _Action, _Value, Updates, Session) ->
 %% Util
 %% ===================================================================
 
-
-get_view_mod(Type, #admin_session{srv_id=SrvId}) ->
+%% @private
+get_type_view_mod(Type, #admin_session{srv_id=SrvId}) ->
     case SrvId:object_admin_info(Type) of
         #{type_view_mod:=Mod} ->
+            {ok, Mod};
+        _ ->
+            not_found
+    end.
+
+%% @private
+get_obj_view_mod(Type, #admin_session{srv_id=SrvId}) ->
+    case SrvId:object_admin_info(Type) of
+        #{obj_view_mod:=Mod} ->
             {ok, Mod};
         _ ->
             not_found

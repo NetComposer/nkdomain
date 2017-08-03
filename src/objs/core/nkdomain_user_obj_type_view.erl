@@ -289,7 +289,7 @@ table_iter([Entry|Rest], Pos, Acc) ->
         checkbox => <<"0">>,
         pos => Pos,
         id => ObjId,
-        obj_name => <<"<a href=\"#", Path/binary, "\">", ShortName/binary, "</a>">>,
+        obj_name => <<"<a href=\"#_id/", ObjId/binary, "\">", ShortName/binary, "</a>">>,
         domain => Domain,
         name => Name,
         surname => Surname,

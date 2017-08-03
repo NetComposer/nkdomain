@@ -394,22 +394,28 @@ do_get_data(ElementId, Spec, State) ->
 
 
 %% @private
-find_url(Url, Session) ->
+find_url(<<"_id/", ObjId/binary>>, #admin_session{srv_id=SrvId}=Session) ->
+    case nkdomain_lib:find(SrvId, ObjId) of
+        #obj_id_ext{path=Path} ->
+            lager:error("NKLOG URL1"),
+            find_url(Path, Session);
+        {error, _Error} ->
+            lager:error("NKLOG URL2"),
+            {error, url_unknown}
+    end;
+
+find_url(Url, #admin_session{srv_id=SrvId}=Session) ->
     case nkadmin_util:get_url_key(Url, Session) of
         undefined ->
-            Parts = binary:split(Url, <<"/">>, [global]),
-            [Last|R1] = lists:reverse(Parts),
-            Url2 = nklib_util:bjoin(lists:reverse(R1), <<"/">>),
-            case nkadmin_util:get_url_key(Url2, Session) of
-                undefined ->
-                    {error, url_unknown};
-                Key ->
-                    {ok, binary:split(Key, <<"__">>, [global]) ++ [Last]}
+            case nkdomain_lib:find(SrvId, Url) of
+                #obj_id_ext{type=Type, path=Path} ->
+                    {ok, [<<"obj">>, Type, Path]};
+                {error, _} ->
+                    {error, url_unknown}
             end;
         Key ->
             {ok, binary:split(Key, <<"__">>, [global])}
     end.
-
 
 
 %% @private

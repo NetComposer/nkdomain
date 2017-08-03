@@ -161,27 +161,6 @@ element_action([?RESOURCES, Type], selected, _Value, Updates, Session) ->
             {ok, Updates2, Session2}
     end;
 
-element_action([?RESOURCES, Type, Name], selected, _Value, Updates, Session) ->
-    #admin_session{srv_id=SrvId} = Session,
-    {true, Info} = is_resource(Type, Session),
-    Path = <<$/, (nkdomain_util:class(Type))/binary, $/, Name/binary>>,
-    case Info of
-        #{obj_view_mod:=Mod} ->
-            case nkdomain_lib:load(SrvId, Path) of
-                #obj_id_ext{}=ObjIdExt ->
-                    {Detail, Session2} = Mod:view(ObjIdExt, Session),
-                    {Updates3, Session3} = nkadmin_util:update_detail(Path, Detail, Updates, Session2),
-                    {ok, Updates3, Session3};
-                {error, Error} ->
-                    ?LLOG(notice, "error loading object ~s: ~p", [Path, Error], Session),
-                    {error, object_load_error, Session}
-            end;
-        _ ->
-            ?LLOG(notice, "type with no supported view: ~s", [Type], Session),
-            {Updates2, Session2} = nkadmin_util:update_detail(Path, #{}, Updates, Session),
-            {ok, Updates2, Session2}
-    end;
-
 element_action([?SESSIONS, Type], selected, _Value, Updates, Session) ->
     Path = <<$/, (nkdomain_util:class(Type))/binary>>,
     {Updates2, Session2} = nkadmin_util:update_detail(Path, #{}, Updates, Session),

@@ -21,7 +21,7 @@
 -module(nkdomain_util).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([is_path/1, get_parts/2, class/1, name/1, field/2, fields/2]).
+-export([is_path/1, get_parts/1, get_parts/2, class/1, type/1, name/1, field/2, fields/2]).
 -export([add_destroyed/3]).
 -export([timestamp/0]).
 -export_type([error/0]).
@@ -68,6 +68,47 @@ is_path(Path) ->
 %%                    {true, <<"/", Path3/binary>>}
 %%            end
     end.
+
+
+
+%% @doc
+%% /domain/users/user1 -> {ok, <<"/domain">>, <<"user1">>}
+-spec get_parts(nkdomain:path()) ->
+    {ok, Base::nkdomain:path(), Type::binary(), Name::binary()} | {error, term()}.
+
+get_parts(Path) ->
+    case is_path(Path) of
+        {true, Path2} ->
+            case lists:reverse(binary:split(Path2, <<"/">>, [global])) of
+                [<<>>, <<>>] ->
+                    {ok, <<>>, ?DOMAIN_DOMAIN, <<>>};
+                [<<>>|_] ->
+                    {error, {invalid_object_path, Path2}};
+                [ObjName, Class|Parts] ->
+                    ObjName2 = name(ObjName),
+                    case type(Class) of
+                        {ok, Type} ->
+                            case nklib_util:bjoin(lists:reverse(Parts), <<"/">>) of
+                                <<>> ->
+                                    {ok, <<"/">>, Type, ObjName2};
+                                Base ->
+                                    {ok, Base, Type, ObjName2}
+                            end;
+                        error ->
+                            case nklib_util:bjoin(lists:reverse([Class|Parts]), <<"/">>) of
+                                <<>> ->
+                                    {ok, <<"/">>, ?DOMAIN_DOMAIN, ObjName2};
+                                Base ->
+                                    {ok, Base, ?DOMAIN_DOMAIN, ObjName2}
+                            end
+                    end;
+                _ ->
+                    {error, {invalid_object_path, Path2}}
+            end;
+        false ->
+            {error, {invalid_object_path, to_bin(Path)}}
+    end.
+
 
 
 %% @doc
@@ -120,6 +161,21 @@ class(?DOMAIN_DOMAIN) ->
     <<>>;
 class(Type) ->
     <<Type/binary, "s">>.
+
+
+%% @private
+type(Class) ->
+    case byte_size(Class) - 1 of
+        Size when Size > 0 ->
+            case Class of
+                <<Type:Size/binary, $s>> ->
+                    {ok, Type};
+                _ ->
+                    error
+            end;
+        _ ->
+            error
+    end.
 
 
 %% @private
