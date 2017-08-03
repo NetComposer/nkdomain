@@ -36,21 +36,26 @@ view(Session) ->
     _DomainOptions = [
         #{ id => <<"">>, value => <<"">> },
         #{ id => <<"/">>, value => <<"/">> },
-        #{ id => <<"/chattest/">>, value => <<"/chattest">> }
+        #{ id => <<"/c4/">>, value => <<"/c4">> }
     ],
     Spec = #{
         table_id => ?ID,
         % subdomains_id => ?ID_SUBDOMAINS,
         filters => [?ID_SUBDOMAINS],
         columns => [
+%            #{
+%                id => pos,
+%                type => pos,
+%                name => domain_column_pos
+%            },
             #{
-                id => pos,
-                type => pos,
-                name => domain_column_pos
+                id => checkbox,
+                type => checkbox
             },
             #{
                 id => domain,
                 type => text,
+                fillspace => <<"0.5">>,
                 name => domain_column_domain,
                 sort => true
                 %options => DomainOptions
@@ -59,7 +64,8 @@ view(Session) ->
                 id => obj_name,
                 type => text,
                 name => domain_column_id,
-                sort => true
+                sort => true,
+                is_html => true % Will allow us to return HTML inside the column data
             },
             #{
                 id => name,
@@ -84,42 +90,35 @@ view(Session) ->
                 sort => true,
                 editor => text
             },
-%%            #{
-%%                id => created_by,
-%%                type => text,
-%%                name => domain_column_created_by,
-%%                sort => false
-%%            },
+            #{
+                id => created_by,
+                type => text,
+                name => domain_column_created_by,
+                sort => true,
+                is_html => true % Will allow us to return HTML inside the column data
+            },
             #{
                 id => created_time,
                 type => date,
                 name => domain_column_created_time,
                 sort => true
-            },
-            #{
-                id => enabled_icon,
-                type => {icon, <<"enabled_icon">>}
-            },
-            #{
-                id => delete,
-                type => {fixed_icon, <<"fa-trash">>}
             }
         ],
         left_split => 1,
-        right_split => 2,
+%        right_split => 2,
         on_click => [
-            #{
-                id => <<"fa-times">>,
-                type => enable
-            },
-            #{
-                id => <<"fa-check">>,
-                type => disable
-            },
-            #{
-                id => <<"fa-trash">>,
-                type => delete
-            }
+%            #{
+%                id => <<"fa-times">>,
+%                type => enable
+%            },
+%            #{
+%                id => <<"fa-check">>,
+%                type => disable
+%            },
+%            #{
+%                id => <<"fa-trash">>,
+%                type => delete
+%            }
         ]},
     Table = #{
         id => ?ID,
@@ -134,6 +133,8 @@ view(Session) ->
 %% @doc
 table_data(#{start:=Start, size:=Size, sort:=Sort, filter:=Filter}, #admin_session{srv_id=SrvId, domain_id=DomainId}) ->
     SortSpec = case Sort of
+        {<<"obj_name">>, Order} ->
+            <<Order/binary, ":path">>;
         {<<"domain">>, Order} ->
             <<Order/binary, ":path">>;
         {<<"name">>, Order} ->
@@ -155,7 +156,10 @@ table_data(#{start:=Start, size:=Size, sort:=Sort, filter:=Filter}, #admin_sessi
 
             FindSpec = #{
                 filters => Filters,
-                fields => [<<"path">>, <<"created_time">>,
+                fields => [<<"path">>,
+                           <<"obj_name">>,
+                           <<"created_time">>,
+                           <<"created_by">>,
                            <<"user.name">>, <<"user.surname">>, <<"user.email">>],
                 sort => SortSpec,
                 from => Start,
@@ -267,6 +271,7 @@ table_iter([Entry|Rest], Pos, Acc) ->
     #{
         <<"obj_id">> := ObjId,
         <<"path">> := Path,
+        <<"created_by">> := CreatedBy,
         <<"created_time">> := CreatedTime,
         <<"user">> := #{
             <<"name">> := Name,
@@ -278,15 +283,18 @@ table_iter([Entry|Rest], Pos, Acc) ->
         true -> <<"fa-times">>;
         false -> <<"fa-check">>
     end,
+    DomainUsers = nkdomain_util:class(?DOMAIN_USER),
     {ok, Domain, ShortName} = nkdomain_util:get_parts(?DOMAIN_USER, Path),
     Data = #{
+        checkbox => <<"0">>,
         pos => Pos,
         id => ObjId,
-        obj_name => ShortName,
+        obj_name => <<"<a href=\"#/", DomainUsers/binary, "/", ObjId/binary, "\">", ShortName/binary, "</a>">>,
         domain => Domain,
         name => Name,
         surname => Surname,
         email => Email,
+        created_by => <<"<a href=\"#/", DomainUsers/binary, "/", CreatedBy/binary, "\">", CreatedBy/binary, "</a>">>,
         created_time => CreatedTime,
         enabled_icon => Enabled
     },

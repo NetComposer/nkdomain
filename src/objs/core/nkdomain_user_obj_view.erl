@@ -38,9 +38,288 @@ view(#obj_id_ext{obj_id=ObjId, pid=Pid}, Session) ->
             Data = #{
                 id => <<?ID/binary, "__", ObjId/binary>>,
                 class => webix_ui,
-                value => Obj
+                value => get_form(Obj)
             },
             {Data, Session};
         {error, Error} ->
             {error, Error}
     end.
+
+get_form(Obj) ->
+    % TODO: Binaries VS Atoms
+    CreatedBy = maps:get(created_by, Obj, <<>>),
+    CreatedTime = maps:get(created_time, Obj, <<>>),
+    _Description = maps:get(description, Obj, <<>>),
+    _DomainId = maps:get(domain_id, Obj, <<>>),
+    _Name = maps:get(name, Obj, <<>>),
+    _ObjId = maps:get(obj_id, Obj, <<>>),
+    IconId = maps:get(icon_id, Obj, <<>>),
+    ObjName = maps:get(obj_name, Obj, <<>>),
+    _ParentId = maps:get(parent_id, Obj, <<>>),
+    _Path = maps:get(path, Obj, <<>>),
+    _Type = maps:get(type, Obj, <<>>),
+    UpdatedBy = maps:get(updated_by, Obj, <<>>),
+    UpdatedTime = maps:get(updated_time, Obj, <<>>),
+    UserObj = maps:get(<<"user">>, Obj, #{}),
+    UserEmail = maps:get(email, UserObj, <<>>),
+    UserName = maps:get(name, UserObj, <<>>),
+    UserSurname = maps:get(surname, UserObj, <<>>),
+    UserPhoneT = maps:get(phone_t, UserObj, <<>>),
+    UserAddressT = maps:get(address_t, UserObj, <<>>),
+    DomainUsers = nkdomain_util:class(?DOMAIN_USER),
+    case IconId of
+        <<>> ->
+            IconImage = <<"<img class='photo' style='width:150px; height:150px;' src='img/avatar.png'/>">>;
+        _ ->
+            % TODO: Generate a correct link to the file "icon_id"
+            IconImage = <<"<img class='photo' style='width:150px; height:150px;' src='", IconId/binary,"'/>">>
+    end,
+    #{
+        id => <<"body">>,
+        type => <<"clean">>,
+        height => <<"100%">>,
+        margin => 0,
+        borderless => false,
+        rows => [#{
+%           ACTION BUTTONS (DISABLE, ENABLE, DELETE, SAVE, ETC)
+            id => <<"user_buttons">>,
+            view => <<"layout">>,
+            cols => [
+                #{
+                    id => <<"user_disable_button">>,
+                    view => <<"button">>,
+                    value => <<"Disable">>,
+                    autoWidth => true,
+                    align => <<"center">>,
+                    hidden => false,
+                    click => <<"
+                        function() {
+                            alert('Disable object');
+                        }
+                    ">>
+                }, #{
+                    id => <<"user_enable_button">>,
+                    view => <<"button">>,
+                    value => <<"Enable">>,
+                    autoWidth => true,
+                    align => <<"center">>,
+                    hidden => true,
+                    click => <<"
+                        function() {
+                            alert('Enable object');
+                        }
+                    ">>
+                }, #{
+                    id => <<"user_delete_button">>,
+                    view => <<"button">>,
+                    value => <<"Delete">>,
+                    autoWidth => true,
+                    align => <<"center">>,
+                    hidden => false,
+                    click => <<"
+                        function() {
+                            alert('Delete object');
+                        }
+                    ">>
+                }, #{
+                    id => <<"user_save_button">>,
+                    view => <<"button">>,
+                    value => <<"Save changes">>,
+                    autoWidth => true,
+                    align => <<"center">>,
+                    disabled => true,
+                    hidden => false,
+                    click => <<"
+                        function() {
+                            alert('Save object');
+                        }
+                    ">>
+                }
+            ]
+%       CURRENT OBJECT FORM
+        }, #{
+            id => <<"user_form">>,
+            header => <<"USER DETAILS">>,
+            type => <<"clean">>,
+            gravity => 1.0,
+            height => <<"100%">>,
+            margin => 0,
+            borderless => false,
+            cols => [#{
+                view => <<"layout">>,
+                height => <<"100%">>,
+                rows => [#{
+                    height => 30
+                }, #{
+                    view => <<"label">>,
+                    label => IconImage,
+                    width => 200,
+                    height => 150,
+                    align => <<"center">>
+                }, #{
+                    % SPACER
+                }]
+            }, #{
+                view => <<"form">>,
+                height => <<"100%">>,
+                scroll => <<"y">>,
+                margin => 0,
+                elements => [#{
+                    minWidth => 300,
+                    rows => [#{
+                        template => <<"Credentials">>,
+                        type => <<"section">>
+                    }, #{
+                        view => <<"text">>,
+                        label => <<"Username">>,
+                        placeholder => <<"username...">>,
+                        labelWidth => 150,
+                        labelAlign => <<"left">>,
+                        value => ObjName,
+                        disabled => true
+                    }, #{
+                        view => <<"text">>,
+                        label => <<"E-mail">>,
+                        placeholder => <<"e-mail address...">>,
+                        labelWidth => 150,
+                        labelAlign => <<"left">>,
+                        value => UserEmail
+                    }, #{
+                        view => <<"text">>,
+                        label => <<"Password">>,
+                        placeholder => <<"new password...">>,
+                        labelWidth => 150,
+                        labelAlign => <<"left">>,
+                        value => <<"">>,
+                        type => <<"password">>
+                    }]
+                }, #{
+                    rows => [#{
+                        template => <<"Personal data">>,
+                        type => <<"section">>,
+                        hidden => false
+                    }, #{
+                        view => <<"text">>,
+                        label => <<"First name">>,
+                        placeholder => <<"first name...">>,
+                        labelWidth => 150,
+                        labelAlign => <<"left">>,
+                        value => UserName
+                    }, #{
+                        view => <<"text">>,
+                        label => <<"Last name">>,
+                        placeholder => <<"last name...">>,
+                        labelWidth => 150,
+                        labelAlign => <<"left">>,
+                        value => UserSurname
+                    }, #{
+                        view => <<"text">>,
+                        label => <<"Phone">>,
+                        placeholder => <<"phone...">>,
+                        labelWidth => 150,
+                        labelAlign => <<"left">>,
+                        value => UserPhoneT
+                    }, #{
+                        view => <<"text">>,
+                        label => <<"Address">>,
+                        placeholder => <<"address...">>,
+                        labelWidth => 150,
+                        labelAlign => <<"left">>,
+                        value => UserAddressT
+                    }]
+                }, #{
+                    rows => [#{
+                        template => <<"Other">>,
+                        type => <<"section">>
+                    }, #{
+% Can't show HTML code inside a text "value"
+%                        view => <<"text">>,
+%                        label => <<"Created by">>,
+%                        labelWidth => 150,
+%                        labelAlign => <<"left">>,
+%                        value => <<"<a href=\"#/", DomainUsers/binary, "/", CreatedBy/binary, "\">", CreatedBy/binary, "</a>">>,
+%                        disabled => true
+                        cols => [#{
+                            view => <<"label">>,
+                            label => <<"Created by">>,
+                            width => 150,
+                            disabled => true
+                        }, #{
+                            view => <<"template">>,
+                            template => <<"<a href=\"#/", DomainUsers/binary, "/", CreatedBy/binary, "\">", CreatedBy/binary, "</a>">>,
+                            borderless => true,
+                            autoheight => true
+                        }]
+                    }, #{
+                        view => <<"text">>,
+                        label => <<"Created time">>,
+                        labelWidth => 150,
+                        labelAlign => <<"left">>,
+                        value => CreatedTime, %% TODO: Format to client date string
+                        disabled => true
+                    }, #{
+                        cols => [#{
+                            view => <<"label">>,
+                            label => <<"Updated by">>,
+                            width => 150,
+                            disabled => true
+                        }, #{
+                            view => <<"template">>,
+                            template => <<"<a href=\"#/", DomainUsers/binary, "/", UpdatedBy/binary, "\">", UpdatedBy/binary, "</a>">>,
+                            borderless => true,
+                            autoheight => true
+                        }]
+                    }, #{
+                        view => <<"text">>,
+                        label => <<"Updated time">>,
+                        labelWidth => 150,
+                        labelAlign => <<"left">>,
+                        value => UpdatedTime, %% TODO: Format to client date string
+                        disabled => true
+                    }]
+            	}],
+                elementsConfig => #{
+                    labelAlign => <<"right">>
+                }
+            }]
+%       TABVIEW WITH RELATED DATATABLES (DELETE IN CASE THERE ISN'T ANY)
+        }, #{
+            view => <<"tabview">>,
+          	gravity => 1.0,
+            cells => [#{
+                id => <<"user_sessions">>,
+              	header => <<"SESSIONS">>,
+                template => <<"WIP...">>
+            }, #{
+                id => <<"user_conversations">>,
+              	header => <<"CONVERSATIONS">>,
+                template => <<"WIP...">>
+        	}, #{
+                id => <<"user_messages">>,
+              	header => <<"MESSAGES">>,
+              	template => <<"WIP...">>
+            }, #{
+                id => <<"user_roles">>,
+              	header => <<"ROLES">>,
+                template => <<"WIP...">>
+            }, #{
+                id => <<"user_files">>,
+              	header => <<"FILES">>,
+                template => <<"WIP...">>
+            }, #{
+                id => <<"user_mails">>,
+              	header => <<"MAILS">>,
+                template => <<"WIP...">>
+            }],
+            tabbar => #{
+                on => #{
+                    onChange => <<"
+                        function() {
+                            webix.message('tab was changed to ' + this.getValue());
+                      	    console.log(this);
+                        }
+                    ">>
+                }
+            }
+        }]
+    }.
