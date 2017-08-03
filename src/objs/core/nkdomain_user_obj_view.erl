@@ -315,8 +315,11 @@ get_form(Obj) ->
                 on => #{
                     onChange => <<"
                         function() {
-                            webix.message('tab was changed to ' + this.getValue());
-                      	    console.log(this);
+                            console.log('Selected tab: ', this.getValue());
+                            ncClient.sendMessageAsync('objects/admin.session/element_action', {
+                                element_id: this.getValue(),
+                                action: 'selected'
+                            });
                         }
                     ">>
                 }
