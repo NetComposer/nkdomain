@@ -146,6 +146,18 @@ user_make_token() ->
     cmd(<<"objects/user/make_token"/utf8>>, #{ttl=>30}).
 
 
+user_avatar(Id) ->
+    Dir = filename:join(code:priv_dir(nkdomain), "avatar1.png"),
+    {ok, Bin} = file:read_file(Dir),
+    File = #{content_type=><<"image/png">>, body=>base64:encode(Bin)},
+    {ok, #{<<"obj_id">>:=FileId}} = cmd(<<"objects/file/create"/utf8>>, #{name=>avatar1, file=>File}),
+    Data = #{
+        id => to_bin(Id),
+        icon_id => FileId
+    },
+    cmd(<<"objects/user/update">>, Data).
+
+
 
 domain_get() ->
     cmd(<<"objects/domain/get"/utf8>>, #{}).

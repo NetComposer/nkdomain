@@ -38,14 +38,14 @@ view(#obj_id_ext{obj_id=ObjId, pid=Pid}, Session) ->
             Data = #{
                 id => <<?ID/binary, "__", ObjId/binary>>,
                 class => webix_ui,
-                value => get_form(Obj)
+                value => get_form(Obj, Session)
             },
             {Data, Session};
         {error, Error} ->
             {error, Error}
     end.
 
-get_form(Obj) ->
+get_form(Obj, Session) ->
     % TODO: Binaries VS Atoms
     CreatedBy = maps:get(created_by, Obj, <<>>),
     CreatedTime = maps:get(created_time, Obj, <<>>),
@@ -67,13 +67,13 @@ get_form(Obj) ->
     UserPhoneT = maps:get(phone_t, UserObj, <<>>),
     UserAddressT = maps:get(address_t, UserObj, <<>>),
     DomainUsers = nkdomain_util:class(?DOMAIN_USER),
-    case IconId of
+    IconUrl = case IconId of
         <<>> ->
-            IconImage = <<"<img class='photo' style='width:150px; height:150px;' src='img/avatar.png'/>">>;
+            <<"img/avatar.png">>;
         _ ->
-            % TODO: Generate a correct link to the file "icon_id"
-            IconImage = <<"<img class='photo' style='width:150px; height:150px;' src='", IconId/binary,"'/>">>
+            nkdomain_admin_util:get_file_url(IconId, Session)
     end,
+    IconImage = <<"<img class='photo' style='width:150px; height:150px;' src='", IconUrl/binary,"'/>">>,
     #{
         id => <<"body">>,
         type => <<"clean">>,

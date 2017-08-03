@@ -401,10 +401,8 @@ do_get_data(ElementId, Spec, State) ->
 find_url(<<"_id/", ObjId/binary>>, #admin_session{srv_id=SrvId}=Session) ->
     case nkdomain_lib:find(SrvId, ObjId) of
         #obj_id_ext{path=Path} ->
-            lager:error("NKLOG URL1"),
             find_url(Path, Session);
         {error, _Error} ->
-            lager:error("NKLOG URL2"),
             {error, url_unknown}
     end;
 
