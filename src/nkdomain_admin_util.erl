@@ -21,7 +21,7 @@
 %% @doc NkDomain service callback module
 -module(nkdomain_admin_util).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
--export([get_data/3, search_spec/1, time/2, get_file/2]).
+-export([get_data/3, search_spec/1, time/2, time2/2, get_file_url/2]).
 
 -include("nkdomain.hrl").
 -include_lib("nkevent/include/nkevent.hrl").
@@ -87,11 +87,12 @@ search_spec(Data) -> <<"prefix:", Data/binary>>.
 
 
 %% @doc
-time(Spec, _Offset) ->
+time(Spec, SecsOffset) ->
     Now = nklib_util:timestamp(),
     {{Y, M, D}, _} = nklib_util:timestamp_to_gmt(Now),
-    TodayS = 1000*nklib_util:gmt_to_timestamp({{Y, M, D}, {0, 0, 0}}),
-    TodayE = 1000*nklib_util:gmt_to_timestamp({{Y, M, D}, {23, 59, 59}}) + 999,
+    TodayGMT = nklib_util:gmt_to_timestamp({{Y, M, D}, {0, 0, 0}}) * 1000,
+    TodayS = TodayGMT + (SecsOffset * 1000),
+    TodayE = TodayS + 24*60*60*1000 - 1,
     {S, E} = case Spec of
         today ->
             {TodayS, TodayE};
@@ -108,9 +109,19 @@ time(Spec, _Offset) ->
     list_to_binary(["<", nklib_util:to_binary(S), "-", nklib_util:to_binary(E),">"]).
 
 
+%% @private Useful for testing
+time2(Spec, SecsOffset) ->
+    <<"<", R1/binary>> = time(Spec, SecsOffset),
+    [T1, R2] = binary:split(R1, <<"-">>),
+    [T2, _] = binary:split(R2, <<">">>),
+    T1B = nklib_util:timestamp_to_local(nklib_util:to_integer(T1) div 1000),
+    T2B = nklib_util:timestamp_to_local(nklib_util:to_integer(T2) div 1000),
+    {T1B, T2B}.
+
+
 %% @doc
-get_file(FileId, #admin_session{http_auth_id=AuthId}) ->
-    <<"/_file/", FileId/binary, "?auth=", AuthId/binary>>.
+get_file_url(FileId, #admin_session{http_auth_id=AuthId}) ->
+    <<"../_file/", FileId/binary, "?auth=", AuthId/binary>>.
 
 
 %% @private

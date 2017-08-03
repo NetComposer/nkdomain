@@ -269,13 +269,13 @@ table_filter([{<<"created_time">>, Data}|Rest], #{timezone_offset:=Offset} = Inf
     Secs = Offset * 60,
     Filter = case Data of
         <<"today">> ->
-            nkdomain_admin_util:time(today, Offset);
+            nkdomain_admin_util:time(today, Secs);
         <<"yesterday">> ->
-            nkdomain_admin_util:time(yesterday, Offset);
+            nkdomain_admin_util:time(yesterday, Secs);
         <<"last_7">> ->
-            nkdomain_admin_util:time(last7, Offset);
+            nkdomain_admin_util:time(last7, Secs);
         <<"last_30">> ->
-            nkdomain_admin_util:time(last30, Offset);
+            nkdomain_admin_util:time(last30, Secs);
         <<"custom">> ->
             <<"">>;
         _ ->
