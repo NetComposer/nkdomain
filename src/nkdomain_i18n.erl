@@ -24,10 +24,14 @@
 -export([i18n/0, reload/0]).
 
 
-
 i18n() -> #{
     en => #{
+        "real_time" => "Real time",
         "logout" => "Logout",
+
+        "admin_frame_user_menu_account" => "My account",
+        "admin_frame_user_menu_messages" => "My messages",
+
         "domain_refresh" => "Refresh",
         "domain_show_subdomains" => "Show subdomains",
 
@@ -61,9 +65,17 @@ i18n() -> #{
         "domain_column_email" => "EMAIL",
         "domain_column_created_by" => "CREATOR",
         "domain_column_created_time" => "CREATED"
+
+
+
     },
     es => #{
+        "real_time" => "Tiempo real",
         "logout" => "Salir",
+
+        "admin_frame_user_menu_account" => "Mi cuenta",
+        "admin_frame_user_menu_messages" => "Mis mensajes",
+
         "domain_refresh" => "Refrescar",
         "domain_show_subdomains" => "Mostrar subdominios",
 
@@ -96,7 +108,7 @@ i18n() -> #{
         "domain_column_email" => "EMAIL",
         "domain_column_created_by" => "CREADOR",
         "domain_column_created_time" => <<"CREACIÓN"/utf8>>
-    }
+        }
 }.
 
 

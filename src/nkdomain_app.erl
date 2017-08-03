@@ -134,7 +134,10 @@ register_types() ->
     ok = nkdomain_all_types:register(nkdomain_mail_provider_obj),
 
     ok = nkdomain_all_types:register(nkdomain_file_store_obj),
-    ok = nkdomain_all_types:register(nkdomain_file_obj).
+    ok = nkdomain_all_types:register(nkdomain_file_obj),
+
+    ok = nkdomain_all_types:register(nkadmin_session_obj).
+
 
 
 %% @doc gets a configuration value
