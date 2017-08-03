@@ -33,21 +33,11 @@
 
 %% @doc
 view(Session) ->
-    _DomainOptions = [
-        #{ id => <<"">>, value => <<"">> },
-        #{ id => <<"/">>, value => <<"/">> },
-        #{ id => <<"/c4/">>, value => <<"/c4">> }
-    ],
     Spec = #{
         table_id => ?ID,
         % subdomains_id => ?ID_SUBDOMAINS,
         filters => [?ID_SUBDOMAINS],
         columns => [
-%            #{
-%                id => pos,
-%                type => pos,
-%                name => domain_column_pos
-%            },
             #{
                 id => checkbox,
                 type => checkbox
@@ -57,8 +47,8 @@ view(Session) ->
                 type => text,
                 fillspace => <<"0.5">>,
                 name => domain_column_domain,
-                sort => true
-                %options => DomainOptions
+                sort => true,
+                options => get_domains(Session)
             },
             #{
                 id => obj_name,
@@ -96,6 +86,7 @@ view(Session) ->
                 type => text,
                 name => domain_column_created_by,
                 sort => true,
+                options => get_creators(Session),
                 is_html => true % Will allow us to return HTML inside the column data
             },
             #{
@@ -129,6 +120,62 @@ view(Session) ->
     KeyData = #{data_fun => fun ?MODULE:table_data/2},
     Session2 = nkadmin_util:set_key_data(?ID, KeyData, Session),
     {Table, Session2}.
+
+
+%% @private
+get_domains(#admin_session{srv_id=SrvId, domain_id=DomainId}) ->
+    case nkdomain:search_agg_field(SrvId, DomainId, <<"domain_id">>, #{size=>50}, true) of
+        {ok, _N, Data, #{agg_sum_other:=SumOther}} ->
+            Base = case SumOther of
+                0 ->
+                    [];
+                _ ->
+                    [#{id => <<"...">>, value => <<"...">>}]
+            end,
+            Data2 = lists:foldl(
+                fun({ObjId, _Num}, Acc) ->
+                    case nkdomain:get_name(SrvId, ObjId) of
+                        {ok, #{name:=Name}} ->
+                            [#{ id => ObjId, value => Name} | Acc];
+                        _ ->
+                            Acc
+                    end
+                end,
+                Base,
+                lists:reverse(Data)),
+            [#{id => <<>>, value => <<>>} | Data2];
+        {error, _Error} ->
+            #{}
+    end.
+
+
+%% @private
+get_creators(#admin_session{srv_id=SrvId, domain_id=DomainId}) ->
+    case nkdomain:search_agg_field(SrvId, DomainId, <<"created_by">>, #{size=>50}, true) of
+        {ok, _N, Data, #{agg_sum_other:=SumOther}} ->
+            Base = case SumOther of
+                0 ->
+                    [];
+                _ ->
+                    [#{id => <<"...">>, value => <<"...">>}]
+            end,
+            Data2 = lists:foldl(
+                fun({ObjId, _Num}, Acc) ->
+                    case nkdomain:get_name(SrvId, ObjId) of
+                        {ok, #{name:=Name}} ->
+                            [#{ id => ObjId, value => Name} | Acc];
+                        _ ->
+                            Acc
+                    end
+                end,
+                Base,
+                lists:reverse(Data)),
+            [#{id => <<>>, value => <<>>} | Data2];
+        {error, _Error} ->
+            #{}
+    end.
+
+
 
 
 %% @doc
@@ -189,8 +236,11 @@ table_filter([], _Info, Acc) ->
 table_filter([{_, <<>>}|Rest], Info, Acc) ->
     table_filter(Rest, Info, Acc);
 
+table_filter([{<<"domain">>, <<"...">>}|Rest], Info, Acc) ->
+    table_filter(Rest, Info, Acc);
+
 table_filter([{<<"domain">>, Data}|Rest], Info, Acc) ->
-    Acc2 = Acc#{<<"path">> => nkdomain_admin_util:search_spec(Data)},
+    Acc2 = Acc#{<<"domain_id">> => Data},
     table_filter(Rest, Info, Acc2);
 
 table_filter([{<<"obj_name">>, Data}|Rest], Info, Acc) ->
@@ -205,41 +255,15 @@ table_filter([{<<"name">>, Data}|Rest], Info, Acc) ->
     Acc2 = Acc#{<<"user.fullname_norm">> => nkdomain_admin_util:search_spec(Data)},
     table_filter(Rest, Info, Acc2);
 
+table_filter([{<<"created_by">>, <<"...">>}|Rest], Info, Acc) ->
+    table_filter(Rest, Info, Acc);
+
 table_filter([{<<"created_by">>, Data}|Rest], Info, Acc) ->
-    Acc2 = Acc#{<<"created_by">> => nkdomain_admin_util:search_spec(Data)},
+    Acc2 = Acc#{<<"created_by">> => Data},
     table_filter(Rest, Info, Acc2);
 
 table_filter([{<<"created_time">>, <<"custom">>}|_Rest], _Acc, _Info) ->
     {error, date_needs_more_data};
-
-%%table_filter([{<<"created_time">>, Data}|Rest], #{timezone_offset:=Offset}=Info, Acc) ->
-%%    lager:error("NKLOG IFF ~p", [Offset]),
-%%    SNow = nklib_util:timestamp(),
-%%    {_,{H,M,S}} = nklib_util:timestamp_to_gmt(SNow),
-%%    Now = SNow - H*3600 - M*60 - S,
-%%    OffsetSecs = Offset * 60,
-%%    io:format("Filter: ~w~nNow: ~w~n", [Data, Now]),
-%%    case Data of
-%%        <<"today">> ->
-%%            Now2 = (Now - 24*60*60 + OffsetSecs)*1000,
-%%            Filter = list_to_binary([">", nklib_util:to_binary(Now2)]);
-%%        <<"yesterday">> ->
-%%            Now2 = (Now - 2*24*60*60 + OffsetSecs)*1000,
-%%            Now3 = (Now - 24*60*60 + OffsetSecs)*1000,
-%%            Filter = list_to_binary(["<", nklib_util:to_binary(Now2), "-", nklib_util:to_binary(Now3),">"]);
-%%        <<"last_7">> ->
-%%            Now2 = (Now - 7*24*60*60 + OffsetSecs)*1000,
-%%            Filter = list_to_binary([">", nklib_util:to_binary(Now2)]);
-%%        <<"last_30">> ->
-%%            Now2 = (Now - 30*24*60*60 + OffsetSecs)*1000,
-%%            Filter = list_to_binary([">", nklib_util:to_binary(Now2)]);
-%%        <<"custom">> ->
-%%            Filter = <<"">>;
-%%        _ ->
-%%            Filter = <<"">>
-%%    end,
-%%    Acc2 = Acc#{<<"created_time">> => Filter},
-%%    table_filter(Rest, Info, Acc2);
 
 table_filter([{<<"created_time">>, Data}|Rest], #{timezone_offset:=_Offset} = Info, Acc) ->
     Filter = case Data of
@@ -295,7 +319,7 @@ table_iter([Entry|Rest], Pos, Acc) ->
         name => Name,
         surname => Surname,
         email => Email,
-        created_by => <<"<a href=\"#/", DomainUsers/binary, "/", CreatedBy/binary, "\">", CreatedBy/binary, "</a>">>,
+        created_by => <<"<a href=\"#_id/", CreatedBy/binary, "\">", CreatedBy/binary, "</a>">>,
         created_time => CreatedTime,
         enabled_icon => Enabled
     },

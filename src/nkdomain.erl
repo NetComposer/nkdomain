@@ -25,7 +25,7 @@
 
 -export([find/2, load/2, unload/2, unload/3, get_obj/2, get_info/2, get_name/2]).
 -export([enable/3, update/3, delete/2, send_info/4]).
--export([search/2, delete_all_childs/2, delete_all_childs_type/3]).
+-export([search/2, delete_all_childs/2, delete_all_childs_type/3, search_agg_field/5]).
 -export([clean/1]).
 -export_type([obj_id/0, name/0, obj/0, path/0, id/0, type/0]).
 -export_type([timestamp/0]).
@@ -181,6 +181,18 @@ search(SrvId, Spec) ->
             {error, Error}
     end.
 
+
+%% @doc Finds types
+-spec search_agg_field(nkdomain:obj_id(), binary(), nkdomain:search_spec(), boolean(), nkelastic:opts()) ->
+    {ok, integer(), [{nkdomain:type(), integer()}], map()} | {error, term()}.
+
+search_agg_field(SrvId, Id, Field, Spec, SubChilds) ->
+    case SrvId:object_db_search_agg_field(SrvId, Id, Field, Spec, SubChilds) of
+        {ok, Total, Data, Meta} ->
+            {ok, Total, Data, Meta};
+        {error, Error} ->
+            {error, Error}
+    end.
 
 
 %%%% @doc Archives an object

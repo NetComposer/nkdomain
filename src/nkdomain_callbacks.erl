@@ -36,7 +36,7 @@
 -export([object_db_init/1, object_db_start/1, object_db_read/2, object_db_save/2, object_db_delete/2]).
 -export([object_db_find_obj/2, object_db_search/2, object_db_search_alias/2,
          object_db_search_types/3, object_db_search_all_types/3,
-         object_db_search_childs/3, object_db_search_all_childs/3,
+         object_db_search_childs/3, object_db_search_all_childs/3, object_db_search_agg_field/5,
          object_db_delete_all_childs/3, object_db_clean/1]).
 -export([plugin_deps/0, plugin_syntax/0, plugin_config/2]).
 -export([service_api_syntax/2, service_api_allow/1, service_api_cmd/1]).
@@ -720,6 +720,15 @@ object_db_search_alias(_SrvId, _Alias) ->
     {error, term()}.
 
 object_db_search(_SrvId, _Spec) ->
+    {error, db_not_defined}.
+
+
+%% @doc
+-spec object_db_search_agg_field(nkservice:id(), nkdomain:id(), binary(),
+                                 nkdomain:search_spec(), SubChilds::boolean()) ->
+    {ok, Total::integer(), [{nkdomain:type(), integer()}], Map::map()} | {error, term()}.
+
+object_db_search_agg_field(_SrvId, _Id, _Field, _Spec, _SubChilds) ->
     {error, db_not_defined}.
 
 
