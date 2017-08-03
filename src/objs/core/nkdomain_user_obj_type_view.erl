@@ -60,7 +60,7 @@ view(Session) ->
             #{
                 id => name,
                 type => text,
-                header_colspan => 2,
+                header_colspan => 1,
                 filter_colspan => 2,
                 fillspace => <<"0.5">>,
                 name => domain_column_name,
@@ -70,6 +70,7 @@ view(Session) ->
             #{
                 id => surname,
                 type => text,
+                name => domain_column_lastname,
                 sort => true,
                 editor => text
             },
