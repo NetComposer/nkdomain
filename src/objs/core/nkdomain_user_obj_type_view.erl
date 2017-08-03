@@ -23,12 +23,12 @@
 -module(nkdomain_user_obj_type_view).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([view/1, table_data/2]).
+-export([view/1, table_data/2, element_updated/3]).
 
 -include("nkdomain.hrl").
 -include_lib("nkadmin/include/nkadmin.hrl").
 
--define(ID, <<"domain_detail_user_table">>).
+-define(ID, <<"domain_detail_type_view__user">>).
 -define(ID_SUBDOMAINS, <<"domain_detail_user_table_subdomains">>).
 
 %% @doc
@@ -189,23 +189,23 @@ table_filter([{_, <<>>}|Rest], Info, Acc) ->
     table_filter(Rest, Info, Acc);
 
 table_filter([{<<"domain">>, Data}|Rest], Info, Acc) ->
-    Acc2 = Acc#{<<"path">> => nkdomain_admin_detail:search_spec(Data)},
+    Acc2 = Acc#{<<"path">> => nkdomain_admin_util:search_spec(Data)},
     table_filter(Rest, Info, Acc2);
 
 table_filter([{<<"obj_name">>, Data}|Rest], Info, Acc) ->
-    Acc2 = Acc#{<<"obj_name">> => nkdomain_admin_detail:search_spec(Data)},
+    Acc2 = Acc#{<<"obj_name">> => nkdomain_admin_util:search_spec(Data)},
     table_filter(Rest, Info, Acc2);
 
 table_filter([{<<"email">>, Data}|Rest], Info, Acc) ->
-    Acc2 = Acc#{<<"user.email">> => nkdomain_admin_detail:search_spec(Data)},
+    Acc2 = Acc#{<<"user.email">> => nkdomain_admin_util:search_spec(Data)},
     table_filter(Rest, Info, Acc2);
 
 table_filter([{<<"name">>, Data}|Rest], Info, Acc) ->
-    Acc2 = Acc#{<<"user.fullname_norm">> => nkdomain_admin_detail:search_spec(Data)},
+    Acc2 = Acc#{<<"user.fullname_norm">> => nkdomain_admin_util:search_spec(Data)},
     table_filter(Rest, Info, Acc2);
 
 table_filter([{<<"created_by">>, Data}|Rest], Info, Acc) ->
-    Acc2 = Acc#{<<"created_by">> => nkdomain_admin_detail:search_spec(Data)},
+    Acc2 = Acc#{<<"created_by">> => nkdomain_admin_util:search_spec(Data)},
     table_filter(Rest, Info, Acc2);
 
 table_filter([{<<"created_time">>, <<"custom">>}|_Rest], _Acc, _Info) ->
@@ -243,13 +243,13 @@ table_filter([{<<"created_time">>, <<"custom">>}|_Rest], _Acc, _Info) ->
 table_filter([{<<"created_time">>, Data}|Rest], #{timezone_offset:=_Offset} = Info, Acc) ->
     Filter = case Data of
         <<"today">> ->
-            nkdomain_admin_detail:time(today);
+            nkdomain_admin_util:time(today);
         <<"yesterday">> ->
-            nkdomain_admin_detail:time(yesterday);
+            nkdomain_admin_util:time(yesterday);
         <<"last_7">> ->
-            nkdomain_admin_detail:time(last7);
+            nkdomain_admin_util:time(last7);
         <<"last_30">> ->
-            nkdomain_admin_detail:time(last30);
+            nkdomain_admin_util:time(last30);
         <<"custom">> ->
             <<"">>;
         _ ->
@@ -289,7 +289,7 @@ table_iter([Entry|Rest], Pos, Acc) ->
         checkbox => <<"0">>,
         pos => Pos,
         id => ObjId,
-        obj_name => <<"<a href=\"#/", DomainUsers/binary, "/", ObjId/binary, "\">", ShortName/binary, "</a>">>,
+        obj_name => <<"<a href=\"#", Path/binary, "\">", ShortName/binary, "</a>">>,
         domain => Domain,
         name => Name,
         surname => Surname,
@@ -300,3 +300,19 @@ table_iter([Entry|Rest], Pos, Acc) ->
     },
     table_iter(Rest, Pos+1, [Data|Acc]).
 
+
+%% @private
+element_updated(_ObjId, Value, _Session) ->
+    #{
+        <<"name">> := Name,
+        <<"surname">> := Surname,
+        <<"email">> := Email
+    } = Value,
+    Update = #{
+        ?DOMAIN_USER => #{
+            name => Name,
+            surname => Surname,
+            email => Email
+        }
+    },
+    {ok, Update}.

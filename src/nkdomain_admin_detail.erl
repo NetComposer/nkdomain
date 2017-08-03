@@ -21,10 +21,14 @@
 %% @doc NkDomain service callback module
 -module(nkdomain_admin_detail).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
--export([get_data/3, search_spec/1, time/1]).
+-export([element_action/5]).
+
 
 -include("nkdomain.hrl").
+-include_lib("nkadmin/include/nkadmin.hrl").
 -include_lib("nkevent/include/nkevent.hrl").
+
+-define(TYPE_VIEW, <<"domain_detail_type_view">>).
 
 -define(LLOG(Type, Txt, Args), lager:Type("NkDOMAN Admin " ++ Txt, Args)).
 
@@ -34,79 +38,38 @@
 %% Public
 %% ===================================================================
 
-
 %% @doc
-get_data(Key, Spec, Session) ->
-    % lager:warning("NKLOG Spec ~p", [Spec]),
-    case nkadmin_util:get_key_data(Key, Session) of
-        #{data_fun:=Fun} ->
-            Start = maps:get(start, Spec, 0),
-            Size = case maps:find('end', Spec) of
-                {ok, End} when End > Start -> End-Start;
-                _ -> 100
-            end,
-            Filter = maps:get(filter, Spec, #{}),
-            Sort = case maps:get(sort, Spec, undefined) of
-                #{
-                    id := SortId,
-                    dir := SortDir
-                } ->
-                    {SortId, to_bin(SortDir)};
-                undefined ->
-                    undefined
-            end,
-            FunSpec = #{
-                start => Start,
-                size => Size,
-                filter => Filter,
-                sort => Sort
-            },
-            case Fun(FunSpec, Session) of
-                {ok, Total, Data} ->
-                    Reply = #{
-                        total_count => Total,
-                        pos => Start,
-                        data => Data
-                    },
-                    {ok, Reply, Session};
+element_action([?TYPE_VIEW, Type], updated, Value, Updates, Session) ->
+    #{
+        <<"obj_id">> := ObjId,
+        <<"value">> := ObjValue
+    } = Value,
+    {ok, Mod} = get_view_mod(Type, Session),
+    case Mod:element_updated(ObjId, ObjValue, Session) of
+        {ok, Update} ->
+            #admin_session{srv_id=SrvId} = Session,
+            case nkdomain:update(SrvId, ObjId, Update) of
+                {ok, _} ->
+                    {ok, Updates, Session};
                 {error, Error} ->
-                    ?LLOG(warning, "error getting query: ~p", [Error]),
-                    {ok, #{total_count=>0, pos=>0, data=>[]}, Session}
-            end;
+                    ?LLOG(warning, "Object update error: ~p", [Error]),
+                    {ok, Updates, Session}
+            end
+    end;
+
+element_action(_Elements, _Action, _Value, Updates, Session) ->
+    {ok, Updates, Session}.
+
+
+%% ===================================================================
+%% Util
+%% ===================================================================
+
+
+get_view_mod(Type, #admin_session{srv_id=SrvId}) ->
+    case SrvId:object_admin_info(Type) of
+        #{type_view_mod:=Mod} ->
+            {ok, Mod};
         _ ->
-            {error, object_not_found, Session}
+            not_found
     end.
-
-
-%% @private
-search_spec(<<">", _/binary>>=Data) -> Data;
-search_spec(<<"<", _/binary>>=Data) -> Data;
-search_spec(<<"!", _/binary>>=Data) -> Data;
-search_spec(Data) -> <<"prefix:", Data/binary>>.
-
-
-%% @doc
-time(Spec) ->
-    Now = nklib_util:timestamp(),
-    {{Y, M, D}, _} = nklib_util:timestamp_to_local(Now),
-    TodayS = 1000*nklib_util:local_to_timestamp({{Y, M, D}, {0, 0, 0}}),
-    TodayE = 1000*nklib_util:local_to_timestamp({{Y, M, D}, {23, 59, 59}}) + 999,
-    {S, E} = case Spec of
-        today ->
-            {TodayS, TodayE};
-        yesterday ->
-            Sub = 24*60*60*1000,
-            {TodayS-Sub, TodayE-Sub};
-        last7 ->
-            Sub = 7*24*60*60*1000,
-            {TodayS-Sub, TodayE};
-        last30 ->
-            Sub = 30*24*60*60*1000,
-            {TodayS-Sub, TodayE}
-    end,
-    list_to_binary(["<", nklib_util:to_binary(S), "-", nklib_util:to_binary(E),">"]).
-
-
-
-%% @private
-to_bin(K) -> nklib_util:to_binary(K).

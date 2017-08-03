@@ -75,6 +75,7 @@ error({could_not_load_domain, Id})      -> {"Object could not load domain '~s'",
 error(domain_unknown)                   -> "Unknown domain";
 error({domain_unknown, D})              -> {"Unknown domain '~s'", [D]};
 error({email_duplicated, E})            -> {"Duplicated email '~s'", [E]};
+error(element_action_unknown)           -> "Unknown element action";
 error({file_not_found, F})              -> {"File '~s' not found", [F]};
 error(invalid_content_type)             -> "Invalid Content-Type";
 error({invalid_name, N})                -> {"Invalid name '~s'", [N]};
@@ -155,12 +156,17 @@ admin_event(_Event, _Updates, _Session) ->
 
 %% @doc
 admin_element_action(ElementIdParts, Action, Value, Updates, Session) ->
-    nkdomain_admin_tree:element_action(ElementIdParts, Action, Value, Updates, Session).
+    case nkdomain_admin_tree:element_action(ElementIdParts, Action, Value, Updates, Session) of
+        {ok, Updates2, Session2} ->
+            nkdomain_admin_detail:element_action(ElementIdParts, Action, Value, Updates2, Session2);
+        {error, Error} ->
+            {error, Error, Session}
+    end.
 
 
 %% @doc
 admin_get_data(ElementId, Spec, Session) ->
-    nkdomain_admin_detail:get_data(ElementId, Spec, Session).
+    nkdomain_admin_util:get_data(ElementId, Spec, Session).
 
 
 %% ===================================================================

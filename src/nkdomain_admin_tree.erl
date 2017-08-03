@@ -128,40 +128,40 @@ event(Event, Updates, Session) ->
 
 
 %% @doc
-element_action([?DASHBOARD], selected, Value, Updates, Session) ->
+element_action([?DASHBOARD], selected, _Value, Updates, Session) ->
     {Updates2, Session2} = nkadmin_util:update_detail(<<"/dashboard">>, #{}, Updates, Session),
-    {continue, [[?DASHBOARD], selected, Value, Updates2, Session2]};
+    {ok, Updates2, Session2};
 
-element_action([?DOMAINS], selected, _Value, _Updates, _Session) ->
-    continue;
+element_action([?DOMAINS], selected, _Value, Updates, Session) ->
+    {ok, Updates, Session};
 
-element_action([?DOMAINS_ALL], selected, Value, Updates, Session) ->
+element_action([?DOMAINS_ALL], selected, _Value, Updates, Session) ->
     {Updates2, Session2} = nkadmin_util:update_detail(<<"/domains">>, #{}, Updates, Session),
-    {continue, [[?DOMAINS_ALL], selected, Value, Updates2, Session2]};
+    {ok, Updates2, Session2};
 
-element_action([?DOMAINS_ID, ObjId]=Parts, selected, Value, Updates, Session) ->
+element_action([?DOMAINS_ID, ObjId], selected, _Value, Updates, Session) ->
     {Updates2, Session2} = selected_domain(ObjId, Updates, Session),
-    {continue, [Parts, selected, Value, Updates2, Session2]};
+    {ok, Updates2, Session2};
 
-element_action([?ALERTS], selected, Value, Updates, Session) ->
+element_action([?ALERTS], selected, _Value, Updates, Session) ->
     {Updates2, Session2} = nkadmin_util:update_detail(<<"/alerts">>, #{}, Updates, Session),
-    {continue, [[?ALERTS], selected, Value, Updates2, Session2]};
+    {ok, Updates2, Session2};
 
-element_action([?RESOURCES, Type]=Parts, selected, Value, Updates, Session) ->
+element_action([?RESOURCES, Type], selected, _Value, Updates, Session) ->
     {true, Info} = is_resource(Type, Session),
     Path = <<$/, (nkdomain_util:class(Type))/binary>>,
     case Info of
         #{type_view_mod:=Mod} ->
             {Detail, Session2} = Mod:view(Session),
             {Updates3, Session3} = nkadmin_util:update_detail(Path, Detail, Updates, Session2),
-            {continue, [Parts, selected, Value, Updates3, Session3]};
+            {ok, Updates3, Session3};
         _ ->
             ?LLOG(notice, "type with no supported view: ~s", [Type], Session),
             {Updates2, Session2} = nkadmin_util:update_detail(Path, #{}, Updates, Session),
-            {continue, [Parts, selected, Value, Updates2, Session2]}
+            {ok, Updates2, Session2}
     end;
 
-element_action([?RESOURCES, Type, Name]=Parts, selected, Value, Updates, Session) ->
+element_action([?RESOURCES, Type, Name], selected, _Value, Updates, Session) ->
     #admin_session{srv_id=SrvId} = Session,
     {true, Info} = is_resource(Type, Session),
     Path = <<$/, (nkdomain_util:class(Type))/binary, $/, Name/binary>>,
@@ -171,25 +171,24 @@ element_action([?RESOURCES, Type, Name]=Parts, selected, Value, Updates, Session
                 #obj_id_ext{}=ObjIdExt ->
                     {Detail, Session2} = Mod:view(ObjIdExt, Session),
                     {Updates3, Session3} = nkadmin_util:update_detail(Path, Detail, Updates, Session2),
-                    {continue, [Parts, selected, Value, Updates3, Session3]};
+                    {ok, Updates3, Session3};
                 {error, Error} ->
                     ?LLOG(notice, "error loading object ~s: ~p", [Path, Error], Session),
-                    continue
+                    {error, object_load_error, Session}
             end;
         _ ->
             ?LLOG(notice, "type with no supported view: ~s", [Type], Session),
             {Updates2, Session2} = nkadmin_util:update_detail(Path, #{}, Updates, Session),
-            {continue, [Parts, selected, Value, Updates2, Session2]}
+            {ok, Updates2, Session2}
     end;
 
-element_action([?SESSIONS, Type]=Key, selected, Value, Updates, Session) ->
+element_action([?SESSIONS, Type], selected, _Value, Updates, Session) ->
     Path = <<$/, (nkdomain_util:class(Type))/binary>>,
     {Updates2, Session2} = nkadmin_util:update_detail(Path, #{}, Updates, Session),
-    {continue, [Key, selected, Value, Updates2, Session2]};
+    {ok, Updates2, Session2};
 
-element_action(_Id, _Action, _Value, _Updates, _Session) ->
-    ?LLOG(notice, "unsupported action ~s (~p)", [_Action, _Id], _Session),
-    continue.
+element_action(_Id, _Action, _Value, Updates, Session) ->
+    {ok, Updates, Session}.
 
 
 

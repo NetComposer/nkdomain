@@ -210,8 +210,8 @@ object_sync_op({?MODULE, element_action, <<"url">>, updated, Url}, _From, State)
             case do_element_action(Parts, selected, <<>>, State) of
                 {ok, Reply, State2} ->
                     {reply, {ok, Reply}, State2};
-                {error, Error} ->
-                    {reply, {error, Error}, State}
+                {error, Error, State2} ->
+                    {reply, {error, Error}, State2}
             end;
         {error, Error} ->
             {reply, {error, Error}, State}
@@ -222,8 +222,8 @@ object_sync_op({?MODULE, element_action, ElementId, Action, Value}, _From, State
     case do_element_action(Parts, Action, Value, State) of
         {ok, Reply, State2} ->
             {reply, {ok, Reply}, State2};
-        {error, Error} ->
-            {reply, {error, Error}, State}
+        {error, Error, State2} ->
+            {reply, {error, Error}, State2}
     end;
 
 object_sync_op({?MODULE, get_data, ElementId, Data}, _From, State) ->
@@ -376,8 +376,7 @@ do_element_action(Parts, Action, Value, State) ->
                     {ok, #{elements=>UpdList}, State2}
             end;
         {error, Error, Session2} ->
-            State2 = State#?STATE{session=Session2},
-            {reply, {error, Error}, State2}
+            {error, Error, State#?STATE{session=Session2}}
     end.
 
 
