@@ -108,6 +108,7 @@ error(object_not_found) 		        -> "Object not found";
 error(object_not_started) 		        -> "Object is not started";
 error(object_parent_conflict) 	        -> "Object has conflicting parent";
 error(object_stopped) 		            -> "Object stopped";
+error(operation_invalid) 	            -> "Invalid operation";
 error(operation_token_invalid) 	        -> "Operation token is invalid";
 error(parent_not_found) 		        -> "Parent not found";
 error(parent_stopped) 		            -> "Parent stopped";
