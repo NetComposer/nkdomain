@@ -34,6 +34,7 @@ i18n() -> #{
 
         "domain_refresh" => "Refresh",
         "domain_show_subdomains" => "Show subdomains",
+        "domain_items_selected" => <<" item/s selected"/utf8>>, % This string is used in nkadmin_webix_datatable
 
         "domain_tree_overview" => "Overview",
         "domain_tree_overview_dashboard" => "Dashboard",
@@ -78,6 +79,7 @@ i18n() -> #{
 
         "domain_refresh" => "Refrescar",
         "domain_show_subdomains" => "Mostrar subdominios",
+        "domain_items_selected" => <<" elemento/s seleccionado/s"/utf8>>, % This string is used in nkadmin_webix_datatable
 
         "domain_tree_overview" => "General",
         "domain_tree_overview_dashboard" => <<"Información"/utf8>>,
