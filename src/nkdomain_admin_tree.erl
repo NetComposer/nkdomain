@@ -167,6 +167,8 @@ element_action([?SESSIONS, Type], selected, _Value, Updates, Session) ->
     {ok, Updates2, Session2};
 
 element_action(_Id, _Action, _Value, Updates, Session) ->
+    lager:error("NKLOG AA ~p", [{_Id, _Action, _Value}]),
+
     {ok, Updates, Session}.
 
 

@@ -28,7 +28,9 @@
 -include("nkdomain.hrl").
 -include_lib("nkadmin/include/nkadmin.hrl").
 
--define(ID, <<"domain_detail_user">>).
+-define(ID, <<"domain_detail_form__user">>).
+-define(ID_MESSAGES, <<"domain_detail_form__user__messages">>).
+
 
 
 %% @doc
@@ -295,7 +297,7 @@ get_form(Obj, Session) ->
               	header => <<"CONVERSATIONS">>,
                 template => <<"WIP...">>
         	}, #{
-                id => <<"user_messages">>,
+                id => ?ID_MESSAGES,
               	header => <<"MESSAGES">>,
               	template => <<"WIP...">>
             }, #{

@@ -220,6 +220,9 @@ object_sync_op({?MODULE, element_action, <<"url">>, updated, Url}, _From, State)
             {reply, {error, Error}, State}
     end;
 
+object_sync_op({?MODULE, element_action, <<"breadcrumbs">>, selected, Val}, _From, State) ->
+    object_sync_op({?MODULE, element_action, <<"url">>, updated, Val}, _From, State);
+
 object_sync_op({?MODULE, element_action, ElementId, Action, Value}, _From, State) ->
     Parts = binary:split(ElementId, <<"__">>, [global]),
     case do_element_action(Parts, Action, Value, State) of
@@ -367,6 +370,8 @@ send_event(Event, State) ->
 
 
 %% @private
+
+
 do_element_action(Parts, Action, Value, State) ->
     #?STATE{srv_id=SrvId, session=Session} = State,
     case SrvId:admin_element_action(Parts, Action, Value, [], Session) of

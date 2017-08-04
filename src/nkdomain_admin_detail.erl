@@ -76,6 +76,19 @@ element_action([<<"obj">>, Type, Path], selected, _Value, Updates, Session) ->
             {ok, Updates2, Session2}
     end;
 
+element_action([<<"domain_detail_form">>, <<"user">>, <<"messages">>], selected, _Value, Updates, Session) ->
+    Table = nkchat_message_obj_type_view:view(Session),
+
+
+
+
+    lager:error("NKLOG MESSAGES"),
+
+
+
+
+    {ok, Updates, Session};
+
 element_action(_Elements, _Action, _Value, Updates, Session) ->
     {ok, Updates, Session}.
 
