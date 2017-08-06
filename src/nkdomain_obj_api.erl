@@ -163,7 +163,7 @@ api(<<"make_token">>, Type, #nkreq{data=Data, user_id=UserId, srv_id=SrvId}=Req)
             case nkdomain_api_util:get_id(Type, Data, Req) of
                 {ok, Id} ->
                     case nkdomain_token_obj:create(SrvId, DomainId, Id, UserId, Type, #{}, Data) of
-                        {ok, TokenId, TTL, Unknown} ->
+                        {ok, TokenId, _Pid, TTL, Unknown} ->
                             Req2 = nkservice_api:add_unknown(Unknown, Req),
                             {ok, #{obj_id=>TokenId, ttl=>TTL}, Req2};
                         {error, Error} ->

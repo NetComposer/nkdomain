@@ -114,7 +114,7 @@ auth(SrvId, UserId, #{password:=Pass}) ->
 
 make_token(SrvId, DomainId, UserId, TokenOpts, TokenData) ->
     case nkdomain_token_obj:create(SrvId, DomainId, UserId, UserId, ?DOMAIN_USER, TokenOpts, TokenData) of
-        {ok, TokenId, TTL, _Unknown} ->
+        {ok, TokenId, _Pid, TTL, _Unknown} ->
             {ok, TokenId, TTL};
         {error, Error} ->
             {error, Error}

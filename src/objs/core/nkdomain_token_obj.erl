@@ -28,7 +28,7 @@
 -export([object_info/0, object_parse/3, object_send_event/2,
          object_sync_op/3, object_async_op/2]).
 -export([object_admin_info/0]).
--export([get_token_data/2, consume_token/2]).
+-export([get_token_data/2, consume_token/3]).
 
 -include("nkdomain.hrl").
 -include("nkdomain_debug.hrl").
@@ -49,23 +49,23 @@
 %% @doc
 -spec create(nkservice:id(), nkdomain:id(), nkdomain:id(), nkdomain:id(), nkdomain:subtype(),
              nkdomain_obj_make:make_opts(), map()) ->
-    {ok, TokenId::nkdomain:obj_id(), integer(), [Unknown::binary()]} | {error, term()}.
+    {ok, TokenId::nkdomain:obj_id(), pid(), integer(), [Unknown::binary()]} | {error, term()}.
 
-create(SrvId, DomainId, ParentId, UserId, SubType, Opts, Data) ->
+create(SrvId, DomainId, ParentId, CreatorId, SubType, Opts, Data) ->
     case check_ttl(SubType, Opts) of
         {ok, SecsTTL} ->
             Obj = Opts#{
                 type => ?DOMAIN_TOKEN,
                 domain_id => DomainId,
                 parent_id => ParentId,
-                created_by => UserId,
+                created_by => CreatorId,
                 subtype => SubType,
                 ttl => SecsTTL,
                 ?DOMAIN_TOKEN => Data
             },
             case nkdomain_obj_make:create(SrvId, Obj) of
-                {ok, #obj_id_ext{obj_id=TokenId}, Unknown} ->
-                    {ok, TokenId, SecsTTL, Unknown};
+                {ok, #obj_id_ext{obj_id=TokenId, pid=Pid}, Unknown} ->
+                    {ok, TokenId, Pid, SecsTTL, Unknown};
                 {error, Error} ->
                     {error, Error}
             end;
@@ -94,8 +94,8 @@ check_ttl(Type, Opts) ->
 
 
 %% @doc
-consume_token(SrvId, Id) ->
-    nkdomain_obj:sync_op(SrvId, Id, {?MODULE, consume}).
+consume_token(SrvId, Id, Reason) ->
+    nkdomain_obj:sync_op(SrvId, Id, {?MODULE, consume, Reason}).
 
 %% @doc
 get_token_data(SrvId, Id) ->
@@ -145,14 +145,17 @@ object_sync_op({?MODULE, get_token_data}, _From, State) ->
     {reply, {ok, Reply}, State};
 
 %% @private
-object_sync_op({?MODULE, consume}, _From, State) ->
+object_sync_op({?MODULE, consume, Reason}, From, State) ->
     #?STATE{domain_id=DomainId, obj=Obj} = State,
     #{?DOMAIN_TOKEN:=TokenData} = Obj,
     Reply = #{
         domain_id => DomainId,
         data => TokenData
     },
-    {stop, object_consumed, {ok, Reply}, State};
+    gen_server:reply(From, {ok, Reply}),
+    % Process user events before detecting token down
+    timer:sleep(500),
+    {stop, {object_consumed, Reason}, State};
 
 object_sync_op(_Op, _From, _State) ->
     continue.

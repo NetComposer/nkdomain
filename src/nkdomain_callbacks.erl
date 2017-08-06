@@ -97,6 +97,7 @@ error(object_already_exists)            -> "Object already exists";
 error(object_clean_process)             -> "Object cleaned (process stopped)";
 error(object_clean_expire)              -> "Object cleaned (expired)";
 error(object_consumed)                  -> "Object is consumed";
+error({object_consumed, R})             -> {"Object is consumed: ~s", [R]};
 error(object_deleted) 		            -> "Object removed";
 error(object_expired) 		            -> "Object expired";
 error(object_has_childs) 		        -> "Object has childs";
@@ -831,6 +832,8 @@ service_api_cmd(#nkreq{cmd = <<"objects/", _/binary>>, req_state={Type, Module, 
                             nkdomain_obj_api:api(Cmd, Type, Req2)
                     end,
                     Reply2 = case Reply of
+                        ok ->
+                            {ok, #{}, Req2};
                         {ok, UserReply} ->
                             {ok, UserReply, Req2};
                         {error, Error} ->
