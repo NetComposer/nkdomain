@@ -112,26 +112,30 @@ object_admin_info() ->
 %% @private
 object_es_mapping() ->
     #{
+        vsn => #{type => keyword},
         local => #{type => keyword},
         remote => #{type => keyword},
         device_id => #{type => keyword},
         push_id => #{type => keyword},
         platform_id => #{type => keyword},
         platform_version => #{type => keyword},
-        login_meta => #{enabled => false}
+        login_meta => #{enabled => false},
+        name_sort => #{type => keyword}
     }.
 
 
 %% @private
 object_parse(_SrvId, _Mode, _Obj) ->
     #{
+        vsn => binary,
         local => binary,
         remote => binary,
         device_id => binary,
         push_id => binary,
         platform_id => binary,
         platform_version => binary,
-        login_meta => any
+        login_meta => any,
+        '__defaults' => #{vsn => <<"1">>}
     }.
 
 

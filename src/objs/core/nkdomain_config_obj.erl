@@ -25,7 +25,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([find_configs/3]).
--export([object_info/0, object_parse/3,
+-export([object_info/0, object_es_mapping/0, object_parse/3,
          object_api_syntax/2, object_api_cmd/2]).
 -export([object_admin_info/0]).
 
@@ -94,14 +94,21 @@ object_admin_info() ->
     }.
 
 
-%%%% @private
-%%object_es_mapping() ->
-%%    #{}.
+%% @private
+object_es_mapping() ->
+    #{
+        vsn => #{type => keyword},
+        data => #{enabled => false}
+    }.
 
 
 %% @private
 object_parse(_SrvId, _Mode, _Obj) ->
-    any.
+    #{
+        vsn => binary,
+        data => any,
+        '__defaults' => #{vsn => <<"1">>}
+    }.
 
 
 %% @private

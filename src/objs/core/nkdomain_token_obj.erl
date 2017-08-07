@@ -25,7 +25,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([create/7]).
--export([object_info/0, object_parse/3, object_send_event/2,
+-export([object_info/0, object_es_mapping/0, object_parse/3, object_send_event/2,
          object_sync_op/3, object_async_op/2]).
 -export([object_admin_info/0]).
 -export([get_token_data/2, consume_token/3]).
@@ -61,7 +61,10 @@ create(SrvId, DomainId, ParentId, CreatorId, SubType, Opts, Data) ->
                 created_by => CreatorId,
                 subtype => SubType,
                 ttl => SecsTTL,
-                ?DOMAIN_TOKEN => Data
+                ?DOMAIN_TOKEN => #{
+                    vsn => <<"1">>,
+                    data => Data
+                }
             },
             case nkdomain_obj_make:create(SrvId, Obj) of
                 {ok, #obj_id_ext{obj_id=TokenId, pid=Pid}, Unknown} ->
@@ -97,6 +100,7 @@ check_ttl(Type, Opts) ->
 consume_token(SrvId, Id, Reason) ->
     nkdomain_obj:sync_op(SrvId, Id, {?MODULE, consume, Reason}).
 
+
 %% @doc
 get_token_data(SrvId, Id) ->
     nkdomain_obj:sync_op(SrvId, Id, {?MODULE, get_token_data}).
@@ -125,8 +129,20 @@ object_admin_info() ->
 
 
 %% @private
+object_es_mapping() ->
+    #{
+        vsn => #{type => keyword},
+        data => #{enabled => false}
+    }.
+
+
+%% @private
 object_parse(_SrvId, _Mode, _Obj) ->
-    any.
+    #{
+        vsn => binary,
+        data => any,
+        '__defaults' => #{vsn => 1, data => #{}}
+    }.
 
 
 %% @private
@@ -137,7 +153,7 @@ object_send_event(_Event, State) ->
 %% @private
 object_sync_op({?MODULE, get_token_data}, _From, State) ->
     #?STATE{domain_id=DomainId, obj=Obj} = State,
-    #{?DOMAIN_TOKEN:=TokenData} = Obj,
+    #{?DOMAIN_TOKEN:=#{data:=TokenData}} = Obj,
     Reply = #{
         domain_id => DomainId,
         data => TokenData
@@ -147,7 +163,7 @@ object_sync_op({?MODULE, get_token_data}, _From, State) ->
 %% @private
 object_sync_op({?MODULE, consume, Reason}, From, State) ->
     #?STATE{domain_id=DomainId, obj=Obj} = State,
-    #{?DOMAIN_TOKEN:=TokenData} = Obj,
+    #{?DOMAIN_TOKEN:=#{data:=TokenData}} = Obj,
     Reply = #{
         domain_id => DomainId,
         data => TokenData

@@ -98,6 +98,7 @@ plugin_config(_Config, _Service) ->
 
 object_es_mapping() ->
     #{
+        vsn => #{type => keyword},
         obj_id => #{type => keyword},
         type => #{type => keyword},
         path => #{type => keyword},

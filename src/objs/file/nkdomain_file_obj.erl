@@ -162,6 +162,7 @@ object_admin_info() ->
 %% @private
 object_es_mapping() ->
     #{
+        vsn => #{type => keyword},
         content_type => #{type => keyword},
         store_id => #{type => keyword},
         size => #{type => long},
@@ -175,11 +176,13 @@ object_parse(_SrvId, update, _Obj) ->
 
 object_parse(_SrvId, _Mode, _Obj) ->
      #{
+         vsn => binary,
         content_type => binary,
         store_id => binary,
         size => integer,
         password => binary,
-        '__mandatory' => [content_type, store_id, size]
+        '__mandatory' => [content_type, store_id, size],
+        '__defaults' => #{vsn => <<"1">>}
     }.
 
 

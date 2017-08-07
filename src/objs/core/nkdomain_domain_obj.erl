@@ -25,7 +25,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([find/3, find_all/3, find_types/3, find_all_types/3, find_childs/3, find_all_childs/3]).
--export([object_info/0, object_parse/3,
+-export([object_info/0, object_parse/3, object_es_mapping/0,
          object_api_syntax/2, object_api_cmd/2]).
 -export([object_start/1]).
 
@@ -120,15 +120,20 @@ object_info() ->
     }.
 
 
-%%%% @private
-%%object_es_mapping() ->
-%%    #{}.
+%% @private
+object_es_mapping() ->
+    #{
+        vsn => #{type => keyword},
+        defaults => #{enabled => false}
+    }.
 
 
 %% @private
 object_parse(_SrvId, _Mode, _Obj) ->
     #{
-        default_store_id => binary
+        vsn => binary,
+        defaults => map,
+        '__defaults' => #{vsn => <<"1">>}
     }.
 
 

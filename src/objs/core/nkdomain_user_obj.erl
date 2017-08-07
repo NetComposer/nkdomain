@@ -282,6 +282,7 @@ object_create(SrvId, Obj) ->
 %% @private
 object_es_mapping() ->
     #{
+        vsn => #{type => keyword},
         name => #{type => text},
         surname => #{type => text},
         name_sort => #{type => keyword},
@@ -301,7 +302,8 @@ object_es_mapping() ->
                 push_data => #{enabled => false},
                 updated_time => #{type => date}
             }
-        }
+        },
+        name_sort => #{type => keyword}
     }.
 
 
@@ -326,6 +328,7 @@ object_es_unparse(_SrvId, Obj, Base) ->
 %% @private
 object_parse(_SrvId, update, _Obj) ->
     #{
+        vsn => binary,
         name => binary,
         surname => binary,
         password => fun ?MODULE:fun_user_pass/1,
@@ -341,7 +344,8 @@ object_parse(_SrvId, update, _Obj) ->
                 updated_time => integer,
                 '__mandatory' => [domain_id, session_type, device_id, push_data, updated_time]
              }
-        }
+        },
+        '__defaults' => #{vsn => <<"1">>}
     };
 
 object_parse(SrvId, Mode, Obj) ->

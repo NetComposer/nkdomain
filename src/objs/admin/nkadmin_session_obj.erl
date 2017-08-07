@@ -143,12 +143,17 @@ object_admin_info() ->
 
 %% @private
 object_es_mapping() ->
-    not_indexed.
+    #{
+        vsn => #{type => keyword}
+    }.
 
 
 %% @private
 object_parse(_SrvId, _Mode, _Obj) ->
-    #{}.
+    #{
+        vsn => binary,
+        '__defaults' => #{vsn => <<"1">>}
+    }.
 
 
 %% @private

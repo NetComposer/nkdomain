@@ -214,6 +214,7 @@ nkservice_rest_http(_Method, _Path, _Req) ->
 
 object_syntax(SrvId, load) ->
     Syntax = #{
+        vsn => binary,
         obj_id => binary,
         type => binary,
         path => binary,
@@ -517,7 +518,8 @@ object_async_op(Op, State) ->
 object_save(#?STATE{srv_id=SrvId}=State) ->
     case call_module(object_save, [], State) of
         {ok, #?STATE{obj=Obj2}=State2} ->
-            case SrvId:object_db_save(SrvId, Obj2) of
+            Obj3 = Obj2#{<<"vsn">> => <<"1">>},
+            case SrvId:object_db_save(SrvId, Obj3) of
                 {ok, Meta} ->
                     {ok, State2, Meta};
                 {error, Error} ->
