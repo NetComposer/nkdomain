@@ -77,10 +77,10 @@ element_action([<<"obj">>, Type, Path], selected, _Value, Updates, Session) ->
     end;
 
 element_action([<<"domain_detail_form">>, <<"user">>, <<"messages">>], selected, _Value, Updates, Session) ->
-    Opts = #{table_id => <<"messages">>},
+    Opts = #{table_id => <<"domain_detail_form__user__messages__table">>, header => <<"MESSAGES">>},
     {Table, _Session2} = nkchat_message_obj_type_view:subview(Opts, Session),
     Update = #{
-        id => <<"domain_detail_form__user__messages">>,
+        id => <<"domain_detail_form__user__messages__table_body">>,
         class => webix_ui,
         value => Table
     },

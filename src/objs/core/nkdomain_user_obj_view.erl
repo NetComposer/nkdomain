@@ -287,31 +287,37 @@ get_form(Obj, Session) ->
 %       TABVIEW WITH RELATED DATATABLES (DELETE IN CASE THERE ISN'T ANY)
         }, #{
             view => <<"tabview">>,
+            id => <<?ID/binary, "__tabview">>,
           	gravity => 1.0,
             cells => [#{
                 id => <<"user_sessions">>,
               	header => <<"SESSIONS">>,
-                template => <<"WIP...">>
+                template => <<"WIP SESSIONS...">>
             }, #{
                 id => <<"user_conversations">>,
               	header => <<"CONVERSATIONS">>,
-                template => <<"WIP...">>
+                template => <<"WIP CONVERSATIONS...">>
         	}, #{
-                id => ?ID_MESSAGES,
-              	header => <<"MESSAGES">>,
-              	template => <<"WIP...">>
+                header => <<"MESSAGES">>,
+                body => #{
+                    id => ?ID_MESSAGES,
+                    rows => [#{
+                        id => <<?ID_MESSAGES/binary, "__table_body">>,
+                        template => <<>>
+                    }]
+                }
             }, #{
                 id => <<"user_roles">>,
               	header => <<"ROLES">>,
-                template => <<"WIP...">>
+                template => <<"WIP ROLES...">>
             }, #{
                 id => <<"user_files">>,
               	header => <<"FILES">>,
-                template => <<"WIP...">>
+                template => <<"WIP FILES...">>
             }, #{
                 id => <<"user_mails">>,
               	header => <<"MAILS">>,
-                template => <<"WIP...">>
+                template => <<"WIP MAILS...">>
             }],
             tabbar => #{
                 on => #{
@@ -321,6 +327,15 @@ get_form(Obj, Session) ->
                             ncClient.sendMessageAsync('objects/admin.session/element_action', {
                                 element_id: this.getValue(),
                                 action: 'selected'
+                            }).then(function(response) {
+                                console.log('Tab selected OK: ', response);
+                                if (response.data && response.data.elements) {
+                                    // Update view
+                                    updateView(response.data.elements);
+                                }
+                            }).catch(function(response) {
+                                console.log('Error at tabbar onChange: ', response);
+                                webix.message({ 'type': 'error', 'text': response.data.code + ' - ' + response.data.error });
                             });
                         }
                     ">>
