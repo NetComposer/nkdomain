@@ -433,8 +433,6 @@ object_save(#?STATE{obj=Obj, session=Session}=State) ->
     #{?DOMAIN_USER:=User} = Obj,
     User2 = User#{push=>Push},
     Obj2 = ?ADD_TO_OBJ(?DOMAIN_USER, User2, Obj),
-    lager:error("NKLOG OBJET SAVE ~p", [Obj2]),
-
     {ok, State#?STATE{obj = Obj2}}.
 
 
