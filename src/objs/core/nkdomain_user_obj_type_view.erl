@@ -29,7 +29,7 @@
 -include_lib("nkadmin/include/nkadmin.hrl").
 
 -define(ID, <<"domain_detail_type_view__user">>).
--define(ID_SUBDOMAINS, <<"domain_detail_type_view__user___subdomains">>).
+-define(ID_SUBDOMAINS, <<"domain_detail_type_view__user__subdomains">>).
 
 %% @doc
 view(Session) ->
