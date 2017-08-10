@@ -58,7 +58,8 @@
 
 %% @doc Uses login_data() and session_meta()
 -spec session_login(#nkreq{}) ->
-    {ok, UserId::nkdomain:obj_id(), SessId::nkdomain:obj_id(), pid(), #nkreq{}} | {error, term()}.
+    {ok, DomainId::nkdomain:obj_id(), UserId::nkdomain:obj_id(), SessId::nkdomain:obj_id(), pid(), #nkreq{}} |
+    {error, term()}.
 
 session_login(#nkreq{srv_id=SrvId, data=Data, session_meta=SessMeta}=Req) ->
     #{id:=User} = Data,
@@ -79,7 +80,7 @@ session_login(#nkreq{srv_id=SrvId, data=Data, session_meta=SessMeta}=Req) ->
                             Req3 = add_id(?DOMAIN_DOMAIN, DomainId, Req2),
                             Req4 = add_id(?DOMAIN_USER, UserId, Req3),
                             Req5 = add_id(?DOMAIN_SESSION, SessId, Req4),
-                            {ok, UserId, SessId, Pid, Req5#nkreq{user_id=UserId}};
+                            {ok, DomainId, UserId, SessId, Pid, Req5#nkreq{user_id=UserId}};
                         {error, Error} ->
                             {error, Error}
                     end;

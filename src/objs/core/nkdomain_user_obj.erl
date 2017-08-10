@@ -35,9 +35,9 @@
 -export([get_sessions/2, get_sessions/3]).
 -export([register_session/6, unregister_session/3, update_status/4]).
 -export([add_notification_op/5]).
--export([add_push_device/6, remove_push_device/3]).
+-export([add_push_device/6, remove_push_device/3, send_push/4]).
 
--export_type([events/0]).
+-export_type([events/0, push_msg/0, push_app_id/0, push_device_id/0, push_device/0]).
 
 -include("nkdomain.hrl").
 -include("nkdomain_debug.hrl").
@@ -72,11 +72,23 @@
 -type notify_fun() ::
     fun((SessId::nkdomain:obj_id(), Pid::pid(), TokenId::nkdomain:obj_id(), Data::map(), created|removed) -> ok).
 
--type push_data() ::
+-type push_msg() ::
+    #{
+        type => simple,
+        title => binary(),
+        body =>binary()
+    }.
+
+-type push_app_id() :: binary().
+
+-type push_device_id() :: binary().
+
+-type push_device() ::
     #{
         push_id => binary(),
         platform_id => binary(),
-        platform_version => binary()
+        platform_version => binary(),
+        base_url => binary()
     }.
 
 %% ===================================================================
@@ -185,13 +197,21 @@ add_notification_op(SrvId, Id, SessType, Opts, Base) ->
 
 
 %% @doc
-add_push_device(SrvId, Id, DomainId, Type, DeviceId, PushData) ->
-    nkdomain_obj:async_op(SrvId, Id, {?MODULE, add_push_device, DomainId, Type, DeviceId, PushData}).
+add_push_device(SrvId, Id, DomainId, AppId, DeviceId, PushData) ->
+    nkdomain_obj:async_op(SrvId, Id, {?MODULE, add_push_device, DomainId, AppId, DeviceId, PushData}).
 
 
 %% @doc
 remove_push_device(SrvId, Id, DeviceId) ->
     nkdomain_obj:async_op(SrvId, Id, {?MODULE, remove_push_device, DeviceId}).
+
+
+%% @doc
+-spec send_push(nkservice:id(), nkdomain:obj_id(), push_app_id(), push_msg()) ->
+    ok | {error, term()}.
+
+send_push(SrvId, Id, AppId, Push) ->
+    nkdomain_obj:async_op(SrvId, Id, {?MODULE, send_push, AppId, Push}).
 
 
 %% @private
@@ -236,10 +256,10 @@ find_childs(SrvId, User) ->
 }).
 
 -record(push_device, {
-    session_type :: binary(),
-    domain_id :: nkdomain:obj_id(),
     device_id :: binary(),
-    push_data :: push_data(),
+    domain_id :: nkdomain:obj_id(),
+    app_id :: binary(),
+    push_data :: push_device(),
     updated_time :: binary()
 }).
 
@@ -297,7 +317,7 @@ object_es_mapping() ->
             dynamic => false,
             properties => #{
                 domain_id => #{type => keyword},
-                session_type => #{type => keyword},
+                app_id => #{type => keyword},
                 device_id => #{type => keyword},
                 push_data => #{enabled => false},
                 updated_time => #{type => date}
@@ -338,11 +358,11 @@ object_parse(_SrvId, update, _Obj) ->
         push => {list,
             #{
                 domain_id => binary,
-                session_type => binary,
+                app_id => binary,
                 device_id => binary,
                 push_data => map,
                 updated_time => integer,
-                '__mandatory' => [domain_id, session_type, device_id, push_data, updated_time]
+                '__mandatory' => [domain_id, app_id, device_id, push_data, updated_time]
              }
         },
         '__defaults' => #{vsn => <<"1">>}
@@ -393,18 +413,18 @@ object_init(#?STATE{obj=#{?DOMAIN_USER:=User}}=State) ->
 object_save(#?STATE{obj=Obj, session=Session}=State) ->
     #session{notify_msgs=_Msgs, push_devices=Devices} = Session,
     Push = lists:map(
-        fun({DeviceId, PushDevice}) ->
+        fun(PushDevice) ->
             #push_device{
-                domain_id = DomainId,
-                session_type = Type,
-                device_id = DeviceId,
-                push_data = Data,
-                updated_time = Time
+                device_id   = DeviceId,
+                app_id      = AppId,
+                domain_id   = DomainId,
+                push_data   = Data,
+                updated_time= Time
             } = PushDevice,
             #{
-                domain_id => DomainId,
-                session_type => Type,
                 device_id => DeviceId,
+                app_id => AppId,
+                domain_id => DomainId,
                 push_data => Data,
                 updated_time => Time
             }
@@ -413,6 +433,8 @@ object_save(#?STATE{obj=Obj, session=Session}=State) ->
     #{?DOMAIN_USER:=User} = Obj,
     User2 = User#{push=>Push},
     Obj2 = ?ADD_TO_OBJ(?DOMAIN_USER, User2, Obj),
+    lager:error("NKLOG OBJET SAVE ~p", [Obj2]),
+
     {ok, State#?STATE{obj = Obj2}}.
 
 
@@ -545,9 +567,13 @@ object_async_op({?MODULE, unloaded_token, TokenId}, State) ->
     State2 = remove_notification(TokenId, State),
     {noreply, State2};
 
-object_async_op({?MODULE, add_push_device, DomainId, Type, DeviceId, PushData}, State) ->
-    State2 = add_push(DomainId, Type, DeviceId, PushData, State),
+object_async_op({?MODULE, add_push_device, DomainId, AppId, DeviceId, PushData}, State) ->
+    State2 = add_push(DomainId, AppId, DeviceId, PushData, State),
     {noreply, State2};
+
+object_async_op({?MODULE, send_push, AppId, Push}, State) ->
+    send_push(AppId, Push, State),
+    {noreply, State};
 
 object_async_op({?MODULE, remove_push_device, DeviceId}, State) ->
     State2 = remove_push(DeviceId, State),
@@ -724,10 +750,21 @@ notify_sessions(#notify_msg{domain_id=DomainId, session_type=Type, token_id=Toke
         true ->
             ok;
         false when Op==created ->
-            lager:error("NKLOG SEND PUSH ~p", [Data]),
-            send_push(DomainId, Type, Data, State);
+            lager:error("NKLOG SEND PUSH WAKEUP ~p", [Data]),
+            Push = #{
+                type => simple,
+                title => <<"New user notification">>,
+                body => <<"Wake up">>
+            },
+            AppId = <<"user_notifications">>,
+            send_push(any, self(), AppId, Push);
         false when Op==removed ->
-            lager:error("NKLOG SEND PUSH REMOVED ~p", [Data])
+            lager:error("NKLOG SEND PUSH WAKEUP REMOVED ~p", [Data]),
+            Push = #{
+                type => remove
+            },
+            AppId = <<"user_notifications">>,
+            send_push(any, self(), AppId, Push)
     end.
 
 
@@ -764,33 +801,41 @@ do_load_push([], Acc) ->
 do_load_push([Push|Rest], Acc) ->
     #{
         domain_id := DomainId,
-        session_type := Type,
+        app_id := AppId,
         device_id := DeviceId,
         push_data := Data,
         updated_time := Time
     } = Push,
     PushDevice = #push_device{
-        domain_id = DomainId,
-        session_type = Type,
-        device_id = DeviceId,
-        push_data = Data,
-        updated_time = Time
+        domain_id   = DomainId,
+        app_id      = AppId,
+        device_id   = DeviceId,
+        push_data   = Data,
+        updated_time= Time
     },
     do_load_push(Rest, [PushDevice|Acc]).
 
 
 
 %% @private
-add_push(DomainId, Type, DeviceId, PushData, State) ->
+add_push(DomainId, AppId, DeviceId, PushData, State) ->
     #?STATE{session=Session} = State,
     #session{push_devices=PushDevices1} = Session,
-    PushDevice = #push_device{
-        domain_id = DomainId,
-        session_type = Type,
-        device_id = DeviceId,
-        push_data = PushData,
-        updated_time = nkdomain_util:timestamp()
-    },
+    Now =nkdomain_util:timestamp(),
+    PushDevice = case lists:keyfind(DeviceId, #push_device.device_id, PushDevices1) of
+        #push_device{push_data=PushData} = PD ->
+            PD#push_device{
+                updated_time=Now
+            };
+        _ ->
+            #push_device{
+                domain_id   = DomainId,
+                app_id      = AppId,
+                device_id   = DeviceId,
+                push_data   = PushData,
+                updated_time= Now
+            }
+    end,
     PushDevices2 = lists:keystore(DeviceId, #push_device.device_id, PushDevices1, PushDevice),
     Session2 = Session#session{push_devices = PushDevices2},
     State#?STATE{session=Session2, is_dirty=true}.
@@ -806,20 +851,23 @@ remove_push(DeviceId, State) ->
 
 
 %% @doc
-send_push(DomainId, Type, Push, #?STATE{session=Session}) ->
-    #session{push_devices=Devices} = Session,
+send_push(AppId, Push, #?STATE{srv_id=SrvId}=State) ->
+    Devices = find_push_devices(AppId, State),
     lists:foreach(
-        fun(#push_device{domain_id=D, session_type=T, device_id=Device, push_data=PushData}) ->
-            case D==DomainId andalso T==Type of
-                true ->
-                    lager:warning("NKLOG Sending PUSH to ~s:~s device ~s: ~p (~p)",
-                                  [DomainId, Type, Device, Push, PushData]);
-                false ->
-                    ok
-            end
+        fun(#push_device{device_id=DeviceId, push_data=PushDevice}) ->
+            ?LLOG(notice, "sending PUSH to ~s device ~s: ~p (~p)",
+                          [AppId, DeviceId, Push, PushDevice], State),
+            SrvId:object_send_push(SrvId, AppId, DeviceId, PushDevice, Push)
         end,
         Devices).
 
+
+
+%% @private
+find_push_devices(AppId, State) ->
+    #?STATE{session=Session} = State,
+    #session{push_devices=Devices} = Session,
+    [Device || #push_device{app_id=A}=Device <- Devices, A==AppId].
 
 
 %% @private

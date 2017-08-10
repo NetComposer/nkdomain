@@ -46,11 +46,7 @@
         data => #{
             login_meta => map(),
             local => binary(),
-            remote => binary(),
-            device_id => binary(),
-            push_id => binary(),
-            platform_id => binary(),
-            platform_version => binary()
+            remote => binary()
         }
     }.
 
@@ -115,12 +111,7 @@ object_es_mapping() ->
         vsn => #{type => keyword},
         local => #{type => keyword},
         remote => #{type => keyword},
-        device_id => #{type => keyword},
-        push_id => #{type => keyword},
-        platform_id => #{type => keyword},
-        platform_version => #{type => keyword},
-        login_meta => #{enabled => false},
-        name_sort => #{type => keyword}
+        login_meta => #{enabled => false}
     }.
 
 
@@ -130,10 +121,6 @@ object_parse(_SrvId, _Mode, _Obj) ->
         vsn => binary,
         local => binary,
         remote => binary,
-        device_id => binary,
-        push_id => binary,
-        platform_id => binary,
-        platform_version => binary,
         login_meta => any,
         '__defaults' => #{vsn => <<"1">>}
     }.
@@ -195,8 +182,8 @@ object_api_cmd(<<"start">>, #nkreq{session_module=nkapi_server}=Req) ->
     SessMeta3 = SessMeta2#{session_id=>SessId, session_link=>{nkapi_server, SessPid}},
     Req2 = Req#nkreq{session_meta=SessMeta3},
     case nkdomain_api_util:session_login(Req2) of
-        {ok, UserId, SessId, _SessPid, Req3} ->
-            Reply = #{user_id=>UserId, session_id=>SessId},
+        {ok, DomainId, UserId, SessId, _SessPid, Req3} ->
+            Reply = #{domain_id=>DomainId, user_id=>UserId, session_id=>SessId},
             {ok, Reply, Req3};
         {error, Error} ->
             {error, Error}

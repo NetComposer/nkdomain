@@ -304,8 +304,10 @@ init({loaded, SrvId, Obj, Meta}) ->
         session = #{}
     },
     ?DEBUG("started (~p)", [self()], State1),
+    % Register parent, type and service
     case do_init_common(State1) of
         {ok, State2} ->
+            % Register name in nkdist
             case register(SrvId, Type, ObjId, Path, #{}) of
                 ok ->
                     ?DEBUG("loaded (~p)", [self()], State2),
@@ -336,6 +338,7 @@ init({moved, State, OldPid}) ->
     #?STATE{id=#obj_id_ext{srv_id=SrvId, type=Type, obj_id=ObjId, path=Path}} = State,
     case do_init_common(State) of
         {ok, State2} ->
+            % Register name in nkdist
             case register(SrvId, Type, ObjId, Path, #{replace_pid=>OldPid}) of
                 ok ->
                     %% TODO: Add 'moved' callback
