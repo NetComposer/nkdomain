@@ -122,6 +122,7 @@
     get_time |
     is_enabled |
     {enable, boolean()} |
+    {update_name, binary()} |
     {update, map()} |
     delete |
     {register, usage|link, nklib:link()} |
@@ -305,28 +306,19 @@ init({loaded, SrvId, Obj, Meta}) ->
     },
     ?DEBUG("started (~p)", [self()], State1),
     % Register parent, type and service
-    case do_init_common(State1) of
-        {ok, State2} ->
-            % Register name in nkdist
-            case register(SrvId, Type, ObjId, Path, #{}) of
-                ok ->
-                    ?DEBUG("loaded (~p)", [self()], State2),
-                    case handle(object_init, [], State2) of
-                        {ok, State3} ->
-                            State4 = case Meta of
-                                #{is_created:=true} ->
-                                    do_event(created, State3);
-                                _ ->
-                                    State3
-                            end,
-                            State5 = do_event(loaded, State4),
-                            {ok, do_refresh(State5)};
-                        {error, Error} ->
-                            {stop, Error}
-                    end;
-                {error, {pid_conflict, Pid}} ->
-                    ?LLOG(warning, "object is already registered", [], State2),
-                    {stop, {already_registered, Pid}};
+    State2 = do_init_common(State1),
+    case do_register(State2) of
+        {ok, State3} ->
+            ?DEBUG("loaded (~p)", [self()], State3),
+            case handle(object_init, [], State3) of
+                {ok, State4} ->
+                    State4 = case Meta of
+                        #{is_created:=true} ->
+                            do_event(created, State4);
+                        _ ->
+                            State4
+                    end,
+                    {ok, do_event(loaded, State4)};
                 {error, Error} ->
                     {stop, Error}
             end;
@@ -335,20 +327,13 @@ init({loaded, SrvId, Obj, Meta}) ->
     end;
 
 init({moved, State, OldPid}) ->
-    #?STATE{id=#obj_id_ext{srv_id=SrvId, type=Type, obj_id=ObjId, path=Path}} = State,
-    case do_init_common(State) of
-        {ok, State2} ->
-            % Register name in nkdist
-            case register(SrvId, Type, ObjId, Path, #{replace_pid=>OldPid}) of
-                ok ->
-                    %% TODO: Add 'moved' callback
-                    %% TODO: Re-register childs
-                    ?DEBUG("moved (~p)", [self()], State2),
-                    State3 = do_refresh(State2),
-                    {ok, State3};
-                {error, Error} ->
-                    {stop, Error}
-            end;
+    State2 = do_init_common(State),
+    case do_register(OldPid, State2) of
+        {ok, State3} ->
+            %% TODO: Add 'moved' callback
+            %% TODO: Re-register childs
+            ?DEBUG("moved (~p)", [self()], State3),
+            {ok, State3};
         {error, Error} ->
             {stop, Error}
     end.
@@ -621,6 +606,23 @@ do_sync_op({update, Map}, _From, #?STATE{is_enabled=IsEnabled, object_info=Info}
             end
     end;
 
+do_sync_op({update_name, _ObjName}, _From, #?STATE{id=#obj_id_ext{type=?DOMAIN_DOMAIN}}=State) ->
+    reply({error, domains_name_cannot_change}, State);
+
+do_sync_op({update_name, ObjName}, _From, #?STATE{is_enabled=IsEnabled, object_info=Info}=State) ->
+    case {IsEnabled, Info} of
+        {false, #{dont_update_on_disabled:=true}} ->
+            reply({error, object_is_disabled}, State);
+        _ ->
+            ObjName2 = nkdomain_util:name(ObjName),
+            case do_update_name(ObjName2, State) of
+                {ok, State2} ->
+                    reply({ok, ObjName2}, do_refresh(State2));
+                {error, Error, State2} ->
+                    reply({error, Error}, State2)
+            end
+    end;
+
 do_sync_op({nkdomain_reg_child, ObjIdExt}, _From, State) ->
     #obj_id_ext{obj_id=ObjId, type=Type, path=Path, pid=Pid} = ObjIdExt,
     #?STATE{is_enabled=IsEnabled, object_info=Info} = State,
@@ -665,13 +667,13 @@ do_async_op(Op, State) ->
 
 
 %% ===================================================================
-%% Internal
+%% Internals
 %% ===================================================================
 
 %% @private
 do_init_common(State) ->
     #?STATE{
-        id = #obj_id_ext{srv_id=SrvId, type=Type, obj_id=ObjId, path=Path},
+        id = #obj_id_ext{srv_id=SrvId, type=Type},
         ttl = TTL
     }= State,
     % If expired, do proper delete
@@ -681,17 +683,9 @@ do_init_common(State) ->
         _ ->
             ok
     end,
-    case register_parent(State) of
-        {ok, State2} ->
-            nklib_proc:put(?MODULE, {Type, ObjId, Path}),
-            set_log(SrvId, Type),
-            nkservice_util:register_for_changes(SrvId),
-            State3 = register_type(State2),
-            State4 = register_service(State3),
-            {ok, State4};
-        {error, Error} ->
-            {error, Error}
-    end.
+    set_log(SrvId, Type),
+    nkservice_util:register_for_changes(SrvId),
+    do_refresh(State).
 
 
 %% @private
@@ -708,14 +702,66 @@ set_log(SrvId, Type) ->
 
 
 %% @private
+do_register(State) ->
+    do_register(none, State).
+
+
+%% @private
+do_register(OldPid, State) ->
+    case register_name(OldPid, State) of
+        {ok, State2} ->
+            State3 = register_type(State2),
+            State4 = register_service(State3),
+            {ok, State4};
+        {error, {pid_conflict, Pid}} ->
+            ?LLOG(warning, "object is already registered", [], State),
+            {error, {already_registered, Pid}};
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
+%% @private
+register_name(OldPid, #?STATE{id=Id}=State) ->
+    #obj_id_ext{srv_id=SrvId, type=Type, obj_id=ObjId, path=Path} = Id,
+    OptsPid = case is_pid(OldPid) of
+        true ->
+            #{replace_pid => OldPid};
+        false ->
+            #{}
+    end,
+    Opts1 = OptsPid#{sync=>true, meta=>{Type, path, Path}},
+    case nkdist_reg:register(proc, {nkdomain, SrvId}, ObjId, Opts1) of
+        ok ->
+            Opts2 = OptsPid#{sync=>true, meta=>{Type, obj_id, ObjId}},
+            case nkdist_reg:register(reg, {nkdomain, SrvId}, Path, Opts2) of
+                ok ->
+                    nklib_proc:put(?MODULE, {Type, ObjId, Path}),
+                    register_parent(State);
+                {error, Error} ->
+                    {error, Error}
+            end;
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
+%% @private
+unregister_name(#?STATE{id=Id}) ->
+    #obj_id_ext{srv_id=SrvId, path=Path} = Id,
+    nkdist_reg:unregister({nkdomain, SrvId}, Path).
+
+
+%% @private
 register_parent(#?STATE{id=#obj_id_ext{obj_id = <<"root">>, type = ?DOMAIN_DOMAIN}}=State) ->
     {ok, State};
 
-register_parent(#?STATE{srv_id=SrvId, id=ObjIdExt, parent_id=ParentId}=State) ->
+register_parent(#?STATE{srv_id=SrvId, id=ObjIdExt, parent_id=ParentId, parent_pid=ParentPid}=State) ->
     case sync_op(SrvId, ParentId, {nkdomain_reg_child, ObjIdExt}) of
-        {ok, ParentEnabled, ParentPid} ->
-            monitor(process, ParentPid),
-            State2 = do_enabled(ParentEnabled, State#?STATE{parent_pid=ParentPid}),
+        {ok, ParentEnabled, NewParentPid} ->
+            nklib_util:demonitor(ParentPid),
+            monitor(process, NewParentPid),
+            State2 = do_enabled(ParentEnabled, State#?STATE{parent_pid=NewParentPid}),
             {ok, State2};
         {error, object_not_found} ->
             {error, {could_not_load_parent, ParentId}};
@@ -880,6 +926,49 @@ do_rm_child(ObjId, #?STATE{childs=Childs}=State) ->
 
 
 %% @private
+do_update_name(ObjName, #?STATE{srv_id=SrvId, id=Id, obj=Obj}=State) ->
+    #obj_id_ext{type=Type, path=Path1} = Id,
+    case nkdomain_util:get_parts(Type, Path1) of
+        {ok, _Domain, ObjName} ->
+            {ok, State};
+        {ok, Domain, _} ->
+            Class = nkdomain_util:class(Type),
+            Path2 = case Domain of
+                <<"/">> ->
+                    <<$/, Class/binary, $/, ObjName/binary>>;
+                _ ->
+                    <<Domain/binary, $/, Class/binary, $/, ObjName/binary>>
+            end,
+            case nkdomain_lib:find(SrvId, Path2) of
+                {error, object_not_found} ->
+                    Id2 = Id#obj_id_ext{path=Path2},
+                    Update = #{
+                        obj_name => ObjName,
+                        path => Path2,
+                        updated_time => nkdomain_util:timestamp(),
+                        updated_by => <<>>
+                    },
+                    Obj2 = ?ADD_TO_OBJ(Update, Obj),
+                    State2 = State#?STATE{id=Id2, obj=Obj2, is_dirty=true},
+                    case register_name(none, State2) of
+                        {ok, State3} ->
+                            unregister_name(State),                     % Old State
+                            case do_save(object_updated, State3) of
+                                {ok, State4} ->
+                                    {ok, do_event({updated, #{obj_name=>ObjName}}, State4)};
+                                {{error, Error}, _} ->                  % Old State
+                                    {error, Error, State}
+                            end;
+                        {error, Error} ->
+                            {error, Error, State}                       % Old State
+                    end;
+                _ ->
+                    {error, object_already_exists, State}
+            end
+    end.
+
+
+%% @private
 do_update(Update, #?STATE{id=Id, obj=Obj}=State) ->
     #obj_id_ext{srv_id=SrvId, type=Type} = Id,
     Update2 = Update#{type=>Type},
@@ -981,16 +1070,6 @@ do_nkdist(Msg, State) ->
 %% ===================================================================
 %% Util
 %% ===================================================================
-
-
-%% @private
-register(SrvId, Type, ObjId, Path, Opts) ->
-    case nkdist_reg:register(proc, {nkdomain, SrvId}, ObjId, Opts#{sync=>true, meta=>{Type, path, Path}}) of
-        ok ->
-            nkdist_reg:register(reg, {nkdomain, SrvId}, Path, Opts#{sync=>true, meta=>{Type, obj_id, ObjId}});
-        {error, Error} ->
-            {error, Error}
-    end.
 
 
 % @private

@@ -24,7 +24,7 @@
 
 
 -export([find/2, load/2, unload/2, unload/3, get_obj/2, get_info/2, get_name/2]).
--export([enable/3, update/3, delete/2, send_info/4]).
+-export([enable/3, update/3, update_name/3, delete/2, send_info/4]).
 -export([search/2, delete_all_childs/2, delete_all_childs_type/3, search_agg_field/5]).
 -export([clean/1]).
 -export_type([obj_id/0, name/0, obj/0, path/0, id/0, type/0]).
@@ -133,9 +133,17 @@ update(SrvId, Id, Update) ->
     nkdomain_obj:sync_op(SrvId, Id, {update, Update}).
 
 
+%% @doc Updates an object's obj_name
+-spec update_name(nkservice:id(), id(), binary()) ->
+    ok | {error, term()}.
+
+update_name(SrvId, Id, ObjName) ->
+    nkdomain_obj:sync_op(SrvId, Id, {update_name, ObjName}).
+
+
 %% @doc Remove an object
 -spec delete(nkservice:id(), id()) ->
-    ok | {error, term()}.
+    {ok, binary()} | {error, term()}.
 
 delete(SrvId, Id) ->
     nkdomain_obj:sync_op(SrvId, Id, delete).

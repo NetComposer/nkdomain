@@ -75,6 +75,7 @@ error({could_not_load_parent, Id})      -> {"Object could not load parent '~s'",
 error({could_not_load_domain, Id})      -> {"Object could not load domain '~s'", [Id]};
 error(domain_unknown)                   -> "Unknown domain";
 error({domain_unknown, D})              -> {"Unknown domain '~s'", [D]};
+error(domains_name_cannot_change)       -> "ObjName cannot be updated for domains";
 error({email_duplicated, E})            -> {"Duplicated email '~s'", [E]};
 error(element_action_unknown)           -> "Unknown element action";
 error({file_not_found, F})              -> {"File '~s' not found", [F]};

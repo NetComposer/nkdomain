@@ -61,6 +61,13 @@ syntax(<<"update">>, Type, Syntax) ->
         '__mandatory' => [id]
     };
 
+syntax(<<"update_obj_name">>, _Type, Syntax) ->
+    Syntax#{
+        id => binary,
+        obj_name => binary,
+        '__mandatory' => [id, obj_name]
+    };
+
 syntax(<<"get">>, _Type, Syntax) ->
     Syntax#{
         id => binary

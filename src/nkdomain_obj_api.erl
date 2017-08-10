@@ -112,6 +112,19 @@ api(<<"update">>, Type, #nkreq{data=Data, srv_id=SrvId}=Req) ->
             {error, Error}
     end;
 
+api(<<"update_obj_name">>, Type, #nkreq{data=#{obj_name:=ObjName}=Data, srv_id=SrvId}=Req) ->
+    case nkdomain_api_util:get_id(Type, Data, Req) of
+        {ok, Id} ->
+            case nkdomain:update_name(SrvId, Id, ObjName) of
+                {ok, ObjName2} ->
+                    {ok, #{obj_name=>ObjName2}, Req};
+                {error, Error} ->
+                    {error, Error}
+            end;
+        {error, Error} ->
+            {error, Error}
+    end;
+
 api(<<"enable">>, Type, #nkreq{data=#{enable:=Enable}=Data, srv_id=SrvId}=Req) ->
     case nkdomain_api_util:get_id(Type, Data, Req) of
         {ok, Id} ->
@@ -177,6 +190,7 @@ api(<<"make_token">>, Type, #nkreq{data=Data, user_id=UserId, srv_id=SrvId}=Req)
     end;
 
 api(_Cmd, _Type, _Req) ->
+    lager:error("NKLOG NNN ~p", [_Cmd]),
     {error, not_implemented}.
 
 

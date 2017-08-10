@@ -43,26 +43,26 @@ login(User, Pass, Domain) ->
 
 
 event_get_subs() ->
-    cmd(<<"event/get_subscriptions"/utf8>>, #{}).
+    cmd(<<"event/get_subscriptions">>, #{}).
 
 event_subscribe(ObjType, EvType, ObjId) ->
-    cmd(<<"event/subscribe"/utf8>>, #{class=>domain, subclass=>ObjType, type=>EvType, obj_id=>ObjId}).
+    cmd(<<"event/subscribe">>, #{class=>domain, subclass=>ObjType, type=>EvType, obj_id=>ObjId}).
 
 event_unsubscribe(ObjType, EvType, ObjId) ->
-    cmd(<<"event/unsubscribe"/utf8>>, #{class=>domain, subclass=>ObjType, type=>EvType, obj_id=>ObjId}).
+    cmd(<<"event/unsubscribe">>, #{class=>domain, subclass=>ObjType, type=>EvType, obj_id=>ObjId}).
 
 
 %% @doc
 log(Source, Msg, Data) ->
-    cmd(<<"session/log"/utf8>>, Data#{source=>Source, message=>Msg}).
+    cmd(<<"session/log">>, Data#{source=>Source, message=>Msg}).
 
 
 
 user_get() ->
-    cmd(<<"objects/user/get"/utf8>>, #{unknown=>1}).
+    cmd(<<"objects/user/get">>, #{unknown=>1}).
 
 user_get(Id) ->
-    cmd(<<"objects/user/get"/utf8>>, #{id=>Id}).
+    cmd(<<"objects/user/get">>, #{id=>Id}).
 
 user_create(Domain, Name, Surname) ->
     Data = #{
@@ -74,7 +74,7 @@ user_create(Domain, Name, Surname) ->
             password => <<"1234">>
         }
     },
-    case cmd(<<"objects/user/create"/utf8>>, Data) of
+    case cmd(<<"objects/user/create">>, Data) of
         {ok, #{<<"obj_id">>:=ObjId}} -> {ok, ObjId};
         {error, Error} -> {error, Error}
     end.
@@ -93,7 +93,7 @@ user_create(Domain, ObjName, Password, Name, Surname, Email) ->
             email => to_bin(Email)
         }
     },
-    case cmd(<<"objects/user/create"/utf8>>, Data) of
+    case cmd(<<"objects/user/create">>, Data) of
         {ok, #{<<"obj_id">>:=ObjId}} -> {ok, ObjId};
         {error, Error} -> {error, Error}
     end.
@@ -110,7 +110,7 @@ user_create2(Domain, Name, Surname, Avatar, Phone, Address) ->
             address_t => to_bin(Address)
         }
     },
-    case cmd(<<"objects/user/create"/utf8>>, Data) of
+    case cmd(<<"objects/user/create">>, Data) of
         {ok, #{<<"obj_id">>:=ObjId}} -> {ok, ObjId};
         {error, Error} -> {error, Error}
     end.
@@ -118,7 +118,7 @@ user_create2(Domain, Name, Surname, Avatar, Phone, Address) ->
 
 
 user_delete(Id) ->
-    cmd(<<"objects/user/delete"/utf8>>, #{id=>to_bin(Id)}).
+    cmd(<<"objects/user/delete">>, #{id=>to_bin(Id)}).
 
 
 user_update(Id, Name, Password, Email) ->
@@ -130,7 +130,7 @@ user_update(Id, Name, Password, Email) ->
             email => Email
         }
     },
-    cmd(<<"objects/user/update"/utf8>>, Data).
+    cmd(<<"objects/user/update">>, Data).
 
 user_update(Id, Name) ->
     Data = #{
@@ -139,18 +139,25 @@ user_update(Id, Name) ->
             name => to_bin(Name)
         }
     },
-    cmd(<<"objects/user/update"/utf8>>, Data).
+    cmd(<<"objects/user/update">>, Data).
+
+user_update_obj_name(Id, ObjName) ->
+    Data = #{
+        id => to_bin(Id),
+        obj_name => to_bin(ObjName)
+    },
+    cmd(<<"objects/user/update_obj_name">>, Data).
 
 
 user_make_token() ->
-    cmd(<<"objects/user/make_token"/utf8>>, #{ttl=>30}).
+    cmd(<<"objects/user/make_token">>, #{ttl=>30}).
 
 
 user_avatar(Id) ->
     Dir = filename:join(code:priv_dir(nkdomain), "avatar1.png"),
     {ok, Bin} = file:read_file(Dir),
     File = #{content_type=><<"image/png">>, body=>base64:encode(Bin)},
-    {ok, #{<<"obj_id">>:=FileId}} = cmd(<<"objects/file/create"/utf8>>, #{name=>avatar1, file=>File}),
+    {ok, #{<<"obj_id">>:=FileId}} = cmd(<<"objects/file/create">>, #{name=>avatar1, file=>File}),
     Data = #{
         id => to_bin(Id),
         icon_id => FileId
@@ -160,10 +167,10 @@ user_avatar(Id) ->
 
 
 domain_get() ->
-    cmd(<<"objects/domain/get"/utf8>>, #{}).
+    cmd(<<"objects/domain/get">>, #{}).
 
 domain_get(Id) ->
-    cmd(<<"objects/domain/get"/utf8>>, #{id=>Id}).
+    cmd(<<"objects/domain/get">>, #{id=>Id}).
 
 domain_create(Domain, ObjName, Name, Desc) ->
     Data = #{
@@ -173,7 +180,7 @@ domain_create(Domain, ObjName, Name, Desc) ->
         description => Desc,
         domain => #{}
     },
-    case cmd(<<"objects/domain/create"/utf8>>, Data) of
+    case cmd(<<"objects/domain/create">>, Data) of
         {ok, #{<<"obj_id">>:=ObjId}} -> {ok, ObjId};
         {error, Error} -> {error, Error}
     end.
