@@ -36,6 +36,7 @@ i18n() -> #{
         "domain_show_subdomains" => "Show subdomains",
         "domain_items_selected" => <<" item/s selected"/utf8>>, % This string is used in nkadmin_webix_datatable
         "domain_delete_button_tooltip" => "Delete items",
+        "domain_enable_button_tooltip" => "Enable items",
         "domain_disable_button_tooltip" => "Disable items",
 
         "domain_tree_overview" => "Overview",
@@ -82,6 +83,9 @@ i18n() -> #{
         "domain_refresh" => "Refrescar",
         "domain_show_subdomains" => "Mostrar subdominios",
         "domain_items_selected" => <<" elemento/s seleccionado/s"/utf8>>, % This string is used in nkadmin_webix_datatable
+        "domain_delete_button_tooltip" => "Borrar elementos",
+        "domain_enable_button_tooltip" => "Habilitar elementos",
+        "domain_disable_button_tooltip" => "Deshabilitar elementos",
 
         "domain_tree_overview" => "General",
         "domain_tree_overview_dashboard" => <<"Información"/utf8>>,
