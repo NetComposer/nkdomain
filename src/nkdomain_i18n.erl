@@ -35,6 +35,8 @@ i18n() -> #{
         "domain_refresh" => "Refresh",
         "domain_show_subdomains" => "Show subdomains",
         "domain_items_selected" => <<" item/s selected"/utf8>>, % This string is used in nkadmin_webix_datatable
+        "domain_delete_button_tooltip" => "Delete items",
+        "domain_disable_button_tooltip" => "Disable items",
 
         "domain_tree_overview" => "Overview",
         "domain_tree_overview_dashboard" => "Dashboard",
