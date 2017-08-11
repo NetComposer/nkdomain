@@ -306,6 +306,8 @@ object_create(SrvId, DomainId, Type, UserId, Obj) ->
             },
             case erlang:function_exported(Module, object_create, 2) of
                 true ->
+                    % If the objects has its own object creation function,
+                    % parse it so that it can be useful
                     case SrvId:object_parse(SrvId, create, Obj2) of
                         {ok, Obj3, _} ->
                             Module:object_create(SrvId, Obj3);
@@ -324,7 +326,7 @@ object_create(SrvId, DomainId, Type, UserId, Obj) ->
 %% load:   used when loading an object from disk
 %% update: used when updating an object, only fields allowed to be updated
 %%         must be included
--spec object_parse(srv_id(), load|update, map()) ->
+-spec object_parse(srv_id(), create|load|update, map()) ->
     {ok, nkdomain:obj(), Unknown::[binary()]} | {error, term()}.
 
 object_parse(SrvId, Mode, Map) ->

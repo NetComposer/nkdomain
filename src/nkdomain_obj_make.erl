@@ -180,7 +180,7 @@ create(SrvId, MakeOpts) ->
 create(SrvId, MakeOpts, Opts) ->
     case make(SrvId, MakeOpts) of
         {ok, Obj2} ->
-            case SrvId:object_parse(SrvId, load, Obj2) of
+            case SrvId:object_parse(SrvId, create, Obj2) of
                 {ok, Obj3, Unknown} ->
                     case nkdomain_lib:create(SrvId, Obj3, Opts) of
                         #obj_id_ext{}=ObjIdExt ->

@@ -21,7 +21,7 @@
 -module(nkdomain_util).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([is_path/1, get_parts/1, get_parts/2, class/1, type/1, name/1, field/2, fields/2]).
+-export([make_path/3, is_path/1, get_parts/1, get_parts/2, class/1, type/1, name/1, field/2, fields/2]).
 -export([add_destroyed/3]).
 -export([timestamp/0]).
 -export_type([error/0]).
@@ -40,34 +40,37 @@
 %% Public
 %% ===================================================================
 
+%% @doc 
+make_path(Base, Type, ObjName) ->
+    Class = class(Type),
+    case Base of
+        <<"/">> ->
+            <<$/, Class/binary, $/, ObjName/binary>>;
+        _ ->
+            <<Base/binary, $/, Class/binary, $/, ObjName/binary>>
+    end.
+
 
 %% @doc Normalizes a path
 %% Valid paths either start with / or has '@' or '.'
 -spec is_path(list()|binary()) ->
-    {true, nkdomain:path()} | false.
-
-is_path(Path) when is_list(Path) ->
-    is_path(list_to_binary(Path));
+    {true|false, nkdomain:path()}.
 
 is_path(<<"/", _/binary>>=Path) ->
     {true, Path};
-is_path(Path) ->
-    case binary:split(nklib_util:to_binary(Path), <<"@">>) of
+
+is_path(Path) when is_binary(Path) ->
+    case binary:split(Path, <<"@">>) of
         [Name, Path1] ->
             Path2 = binary:split(Path1, <<".">>, [global]),
             Path3 = nklib_util:bjoin(lists:reverse(Path2), <<"/">>),
             {true, <<"/", Path3/binary, "/", Name/binary>>};
         _ ->
-            false
-%%        [Path1] ->
-%%            case binary:split(Path1, <<".">>, [global]) of
-%%                [_] ->
-%%                    false;
-%%                Path2 ->
-%%                    Path3 = nklib_util:bjoin(lists:reverse(Path2), <<"/">>),
-%%                    {true, <<"/", Path3/binary>>}
-%%            end
-    end.
+            {false, Path}
+    end;
+
+is_path(Path) ->
+    is_path(to_bin(Path)).
 
 
 
@@ -105,8 +108,8 @@ get_parts(Path) ->
                 _ ->
                     {error, {invalid_object_path, Path2}}
             end;
-        false ->
-            {error, {invalid_object_path, to_bin(Path)}}
+        {false, Other} ->
+            {error, {invalid_object_path, Other}}
     end.
 
 
@@ -148,8 +151,8 @@ get_parts(Type, Path) when is_binary(Type) ->
                 _ ->
                     {error, {invalid_object_path, Path2}}
             end;
-        false ->
-            {error, {invalid_object_path, to_bin(Path)}}
+        {false, Other} ->
+            {error, {invalid_object_path, Other}}
     end;
 
 get_parts(Type, Path) ->
@@ -181,6 +184,10 @@ type(Class) ->
 %% @private
 name(Name) ->
     nklib_parse:normalize(Name, #{space=>$_, allowed=>[$-, $., $_]}).
+
+
+
+
 
 %% @doc
 field(Type, Field) ->

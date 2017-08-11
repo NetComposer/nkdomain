@@ -30,7 +30,7 @@
 -export([start/3, new_type_master/1, object_deleted/1]).
 -export([init/1, terminate/2, code_change/3, handle_call/3,  handle_cast/2, handle_info/2]).
 -export([links_add/3, links_remove/3, links_iter/4]).
--export([get_all/0, unload_all/0, get_state/2, get_time/2]).
+-export([get_all/0, unload_all/0, get_state/2, get_time/2, do_update_name/2]).
 -export_type([event/0, status/0]).
 
 
@@ -135,6 +135,7 @@
     {unregister, usage|link, nklib:link()} |
     {send_info, atom()|binary(), map()} |
     {send_event, event()} |
+    save |
     {unload, Reason::nkservice:error()} |
     term().
 
@@ -617,9 +618,10 @@ do_sync_op({update_name, ObjName}, _From, #?STATE{is_enabled=IsEnabled, object_i
             ObjName2 = nkdomain_util:name(ObjName),
             case do_update_name(ObjName2, State) of
                 {ok, State2} ->
-                    reply({ok, ObjName2}, do_refresh(State2));
-                {error, Error, State2} ->
-                    reply({error, Error}, State2)
+                    State3 = do_event({updated, #{obj_name=>ObjName2}}, State2),
+                    reply({ok, ObjName2}, do_refresh(State3));
+                {error, Error} ->
+                    reply({error, Error}, State)
             end
     end;
 
@@ -655,6 +657,10 @@ do_async_op({send_info, Info, Meta}, State) ->
 
 do_async_op({send_event, Event}, State) ->
     noreply(do_event(Event, do_refresh(State)));
+
+do_async_op(save, State) ->
+    {_Reply, State2} = do_save(user_order, State),
+    noreply(State2);
 
 do_async_op({unload, Reason}, State) ->
     ?DEBUG("received unload: ~p", [Reason], State),
@@ -932,13 +938,7 @@ do_update_name(ObjName, #?STATE{srv_id=SrvId, id=Id, obj=Obj}=State) ->
         {ok, _Domain, ObjName} ->
             {ok, State};
         {ok, Domain, _} ->
-            Class = nkdomain_util:class(Type),
-            Path2 = case Domain of
-                <<"/">> ->
-                    <<$/, Class/binary, $/, ObjName/binary>>;
-                _ ->
-                    <<Domain/binary, $/, Class/binary, $/, ObjName/binary>>
-            end,
+            Path2 = nkdomain_util:make_path(Domain, Type, ObjName),
             case nkdomain_lib:find(SrvId, Path2) of
                 {error, object_not_found} ->
                     Id2 = Id#obj_id_ext{path=Path2},
@@ -949,21 +949,23 @@ do_update_name(ObjName, #?STATE{srv_id=SrvId, id=Id, obj=Obj}=State) ->
                         updated_by => <<>>
                     },
                     Obj2 = ?ADD_TO_OBJ(Update, Obj),
-                    State2 = State#?STATE{id=Id2, obj=Obj2, is_dirty=true},
+                    State2 = State#?STATE{id=Id2, obj=Obj2, obj_name=ObjName, is_dirty=true},
                     case register_name(none, State2) of
                         {ok, State3} ->
+                            lager:error("NKLOG UNREGISTER ~p", [Path1]),
                             unregister_name(State),                     % Old State
                             case do_save(object_updated, State3) of
                                 {ok, State4} ->
                                     {ok, do_event({updated, #{obj_name=>ObjName}}, State4)};
-                                {{error, Error}, _} ->                  % Old State
-                                    {error, Error, State}
+                                {{error, Error}, _} ->
+                                    {error, Error}
                             end;
                         {error, Error} ->
-                            {error, Error, State}                       % Old State
+                            {error, Error}
                     end;
                 _ ->
-                    {error, object_already_exists, State}
+                    ?LLOG(notice, "cannot update name, ~s already exists", [Path2], State),
+                    {error, object_already_exists}
             end
     end.
 
@@ -1060,6 +1062,10 @@ do_nkdist({must_move, Node}, #?STATE{timer=Timer}=State) ->
     end;
 
 do_nkdist({vnode_pid, _Pid}, State) ->
+    noreply(State);
+
+do_nkdist({updated_reg_pid, _Class, ObjId, Pid}, State) ->
+    lager:error("NKLOG UPDATED REG ~s, ~p (I am ~p)", [ObjId, Pid, self()]),
     noreply(State);
 
 do_nkdist(Msg, State) ->

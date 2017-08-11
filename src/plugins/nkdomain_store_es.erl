@@ -105,8 +105,8 @@ find_obj(Id, EsOpts) ->
     Filters = case nkdomain_util:is_path(Id) of
         {true, Path} ->
             #{path => Path};
-        false ->
-            #{obj_id => to_bin(Id)}
+        {false, Id2} ->
+            #{obj_id => Id2}
     end,
     case do_search_objs(#{filters=>Filters}, EsOpts) of
         {ok, 0, []} ->
@@ -478,8 +478,8 @@ filter_childs(Id, Spec, false, EsOpts) ->
 %% @private
 filter_childs(Id, Spec, EsOpts) ->
     case nkdomain_util:is_path(Id) of
-        false ->
-            {ok, parent_filter(to_bin(Id), Spec)};
+        {false, Id2} ->
+            {ok, parent_filter(Id2, Spec)};
         {true, Path} ->
             case find_obj(Path, EsOpts) of
                 {ok, _Type, ObjId, _Path} ->
@@ -502,8 +502,8 @@ filter_all_childs(Id, Spec, EsOpts) ->
     case nkdomain_util:is_path(Id) of
         {true, Path} ->
             {ok, path_filter(Path, Spec)};
-        false ->
-            case find_obj(Id, EsOpts) of
+        {false, Id2} ->
+            case find_obj(Id2, EsOpts) of
                 {ok, _Type, _ObjId, Path} ->
                     {ok, path_filter(Path, Spec)};
                 {error, _} ->
