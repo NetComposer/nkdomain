@@ -85,57 +85,74 @@ get_form(Obj, Session) ->
         rows => [#{
 %           ACTION BUTTONS (DISABLE, ENABLE, DELETE, SAVE, ETC)
             id => <<"user_buttons">>,
+            type => <<"space">>,            
             view => <<"layout">>,
             cols => [
                 #{
                     id => <<"user_disable_button">>,
                     view => <<"button">>,
-                    value => <<"Disable">>,
-                    autoWidth => true,
+                    label => <<"Disable">>,
+                    type => <<"iconButton">>,
+                    icon => <<"ban">>,
+                    css => <<"webix_img_btn__centered">>,
                     align => <<"center">>,
                     hidden => false,
-                    click => <<"
-                        function() {
-                            alert('Disable object');
-                        }
-                    ">>
+                    click => #{
+                        nkParseFunction => <<"
+                            function() {
+                                alert('Disable object');
+                            }
+                        ">>
+                    }
                 }, #{
                     id => <<"user_enable_button">>,
                     view => <<"button">>,
-                    value => <<"Enable">>,
-                    autoWidth => true,
+                    label => <<"Enable">>,
+                    type => <<"iconButton">>,
+                    icon => <<"circle-thin">>,
+                    css => <<"webix_img_btn__centered">>,
                     align => <<"center">>,
                     hidden => true,
-                    click => <<"
-                        function() {
-                            alert('Enable object');
-                        }
-                    ">>
+                    click => #{
+                        nkParseFunction => <<"
+                            function() {
+                                alert('Enable object');
+                            }
+                        ">>
+                    }
                 }, #{
                     id => <<"user_delete_button">>,
                     view => <<"button">>,
-                    value => <<"Delete">>,
-                    autoWidth => true,
+                    label => <<"Delete">>,
+                    type => <<"iconButton">>,
+                    icon => <<"trash">>,
+                    css => <<"webix_img_btn__centered">>,
                     align => <<"center">>,
                     hidden => false,
-                    click => <<"
-                        function() {
-                            alert('Delete object');
-                        }
-                    ">>
+                    click => #{
+                        nkParseFunction => <<"
+                            function() {
+                                alert('Delete object');
+                            }
+                        ">>
+                    }
                 }, #{
                     id => <<"user_save_button">>,
                     view => <<"button">>,
-                    value => <<"Save changes">>,
-                    autoWidth => true,
+                    label => <<"Save changes">>,
+                    type => <<"iconButton">>,
+                    icon => <<"floppy-o">>,
+                    css => <<"webix_img_btn__centered">>,
                     align => <<"center">>,
                     disabled => true,
                     hidden => false,
-                    click => <<"
-                        function() {
-                            alert('Save object');
-                        }
-                    ">>
+                    click => #{
+                        nkParseFunction => <<"
+                            function() {
+                                alert('Save object');
+                            }
+                        ">>
+                    }
                 }
             ]
 %       CURRENT OBJECT FORM
@@ -321,24 +338,30 @@ get_form(Obj, Session) ->
             }],
             tabbar => #{
                 on => #{
-                    onChange => <<"
-                        function() {
-                            console.log('Selected tab: ', this.getValue());
-                            ncClient.sendMessageAsync('objects/admin.session/element_action', {
-                                element_id: this.getValue(),
-                                action: 'selected'
-                            }).then(function(response) {
-                                console.log('Tab selected OK: ', response);
-                                if (response.data && response.data.elements) {
-                                    // Update view
-                                    updateView(response.data.elements);
+                    onChange => #{
+                        nkParseFunction => <<"
+                            function(newTab, oldTab) {
+                                console.log('Selected tab: ', newTab, oldTab);
+                                var oldTable = $$(oldTab + '__table');
+                                if (oldTable && oldTable.hasOwnProperty('nkClearInterval')) {
+                                    oldTable.nkClearInterval();
                                 }
-                            }).catch(function(response) {
-                                console.log('Error at tabbar onChange: ', response);
-                                webix.message({ 'type': 'error', 'text': response.data.code + ' - ' + response.data.error });
-                            });
-                        }
-                    ">>
+                                ncClient.sendMessageAsync('objects/admin.session/element_action', {
+                                    element_id: newTab,
+                                    action: 'selected'
+                                }).then(function(response) {
+                                    console.log('Tab selected OK: ', response);
+                                    if (response.data && response.data.elements) {
+                                        // Update view
+                                        updateView(response.data.elements);
+                                    }
+                                }).catch(function(response) {
+                                    console.log('Error at tabbar onChange: ', response);
+                                    webix.message({ 'type': 'error', 'text': response.data.code + ' - ' + response.data.error });
+                                });
+                            }
+                        ">>
+                    }
                 }
             }
         }]
