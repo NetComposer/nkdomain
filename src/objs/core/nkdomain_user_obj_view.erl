@@ -85,13 +85,16 @@ get_form(Obj, Session) ->
         rows => [#{
 %           ACTION BUTTONS (DISABLE, ENABLE, DELETE, SAVE, ETC)
             id => <<"user_buttons">>,
+            type => <<"space">>,            
             view => <<"layout">>,
             cols => [
                 #{
                     id => <<"user_disable_button">>,
                     view => <<"button">>,
-                    value => <<"Disable">>,
-                    autoWidth => true,
+                    label => <<"Disable">>,
+                    type => <<"iconButton">>,
+                    icon => <<"ban">>,
+                    css => <<"webix_img_btn__centered">>,
                     align => <<"center">>,
                     hidden => false,
                     click => #{
@@ -104,8 +107,10 @@ get_form(Obj, Session) ->
                 }, #{
                     id => <<"user_enable_button">>,
                     view => <<"button">>,
-                    value => <<"Enable">>,
-                    autoWidth => true,
+                    label => <<"Enable">>,
+                    type => <<"iconButton">>,
+                    icon => <<"circle-thin">>,
+                    css => <<"webix_img_btn__centered">>,
                     align => <<"center">>,
                     hidden => true,
                     click => #{
@@ -118,8 +123,10 @@ get_form(Obj, Session) ->
                 }, #{
                     id => <<"user_delete_button">>,
                     view => <<"button">>,
-                    value => <<"Delete">>,
-                    autoWidth => true,
+                    label => <<"Delete">>,
+                    type => <<"iconButton">>,
+                    icon => <<"trash">>,
+                    css => <<"webix_img_btn__centered">>,
                     align => <<"center">>,
                     hidden => false,
                     click => #{
@@ -132,8 +139,10 @@ get_form(Obj, Session) ->
                 }, #{
                     id => <<"user_save_button">>,
                     view => <<"button">>,
-                    value => <<"Save changes">>,
-                    autoWidth => true,
+                    label => <<"Save changes">>,
+                    type => <<"iconButton">>,
+                    icon => <<"floppy-o">>,
+                    css => <<"webix_img_btn__centered">>,
                     align => <<"center">>,
                     disabled => true,
                     hidden => false,
