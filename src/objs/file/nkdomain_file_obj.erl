@@ -130,7 +130,7 @@ http_get(FileId, Req) ->
 
 %% @private
 find(SrvId) ->
-    nkdomain_domain_obj:find(SrvId, <<"root">>, #{filters=>#{type=>?DOMAIN_FILE}}).
+    nkdomain_domain_obj:search(SrvId, <<"root">>, #{filters=>#{type=>?DOMAIN_FILE}}).
 
 
 %% @private

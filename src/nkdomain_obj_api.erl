@@ -144,7 +144,7 @@ api(<<"find">>, Type, #nkreq{data=Data, srv_id=SrvId}=Req) ->
             Filters1 = maps:get(filters, Data, #{}),
             Filters2 = Filters1#{type=>Type},
             Data2 = Data#{filters=>Filters2},
-            case nkdomain_domain_obj:find(SrvId, DomainId, Data2) of
+            case nkdomain_domain_obj:search(SrvId, DomainId, Data2) of
                 {ok, Total, List, _Meta} ->
                     {ok, #{<<"total">>=>Total, <<"data">>=>List}};
                 {error, Error} ->
@@ -160,7 +160,7 @@ api(<<"find_all">>, Type, #nkreq{data=Data, srv_id=SrvId}=Req) ->
             Filters1 = maps:get(filters, Data, #{}),
             Filters2 = Filters1#{type=>Type},
             Data2 = Data#{filters=>Filters2},
-            case nkdomain_domain_obj:find_all(SrvId, DomainId, Data2) of
+            case nkdomain_domain_obj:search_all(SrvId, DomainId, Data2) of
                 {ok, Total, List, _Meta} ->
                     {ok, #{<<"total">>=>Total, <<"data">>=>List}};
                 {error, Error} ->

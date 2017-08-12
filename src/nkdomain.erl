@@ -23,9 +23,9 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 
--export([find/2, load/2, unload/2, unload/3, get_obj/2, get_info/2, get_name/2]).
+-export([find/2, load/2, unload/2, unload/3, get_obj/2, get_info/2, get_name/2, get_domain_id/2]).
 -export([enable/3, update/3, update_name/3, delete/2, send_info/4]).
--export([search/2, delete_all_childs/2, delete_all_childs_type/3, search_agg_field/5]).
+-export([search/2, search_type/2, delete_all_childs/2, delete_all_childs_type/3, search_agg_field/5]).
 -export([clean/1]).
 -export_type([obj_id/0, name/0, obj/0, path/0, id/0, type/0]).
 -export_type([timestamp/0]).
@@ -117,6 +117,14 @@ get_name(SrvId, Id) ->
     nkdomain_obj:sync_op(SrvId, Id, get_obj_name).
 
 
+%% @doc
+-spec get_domain_id(nkservice:id(), id()) ->
+    {ok, nkdomain:obj_id()} | {error, term()}.
+
+get_domain_id(SrvId, Id) ->
+    nkdomain_obj:sync_op(SrvId, Id, get_domain_id).
+
+
 %% @doc Enables/disabled an object
 -spec enable(nkservice:id(), id(), boolean()) ->
     ok | {error, term()}.
@@ -188,6 +196,14 @@ search(SrvId, Spec) ->
         {error, Error} ->
             {error, Error}
     end.
+
+%% @doc
+-spec search_type(nkservice:id(), type()) ->
+    {ok, integer(), Data::[map()], Meta::map()} | {error, term()}.
+
+search_type(SrvId, Type) ->
+    search(SrvId, #{filters=>#{type=>Type}}).
+
 
 
 %% @doc Finds types

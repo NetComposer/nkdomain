@@ -269,8 +269,8 @@ session_delete() ->
     cmd(<<"objects/session/delete"/utf8>>, #{}).
 
 
-config_create(Sub, Parent, Config) ->
-    cmd(<<"objects/config/create"/utf8>>, #{subtype=>Sub, parent=>Parent, config=>Config}).
+config_create(Sub, Domain, Parent, Config) ->
+    cmd(<<"objects/config/create"/utf8>>, #{subtype=>Sub, domain_id=>Domain, parent=>Parent, config=>Config}).
 
 config_get(Id) ->
     cmd(<<"objects/config/get"/utf8>>, #{id=>Id}).

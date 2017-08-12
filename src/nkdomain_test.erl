@@ -452,7 +452,7 @@ remove_data() ->
         {error, object_not_found} ->
             ok
     end,
-    case nkdomain_domain_obj:find_childs(?SRV, "/stest1", #{}) of
+    case nkdomain_domain_obj:search_childs(?SRV, "/stest1", #{}) of
         {ok, 0, []} ->
             ok;
         _ ->

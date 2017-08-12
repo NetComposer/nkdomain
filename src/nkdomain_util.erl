@@ -86,7 +86,7 @@ get_parts(Path) ->
                 [<<>>, <<>>] ->
                     {ok, <<>>, ?DOMAIN_DOMAIN, <<>>};
                 [<<>>|_] ->
-                    {error, {invalid_object_path, Path2}};
+                    {error, {object_path_invalid, Path2}};
                 [ObjName, Class|Parts] ->
                     ObjName2 = name(ObjName),
                     case type(Class) of
@@ -106,10 +106,10 @@ get_parts(Path) ->
                             end
                     end;
                 _ ->
-                    {error, {invalid_object_path, Path2}}
+                    {error, {object_path_invalid, Path2}}
             end;
         {false, Other} ->
-            {error, {invalid_object_path, Other}}
+            {error, {object_path_invalid, Other}}
     end.
 
 
@@ -127,7 +127,7 @@ get_parts(Type, Path) when is_binary(Type) ->
         {true, Path2} ->
             case lists:reverse(binary:split(Path2, <<"/">>, [global])) of
                 [<<>>|_] ->
-                    {error, {invalid_object_path, Path2}};
+                    {error, {object_path_invalid, Path2}};
                 [ObjName|Parts] when Type==?DOMAIN_DOMAIN ->
                     ObjName2 = name(ObjName),
                     case nklib_util:bjoin(lists:reverse(Parts), <<"/">>) of
@@ -146,13 +146,13 @@ get_parts(Type, Path) when is_binary(Type) ->
                                     {ok, Base, name(ObjName)}
                             end;
                         _ ->
-                            {error, {invalid_object_path, Path2}}
+                            {error, {object_path_invalid, Path2}}
                     end;
                 _ ->
-                    {error, {invalid_object_path, Path2}}
+                    {error, {object_path_invalid, Path2}}
             end;
         {false, Other} ->
-            {error, {invalid_object_path, Other}}
+            {error, {object_path_invalid, Other}}
     end;
 
 get_parts(Type, Path) ->

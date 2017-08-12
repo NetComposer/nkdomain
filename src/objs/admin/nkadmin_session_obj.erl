@@ -113,7 +113,7 @@ get_data(SrvId, Id, ElementId, Data) ->
 
 %% @private
 find_all() ->
-    nkdomain_domain_obj:find_all(root, root, #{filters=>#{type=>?DOMAIN_ADMIN_SESSION}}).
+    nkdomain_domain_obj:search_all(root, root, #{filters=>#{type=>?DOMAIN_ADMIN_SESSION}}).
 
 
 
@@ -275,7 +275,7 @@ object_handle_info(_Info, _State) ->
 do_switch_domain(Domain, Url, #?STATE{srv_id=SrvId, session=Session}=State) ->
     case nkdomain_lib:load(SrvId, Domain) of
         #obj_id_ext{obj_id=DomainId, path=Path, type= ?DOMAIN_DOMAIN} ->
-            case nkdomain_domain_obj:find_all_types(SrvId, DomainId, #{}) of
+            case nkdomain_domain_obj:search_all_types(SrvId, DomainId, #{}) of
                 {ok, _, TypeList, _Meta} ->
                     Url2 = case Url of
                         <<"#", U/binary>> -> U;

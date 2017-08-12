@@ -47,7 +47,7 @@
 
 %% @private
 find(SrvId) ->
-    nkdomain_domain_obj:find(SrvId, <<"root">>, #{filters=>#{type=>?DOMAIN_MAIL_PROVIDER}}).
+    nkdomain_domain_obj:search(SrvId, <<"root">>, #{filters=>#{type=>?DOMAIN_MAIL_PROVIDER}}).
 
 
 %% @private

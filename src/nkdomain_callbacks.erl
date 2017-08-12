@@ -31,7 +31,7 @@
 -export([object_create/5, object_check_active/3, object_do_expired/2]).
 -export([object_syntax/2, object_parse/3]).
 -export([object_init/1, object_terminate/2, object_stop/2,
-         object_event/2, object_reg_event/4, object_session_event/3, object_sync_op/3, object_async_op/2, object_save/1, object_delete/1, object_archive/1, object_link_down/2,
+         object_event/2, object_reg_event/4, object_session_event/3, object_sync_op/3, object_async_op/2, object_save/1, object_delete/1, object_archive/1, object_link_down/2, object_enabled/2,
          object_handle_call/3, object_handle_cast/2, object_handle_info/2]).
 -export([object_send_push/5]).
 -export([object_db_init/1, object_db_start/1, object_db_read/2, object_db_save/2, object_db_delete/2]).
@@ -83,8 +83,6 @@ error(invalid_content_type)             -> "Invalid Content-Type";
 error({invalid_name, N})                -> {"Invalid name '~s'", [N]};
 error(invalid_object_id)                -> "Invalid object id";
 error(invalid_object_type)              -> "Invalid object type";
-error(invalid_object_path)              -> "Invalid object path";
-error({invalid_object_path, P})         -> {"Invalid object path '~s'", [P]};
 error(invalid_sessionn)                 -> "Invalid session";
 error({invalid_type, T})                -> {"Invalid type '~s'", [T]};
 error(invalid_token)                    -> "Invalid token";
@@ -109,10 +107,13 @@ error(object_is_disabled) 		        -> "Object is disabled";
 error(object_is_stopped) 		        -> "Object is stopped";
 error(object_not_found) 		        -> "Object not found";
 error(object_not_started) 		        -> "Object is not started";
+error(object_path_invalid)              -> "Invalid object path";
+error({object_path_invalid, P})         -> {"Invalid object path '~s'", [P]};
 error(object_parent_conflict) 	        -> "Object has conflicting parent";
 error(object_stopped) 		            -> "Object stopped";
 error(operation_invalid) 	            -> "Invalid operation";
 error(operation_token_invalid) 	        -> "Operation token is invalid";
+error(parent_is_disabled) 		        -> "Parent is disabled";
 error(parent_not_found) 		        -> "Parent not found";
 error(parent_stopped) 		            -> "Parent stopped";
 error(parse_error)   		            -> "Object parse error";
@@ -593,6 +594,14 @@ object_archive(#?STATE{srv_id=_SrvId}=State) ->
 
 object_link_down(Link, State) ->
     call_module(object_link_down, [Link], State).
+
+
+%% @doc Called when an object is enabled/disabled
+-spec object_enabled(boolean(), state()) ->
+    {ok, state()}.
+
+object_enabled(Enabled, State) ->
+    call_module(object_enabled, [Enabled], State).
 
 
 %% @doc

@@ -63,12 +63,14 @@
     meta :: map(),                      % Object load metadata
     session :: term(),                  % Session-specific metadata
     stop_reason = false :: false | nkservice:error(),
-    ttl :: permanent | {expires, nklib_util:m_timestamp()} | {ttl, integer()},
+    unload_policy :: permanent | {expires, nklib_util:m_timestamp()} | {ttl, integer()},
     timer :: reference(),
     timelog = [] :: [map()],
     type_monitor :: reference(),
+    domain_pid :: pid(),
+    domain_enabled :: boolean(),
     parent_pid :: pid(),
-    service_pid :: pid(),
+    parent_enabled :: boolean(),
     moved_to :: undefined | pid()
 }).
 

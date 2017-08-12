@@ -48,7 +48,7 @@
 
 -define(INVALID_PASSWORD_TIME, 500).
 
--define(MAX_EXPIRE, 60).    % Secs
+%-define(MAX_EXPIRE, 60).    % Secs
 
 %% ===================================================================
 %% Types
@@ -275,7 +275,8 @@ find_childs(SrvId, User) ->
 %% @private
 object_info() ->
     #{
-        type => ?DOMAIN_USER
+        type => ?DOMAIN_USER,
+        default_ttl => 5*60*1000
     }.
 
 

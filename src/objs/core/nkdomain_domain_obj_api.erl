@@ -37,7 +37,7 @@ cmd(<<"check_name">>, #nkreq{data=#{name:=Name}}) ->
 cmd(<<"find">>, #nkreq{data=Data, srv_id=SrvId}=Req) ->
     case get_domain(Data, Req) of
         {ok, Id} ->
-            case nkdomain_domain_obj:find(SrvId, Id, Data) of
+            case nkdomain_domain_obj:search(SrvId, Id, Data) of
                 {ok, Total, List, _Meta} ->
                     {ok, #{total=>Total, data=>List}};
                 {error, Error} ->
@@ -50,7 +50,7 @@ cmd(<<"find">>, #nkreq{data=Data, srv_id=SrvId}=Req) ->
 cmd(<<"find_all">>, #nkreq{data=Data, srv_id=SrvId}=Req) ->
     case get_domain(Data, Req) of
         {ok, Id} ->
-            case nkdomain_domain_obj:find_all(SrvId, Id, Data) of
+            case nkdomain_domain_obj:search_all(SrvId, Id, Data) of
                 {ok, Total, List, _Meta} ->
                     {ok, #{total=>Total, data=>List}};
                 {error, Error} ->
@@ -63,7 +63,7 @@ cmd(<<"find_all">>, #nkreq{data=Data, srv_id=SrvId}=Req) ->
 cmd(<<"find_types">>, #nkreq{data=Data, srv_id=SrvId}=Req) ->
     case get_domain(Data, Req) of
         {ok, Id} ->
-            case nkdomain_domain_obj:find_types(SrvId, Id, Data) of
+            case nkdomain_domain_obj:search_type(SrvId, Id, Data) of
                 {ok, Total, List, _Meta} ->
                     {ok, #{total=>Total, data=>maps:from_list(List)}};
                 {error, Error} ->
@@ -76,7 +76,7 @@ cmd(<<"find_types">>, #nkreq{data=Data, srv_id=SrvId}=Req) ->
 cmd(<<"find_all_types">>, #nkreq{data=Data, srv_id=SrvId}=Req) ->
     case get_domain(Data, Req) of
         {ok, Id} ->
-            case nkdomain_domain_obj:find_all_types(SrvId, Id, Data) of
+            case nkdomain_domain_obj:search_all_types(SrvId, Id, Data) of
                 {ok, Total, List, _Meta} ->
                     {ok, #{total=>Total, data=>maps:from_list(List)}};
                 {error, Error} ->
@@ -89,7 +89,7 @@ cmd(<<"find_all_types">>, #nkreq{data=Data, srv_id=SrvId}=Req) ->
 cmd(<<"find_childs">>, #nkreq{data=Data, srv_id=SrvId}=Req) ->
     case get_domain(Data, Req) of
         {ok, Id} ->
-            Search = nkdomain_domain_obj:find_childs(SrvId, Id, Data),
+            Search = nkdomain_domain_obj:search_childs(SrvId, Id, Data),
             nkdomain_api_util:search(Search);
         Error ->
             Error
@@ -98,7 +98,7 @@ cmd(<<"find_childs">>, #nkreq{data=Data, srv_id=SrvId}=Req) ->
 cmd(<<"find_all_childs">>, #nkreq{data=Data, srv_id=SrvId}=Req) ->
     case get_domain(Data, Req) of
         {ok, Id} ->
-            Search = nkdomain_domain_obj:find_all_childs(SrvId, Id, Data),
+            Search = nkdomain_domain_obj:search_all_childs(SrvId, Id, Data),
             nkdomain_api_util:search(Search);
         Error ->
             Error

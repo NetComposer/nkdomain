@@ -194,7 +194,7 @@ find_domains(#admin_session{srv_id=SrvId, domain_id=DomainId}) ->
     Spec = #{
         filters => #{type => ?DOMAIN_DOMAIN}
     },
-    case nkdomain_domain_obj:find_childs(SrvId, DomainId, Spec) of
+    case nkdomain_domain_obj:search_childs(SrvId, DomainId, Spec) of
         {ok, _N, List} ->
             {ok, [ObjId || {?DOMAIN_DOMAIN, ObjId, _Path} <- List]};
         {error, Error} ->
