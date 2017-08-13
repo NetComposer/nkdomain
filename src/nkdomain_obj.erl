@@ -604,6 +604,9 @@ do_sync_op(get_time, _From, State) ->
 do_sync_op(get_domain_id, _From, #?STATE{domain_id=DomainId}=State) ->
     reply({ok, DomainId}, State);
 
+do_sync_op(get_path, _From, #?STATE{id=#obj_id_ext{path=Path}}=State) ->
+    reply({ok, Path}, State);
+
 do_sync_op(save, _From, State) ->
     {Reply, State2} = do_save(user_order, State),
     reply(Reply, State2);
@@ -781,19 +784,13 @@ register_name(OldPid, #?STATE{id=Id}=State) ->
         false ->
             #{}
     end,
-    Opts1 = OptsPid#{sync=>true, meta=>{Type, path, Path}},
+    Opts1 = OptsPid#{sync=>true, meta=>Type},
     case nkdist_reg:register(proc, {nkdomain, SrvId}, ObjId, Opts1) of
         ok ->
-            Opts2 = OptsPid#{sync=>true, meta=>{Type, obj_id, ObjId}},
-            case nkdist_reg:register(reg, {nkdomain, SrvId}, Path, Opts2) of
-                ok ->
-                    nklib_proc:put(?MODULE, {Type, ObjId, Path}),
-                    case register_domain(State) of
-                        {ok, State2} ->
-                            register_parent(State2);
-                        {error, Error} ->
-                            {error, Error}
-                    end;
+            nklib_proc:put(?MODULE, {Type, ObjId, Path}),
+            case register_domain(State) of
+                {ok, State2} ->
+                    register_parent(State2);
                 {error, Error} ->
                     {error, Error}
             end;

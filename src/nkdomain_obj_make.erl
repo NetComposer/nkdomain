@@ -73,8 +73,8 @@ make(SrvId, Opts) ->
     } = Opts,
     Parent = maps:get(parent_id, Opts, Domain),
     try
-        {DomainId, DomainPath} = case nkdomain_lib:find(SrvId, Domain) of
-            #obj_id_ext{obj_id=DomainId0, path=DomainPath0} ->
+        {DomainId, DomainPath} = case nkdomain_lib:find_path(SrvId, Domain) of
+            {ok, ?DOMAIN_DOMAIN, DomainId0, DomainPath0} ->
                 {DomainId0, DomainPath0};
             {error, object_not_found} ->
                 throw({could_not_load_domain, Domain});
@@ -82,7 +82,7 @@ make(SrvId, Opts) ->
                 throw(DomainError)
         end,
         ParentId = case nkdomain_lib:find(SrvId, Parent) of
-            #obj_id_ext{obj_id=ParentId0} ->
+            {ok, _PType, ParentId0, _PPid} ->
                 ParentId0;
             {error, object_not_found} ->
                 throw({could_not_load_parent, Parent});
@@ -90,7 +90,7 @@ make(SrvId, Opts) ->
                 throw(ParentError)
         end,
         UserId = case nkdomain_lib:find(SrvId, User) of
-            #obj_id_ext{obj_id=UserId0} ->
+            {ok, ?DOMAIN_USER, UserId0, _UPid} ->
                 UserId0;
             {error, object_not_found} ->
                 throw({could_not_load_user, User});

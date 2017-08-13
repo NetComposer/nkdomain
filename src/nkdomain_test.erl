@@ -119,18 +119,18 @@ test_create_user(Pid) ->
 
     % Find user by several ways
     {ok, U2} = cmd(Pid, <<"objects/user/get">>, #{id=><<"/users/tuser1">>}),
-    {ok, <<"user">>, U2Id, <<"/users/tuser1">>, Pid1} = F1 = nkdomain:find(?SRV, "/users/tuser1"),
-    F1 = nkdomain:find(?SRV, U2Id),
-    F1 = nkdomain:load(?SRV, "/users/tuser1"),
-    F1 = nkdomain:load(?SRV, U2Id),
+    #obj_id_ext{type= <<"user">>, obj_id=U2Id, pid=Pid1} = F1 = nkdomain_lib:find_obj(?SRV, "/users/tuser1"),
+    F1 = nkdomain_lib:find_obj(?SRV, U2Id),
+    F1 = nkdomain_lib:load(?SRV, "/users/tuser1"),
+    F1 = nkdomain_lib:load(?SRV, U2Id),
 
     % Unload the user
     ok = nkdomain:unload(?SRV, U2Id, normal),
     timer:sleep(100),
-    {ok, <<"user">>, U2Id, <<"/users/tuser1">>, undefined} = F2 = nkdomain:find(?SRV, "/users/tuser1"),
+    {ok, <<"user">>, U2Id, undefined} = F2 = nkdomain:find(?SRV, "/users/tuser1"),
     F2 = nkdomain:find(?SRV, U2Id),
     {ok, <<"user">>, U2Id, <<"/users/tuser1">>, Pid2} = F3 = nkdomain:load(?SRV, "/users/tuser1"),
-    F3 = nkdomain:find(?SRV, U2Id),
+    F3 = nkdomain:find_obj(?SRV, U2Id),
     false = Pid1 == Pid2,
 
     % Update the user
@@ -161,7 +161,7 @@ test_session1(Pid) ->
     {ok, Pid2, SessId} = login("/users/tuser1", pass2),
     {ok, #{<<"path">>:=<<"/users/tuser1">>, <<"obj_id">>:=UId}} = cmd(Pid2, <<"objects/user/get">>, #{}),
     {ok, #{<<"path">>:=<<"/users/admin">>}} = cmd(Pid, <<"objects/user/get">>, #{}),
-    {ok, <<"session">>, SessId, <<"/sessions/", _/binary>>, SPid} = nkdomain:find(?SRV, SessId),
+    {ok, <<"session">>, SessId, SPid} = nkdomain:find(?SRV, SessId),
     true = is_pid(SPid),
 
     % Object has active childs, we cannot delete it
@@ -207,7 +207,9 @@ test_session1(Pid) ->
 test_session2(Pid) ->
     % Get the admin user (without id) and its current session
     {ok, #{<<"obj_id">>:=SessId}} = cmd(Pid, <<"objects/session/get">>, #{}),
-    {ok, <<"session">>, SessId, Path, SessPid} = nkdomain:find(?SRV, SessId),
+    {ok, <<"session">>, SessId, SessPid} = nkdomain:find(?SRV, SessId),
+    {ok, <<"session">>, SessId, Path} = nkdomain_lib:find_path(?SRV, SessId),
+
     {ok, Childs} = nkdomain_obj:sync_op(?SRV, <<"admin">>, get_childs),
     true = maps:is_key(SessId, Childs),
 
@@ -223,7 +225,8 @@ test_session2(Pid) ->
     timer:sleep(100),
     {ok, Childs2} = nkdomain_obj:sync_op(?SRV, <<"admin">>, get_childs),
     false = maps:is_key(SessId, Childs2),
-    {ok, <<"session">>, SessId, Path, undefined} = nkdomain:find(?SRV, SessId),
+    {ok, <<"session">>, SessId, undefined} = nkdomain:find(?SRV, SessId),
+    {ok, <<"session">>, SessId, Path} = nkdomain_lib:find_path(?SRV, SessId),
 
     % If we force a clean of the database, the stale object is deleted and archived
     {ok, #{inactive:=N}} = nkdomain:clean(?SRV),
@@ -239,7 +242,9 @@ test_session2(Pid) ->
 test_session3(Admin) ->
     % Do login over tuser1, check the session is created and loaded
     {ok, Pid, SessId} = login("/users/tuser1", pass2),
-    {ok, <<"session">>, SessId, <<"/sessions/", _/binary>>, SPid} = nkdomain:find(?SRV, SessId),
+    {ok, <<"session">>, SessId,SPid} = nkdomain:find(?SRV, SessId),
+    {ok, <<"session">>, SessId, <<"/sessions/", _/binary>>} = nkdomain_lib:find_path(?SRV, SessId),
+
     true = is_pid(SPid),
 
     {ok, #{<<"path">>:=<<"/users/tuser1">>}} = cmd(Pid, <<"objects/user/get">>, #{}),
@@ -447,7 +452,7 @@ test_basic_2(Pid) ->
 
 remove_data() ->
     case nkdomain:find(?SRV, "/users/tuser1") of
-        {ok, <<"user">>, UId, <<"/users/tuser1">>, _} ->
+        {ok, <<"user">>, UId, _} ->
             {ok, _} = ?SRV:object_db_delete(?SRV, UId);
         {error, object_not_found} ->
             ok
@@ -460,7 +465,7 @@ remove_data() ->
             nkdomain:delete_all_childs(?SRV, "/stest1")
     end,
     case nkdomain:find(?SRV, "/stest1") of
-        {ok, ?DOMAIN_DOMAIN, S1Id_0, <<"/stest1">>, _} ->
+        {ok, ?DOMAIN_DOMAIN, S1Id_0, _} ->
             %% lager:warning("/stest1 was already present"),
             ok = nkdomain:delete(?SRV, S1Id_0);
         {error, object_not_found} ->
@@ -509,8 +514,10 @@ cmd(Pid, Cmd, Data) ->
 
 is_loaded(Id) ->
     case nkdomain_lib:find_loaded(?SRV, Id) of
-        #obj_id_ext{} -> true;
-        _ -> false
+        {ok, _Type, _ObjId, _Pid} ->
+            true;
+        _ ->
+            false
     end.
 
 

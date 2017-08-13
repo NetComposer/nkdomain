@@ -171,7 +171,7 @@ rm_obj(Id, #obj_monitor{srv_id=SrvId, objs=Objs}=Monitor) ->
             {ok, do_remove(Id2, Monitor)};
         error ->
             case nkdomain_lib:find(SrvId, Id2) of
-                #obj_id_ext{obj_id=ObjId} ->
+                {ok, _Type, ObjId, _Pid} ->
                     case maps:find(ObjId, Objs) of
                         {ok, _} ->
                             {ok, do_remove(ObjId, Monitor)};

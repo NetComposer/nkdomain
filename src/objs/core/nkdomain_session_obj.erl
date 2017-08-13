@@ -210,13 +210,13 @@ object_event(_Event, State) ->
 %% ===================================================================
 
 %% @private
-object_check_active(SrvId, ObjId) ->
-    case nkdomain_lib:find_loaded(SrvId, ObjId) of
-        #obj_id_ext{pid=Pid} when is_pid(Pid) ->
+object_check_active(SrvId, Id) ->
+    case nkdomain_lib:find_loaded(SrvId, Id) of
+        {ok, _Type, _ObjId, _Pid} ->
             true;
-        not_found ->
-            lager:notice("NkDOMAIN: removing stalle active object ~s", [ObjId]),
-            SrvId:object_db_delete(SrvId, ObjId),
+        _ ->
+            lager:notice("NkDOMAIN: removing stalle active object ~s", [Id]),
+            SrvId:object_db_delete(SrvId, Id),
             false
     end.
 

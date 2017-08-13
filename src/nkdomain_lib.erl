@@ -22,7 +22,7 @@
 -module(nkdomain_lib).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([find/2, find_loaded/2, load/2, create/2, create/3]).
+-export([find/2, find_path/2, find_obj/2, find_loaded/2, load/2, create/2, create/3]).
 -export([get_node/1]).
 
 -include("nkdomain.hrl").
@@ -41,51 +41,132 @@
 
 %% @doc Finds and object from UUID or Path, in memory and disk
 -spec find(nkservice:id(), nkdomain:obj_id()|nkdomain:path()) ->
-    #obj_id_ext{} | {error, object_not_found|term()}.
+    {ok, nkdomain:type(), nkdomain:obj_id(), pid()|undefined} | {error, object_not_found|term()}.
 
 find(SrvId, Id) ->
     Id2 = to_bin(Id),
     case find_loaded(SrvId, Id2) of
-        #obj_id_ext{}=ObjIdExt ->
-            ObjIdExt;
-        not_found ->
-            case SrvId:object_db_find_obj(SrvId, Id2) of
-                {ok, Type, ObjId, Path} ->
-                    #obj_id_ext{srv_id=SrvId, type=Type, obj_id=ObjId, path=Path};
-                {error, object_not_found} ->
-                    case SrvId:object_db_search_alias(SrvId, Id2) of
-                        {ok, 0, []} ->
-                            {error, object_not_found};
-                        {ok, N, [{Type, ObjId, Path}|_]}->
-                            case N > 1 of
-                                true ->
-                                    lager:notice("NkDOMAIN: duplicated alias for ~s", [Id]);
-                                false ->
-                                    ok
-                            end,
-                            case find_loaded(SrvId, ObjId) of
-                                #obj_id_ext{}=ObjIdExt ->
-                                    ObjIdExt;
-                                not_found ->
-                                    #obj_id_ext{srv_id=SrvId, type=Type, obj_id=ObjId, path=Path}
-                            end;
+        {ok, Type, ObjId, Pid} ->
+            {ok, Type, ObjId, Pid};
+        {error, object_not_found} ->
+            case find_in_db(SrvId, Id) of
+                {ok, Type, ObjId, _Path} ->
+                    {ok, Type, ObjId, undefined};
+                {alias, Type, ObjId, _Path} ->
+                    case find_loaded(SrvId, ObjId) of
+                        {ok, Type, ObjId, Pid} ->
+                            {ok, Type, ObjId, Pid};
+                        {error, object_not_found}    ->
+                            {ok, Type, ObjId, undefined};
                         {error, Error} ->
                             {error, Error}
-                    end
-            end
+                    end;
+                {error, Error} ->
+                    {error, Error}
+            end;
+        {error, Error} ->
+            {error, Error}
     end.
 
 
+%% @doc Finds object's path from UUID or Path, in memory and disk
+-spec find_path(nkservice:id(), nkdomain:obj_id()|nkdomain:path()) ->
+    {ok, nkdomain:type(), nkdomain:obj_id(), nkdomain:path()} | {error, object_not_found|term()}.
+
+find_path(SrvId, Id) ->
+    case find_loaded(SrvId, Id) of
+        {ok, Type, ObjId, Pid} ->
+            case nkdomain_obj:sync_op(SrvId, Pid, get_path) of
+                {ok, Path} ->
+                    {ok, Type, ObjId, Path};
+                {error, Error} ->
+                    {error, Error}
+            end;
+        {error, object_not_found} ->
+            case find_in_db(SrvId, to_bin(Id)) of
+                {ok, Type, ObjId, Path} ->
+                    {ok, Type, ObjId, Path};
+                {alias, Type, ObjId, Path} ->
+                    {ok, Type, ObjId, Path};
+                {error, Error} ->
+                    {error, Error}
+            end;
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
+%% @doc Finds objects with full #obj_id_ext{}
+-spec find_obj(nkservice:id(), nkdomain:id()) ->
+    #obj_id_ext{} | {error, object_not_found|term()}.
+
+find_obj(SrvId, Id) ->
+    case find(SrvId, Id) of
+        {ok, Type, ObjId, Pid} ->
+            case nkdomain_obj:sync_op(SrvId, Pid, get_path) of
+                {ok, Path} ->
+                    #obj_id_ext{srv_id=SrvId, type=Type, obj_id=ObjId, path=Path, pid=Pid};
+                {error, Error} ->
+                    {error, Error}
+            end;
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
+
 %% @doc
+%%find_loaded(SrvId, Id) ->
+%%    Id2 = to_bin(Id),
+%%    case nkdist_reg:find({nkdomain, SrvId}, Id2) of
+%%        {ok, {Type, path, Path}, Pid} ->
+%%            #obj_id_ext{type=Type, obj_id=Id2, path=Path, pid=Pid, srv_id=SrvId};
+%%        {ok, {Type, obj_id, ObjId}, Pid} ->
+%%            #obj_id_ext{type=Type, obj_id=ObjId, path=Id2, pid=Pid, srv_id=SrvId};
+%%        _ ->
+%%            not_found
+%%    end.
+
+
+-spec find_loaded(nkservice:id(), binary()) ->
+    {ok, nkdomain:type(), nkdomain:obj_id(), pid()} | {error, object_not_found|term()}.
+
 find_loaded(SrvId, Id) ->
-    Id2 = to_bin(Id),
-    case nkdist_reg:find({nkdomain, SrvId}, Id2) of
-        {ok, {Type, path, Path}, Pid} ->
-            #obj_id_ext{type=Type, obj_id=Id2, path=Path, pid=Pid, srv_id=SrvId};
-        {ok, {Type, obj_id, ObjId}, Pid} ->
-            #obj_id_ext{type=Type, obj_id=ObjId, path=Id2, pid=Pid, srv_id=SrvId};
-        _ ->
-            not_found
+    case nkdomain_util:is_path(Id) of
+        {false, Id2} ->
+            case nkdist_reg:find({nkdomain, SrvId}, Id2) of
+                {ok, Type, Pid} ->
+                    {ok, Type, Id2, Pid};
+                _ ->
+                    {error, object_not_found}
+            end;
+        {true, Path} ->
+            nkdomain_domain_obj:find_path(SrvId, Path)
+    end.
+
+
+%% @private
+find_in_db(SrvId, Id) ->
+    case SrvId:object_db_find_obj(SrvId, Id) of
+        {ok, Type, ObjId, Path} ->
+            {ok, Type, ObjId, Path};
+        {error, object_not_found} ->
+            case SrvId:object_db_search_alias(SrvId, Id) of
+                {ok, 0, []} ->
+                    {error, object_not_found};
+                {ok, N, [{Type, ObjId, Path}|_]}->
+                    case N > 1 of
+                        true ->
+                            lager:notice("NkDOMAIN: duplicated alias for ~s", [Id]);
+                        false ->
+                            ok
+                    end,
+                    {alias, Type, ObjId, Path};
+                {error, Error} ->
+                    {error, Error}
+            end;
+        {error, Error} ->
+            {error, Error}
     end.
 
 
@@ -95,21 +176,26 @@ find_loaded(SrvId, Id) ->
 
 load(SrvId, Id) ->
     case find(SrvId, Id) of
-        #obj_id_ext{pid=Pid}=ObjIdExt when is_pid(Pid) ->
-            ObjIdExt;
-        #obj_id_ext{obj_id=ObjId}=ObjIdExt ->
+        {ok, Type, ObjId, Pid} when is_pid(Pid) ->
+            case nkdomain_obj:sync_op(SrvId, Pid, get_path) of
+                {ok, Path} ->
+                    #obj_id_ext{srv_id=SrvId, type=Type, obj_id=ObjId, path=Path, pid=Pid};
+                {error, Error} ->
+                    {error, Error}
+            end;
+        {ok, Type, ObjId, _} ->
             case SrvId:object_db_read(SrvId, ObjId) of
-                {ok, Obj, _Meta} ->
+                {ok, #{path:=Path}=Obj, _Meta} ->
                     Obj2 = case Obj of
                         #{obj_name:=_} ->
                             Obj;
-                        #{path:=Path, type:=Type} ->
+                        #{type:=Type} ->
                             {ok, _, ObjName} = nkdomain_util:get_parts(Type, Path),
                             Obj#{obj_name=>ObjName}
                     end,
                     case nkdomain_obj:start(SrvId, Obj2, #{}) of
                         {ok, Pid} ->
-                            ObjIdExt#obj_id_ext{pid=Pid};
+                            #obj_id_ext{srv_id=SrvId, type=Type, obj_id=ObjId, path=Path, pid=Pid};
                         {error, Error} ->
                             {error, Error}
                     end;
@@ -154,7 +240,6 @@ create(SrvId, #{type:=Type, obj_id:=ObjId, path:=Path}=Obj, Meta) ->
     end.
 
 
-
 %% @private
 get_node(ObjId) ->
     case nkdist:get_vnode(nkdomain, ObjId, #{}) of
@@ -163,7 +248,6 @@ get_node(ObjId) ->
         {error, Error} ->
             {error, Error}
     end.
-
 
 
 %% @private

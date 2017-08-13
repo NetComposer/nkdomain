@@ -45,9 +45,9 @@
 
 
 %% @doc
-search(Srv, Id, Spec) ->
-    case nkdomain_lib:find(Srv, Id) of
-        #obj_id_ext{srv_id=SrvId, obj_id=ObjId} ->
+search(SrvId, Id, Spec) ->
+    case nkdomain_lib:find(SrvId, Id) of
+        {ok, _Type, ObjId, _Pid} ->
             Filters1 = maps:get(filters, Spec, #{}),
             Filters2 = Filters1#{domain_id=>ObjId},
             Spec2 = maps:remove(id, Spec#{filters=>Filters2}),
@@ -58,9 +58,9 @@ search(Srv, Id, Spec) ->
 
 
 %% @doc
-search_all(Srv, Id, Spec) ->
-    case nkdomain_lib:find(Srv, Id) of
-        #obj_id_ext{srv_id=SrvId, path=Path} ->
+search_all(SrvId, Id, Spec) ->
+    case nkdomain_lib:find_path(SrvId, Id) of
+        {ok, _Type, _ObjId, Path} ->
             Filters1 = maps:get(filters, Spec, #{}),
             Filters2 = Filters1#{path=><<"childs_of:", Path/binary>>},
             Spec2 = maps:remove(id, Spec#{filters=>Filters2}),
@@ -71,9 +71,9 @@ search_all(Srv, Id, Spec) ->
 
 
 %% @doc
-search_type(Srv, Id, Spec) ->
-    case nkdomain_lib:find(Srv, Id) of
-        #obj_id_ext{srv_id=SrvId, obj_id=ObjId} ->
+search_type(SrvId, Id, Spec) ->
+    case nkdomain_lib:find(SrvId, Id) of
+        {ok, _Type, ObjId, _Pid} ->
             SrvId:object_db_search_types(SrvId, ObjId, Spec);
         {error, Error} ->
             {error, Error}
@@ -81,9 +81,9 @@ search_type(Srv, Id, Spec) ->
 
 
 %% @doc
-search_all_types(Srv, Id, Spec) ->
-    case nkdomain_lib:find(Srv, Id) of
-        #obj_id_ext{srv_id=SrvId, path=Path} ->
+search_all_types(SrvId, Id, Spec) ->
+    case nkdomain_lib:find_path(SrvId, Id) of
+        {ok, _Type, _ObjId, Path} ->
             SrvId:object_db_search_all_types(SrvId, Path, Spec);
         {error, Error} ->
             {error, Error}
@@ -91,9 +91,9 @@ search_all_types(Srv, Id, Spec) ->
 
 
 %% @doc
-search_childs(Srv, Id, Spec) ->
-    case nkdomain_lib:find(Srv, Id) of
-        #obj_id_ext{srv_id=SrvId, obj_id=ObjId} ->
+search_childs(SrvId, Id, Spec) ->
+    case nkdomain_lib:find(SrvId, Id) of
+        {ok, _Type, ObjId, _Pid} ->
             SrvId:object_db_search_childs(SrvId, ObjId, Spec);
         {error, Error} ->
             {error, Error}
@@ -101,9 +101,9 @@ search_childs(Srv, Id, Spec) ->
 
 
 %% @doc
-search_all_childs(Srv, Id, Spec) ->
-    case nkdomain_lib:find(Srv, Id) of
-        #obj_id_ext{srv_id=SrvId, path=Path} ->
+search_all_childs(SrvId, Id, Spec) ->
+    case nkdomain_lib:find_path(SrvId, Id) of
+        {ok, _Type, _ObjId, Path} ->
             SrvId:object_db_search_all_childs(SrvId, Path, Spec);
         {error, Error} ->
             {error, Error}
@@ -112,12 +112,18 @@ search_all_childs(Srv, Id, Spec) ->
 
 %% @doc Finds a child object with this path
 %% Must be send to a domain that is part of the path (or root to be sure)
+-spec find_path(nkservice:id(), binary()) ->
+    {ok, nkdomain:type(), nkdomain:obj_id(), pid()} | {error, term()}.
+
 find_path(Srv, Path) ->
     find_path(Srv, <<"root">>, Path).
 
 
 %% @doc Finds a child object with this path
 %% Must be send to a domain that is part of the path (or root to be sure)
+-spec find_path(nkservice:id(), nkdomain:obj_id(), binary()) ->
+    {ok, nkdomain:type(), nkdomain:obj_id(), pid()} | {error, term()}.
+
 find_path(Srv, Id, Path) ->
     case nkdomain_util:get_parts(Path) of
         {ok, Base, Type, ObjName} ->
@@ -208,12 +214,12 @@ object_sync_op({nkdomain_reg_obj, ObjIdExt}, _From, #?STATE{id=Id}=State) ->
 
 object_sync_op({?MODULE, find_path, <<>>, ?DOMAIN_DOMAIN, <<>>}, _From,
                 #?STATE{id=#obj_id_ext{obj_id = <<"root">>, type = ?DOMAIN_DOMAIN}}=State) ->
-    {reply, {ok, <<"root">>, self()}, State};
+    {reply, {ok, ?DOMAIN_DOMAIN, <<"root">>, self()}, State};
 
 object_sync_op({?MODULE, find_path, Base, Type, ObjName}, From, State) ->
     case find_obj(Base, Type, ObjName, State) of
         {ok, ObjId, Pid} ->
-            {reply, {ok, ObjId, Pid}, State};
+            {reply, {ok, Type, ObjId, Pid}, State};
         {subdomain, Pid} ->
             nkdomain_obj:async_op(any, Pid, {?MODULE, find_path, Base, Type, ObjName, From}),
             {noreply, State};
@@ -229,7 +235,7 @@ object_sync_op(_Op, _From, _State) ->
 object_async_op({?MODULE, find_path, Base, Type, ObjName, From}, State) ->
     case find_obj(Base, Type, ObjName, State) of
         {ok, ObjId, Pid} ->
-            gen_server:reply(From, {ok, ObjId, Pid});
+            gen_server:reply(From, {ok, Type, ObjId, Pid});
         {subdomain, Pid} ->
             nkdomain_obj:async_op(any, Pid, {?MODULE, find_path, Base, Type, ObjName, From});
         {error, Error} ->
@@ -338,14 +344,14 @@ find_obj(Base, Type, ObjName, #?STATE{id=Id, session=Session}) ->
                     %lager:warning("NKLOG R1: ~p, D: ~p", [Rest, Dom]),
                     case maps:find({?DOMAIN_DOMAIN, Dom}, ObjNames) of
                         {ok, SubDomId} ->
-                            {ok, {?DOMAIN_DOMAIN, SubDomName, Pid}} = maps:find(SubDomId, ObjIds),
+                            {ok, {?DOMAIN_DOMAIN, Dom, Pid}} = maps:find(SubDomId, ObjIds),
                             ?LLOG(notice, "relaying query to ~s", [<<DomainPath/binary, $/, Dom/binary>>]),
                             {subdomain, Pid};
                         error ->
-                            {error, object_not_found2}
+                            {error, object_not_found}
                     end;
                 _ ->
-                    {error, object_path_invalid2}
+                    {error, object_path_invalid}
             end
     end.
 

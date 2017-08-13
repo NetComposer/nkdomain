@@ -86,9 +86,15 @@ save_obj(ObjId, Obj, #{srv_id:=SrvId}=EsOpts) ->
 -spec delete_obj(nkdomain:obj_id(), nkelastic:opts()) ->
     {ok, meta()} | {error, term()}.
 
-delete_obj(ObjId, EsOpts) ->
+delete_obj(ObjId, #{srv_id:=SrvId}=EsOpts) ->
     case search_childs(ObjId, #{size=>0}, EsOpts) of
         {ok, 0, []} ->
+            case nkdomain_lib:find_loaded(SrvId, ObjId) of
+                {ok, _Type, _, Pid} ->
+                    nkdomain_obj:object_deleted(Pid);
+                _ ->
+                    ok
+            end,
             nkelastic:delete(ObjId, EsOpts);
         {ok, _, _} ->
             {error, object_has_childs};
@@ -273,7 +279,7 @@ delete_all_childs(Id, Spec, #{srv_id:=SrvId}=EsOpts) ->
                 case nkelastic:delete(ObjId, EsOpts) of
                     {ok, _} ->
                         case nkdomain_lib:find_loaded(SrvId, ObjId) of
-                            #obj_id_ext{pid=Pid} ->
+                            {ok, _Type, ObjId, Pid} ->
                                 nkdomain_obj:object_deleted(Pid);
                             _ ->
                                 ok
