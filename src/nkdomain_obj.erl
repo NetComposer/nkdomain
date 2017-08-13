@@ -800,12 +800,6 @@ register_name(OldPid, #?STATE{id=Id}=State) ->
 
 
 %% @private
-unregister_name(#?STATE{id=Id}) ->
-    #obj_id_ext{srv_id=SrvId, path=Path} = Id,
-    nkdist_reg:unregister({nkdomain, SrvId}, Path).
-
-
-%% @private
 register_domain(#?STATE{id=#obj_id_ext{obj_id = <<"root">>, type = ?DOMAIN_DOMAIN}}=State) ->
     {ok, State};
 
@@ -986,13 +980,12 @@ do_update_name(ObjName, #?STATE{srv_id=SrvId, id=Id, obj=Obj}=State) ->
                     },
                     Obj2 = ?ADD_TO_OBJ(Update, Obj),
                     State2 = State#?STATE{id=Id2, obj=Obj2, obj_name=ObjName, is_dirty=true},
-                    case register_name(none, State2) of
+                    case register_domain(State2) of
                         {ok, State3} ->
                             lager:error("NKLOG UNREGISTER ~p", [Path1]),
-                            unregister_name(State),                     % Old State
                             case do_save(object_updated, State3) of
                                 {ok, State4} ->
-                                    {ok, do_event({updated, #{obj_name=>ObjName}}, State4)};
+                                    {ok, State4};
                                 {{error, Error}, _} ->
                                     {error, Error}
                             end;

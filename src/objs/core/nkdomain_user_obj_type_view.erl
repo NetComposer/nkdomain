@@ -214,8 +214,8 @@ table_data(#{start:=Start, size:=Size, sort:=Sort, filter:=Filter}, #admin_sessi
                 size => Size
             },
             Fun = case Filter of
-                #{?ID_SUBDOMAINS := 0} -> find;
-                _ -> find_all
+                #{?ID_SUBDOMAINS := 0} -> search;
+                _ -> search_all
             end,
             case nkdomain_domain_obj:Fun(SrvId, DomainId, FindSpec) of
                 {ok, Total, List, _Meta} ->

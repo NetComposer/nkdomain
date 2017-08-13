@@ -231,7 +231,7 @@ object_sync_op(_Op, _From, _State) ->
     continue.
 
 
-%% @doc
+%% @private
 object_async_op({?MODULE, find_path, Base, Type, ObjName, From}, State) ->
     case find_obj(Base, Type, ObjName, State) of
         {ok, ObjId, Pid} ->
