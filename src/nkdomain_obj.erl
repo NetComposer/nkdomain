@@ -47,7 +47,7 @@
 -behaviour(gen_server).
 
 -export([sync_op/3, sync_op/4, async_op/3]).
--export([start/3, new_type_master/1, object_deleted/1]).
+-export([start/4, new_type_master/1, object_deleted/1]).
 -export([init/1, terminate/2, code_change/3, handle_call/3,  handle_cast/2, handle_info/2]).
 -export([links_add/3, links_remove/3, links_iter/4]).
 -export([get_all/0, unload_all/0, get_state/2, get_time/2]).
@@ -127,7 +127,6 @@
 -type start_opts() ::
     #{
         enabled => boolean(),
-        is_created => boolean(),
         session_events => [binary()],       % See bellow
         session_link => nklib_links:link(), %
         meta => map()
@@ -167,13 +166,13 @@
 
 
 %% @private
--spec start(nkservice:id(), nkdomain:obj(), start_opts()) ->
+-spec start(nkservice:id(), nkdomain:obj(), loaded|created, start_opts()) ->
     {ok, pid()} | {error, term()}.
 
-start(SrvId, #{obj_id:=ObjId}=Obj, Meta) ->
+start(SrvId, #{obj_id:=ObjId}=Obj, Op, Meta) ->
     case nkdomain_lib:get_node(ObjId) of
         {ok, Node} ->
-            case rpc:call(Node, gen_server, start, [?MODULE, {loaded, SrvId, Obj, Meta}, []]) of
+            case rpc:call(Node, gen_server, start, [?MODULE, {Op, SrvId, Obj, Meta}, []]) of
                 {ok, Pid} -> {ok, Pid};
                 {error, {already_registered, Pid}} -> {ok, Pid};
                 {error, Error} -> {error, Error}
@@ -181,7 +180,6 @@ start(SrvId, #{obj_id:=ObjId}=Obj, Meta) ->
         {error, Error} ->
             {error, Error}
     end.
-
 
 
 %% @doc
@@ -285,7 +283,7 @@ unload_all() ->
 -spec init(term()) ->
     {ok, state()} | {error, term()}.
 
-init({loaded, SrvId, Obj, Meta}) ->
+init({Op, SrvId, Obj, Meta}) when Op==loaded; Op==created ->
     #{
         type := Type,
         obj_id := ObjId,
@@ -313,7 +311,7 @@ init({loaded, SrvId, Obj, Meta}) ->
         obj_name = ObjName,
         object_info = Info,
         obj = Obj,
-        is_dirty = false,
+        is_dirty = (Op == created),
         is_enabled = Enabled,
         started = nkdomain_util:timestamp(),
         childs = #{},
@@ -329,21 +327,28 @@ init({loaded, SrvId, Obj, Meta}) ->
         session = #{}
     },
     ?DEBUG("started (~p)", [self()], State1),
-    % Register parent, type and service
     State2 = do_init_common(State1),
+    % Register obj_id, domain, parent and type
     case do_register(State2) of
         {ok, State3} ->
-            ?DEBUG("loaded (~p)", [self()], State3),
             case handle(object_init, [], State3) of
                 {ok, State4} ->
-                    State5 = case Meta of
-                        #{is_created:=true} ->
+                    State5 = case Op of
+                        created ->
+                            ?DEBUG("created (~p)", [self()], State4),
                             do_event(created, State4);
-                        _ ->
+                        loaded ->
                             State4
                     end,
+                    ?DEBUG("loaded (~p)", [self()], State5),
                     State6 = do_event(loaded, State5),
-                    {ok, do_refresh(State6)};
+                    % Save if created or init sets is_dirty = true
+                    case do_save(creation, State6) of
+                        {ok, State7} ->
+                            {ok, do_refresh(State7)};
+                        {{error, Error}, _State7} ->
+                            {stop, Error}
+                    end;
                 {error, Error} ->
                     {stop, Error}
             end;
@@ -763,10 +768,20 @@ do_register(State) ->
 
 %% @private
 do_register(OldPid, State) ->
-    case register_name(OldPid, State) of
-        {ok, State2} ->
-            State3 = register_type(State2),
-            {ok, State3};
+    case register_obj_id(OldPid, State) of
+        ok ->
+            case register_domain(State) of
+                {ok, State2} ->
+                    case register_parent(State2) of
+                        {ok, State3} ->
+                            State4 = register_type(State3),
+                            {ok, State4};
+                        {error, Error} ->
+                            {error, Error}
+                    end;
+                {error, Error} ->
+                    {error, Error}
+            end;
         {error, {pid_conflict, Pid}} ->
             ?LLOG(warning, "object is already registered", [], State),
             {error, {already_registered, Pid}};
@@ -776,7 +791,7 @@ do_register(OldPid, State) ->
 
 
 %% @private
-register_name(OldPid, #?STATE{id=Id}=State) ->
+register_obj_id(OldPid, #?STATE{id=Id}) ->
     #obj_id_ext{srv_id=SrvId, type=Type, obj_id=ObjId, path=Path} = Id,
     OptsPid = case is_pid(OldPid) of
         true ->
@@ -788,12 +803,7 @@ register_name(OldPid, #?STATE{id=Id}=State) ->
     case nkdist_reg:register(proc, {nkdomain, SrvId}, ObjId, Opts1) of
         ok ->
             nklib_proc:put(?MODULE, {Type, ObjId, Path}),
-            case register_domain(State) of
-                {ok, State2} ->
-                    register_parent(State2);
-                {error, Error} ->
-                    {error, Error}
-            end;
+            ok;
         {error, Error} ->
             {error, Error}
     end.
@@ -806,7 +816,7 @@ register_domain(#?STATE{id=#obj_id_ext{obj_id = <<"root">>, type = ?DOMAIN_DOMAI
 register_domain(#?STATE{srv_id=SrvId, id=ObjIdExt, domain_id=DomainId}=State) ->
     case sync_op(SrvId, DomainId, {nkdomain_reg_obj, ObjIdExt}) of
         {ok, Enabled, Pid} ->
-            ?LLOG(notice, "registered with domain (enabled:~p)", [Enabled], State),
+            ?DEBUG("registered with domain (enabled:~p)", [Enabled], State),
             monitor(process, Pid),
             State2 = do_enabled(State#?STATE{domain_pid=Pid, domain_enabled=Enabled}),
             {ok, State2};
@@ -824,7 +834,7 @@ register_parent(#?STATE{id=#obj_id_ext{obj_id = <<"root">>, type = ?DOMAIN_DOMAI
 register_parent(#?STATE{srv_id=SrvId, id=ObjIdExt, parent_id=ParentId}=State) ->
     case sync_op(SrvId, ParentId, {nkdomain_reg_child, ObjIdExt}) of
         {ok, Enabled, Pid} ->
-            ?LLOG(notice, "registered with parent (enabled:~p)", [Enabled], State),
+            ?DEBUG("registered with parent (enabled:~p)", [Enabled], State),
             monitor(process, Pid),
             State2 = do_enabled(State#?STATE{parent_pid=Pid, parent_enabled=Enabled}),
             {ok, State2};

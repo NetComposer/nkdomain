@@ -48,6 +48,11 @@ api(<<"get_token">>, Syntax) ->
         '__mandatory' => [id]
     };
 
+api(<<"get_name">>, Syntax) ->
+    Syntax#{
+        id => binary
+    };
+
 api(<<"update_status">>, Syntax) ->
     Syntax#{
         id => binary,

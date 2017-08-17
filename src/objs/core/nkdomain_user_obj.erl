@@ -35,7 +35,7 @@
 -export([get_sessions/2, get_sessions/3]).
 -export([register_session/6, unregister_session/3, update_status/4]).
 -export([add_notification_op/5]).
--export([add_push_device/6, remove_push_device/3, send_push/4]).
+-export([add_push_device/6, remove_push_device/3, send_push/4, remove_push_devices/2]).
 
 -export_type([events/0, push_msg/0, push_app_id/0, push_device_id/0, push_device/0]).
 
@@ -204,6 +204,11 @@ add_push_device(SrvId, Id, DomainId, AppId, DeviceId, PushData) ->
 %% @doc
 remove_push_device(SrvId, Id, DeviceId) ->
     nkdomain_obj:async_op(SrvId, Id, {?MODULE, remove_push_device, DeviceId}).
+
+%% @doc
+remove_push_devices(SrvId, Id) ->
+    nkdomain_obj:async_op(SrvId, Id, {?MODULE, remove_push_devices}).
+
 
 
 %% @doc
@@ -472,7 +477,8 @@ object_sync_op({?MODULE, get_name}, _From, #?STATE{obj=Obj}=State) ->
         surname => UserSurName,
         email => maps:get(email, User, <<>>),
         phone_t => maps:get(phone_t, User, <<>>),
-        address_t => maps:get(address_t, User, <<>>)
+        address_t => maps:get(address_t, User, <<>>),
+        icon_id => maps:get(icon_id, User, <<>>)
     },
     {reply, {ok, Data}, State};
 
@@ -576,6 +582,10 @@ object_async_op({?MODULE, send_push, AppId, Push}, State) ->
 
 object_async_op({?MODULE, remove_push_device, DeviceId}, State) ->
     State2 = remove_push(DeviceId, State),
+    {noreply, State2};
+
+object_async_op({?MODULE, remove_push_devices}, State) ->
+    State2 = remove_push_devices(State),
     {noreply, State2};
 
 object_async_op(_Op, _State) ->
@@ -846,6 +856,13 @@ remove_push(DeviceId, State) ->
     #session{push_devices=PushDevices1} = Session,
     PushDevices2 = lists:keydelete(DeviceId, #push_device.device_id, PushDevices1),
     Session2 = Session#session{push_devices = PushDevices2},
+    State#?STATE{session=Session2, is_dirty=true}.
+
+
+%% @private
+remove_push_devices(State) ->
+    #?STATE{session=Session} = State,
+    Session2 = Session#session{push_devices=[]},
     State#?STATE{session=Session2, is_dirty=true}.
 
 

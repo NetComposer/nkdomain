@@ -193,7 +193,7 @@ load(SrvId, Id) ->
                             {ok, _, ObjName} = nkdomain_util:get_parts(Type, Path),
                             Obj#{obj_name=>ObjName}
                     end,
-                    case nkdomain_obj:start(SrvId, Obj2, #{}) of
+                    case nkdomain_obj:start(SrvId, Obj2, loaded, #{}) of
                         {ok, Pid} ->
                             #obj_id_ext{srv_id=SrvId, type=Type, obj_id=ObjId, path=Path, pid=Pid};
                         {error, Error} ->
@@ -222,14 +222,9 @@ create(SrvId, Obj) ->
 create(SrvId, #{type:=Type, obj_id:=ObjId, path:=Path}=Obj, Meta) ->
     case SrvId:object_db_find_obj(SrvId, Path) of
         {error, object_not_found} ->
-            case SrvId:object_db_save(SrvId, Obj) of
-                {ok, _Meta} ->
-                    case nkdomain_obj:start(SrvId, Obj, Meta#{is_created=>true}) of
-                        {ok, Pid} ->
-                            #obj_id_ext{type=Type, obj_id=ObjId, path=Path, pid=Pid, srv_id=SrvId};
-                        {error, Error} ->
-                            {error, Error}
-                    end;
+            case nkdomain_obj:start(SrvId, Obj, created, Meta) of
+                {ok, Pid} ->
+                    #obj_id_ext{type=Type, obj_id=ObjId, path=Path, pid=Pid, srv_id=SrvId};
                 {error, Error} ->
                     {error, Error}
             end;
