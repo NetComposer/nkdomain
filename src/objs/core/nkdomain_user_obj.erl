@@ -711,7 +711,7 @@ rm_session(SessId, State) ->
             State2 = nkdomain_obj:links_remove(usage, {?MODULE, session, SessId, Pid}, State),
             Session2 = Session#session{user_sessions=UserSessions2},
             set_session(Session2, State2);
-        error ->
+        false ->
             State
     end.
 
