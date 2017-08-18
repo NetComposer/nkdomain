@@ -34,7 +34,7 @@
 -export([fun_user_pass/1, user_pass/1]).
 -export([get_sessions/2, get_sessions/3]).
 -export([register_session/6, unregister_session/3, update_status/4]).
--export([add_notification_op/5]).
+-export([add_notification_op/5, remove_notification/4]).
 -export([add_push_device/6, remove_push_device/3, send_push/4, remove_push_devices/2]).
 
 -export_type([events/0, push_msg/0, push_app_id/0, push_device_id/0, push_device/0]).
@@ -69,8 +69,12 @@
     #{
     }.
 
+-type notify_op() ::
+    created | {removed, term()}.
+
+
 -type notify_fun() ::
-    fun((SessId::nkdomain:obj_id(), Pid::pid(), TokenId::nkdomain:obj_id(), Data::map(), created|removed) -> ok).
+    fun((SessId::nkdomain:obj_id(), Pid::pid(), TokenId::nkdomain:obj_id(), Data::map(), notify_op()) -> ok).
 
 -type push_msg() ::
     #{
@@ -188,12 +192,12 @@ add_notification_op(SrvId, Id, SessType, Opts, Base) ->
     nkdomain_obj:sync_op(SrvId, Id, {?MODULE, add_notification_op, SessType, Opts, Base}).
 
 
-%%%% @doc
-%%-spec remove_notification(nkservice:id(), nkdomain:obj_id(), nkdomain:obj_id()) ->
-%%    ok | {error, term()}.
-%%
-%%remove_notification(SrvId, Id, NotifyId) ->
-%%    nkdomain_obj:sync_op(SrvId, Id, {?MODULE, remove_notification, NotifyId}).
+%% @doc
+-spec remove_notification(nkservice:id(), nkdomain:obj_id(), map(), term()) ->
+    ok | {error, term()}.
+
+remove_notification(SrvId, Id, TokenId, Reason) ->
+    nkdomain_obj:async_op(SrvId, Id, {?MODULE, remove_notification, TokenId, Reason}).
 
 
 %% @doc
@@ -507,11 +511,12 @@ object_sync_op({?MODULE, get_sessions, Type}, _From, State) ->
     {reply, {ok, Reply}, State};
 
 object_sync_op({?MODULE, add_notification_op, SessType, _Opts, Base}, _From, State) ->
-    #?STATE{id=#obj_id_ext{obj_id=UserId}} = State,
+    #?STATE{srv_id=SrvId, id=#obj_id_ext{obj_id=UserId}} = State,
     UserData1 = maps:get(?DOMAIN_USER, Base, #{}),
     UserData2 = UserData1#{
         <<"notification">> => #{
             <<"user_id">> => UserId,
+            <<"srv_id">> => SrvId,
             <<"session_type">> => SessType
         }
     },
@@ -569,7 +574,11 @@ object_async_op({?MODULE, loaded_token, TokenId, Pid}, State) ->
 
 object_async_op({?MODULE, unloaded_token, TokenId}, State) ->
     ?LLOG(notice, "unloaded notification token ~s", [TokenId], State),
-    State2 = remove_notification(TokenId, State),
+    State2 = do_remove_notification(TokenId, timeout, State),
+    {noreply, State2};
+
+object_async_op({?MODULE, remove_notification, TokenId, Reason}, State) ->
+    State2 = do_remove_notification(TokenId, Reason, State),
     {noreply, State2};
 
 object_async_op({?MODULE, add_push_device, DomainId, AppId, DeviceId, PushData}, State) ->
@@ -595,7 +604,7 @@ object_async_op(_Op, _State) ->
 %% @private
 object_handle_info({?MODULE, expired_notify, NotifyId}, State) ->
     lager:warning("NKLOG Expired ~p", [NotifyId]),
-    State2 = remove_notification(NotifyId, State),
+    State2 = do_remove_notification(NotifyId, timeout, State),
     {noreply, State2};
 
 object_handle_info(_Info, _State) ->
@@ -728,11 +737,11 @@ export_session(#user_session{id=Id, type=Type, status=Status, opts=Opts, status_
 
 
 %% @doc
-remove_notification(TokenId, #?STATE{session=Session}=State) ->
+do_remove_notification(TokenId, Reason, #?STATE{session=Session}=State) ->
     #session{notify_msgs=Msgs1} = Session,
     case lists:keytake(TokenId, #notify_msg.token_id, Msgs1) of
         {value, #notify_msg{}=Notify, Msgs2} ->
-            notify_sessions(Notify, removed, State),
+            notify_sessions(Notify, {removed, Reason}, State),
             Session2 = Session#session{notify_msgs=Msgs2},
             State#?STATE{session=Session2};
         false ->
@@ -743,6 +752,7 @@ remove_notification(TokenId, #?STATE{session=Session}=State) ->
 %% @private
 notify_sessions(#notify_msg{domain_id=DomainId, session_type=Type, token_id=TokenId, data=Data}, Op, State) ->
     #session{user_sessions=UserSessions} = get_obj_session(State),
+    ?DEBUG("notify sessions ~s ~s", [DomainId, Type], State),
     Num = lists:foldl(
         fun(#user_session{id=SessId, pid=Pid, notify_fun=Fun, type=T, domain_id=D}, Acc) ->
             case T==Type andalso D==DomainId andalso is_function(Fun, 5) of
@@ -755,11 +765,11 @@ notify_sessions(#notify_msg{domain_id=DomainId, session_type=Type, token_id=Toke
         end,
         0,
         UserSessions),
-    case Num > 0 of
-        true ->
+    case Op of
+        _ when Num > 0 ->
             ok;
-        false when Op==created ->
-            lager:error("NKLOG SEND PUSH WAKEUP ~p", [Data]),
+        created ->
+            ?LLOG(notice, "no ~p session found: send wakeup", [Type], State),
             Push = #{
                 type => simple,
                 title => <<"New user notification">>,
@@ -767,8 +777,8 @@ notify_sessions(#notify_msg{domain_id=DomainId, session_type=Type, token_id=Toke
             },
             AppId = <<"user_notifications">>,
             send_push(any, self(), AppId, Push);
-        false when Op==removed ->
-            lager:error("NKLOG SEND PUSH WAKEUP REMOVED ~p", [Data]),
+        {removed, Reason} ->
+            ?LLOG(notice, "~s session notification removed: ~p", [Type, Reason]),
             Push = #{
                 type => remove
             },
