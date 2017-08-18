@@ -104,6 +104,14 @@ cmd(<<"find_all_childs">>, #nkreq{data=Data, srv_id=SrvId}=Req) ->
             Error
     end;
 
+cmd(<<"unload_childs">>, #nkreq{data=Data, srv_id=SrvId}=Req) ->
+    case get_domain(Data, Req) of
+        {ok, Id} ->
+            nkdomain_domain_obj:unload_childs(SrvId, Id);
+        Error ->
+            Error
+    end;
+
 cmd(Cmd, Req) ->
     nkdomain_obj_api:api(Cmd, ?DOMAIN_DOMAIN, Req).
 

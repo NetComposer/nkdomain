@@ -25,7 +25,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([search/3, search_all/3, search_type/3, search_all_types/3, search_childs/3, search_all_childs/3]).
--export([find_path/2, find_path/3]).
+-export([find_path/2, find_path/3, unload_childs/2]).
 -export([object_info/0, object_parse/3, object_es_mapping/0,
          object_api_syntax/2, object_api_cmd/2]).
 -export([object_init/1, object_sync_op/3, object_async_op/2, object_enabled/2, object_link_down/2,
@@ -133,6 +133,10 @@ find_path(Srv, Id, Path) ->
     end.
 
 
+%% @doc
+unload_childs(Srv, Id) ->
+    nkdomain_obj:sync_op(Srv, Id, {?MODULE, unload_childs}).
+
 
 
 %% ===================================================================
@@ -226,6 +230,24 @@ object_sync_op({?MODULE, find_path, Base, Type, ObjName}, From, State) ->
         {error, Error} ->
             {reply, {error, Error}, State}
     end;
+
+object_sync_op({?MODULE, unload_childs}, _From, State) ->
+    #?STATE{id=#obj_id_ext{path=Path}, session=#session{obj_ids=Objs}} = State,
+    ?LLOG(notice, "unloading childs at ~s", [Path], State),
+    lists:foreach(
+        fun({_ObjId, {Type, Name, Pid}}) ->
+            case Type of
+                ?DOMAIN_DOMAIN ->
+                    ?LLOG(notice, "unloading childs of domain ~s", [Name], State),
+                    unload_childs(any, Pid);
+               _ ->
+                   ok
+            end,
+            ?LLOG(notice, "unloading ~s:~s", [Type, Name], State),
+            nkdomain_obj:async_op(any, Pid, {unload, normal})
+        end,
+        maps:to_list(Objs)),
+    {reply, ok, State};
 
 object_sync_op(_Op, _From, _State) ->
     continue.

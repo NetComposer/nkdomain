@@ -257,9 +257,11 @@ domain_find_all_childs(Id) ->
 domain_find_all_childs(Id, Spec) ->
     cmd(<<"objects/domain/find_all_childs"/utf8>>, Spec#{id=>Id}).
 
-
 domain_find_all_users() ->
     cmd(<<"objects/domain/find_all_childs"/utf8>>, #{type=>user}).
+
+domain_unload_childs(Id) ->
+    cmd(<<"objects/domain/unload_childs"/utf8>>, #{id=>Id}).
 
 
 session_get() ->

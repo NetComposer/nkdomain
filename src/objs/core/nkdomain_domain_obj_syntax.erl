@@ -71,6 +71,11 @@ api(<<"find_childs">>, Syntax) ->
 api(<<"find_all_childs">>, Syntax) ->
     api(<<"find">>, Syntax);
 
+api(<<"unload_childs">>, Syntax) ->
+    Syntax#{
+        id => binary
+    };
+
 api(Cmd, Syntax) ->
     nkdomain_obj_syntax:syntax(Cmd, ?DOMAIN_DOMAIN, Syntax).
 
