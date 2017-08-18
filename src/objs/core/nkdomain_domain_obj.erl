@@ -206,7 +206,7 @@ object_sync_op({nkdomain_reg_obj, ObjIdExt}, _From, #?STATE{id=Id}=State) ->
                 #?STATE{is_enabled=Enabled} = State,
                 {reply, {ok, Enabled, self()}, State4};
             {error, Error} ->
-                {error, Error}
+                {reply, {error, Error}, State}
         end;
     _ ->
         {reply, {error, object_path_invalid}, State}
