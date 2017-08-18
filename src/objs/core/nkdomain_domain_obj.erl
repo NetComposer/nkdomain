@@ -311,7 +311,7 @@ do_add_obj(ObjId, Type, ObjName, Pid, #?STATE{session=Session}=State) ->
             State3 = nkdomain_obj:links_add(usage, {?MODULE, obj, ObjId, Pid}, State2),
             {ok, State3};
         true ->
-            {error, duplicated_object}
+            {error, object_already_exists}
     end.
 
 
