@@ -479,10 +479,11 @@ object_sync_op({?MODULE, get_name}, _From, #?STATE{obj=Obj}=State) ->
     Data = Base#{
         name => UserName,
         surname => UserSurName,
+        fullname => maps:get(name, Obj, <<>>),
         email => maps:get(email, User, <<>>),
         phone_t => maps:get(phone_t, User, <<>>),
         address_t => maps:get(address_t, User, <<>>),
-        icon_id => maps:get(icon_id, User, <<>>)
+        icon_id => maps:get(icon_id, Obj, <<>>)
     },
     {reply, {ok, Data}, State};
 
