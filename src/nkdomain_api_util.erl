@@ -174,8 +174,8 @@ get_domain(SrvId, #{domain_id:=Domain}) ->
     load_domain(SrvId, Domain);
 
 get_domain(SrvId, #{id:=User}) ->
-    case nkdomain_lib:find_path(SrvId, User) of
-        {ok, _Type, _ObjId, Path} ->
+    case nkdomain_lib:find(SrvId, User) of
+        #obj_id_ext{path=Path} ->
             {ok, Domain, _} = nkdomain_util:get_parts(?DOMAIN_USER, Path),
             load_domain(SrvId, Domain);
         {error, Error} ->
@@ -186,7 +186,7 @@ get_domain(SrvId, #{id:=User}) ->
 %% @private
 load_domain(SrvId, Domain) ->
     case nkdomain_lib:find(SrvId, Domain) of
-        {ok, _Type, DomainId, _Pid} ->
+        #obj_id_ext{type = ?DOMAIN_DOMAIN, obj_id=DomainId} ->
             {ok, DomainId};
         {error, _} ->
             {error, {domain_unknown, Domain}}

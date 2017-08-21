@@ -37,6 +37,7 @@
     srv_id :: nkservice:id(),
     type :: nkdomain:type(),
     obj_id :: nkdomain:obj_id(),
+    obj_name :: nkdomain:obj_name(),
     path :: nkdomain:path(),
     pid :: pid() | undefined
 }).
@@ -48,7 +49,6 @@
     module :: module(),
     domain_id :: nkdomain:obj_id(),
     parent_id :: nkdomain:obj_id(),
-    obj_name :: nkdomain:name(),
     object_info :: nkdomain_obj:object_info(),
     obj :: nkdomain:obj(),
     is_dirty :: boolean(),
@@ -70,8 +70,8 @@
     domain_pid :: pid(),
     domain_enabled :: boolean(),
     parent_pid :: pid(),
-    parent_enabled :: boolean(),
-    moved_to :: undefined | pid()
+    parent_enabled :: boolean()
+    %moved_to :: undefined | pid()
 }).
 
 

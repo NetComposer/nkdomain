@@ -47,7 +47,7 @@
 %% @doc
 search(SrvId, Id, Spec) ->
     case nkdomain_lib:find(SrvId, Id) of
-        {ok, _Type, ObjId, _Pid} ->
+        #obj_id_ext{obj_id=ObjId} ->
             Filters1 = maps:get(filters, Spec, #{}),
             Filters2 = Filters1#{domain_id=>ObjId},
             Spec2 = maps:remove(id, Spec#{filters=>Filters2}),
@@ -59,8 +59,8 @@ search(SrvId, Id, Spec) ->
 
 %% @doc
 search_all(SrvId, Id, Spec) ->
-    case nkdomain_lib:find_path(SrvId, Id) of
-        {ok, _Type, _ObjId, Path} ->
+    case nkdomain_lib:find(SrvId, Id) of
+        #obj_id_ext{path=Path} ->
             Filters1 = maps:get(filters, Spec, #{}),
             Filters2 = Filters1#{path=><<"childs_of:", Path/binary>>},
             Spec2 = maps:remove(id, Spec#{filters=>Filters2}),
@@ -73,7 +73,7 @@ search_all(SrvId, Id, Spec) ->
 %% @doc
 search_type(SrvId, Id, Spec) ->
     case nkdomain_lib:find(SrvId, Id) of
-        {ok, _Type, ObjId, _Pid} ->
+        #obj_id_ext{obj_id=ObjId} ->
             SrvId:object_db_search_types(SrvId, ObjId, Spec);
         {error, Error} ->
             {error, Error}
@@ -82,8 +82,8 @@ search_type(SrvId, Id, Spec) ->
 
 %% @doc
 search_all_types(SrvId, Id, Spec) ->
-    case nkdomain_lib:find_path(SrvId, Id) of
-        {ok, _Type, _ObjId, Path} ->
+    case nkdomain_lib:find(SrvId, Id) of
+        #obj_id_ext{path=Path} ->
             SrvId:object_db_search_all_types(SrvId, Path, Spec);
         {error, Error} ->
             {error, Error}
@@ -93,7 +93,7 @@ search_all_types(SrvId, Id, Spec) ->
 %% @doc
 search_childs(SrvId, Id, Spec) ->
     case nkdomain_lib:find(SrvId, Id) of
-        {ok, _Type, ObjId, _Pid} ->
+        #obj_id_ext{obj_id=ObjId} ->
             SrvId:object_db_search_childs(SrvId, ObjId, Spec);
         {error, Error} ->
             {error, Error}
@@ -102,8 +102,8 @@ search_childs(SrvId, Id, Spec) ->
 
 %% @doc
 search_all_childs(SrvId, Id, Spec) ->
-    case nkdomain_lib:find_path(SrvId, Id) of
-        {ok, _Type, _ObjId, Path} ->
+    case nkdomain_lib:find(SrvId, Id) of
+        #obj_id_ext{path=Path} ->
             SrvId:object_db_search_all_childs(SrvId, Path, Spec);
         {error, Error} ->
             {error, Error}
@@ -144,8 +144,9 @@ unload_childs(Srv, Id) ->
 %% ===================================================================
 
 -record(session, {
-    obj_ids = #{} :: #{nkdomain:obj_id() => {nkdomain:type(), nkdomain:obj_name(), pid()}},
+    obj_ids2 = #{} :: #{nkdomain:obj_id() => #obj_id_ext{}},
     obj_names = #{} :: #{{nkdomain:type(), nkdomain:obj_name()} => nkdomain:obj_id()},
+    master_mon :: reference(),
     service_pid :: pid()
 }).
 
@@ -187,8 +188,15 @@ object_api_cmd(Cmd, Req) ->
 
 
 %% @private
-object_init(State) ->
-    State2 = State#?STATE{session=#session{}},
+object_init(#?STATE{id=ObjIdExt}=State) ->
+    Ref = nkdomain_proc:monitor(),
+    case ObjIdExt of
+        #obj_id_ext{obj_id = <<"root">>} ->
+            ok = nkdomain_proc:register(ObjIdExt);
+        _ ->
+            ok
+    end,
+    State2 = State#?STATE{session=#session{master_mon=Ref}},
     case register_service(State2) of
         {ok, State3} ->
             {ok, State3};
@@ -197,23 +205,26 @@ object_init(State) ->
     end.
 
 
-object_sync_op({nkdomain_reg_obj, ObjIdExt}, _From, #?STATE{id=Id}=State) ->
+%% @private
+object_sync_op({nkdomain_reg_obj, ObjIdExt}, _From, #?STATE{id=Id} = State) ->
     #obj_id_ext{path=DomainPath} = Id,
-    #obj_id_ext{obj_id=ObjId, type=Type, path=Path, pid=Pid} = ObjIdExt,
+    #obj_id_ext{obj_id=ObjId, type=Type, path=Path, pid=Pid, obj_name=ObjName} = ObjIdExt,
     case nkdomain_util:get_parts(Type, Path) of
         {ok, DomainPath, ObjName} ->
-        ?DEBUG("registering obj ~s", [Path], State),
-        State2 = do_rm_obj(ObjId, State),
-        case do_add_obj(ObjId, Type, ObjName, Pid, State2) of
-            {ok, State3} ->
-                State4 = do_event({obj_loaded, Type, ObjId, ObjName, Pid}, State3),
-                #?STATE{is_enabled=Enabled} = State,
-                {reply, {ok, Enabled, self()}, State4};
-            {error, Error} ->
-                {reply, {error, Error}, State}
-        end;
-    _ ->
-        {reply, {error, object_path_invalid}, State}
+            case nkdomain_proc:register(ObjIdExt) of
+                ok ->
+                    ?DEBUG("registering obj ~s", [Path], State),
+                    State2 = do_rm_obj(ObjId, State),
+                    State3 = do_add_obj(ObjIdExt, State2),
+                    State4 = do_event({obj_loaded, Type, ObjId, ObjName, Pid}, State3),
+                    #?STATE{is_enabled=Enabled} = State,
+                    {reply, {ok, Enabled, self()}, State4};
+                {error, Error} ->
+                    {error, Error}
+            end;
+        O ->
+            lager:error("NKLOG O ~p ~p", [O, ObjName]),
+            {reply, {error, object_path_invalid}, State}
     end;
 
 object_sync_op({?MODULE, find_path, <<>>, ?DOMAIN_DOMAIN, <<>>}, _From,
@@ -232,18 +243,18 @@ object_sync_op({?MODULE, find_path, Base, Type, ObjName}, From, State) ->
     end;
 
 object_sync_op({?MODULE, unload_childs}, _From, State) ->
-    #?STATE{id=#obj_id_ext{path=Path}, session=#session{obj_ids=Objs}} = State,
+    #?STATE{id=#obj_id_ext{path=Path}, session=#session{obj_ids2=Objs}} = State,
     ?LLOG(notice, "unloading childs at ~s", [Path], State),
     lists:foreach(
-        fun({_ObjId, {Type, Name, Pid}}) ->
+        fun({_ObjId, #obj_id_ext{type=Type, path=ObjPath, pid=Pid}}) ->
             case Type of
                 ?DOMAIN_DOMAIN ->
-                    ?LLOG(notice, "unloading childs of domain ~s", [Name], State),
+                    ?LLOG(notice, "unloading childs of ~s", [ObjPath], State),
                     unload_childs(any, Pid);
                _ ->
                    ok
             end,
-            ?LLOG(notice, "unloading ~s:~s", [Type, Name], State),
+            ?LLOG(notice, "unloading ~s", [Path], State),
             nkdomain_obj:async_op(any, Pid, {unload, normal})
         end,
         maps:to_list(Objs)),
@@ -290,6 +301,15 @@ object_handle_info({'DOWN', _Ref, process, Pid, _Reason}, #?STATE{session=#sessi
     send_objs(nkdomain_service_stopped, State),
     nkdomain_obj:do_stop(service_down, State);
 
+object_handle_info({'DOWN', Ref, process, _Pid, _Reason}, #?STATE{session=#session{master_mon=Ref}}=State) ->
+    ?LLOG(warning, "master stopped", [], State),
+    Ref2 = nkdomain_proc:monitor(),
+    #?STATE{session=Session} = State,
+    State2 = State#?STATE{session=Session#session{master_mon=Ref2}},
+    #session{obj_ids2=ObjIds} = Session,
+    State3 = do_reg_all(maps:values(ObjIds), State2),
+    {noreply, State3};
+
 object_handle_info(_Info, _State) ->
     continue.
 
@@ -300,29 +320,24 @@ object_handle_info(_Info, _State) ->
 %% ===================================================================
 
 %% @private
-do_add_obj(ObjId, Type, ObjName, Pid, #?STATE{session=Session}=State) ->
-    #session{obj_ids=ObjIds, obj_names=ObjNames} = Session,
-    case maps:is_key({Type, ObjName}, ObjNames) of
-        false ->
-            ObjIds2 = ObjIds#{ObjId => {Type, ObjName, Pid}},
-            ObjNames2 = ObjNames#{{Type, ObjName} => ObjId},
-            Session2 = Session#session{obj_ids=ObjIds2, obj_names=ObjNames2},
-            State2 = State#?STATE{session=Session2},
-            State3 = nkdomain_obj:links_add(usage, {?MODULE, obj, ObjId, Pid}, State2),
-            {ok, State3};
-        true ->
-            {error, object_already_exists}
-    end.
+do_add_obj(ObjIdExt, #?STATE{session=Session}=State) ->
+    #obj_id_ext{obj_id=ObjId, obj_name=ObjName, type=Type, pid=Pid} = ObjIdExt,
+    #session{obj_ids2=ObjIds, obj_names=ObjNames} = Session,
+    ObjIds2 = ObjIds#{ObjId => ObjIdExt},
+    ObjNames2 = ObjNames#{{Type, ObjName} => ObjId},
+    Session2 = Session#session{obj_ids2=ObjIds2, obj_names=ObjNames2},
+    State2 = State#?STATE{session=Session2},
+    nkdomain_obj:links_add(usage, {?MODULE, obj, ObjId, Pid}, State2).
 
 
 %% @private
 do_rm_obj(ObjId, #?STATE{session=Session}=State) ->
-    #session{obj_ids=ObjIds, obj_names=ObjNames} = Session,
+    #session{obj_ids2=ObjIds, obj_names=ObjNames} = Session,
     case maps:find(ObjId, ObjIds) of
-        {ok, {Type, ObjName, Pid}} ->
+        {ok, #obj_id_ext{type=Type, obj_name=ObjName, pid=Pid}} ->
             ObjIds2 = maps:remove(ObjId, ObjIds),
             ObjNames2 = maps:remove({Type, ObjName}, ObjNames),
-            Session2 = Session#session{obj_ids=ObjIds2, obj_names=ObjNames2},
+            Session2 = Session#session{obj_ids2=ObjIds2, obj_names=ObjNames2},
             State2 = State#?STATE{session=Session2},
             State3 = do_event({obj_unloaded, Type, ObjId}, State2),
             nkdomain_obj:links_remove(usage, {?MODULE, obj, ObjId, Pid}, State3);
@@ -346,12 +361,12 @@ register_service(#?STATE{srv_id=SrvId, session=Session}=State) ->
 %% @doc
 find_obj(Base, Type, ObjName, #?STATE{id=Id, session=Session}) ->
     #obj_id_ext{path=DomainPath} = Id,
-    #session{obj_ids=ObjIds, obj_names=ObjNames} = Session,
+    #session{obj_ids2=ObjIds, obj_names=ObjNames} = Session,
     case Base of
         DomainPath ->
             case maps:find({Type, ObjName}, ObjNames) of
                 {ok, ObjId} ->
-                    {ok, {Type, ObjName, Pid}} = maps:find(ObjId, ObjIds),
+                    {ok, #obj_id_ext{type=Type, obj_name=ObjName, pid=Pid}} = maps:find(ObjId, ObjIds),
                     {ok, ObjId, Pid};
                 error ->
                     %lager:error("NKLOG not found ~p", [{Type, ObjName}]),
@@ -366,7 +381,7 @@ find_obj(Base, Type, ObjName, #?STATE{id=Id, session=Session}) ->
                     %lager:warning("NKLOG R1: ~p, D: ~p", [Rest, Dom]),
                     case maps:find({?DOMAIN_DOMAIN, Dom}, ObjNames) of
                         {ok, SubDomId} ->
-                            {ok, {?DOMAIN_DOMAIN, Dom, Pid}} = maps:find(SubDomId, ObjIds),
+                            {ok, #obj_id_ext{type=?DOMAIN_DOMAIN, obj_id=Dom, pid=Pid}} = maps:find(SubDomId, ObjIds),
                             ?LLOG(notice, "relaying query to ~s", [<<DomainPath/binary, $/, Dom/binary>>]),
                             {subdomain, Pid};
                         error ->
@@ -379,13 +394,13 @@ find_obj(Base, Type, ObjName, #?STATE{id=Id, session=Session}) ->
 
 
 %% @private
-send_objs(Msg, #?STATE{session=#session{obj_ids=ObjIds}}=State) ->
+send_objs(Msg, #?STATE{session=#session{obj_ids2=ObjIds}}=State) ->
     lists:foreach(
-        fun({_ObjId, {Type, ObjName, Pid}}) ->
-            ?LLOG(notice, "sending ~p to obj ~s/~s", [Msg, Type, ObjName], State),
+        fun(#obj_id_ext{path=Path, pid=Pid}) ->
+            ?LLOG(notice, "sending ~p to obj ~s", [Msg, Path], State),
             gen_server:cast(Pid, Msg)
         end,
-        maps:to_list(ObjIds)).
+        maps:values(ObjIds)).
 
 
 %% @private
@@ -403,3 +418,20 @@ get_first_domain(Path) ->
         [Dom] -> Dom;
         [Dom, _] -> Dom
     end.
+
+
+%% @private
+do_reg_all([], State) ->
+    State;
+
+do_reg_all([#obj_id_ext{obj_id=ObjId, pid=Pid}=ObjIdExt|Rest], State) ->
+    case nkdomain_proc:register(ObjIdExt) of
+        ok ->
+            do_reg_all(Rest, State);
+        {error, {already_registered, WinnerPid}} ->
+            nkdomain_obj:conflict_detected(Pid, WinnerPid),
+            do_reg_all(Rest, do_rm_obj(ObjId, State))
+    end.
+
+
+

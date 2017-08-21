@@ -31,8 +31,9 @@
 -export([object_create/5, object_check_active/3, object_do_expired/2]).
 -export([object_syntax/2, object_parse/3]).
 -export([object_init/1, object_terminate/2, object_stop/2,
-         object_event/2, object_reg_event/4, object_session_event/3, object_sync_op/3, object_async_op/2, object_save/1, object_delete/1, object_archive/1, object_link_down/2, object_enabled/2,
-         object_handle_call/3, object_handle_cast/2, object_handle_info/2]).
+         object_event/2, object_reg_event/4, object_session_event/3, object_sync_op/3, object_async_op/2,
+         object_save/1, object_delete/1, object_archive/1, object_link_down/2, object_enabled/2,
+         object_handle_call/3, object_handle_cast/2, object_handle_info/2, object_conflict_detected/4]).
 -export([object_send_push/5]).
 -export([object_db_init/1, object_db_start/1, object_db_read/2, object_db_save/2, object_db_delete/2]).
 -export([object_db_find_obj/2, object_db_search/2, object_db_search_alias/2,
@@ -646,6 +647,13 @@ object_handle_info(Msg, State) ->
             Other
     end.
 
+
+%% @doc
+-spec object_conflict_detected(nkservice:id(), nkdomain:type(), pid(), state()) ->
+    {noreply, state()} | {stop, term(), state()} | continue.
+
+object_conflict_detected(_SrvId, _Type, _Pid, _State) ->
+    erlang:error(conflict_detected).
 
 
 %% ===================================================================

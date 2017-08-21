@@ -73,8 +73,8 @@ make(SrvId, Opts) ->
     } = Opts,
     Parent = maps:get(parent_id, Opts, Domain),
     try
-        {DomainId, DomainPath} = case nkdomain_lib:find_path(SrvId, Domain) of
-            {ok, ?DOMAIN_DOMAIN, DomainId0, DomainPath0} ->
+        {DomainId, DomainPath} = case nkdomain_lib:find(SrvId, Domain) of
+            #obj_id_ext{type=?DOMAIN_DOMAIN, obj_id=DomainId0, path=DomainPath0} ->
                 {DomainId0, DomainPath0};
             {error, object_not_found} ->
                 throw({could_not_load_domain, Domain});
@@ -82,7 +82,7 @@ make(SrvId, Opts) ->
                 throw(DomainError)
         end,
         ParentId = case nkdomain_lib:find(SrvId, Parent) of
-            {ok, _PType, ParentId0, _PPid} ->
+            #obj_id_ext{obj_id=ParentId0} ->
                 ParentId0;
             {error, object_not_found} ->
                 throw({could_not_load_parent, Parent});
@@ -90,7 +90,7 @@ make(SrvId, Opts) ->
                 throw(ParentError)
         end,
         UserId = case nkdomain_lib:find(SrvId, User) of
-            {ok, ?DOMAIN_USER, UserId0, _UPid} ->
+            #obj_id_ext{type = ?DOMAIN_USER, obj_id=UserId0} ->
                 UserId0;
             {error, object_not_found} ->
                 throw({could_not_load_user, User});
@@ -104,8 +104,10 @@ make(SrvId, Opts) ->
             _ -> ObjId1
         end,
         Name1 = case maps:get(obj_name, Opts, <<>>) of
-            <<>> -> make_name(ObjId1);
-            Name0 -> nkdomain_util:name(Name0)
+            <<>> ->
+                make_name(ObjId1);
+            Name0 ->
+                nkdomain_util:name(Name0)
         end,
         Name2 = case Type2 of
             ?DOMAIN_DOMAIN ->
@@ -162,7 +164,7 @@ make_name(ObjId) ->
         [Rest] when byte_size(Rest) >= 7 -> Rest;
         _ -> nklib_util:luid()
     end,
-    binary:part(UUID, 0, 7).
+    nkdomain_util:name(binary:part(UUID, 0, 7)).
 
 
 %% @doc

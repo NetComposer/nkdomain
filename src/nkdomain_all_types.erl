@@ -164,15 +164,10 @@ start_link() ->
     {{type, nkdomain:type()}, module()} |
     {{module, module()}, nkdomain:type()}.
 
--record(type, {
-
-}).
-
 -record(state, {
-    types = #{} :: #{nkdomain:type() => #type{}}
-
-
+    types = #{} :: #{nkdomain:type() => module()}
 }).
+
 
 
 %% @private

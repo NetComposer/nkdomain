@@ -50,7 +50,7 @@ start() ->
     ok | {error, Reason::term()}.
 
 start(Type) ->
-    nkdist_util:ensure_dir(),
+    % nkdist_util:ensure_dir(),
     case nklib_util:ensure_all_started(?APP, Type) of
         {ok, _Started} ->
             ok;
@@ -89,7 +89,7 @@ start(_Type, _Args) ->
         {ok, _} ->
             {ok, Pid} = nkdomain_sup:start_link(),
             lager:info("waiting for nkdist"),
-            nkdist:wait_for_service(),
+            %% nkdist:wait_for_service(),
             %% ok = riak_core_ring_events:add_guarded_handler(nkdomain_ring_handler, []),
             {ok, Vsn} = application:get_key(nkdomain, vsn),
             lager:info("NkDOMAIN v~s has started.", [Vsn]),

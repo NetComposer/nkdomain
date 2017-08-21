@@ -211,8 +211,8 @@ object_event(_Event, State) ->
 
 %% @private
 object_check_active(SrvId, Id) ->
-    case nkdomain_lib:find_loaded(SrvId, Id) of
-        {ok, _Type, _ObjId, _Pid} ->
+    case nkdomain_lib:find_loaded(Id) of
+        #obj_id_ext{} ->
             true;
         _ ->
             lager:notice("NkDOMAIN: removing stalle active object ~s", [Id]),

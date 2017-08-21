@@ -47,7 +47,7 @@
 -behaviour(gen_server).
 
 -export([sync_op/3, sync_op/4, async_op/3]).
--export([start/4, new_type_master/1, object_deleted/1]).
+-export([start/4, new_type_master/1, object_deleted/1, conflict_detected/2]).
 -export([init/1, terminate/2, code_change/3, handle_call/3,  handle_cast/2, handle_info/2]).
 -export([links_add/3, links_remove/3, links_iter/4]).
 -export([get_all/0, unload_all/0, get_state/2, get_time/2]).
@@ -169,16 +169,23 @@
 -spec start(nkservice:id(), nkdomain:obj(), loaded|created, start_opts()) ->
     {ok, pid()} | {error, term()}.
 
-start(SrvId, #{obj_id:=ObjId}=Obj, Op, Meta) ->
-    case nkdomain_lib:get_node(ObjId) of
-        {ok, Node} ->
-            case rpc:call(Node, gen_server, start, [?MODULE, {Op, SrvId, Obj, Meta}, []]) of
-                {ok, Pid} -> {ok, Pid};
-                {error, {already_registered, Pid}} -> {ok, Pid};
-                {error, Error} -> {error, Error}
-            end;
-        {error, Error} ->
-            {error, Error}
+%%start(SrvId, #{obj_id:=ObjId}=Obj, Op, Meta) ->
+%%    case nkdomain_lib:get_node(ObjId) of
+%%        {ok, Node} ->
+%%            case rpc:call(Node, gen_server, start, [?MODULE, {Op, SrvId, Obj, Meta}, []]) of
+%%                {ok, Pid} -> {ok, Pid};
+%%                {error, {already_registered, Pid}} -> {ok, Pid};
+%%                {error, Error} -> {error, Error}
+%%            end;
+%%        {error, Error} ->
+%%            {error, Error}
+%%    end.
+
+start(SrvId, Obj, Op, Meta) ->
+    case gen_server:start(?MODULE, {Op, SrvId, Obj, Meta}, []) of
+        {ok, Pid} -> {ok, Pid};
+        {error, {already_registered, Pid}} -> {ok, Pid};
+        {error, Error} -> {error, Error}
     end.
 
 
@@ -257,6 +264,12 @@ get_time(SrvId, Id) ->
     sync_op(SrvId, Id, get_time).
 
 
+%% @private
+%% Called from nkdomain_domain_obj after detecting OldPid is in conflict (and will win)
+conflict_detected(Pid, WinnerPid) ->
+    gen_server:cast(Pid, {nkdomain_obj_conflict_detected, WinnerPid}).
+
+
 %% @doc
 -spec get_all() ->
     [{nkdomain:type(), nkdomain:obj_id(), nkdomain:path(), pid()}].
@@ -301,14 +314,13 @@ init({Op, SrvId, Obj, Meta}) when Op==loaded; Op==created ->
             maps:get(enabled, Obj, true)
     end,
     Info = Module:object_info(),
-    ObjIdExt = #obj_id_ext{srv_id=SrvId, obj_id=ObjId, type=Type, path=Path, pid=self()},
+    ObjIdExt = #obj_id_ext{srv_id=SrvId, obj_id=ObjId, type=Type, path=Path, obj_name=ObjName, pid=self()},
     State1 = #?STATE{
         srv_id = SrvId,
         id = ObjIdExt,
         module = Module,
         domain_id = DomainId,
         parent_id = ParentId,
-        obj_name = ObjName,
         object_info = Info,
         obj = Obj,
         is_dirty = (Op == created),
@@ -354,19 +366,19 @@ init({Op, SrvId, Obj, Meta}) when Op==loaded; Op==created ->
             end;
         {error, Error} ->
             {stop, Error}
-    end;
-
-init({moved, State, OldPid}) ->
-    State2 = do_init_common(State),
-    case do_register(OldPid, State2) of
-        {ok, State3} ->
-            %% TODO: Add 'moved' callback
-            %% TODO: Re-register childs
-            ?DEBUG("moved (~p)", [self()], State3),
-            {ok, do_refresh(State3)};
-        {error, Error} ->
-            {stop, Error}
     end.
+
+%%init({moved, State, OldPid}) ->
+%%    State2 = do_init_common(State),
+%%    case do_register(OldPid, State2) of
+%%        {ok, State3} ->
+%%            %% TODO: Add 'moved' callback
+%%            %% TODO: Re-register childs
+%%            ?DEBUG("moved (~p)", [self()], State3),
+%%            {ok, do_refresh(State3)};
+%%        {error, Error} ->
+%%            {stop, Error}
+%%    end.
 
 
 %% @private
@@ -374,10 +386,10 @@ init({moved, State, OldPid}) ->
     {noreply, state()} | {reply, term(), state()} |
     {stop, Reason::term(), state()} | {stop, Reason::term(), Reply::term(), state()}.
 
-handle_call(Msg, _From, #?STATE{moved_to=Pid}=State) when is_pid(Pid) ->
-    ?DEBUG("forwarding call to new process", [], State),
-    Reply = gen_server:call(Pid, Msg, infinity),
-    reply(Reply, State);
+%%handle_call(Msg, _From, #?STATE{moved_to=Pid}=State) when is_pid(Pid) ->
+%%    ?DEBUG("forwarding call to new process", [], State),
+%%    Reply = gen_server:call(Pid, Msg, infinity),
+%%    reply(Reply, State);
 
 handle_call({nkdomain_sync_op, Op}, From, State) ->
     case handle(object_sync_op, [Op, From], State) of
@@ -410,9 +422,9 @@ handle_call(Msg, From, State) ->
 -spec handle_cast(term(), state()) ->
     {noreply, state()} | {stop, term(), state()}.
 
-handle_cast(Msg, #?STATE{moved_to=Pid}=State) when is_pid(Pid) ->
-    gen_server:cast(Pid, Msg),
-    noreply(State);
+%%handle_cast(Msg, #?STATE{moved_to=Pid}=State) when is_pid(Pid) ->
+%%    gen_server:cast(Pid, Msg),
+%%    noreply(State);
 
 handle_cast({nkdomain_async_op, Op}, State) ->
     case handle(object_async_op, [Op], State) of
@@ -445,6 +457,10 @@ handle_cast(nkdomain_new_type_master, State) ->
 handle_cast(nkdomain_obj_deleted, State) ->
     do_stop(object_deleted, State#?STATE{is_dirty=false});
 
+handle_cast({nkdomain_obj_conflict_detected, WinnerPid}, State) ->
+    #?STATE{id=#obj_id_ext{srv_id=SrvId, type=Type}} = State,
+    handle(object_conflict_detected, [SrvId, Type, WinnerPid], State);
+
 handle_cast(Msg, State) ->
     handle(object_handle_cast, [Msg], State).
 
@@ -453,9 +469,9 @@ handle_cast(Msg, State) ->
 -spec handle_info(term(), state()) ->
     {noreply, state()} | {stop, term(), state()}.
 
-handle_info(nkdomain_move_completed, State) ->
-    ?DEBUG("move completed", [], State),
-    {stop, normal, State};
+%%handle_info(nkdomain_move_completed, State) ->
+%%    ?DEBUG("move completed", [], State),
+%%    {stop, normal, State};
 
 handle_info({nkservice_updated, _SrvId}, #?STATE{id=#obj_id_ext{srv_id=SrvId, type=Type}}=State) ->
     set_log(SrvId, Type),
@@ -503,8 +519,8 @@ handle_info(nkdomain_find_domain, #?STATE{domain_pid=undefined}=State) ->
 handle_info(nkdomain_find_domain, State) ->
     {noreply, State};
 
-handle_info({nkdist, Msg}, State) ->
-    do_nkdist(Msg, State);
+%%handle_info({nkdist, Msg}, State) ->
+%%    do_nkdist(Msg, State);
 
 handle_info({'DOWN', _Ref, process, Pid, _Reason}, #?STATE{parent_pid=Pid}=State) ->
     ?LLOG(notice, "parent has failed", [], State),
@@ -559,8 +575,8 @@ code_change(OldVsn, #?STATE{srv_id=SrvId}=State, Extra) ->
 -spec terminate(term(), state()) ->
     ok.
 
-terminate(_Reason, #?STATE{moved_to=Pid}) when is_pid(Pid) ->
-    ok;
+%%terminate(_Reason, #?STATE{moved_to=Pid}) when is_pid(Pid) ->
+%%    ok;
 
 terminate(Reason, State) ->
     State2 = do_stop2({terminate, Reason}, State),
@@ -763,47 +779,15 @@ set_log(SrvId, Type) ->
 
 %% @private
 do_register(State) ->
-    do_register(none, State).
-
-
-%% @private
-do_register(OldPid, State) ->
-    case register_obj_id(OldPid, State) of
-        ok ->
-            case register_domain(State) of
-                {ok, State2} ->
-                    case register_parent(State2) of
-                        {ok, State3} ->
-                            State4 = register_type(State3),
-                            {ok, State4};
-                        {error, Error} ->
-                            {error, Error}
-                    end;
+    case register_domain(State) of
+        {ok, State2} ->
+            case register_parent(State2) of
+                {ok, State3} ->
+                    State4 = register_type(State3),
+                    {ok, State4};
                 {error, Error} ->
                     {error, Error}
             end;
-        {error, {pid_conflict, Pid}} ->
-            ?LLOG(warning, "object is already registered", [], State),
-            {error, {already_registered, Pid}};
-        {error, Error} ->
-            {error, Error}
-    end.
-
-
-%% @private
-register_obj_id(OldPid, #?STATE{id=Id}) ->
-    #obj_id_ext{srv_id=SrvId, type=Type, obj_id=ObjId, path=Path} = Id,
-    OptsPid = case is_pid(OldPid) of
-        true ->
-            #{replace_pid => OldPid};
-        false ->
-            #{}
-    end,
-    Opts1 = OptsPid#{sync=>true, meta=>Type},
-    case nkdist_reg:register(proc, {nkdomain, SrvId}, ObjId, Opts1) of
-        ok ->
-            nklib_proc:put(?MODULE, {Type, ObjId, Path}),
-            ok;
         {error, Error} ->
             {error, Error}
     end.
@@ -981,7 +965,7 @@ do_update_name(ObjName, #?STATE{srv_id=SrvId, id=Id, obj=Obj}=State) ->
             Path2 = nkdomain_util:make_path(Domain, Type, ObjName),
             case nkdomain_lib:find(SrvId, Path2) of
                 {error, object_not_found} ->
-                    Id2 = Id#obj_id_ext{path=Path2},
+                    Id2 = Id#obj_id_ext{path=Path2, obj_name=ObjName},
                     Update = #{
                         obj_name => ObjName,
                         path => Path2,
@@ -989,7 +973,7 @@ do_update_name(ObjName, #?STATE{srv_id=SrvId, id=Id, obj=Obj}=State) ->
                         updated_by => <<>>
                     },
                     Obj2 = ?ADD_TO_OBJ(Update, Obj),
-                    State2 = State#?STATE{id=Id2, obj=Obj2, obj_name=ObjName, is_dirty=true},
+                    State2 = State#?STATE{id=Id2, obj=Obj2, is_dirty=true},
                     case register_domain(State2) of
                         {ok, State3} ->
                             lager:error("NKLOG UNREGISTER ~p", [Path1]),
@@ -1002,9 +986,11 @@ do_update_name(ObjName, #?STATE{srv_id=SrvId, id=Id, obj=Obj}=State) ->
                         {error, Error} ->
                             {error, Error}
                     end;
-                _ ->
+                #obj_id_ext{} ->
                     ?LLOG(notice, "cannot update name, ~s already exists", [Path2], State),
-                    {error, object_already_exists}
+                    {error, object_already_exists};
+                {error, Error} ->
+                    {error, Error}
             end
     end.
 
@@ -1087,28 +1073,28 @@ do_check_timeout(#?STATE{usage_links=[]}=State) ->
 do_check_timeout(State) ->
     noreply(do_refresh(State)).
 
-do_nkdist({must_move, Node}, #?STATE{timer=Timer}=State) ->
-    nklib_util:cancel_timer(Timer),
-    case rpc:call(Node, gen_server, start, [?MODULE, {moved, State, self()}, []]) of
-        {ok, NewPid} ->
-            ?LLOG(info, "starting move to ~p (~p -> ~p)", [Node, self(), NewPid], State),
-            erlang:send_after(?MOVE_WAIT_TIME, self(), nkdomain_move_completed),
-            noreply(State#?STATE{moved_to=NewPid, obj=#{}});
-        {error, Error} ->
-            ?LLOG(warning, "could not move process to ~p: ~p", [Node, Error], State),
-            noreply(State)
-    end;
-
-do_nkdist({vnode_pid, _Pid}, State) ->
-    noreply(State);
-
-do_nkdist({updated_reg_pid, _Class, ObjId, Pid}, State) ->
-    lager:error("NKLOG UPDATED REG ~s, ~p (I am ~p)", [ObjId, Pid, self()]),
-    noreply(State);
-
-do_nkdist(Msg, State) ->
-    ?LLOG(notice, "unexpected NkDIST event: ~p", [Msg], State),
-    noreply(State).
+%%do_nkdist({must_move, Node}, #?STATE{timer=Timer}=State) ->
+%%    nklib_util:cancel_timer(Timer),
+%%    case rpc:call(Node, gen_server, start, [?MODULE, {moved, State, self()}, []]) of
+%%        {ok, NewPid} ->
+%%            ?LLOG(info, "starting move to ~p (~p -> ~p)", [Node, self(), NewPid], State),
+%%            erlang:send_after(?MOVE_WAIT_TIME, self(), nkdomain_move_completed),
+%%            noreply(State#?STATE{moved_to=NewPid, obj=#{}});
+%%        {error, Error} ->
+%%            ?LLOG(warning, "could not move process to ~p: ~p", [Node, Error], State),
+%%            noreply(State)
+%%    end;
+%%
+%%do_nkdist({vnode_pid, _Pid}, State) ->
+%%    noreply(State);
+%%
+%%do_nkdist({updated_reg_pid, _Class, ObjId, Pid}, State) ->
+%%    lager:error("NKLOG UPDATED REG ~s, ~p (I am ~p)", [ObjId, Pid, self()]),
+%%    noreply(State);
+%%
+%%do_nkdist(Msg, State) ->
+%%    ?LLOG(notice, "unexpected NkDIST event: ~p", [Msg], State),
+%%    noreply(State).
 
 
 %% ===================================================================
@@ -1135,7 +1121,7 @@ handle(Fun, Args, #?STATE{srv_id=SrvId}=State) ->
 send_childs(Msg, #?STATE{childs=Childs}=State) ->
     lists:foreach(
         fun({_ObjId, {Type, Pid}}) ->
-            ?LLOG(notice, "sending ~p to child ~s", [Msg, Type], State),
+            ?DEBUG("sending ~p to child ~s", [Msg, Type], State),
             gen_server:cast(Pid, Msg)
         end,
         maps:to_list(Childs)).

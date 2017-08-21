@@ -86,13 +86,13 @@ save_obj(ObjId, Obj, #{srv_id:=SrvId}=EsOpts) ->
 -spec delete_obj(nkdomain:obj_id(), nkelastic:opts()) ->
     {ok, meta()} | {error, term()}.
 
-delete_obj(ObjId, #{srv_id:=SrvId}=EsOpts) ->
+delete_obj(ObjId, EsOpts) ->
     case search_childs(ObjId, #{size=>0}, EsOpts) of
         {ok, 0, []} ->
-            case nkdomain_lib:find_loaded(SrvId, ObjId) of
-                {ok, _Type, _, Pid} ->
+            case nkdomain_lib:find_loaded(ObjId) of
+                #obj_id_ext{pid=Pid} ->
                     nkdomain_obj:object_deleted(Pid);
-                _ ->
+                not_found ->
                     ok
             end,
             nkelastic:delete(ObjId, EsOpts);
@@ -271,15 +271,15 @@ search_obj_alias(Alias, EsOpts) ->
 -spec delete_all_childs(nkdomain:id(), nkdomain:search_spec(), nkelastic:opts()) ->
     {ok, integer()} | {error, term()}.
 
-delete_all_childs(Id, Spec, #{srv_id:=SrvId}=EsOpts) ->
+delete_all_childs(Id, Spec, EsOpts) ->
     case filter_all_childs(Id, Spec, EsOpts) of
         {ok, Spec2} ->
             Spec3 = Spec2#{fields=>[<<"path">>], sort=>[#{<<"path">> => #{order=>desc}}]},
             Fun = fun(#{<<"obj_id">>:=ObjId}, Acc) ->
                 case nkelastic:delete(ObjId, EsOpts) of
                     {ok, _} ->
-                        case nkdomain_lib:find_loaded(SrvId, ObjId) of
-                            {ok, _Type, ObjId, Pid} ->
+                        case nkdomain_lib:find_loaded(ObjId) of
+                            #obj_id_ext{pid=Pid} ->
                                 nkdomain_obj:object_deleted(Pid);
                             _ ->
                                 ok

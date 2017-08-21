@@ -226,7 +226,7 @@ send_push(SrvId, Id, AppId, Push) ->
 %% @private
 find_childs(SrvId, User) ->
     case nkdomain_lib:find(SrvId, User) of
-        {ok, _Type, UserId, _Pid} ->
+        #obj_id_ext{obj_id=UserId} ->
             Spec = #{
                 filters => #{
                     parent_id => UserId

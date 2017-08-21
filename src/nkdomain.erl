@@ -23,11 +23,11 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 
--export([find/2, find_obj/2, load/2, unload/2, unload/3, get_obj/2, get_info/2, get_name/2, get_domain_id/2]).
+-export([find/2, load/2, unload/2, unload/3, get_obj/2, get_info/2, get_name/2, get_domain_id/2]).
 -export([enable/3, update/3, update_name/3, delete/2, send_info/4]).
 -export([search/2, search_type/2, delete_all_childs/2, delete_all_childs_type/3, search_agg_field/5]).
 -export([clean/1]).
--export_type([obj_id/0, name/0, obj/0, path/0, id/0, type/0]).
+-export_type([obj_id/0, obj_name/0, obj/0, path/0, id/0, type/0]).
 -export_type([timestamp/0]).
 
 -include("nkdomain.hrl").
@@ -38,7 +38,7 @@
 
 -type obj_id() :: binary().
 
--type name() :: binary().
+-type obj_name() :: binary().
 
 -type path() :: [binary()].
 
@@ -67,23 +67,28 @@
 
 %% @doc Finds and object from UUID or Path, in memory and disk
 -spec find(nkservice:id(), id()) ->
-    {ok, type(), obj_id(), pid()|undefined} | {error, object_not_found|term()}.
-
-find(SrvId, Id) ->
-    nkdomain_lib:find(SrvId, Id).
-
-
-%% @doc Finds and object from UUID or Path, in memory and disk
--spec find_obj(nkservice:id(), id()) ->
     {ok, type(), obj_id(), path(), pid()|undefined} | {error, object_not_found|term()}.
 
-find_obj(SrvId, Id) ->
-    case nkdomain_lib:find_obj(SrvId, Id) of
+find(SrvId, Id) ->
+    case nkdomain_lib:find(SrvId, Id) of
         #obj_id_ext{type=Type, obj_id=ObjId, path=Path, pid=Pid} ->
             {ok, Type, ObjId, Path, Pid};
         {error, Error} ->
             {error, Error}
     end.
+
+
+%%%% @doc Finds and object from UUID or Path, in memory and disk
+%%-spec find_obj(nkservice:id(), id()) ->
+%%    {ok, type(), obj_id(), path(), pid()|undefined} | {error, object_not_found|term()}.
+%%
+%%find_obj(SrvId, Id) ->
+%%    case nkdomain_lib:find_obj(SrvId, Id) of
+%%        #obj_id_ext{type=Type, obj_id=ObjId, path=Path, pid=Pid} ->
+%%            {ok, Type, ObjId, Path, Pid};
+%%        {error, Error} ->
+%%            {error, Error}
+%%    end.
 
 
 %% @doc Finds an objects's pid or loads it from storage
@@ -183,8 +188,8 @@ unload(SrvId, Id) ->
     ok | {error, term()}.
 
 unload(SrvId, Id, Reason) ->
-    case nkdomain_lib:find_loaded(SrvId, Id) of
-        {ok, _Type, _ObjId, Pid} ->
+    case nkdomain_lib:find_loaded(Id) of
+        #obj_id_ext{pid=Pid} ->
             nkdomain_obj:async_op(SrvId, Pid, {unload, Reason});
         _ ->
             ok

@@ -408,8 +408,8 @@ do_get_data(ElementId, Spec, State) ->
 
 %% @private
 find_url(<<"_id/", ObjId/binary>>, #admin_session{srv_id=SrvId}=Session) ->
-    case nkdomain_lib:find_path(SrvId, ObjId) of
-        {ok, _, _, Path} ->
+    case nkdomain_lib:find(SrvId, ObjId) of
+        #obj_id_ext{path=Path} ->
             find_url(Path, Session);
         {error, _Error} ->
             {error, url_unknown}
@@ -418,8 +418,8 @@ find_url(<<"_id/", ObjId/binary>>, #admin_session{srv_id=SrvId}=Session) ->
 find_url(Url, #admin_session{srv_id=SrvId}=Session) ->
     case nkadmin_util:get_url_key(Url, Session) of
         undefined ->
-            case nkdomain_lib:find_path(SrvId, Url) of
-                {ok, Type, _ObjId, Path} ->
+            case nkdomain_lib:find(SrvId, Url) of
+                #obj_id_ext{type=Type, path=Path} ->
                     {ok, [<<"obj">>, Type, Path]};
                 {error, _} ->
                     {error, url_unknown}
