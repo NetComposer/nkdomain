@@ -133,7 +133,7 @@ find_in_db(SrvId, Id) ->
                         false ->
                             ok
                     end,
-                    {_, ObjName} = nkdomain_util:get_parts(Type, Path),
+                    {ok, _, ObjName} = nkdomain_util:get_parts(Type, Path),
                     Alias = #obj_id_ext{srv_id=SrvId, type=Type, obj_id=ObjId, path=Path, obj_name=ObjName},
                     {alias, Alias};
                 {error, Error} ->
@@ -154,14 +154,20 @@ load(SrvId, Id) ->
             ObjIdExt;
         #obj_id_ext{obj_id=ObjId, path=Path, obj_name=ObjName}=ObjIdExt ->
             case SrvId:object_db_read(SrvId, ObjId) of
-                {ok, #{type:=Type, path:=Path, obj_name:=ObjName}=Obj, _Meta} ->
+                {ok, #{path:=Path}=Obj, _Meta} ->
                     Obj2 = case Obj of
                         #{obj_name:=ObjName} ->
                             Obj;
-                        #{obj_name:=O} ->
-                            error({different_obj_name, O, ObjName});
-                        #{type:=Type} ->
-                            {ok, _, ObjName} = nkdomain_util:get_parts(Type, Path),
+                        #{obj_name:=ObjName2} ->
+
+
+                            case nkdomain_util:name(ObjName2) of
+                                ObjName ->
+                                    Obj#{obj_name=>ObjName};
+                                _ ->
+                                    error({different_obj_name, ObjName, ObjName2})
+                            end;
+                        _ ->
                             Obj#{obj_name=>ObjName}
                     end,
                     case nkdomain_obj:start(SrvId, Obj2, loaded, #{}) of
