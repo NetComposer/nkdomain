@@ -209,10 +209,10 @@ add_push_device(SrvId, Id, DomainId, AppId, DeviceId, PushData) ->
 remove_push_device(SrvId, Id, DeviceId) ->
     nkdomain_obj:async_op(SrvId, Id, {?MODULE, remove_push_device, DeviceId}).
 
+
 %% @doc
 remove_push_devices(SrvId, Id) ->
     nkdomain_obj:async_op(SrvId, Id, {?MODULE, remove_push_devices}).
-
 
 
 %% @doc
