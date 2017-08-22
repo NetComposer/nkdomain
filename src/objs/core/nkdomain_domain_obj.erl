@@ -144,8 +144,8 @@ unload_childs(Srv, Id) ->
 %% ===================================================================
 
 -record(session, {
-    obj_ids2 = #{} :: #{nkdomain:obj_id() => #obj_id_ext{}},
-    obj_names = #{} :: #{{nkdomain:type(), nkdomain:obj_name()} => nkdomain:obj_id()},
+    obj_ids = #{} :: #{nkdomain:obj_id() => #obj_id_ext{}},
+    obj_types = #{} :: #{nkdomain:type() => #{nkdomain:obj_name() => nkdomain:obj_id()}},
     master_mon :: reference(),
     service_pid :: pid()
 }).
@@ -242,7 +242,7 @@ object_sync_op({?MODULE, find_path, Base, Type, ObjName}, From, State) ->
     end;
 
 object_sync_op({?MODULE, unload_childs}, _From, State) ->
-    #?STATE{id=#obj_id_ext{path=Path}, session=#session{obj_ids2=Objs}} = State,
+    #?STATE{id=#obj_id_ext{path=Path}, session=#session{obj_ids=Objs}} = State,
     ?LLOG(notice, "unloading childs at ~s", [Path], State),
     lists:foreach(
         fun({_ObjId, #obj_id_ext{type=Type, path=ObjPath, pid=Pid}}) ->
@@ -305,7 +305,7 @@ object_handle_info({'DOWN', Ref, process, _Pid, _Reason}, #?STATE{session=#sessi
     Ref2 = nkdomain_proc:monitor(),
     #?STATE{session=Session} = State,
     State2 = State#?STATE{session=Session#session{master_mon=Ref2}},
-    #session{obj_ids2=ObjIds} = Session,
+    #session{obj_ids=ObjIds} = Session,
     State3 = do_reg_all(maps:values(ObjIds), State2),
     {noreply, State3};
 
@@ -321,22 +321,31 @@ object_handle_info(_Info, _State) ->
 %% @private
 do_add_obj(ObjIdExt, #?STATE{session=Session}=State) ->
     #obj_id_ext{obj_id=ObjId, obj_name=ObjName, type=Type, pid=Pid} = ObjIdExt,
-    #session{obj_ids2=ObjIds, obj_names=ObjNames} = Session,
+    #session{obj_ids=ObjIds, obj_types=ObjTypes} = Session,
     ObjIds2 = ObjIds#{ObjId => ObjIdExt},
-    ObjNames2 = ObjNames#{{Type, ObjName} => ObjId},
-    Session2 = Session#session{obj_ids2=ObjIds2, obj_names=ObjNames2},
+    ObjNames1 = maps:get(Type, ObjTypes, #{}),
+    ObjNames2 = ObjNames1#{ObjName => ObjId},
+    ObjTypes2 = ObjTypes#{Type => ObjNames2},
+    Session2 = Session#session{obj_ids=ObjIds2, obj_types=ObjTypes2},
     State2 = State#?STATE{session=Session2},
     nkdomain_obj:links_add(usage, {?MODULE, obj, ObjId, Pid}, State2).
 
 
 %% @private
 do_rm_obj(ObjId, #?STATE{session=Session}=State) ->
-    #session{obj_ids2=ObjIds, obj_names=ObjNames} = Session,
+    #session{obj_ids=ObjIds, obj_types=ObjTypes} = Session,
     case maps:find(ObjId, ObjIds) of
         {ok, #obj_id_ext{type=Type, obj_name=ObjName, pid=Pid}} ->
             ObjIds2 = maps:remove(ObjId, ObjIds),
-            ObjNames2 = maps:remove({Type, ObjName}, ObjNames),
-            Session2 = Session#session{obj_ids2=ObjIds2, obj_names=ObjNames2},
+            ObjNames1 = maps:get(Type, ObjTypes, #{}),
+            ObjNames2 = maps:remove(ObjName, ObjNames1),
+            ObjTypes2 = case map_size(ObjNames2) of
+                0 ->
+                    maps:remove(Type, ObjTypes);
+                _ ->
+                    ObjTypes#{Type => ObjNames2}
+            end,
+            Session2 = Session#session{obj_ids=ObjIds2, obj_types=ObjTypes2},
             State2 = State#?STATE{session=Session2},
             State3 = do_event({obj_unloaded, Type, ObjId}, State2),
             nkdomain_obj:links_remove(usage, {?MODULE, obj, ObjId, Pid}, State3);
@@ -360,10 +369,11 @@ register_service(#?STATE{srv_id=SrvId, session=Session}=State) ->
 %% @doc
 find_obj(Base, Type, ObjName, #?STATE{id=Id, session=Session}) ->
     #obj_id_ext{path=DomainPath} = Id,
-    #session{obj_ids2=ObjIds, obj_names=ObjNames} = Session,
+    #session{obj_ids=ObjIds, obj_types=ObjTypes} = Session,
     case Base of
         DomainPath ->
-            case maps:find({Type, ObjName}, ObjNames) of
+            ObjNames = maps:get(Type, ObjTypes, #{}),
+            case maps:find(ObjName, ObjNames) of
                 {ok, ObjId} ->
                     {ok, #obj_id_ext{type=Type, obj_name=ObjName, pid=Pid}} = maps:find(ObjId, ObjIds),
                     {ok, ObjId, Pid};
@@ -378,7 +388,8 @@ find_obj(Base, Type, ObjName, #?STATE{id=Id, session=Session}) ->
                 <<DomainPath:Size/binary, Rest/binary>> ->
                     Dom = get_first_domain(Rest),
                     %lager:warning("NKLOG R1: ~p, D: ~p", [Rest, Dom]),
-                    case maps:find({?DOMAIN_DOMAIN, Dom}, ObjNames) of
+                    Domains = maps:get(?DOMAIN_DOMAIN, ObjTypes, #{}),
+                    case maps:find(Dom, Domains) of
                         {ok, SubDomId} ->
                             {ok, #obj_id_ext{type=?DOMAIN_DOMAIN, obj_id=Dom, pid=Pid}} = maps:find(SubDomId, ObjIds),
                             ?LLOG(notice, "relaying query to ~s", [<<DomainPath/binary, $/, Dom/binary>>]),
@@ -393,7 +404,7 @@ find_obj(Base, Type, ObjName, #?STATE{id=Id, session=Session}) ->
 
 
 %% @private
-send_objs(Msg, #?STATE{session=#session{obj_ids2=ObjIds}}=State) ->
+send_objs(Msg, #?STATE{session=#session{obj_ids=ObjIds}}=State) ->
     lists:foreach(
         fun(#obj_id_ext{path=Path, pid=Pid}) ->
             ?LLOG(notice, "sending ~p to obj ~s", [Msg, Path], State),
