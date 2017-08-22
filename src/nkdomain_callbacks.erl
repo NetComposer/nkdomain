@@ -76,6 +76,7 @@ error({could_not_load_parent, Id})      -> {"Object could not load parent '~s'",
 error({could_not_load_domain, Id})      -> {"Object could not load domain '~s'", [Id]};
 error(domain_unknown)                   -> "Unknown domain";
 error({domain_unknown, D})              -> {"Unknown domain '~s'", [D]};
+error(domain_invalid)                   -> "Invalid domain";
 error(domains_name_cannot_change)       -> "ObjName cannot be updated for domains";
 error({email_duplicated, E})            -> {"Duplicated email '~s'", [E]};
 error(element_action_unknown)           -> "Unknown element action";
@@ -123,6 +124,7 @@ error(session_already_present)          -> "Session is already present";
 error(session_not_found)                -> "Session not found";
 error(session_is_disabled)              -> "Session is disabled";
 error(session_type_unsupported)         -> "Session type not supported";
+error(status_not_defined)               -> "Status is not defined";
 error(store_id_invalid)                 -> "Invalid Store Id";
 error(store_id_missing)                 -> "Missing Store Id";
 error(url_unknown)      		        -> "Unknown url";

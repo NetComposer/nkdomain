@@ -53,22 +53,14 @@ api(<<"get_name">>, Syntax) ->
         id => binary
     };
 
-api(<<"update_status">>, Syntax) ->
-    Syntax#{
-        id => binary,
-        session_id => binary,
-        status => binary,
-        '__mandatory' => [session_id, status]
-    };
-
 api(<<"add_push_device">>, Syntax) ->
     Syntax#{
         id => binary,
         domain_id => binary,
-        session_type => binary,
+        app_id => binary,
         device_id => binary,
         push_data => map,
-        '__mandatory' => [session_type, device_id, push_data]
+        '__mandatory' => [app_id, device_id, push_data]
     };
 
 api(<<"remove_push_device">>, Syntax) ->
@@ -76,6 +68,23 @@ api(<<"remove_push_device">>, Syntax) ->
         id => binary,
         device_id => binary,
         '__mandatory' => [device_id]
+    };
+
+api(<<"get_status">>, Syntax) ->
+    Syntax#{
+        id => binary,
+        domain_id => binary,
+        app_id => binary,
+        '__mandatory' => [app_id]
+    };
+
+api(<<"set_status">>, Syntax) ->
+    Syntax#{
+        id => binary,
+        domain_id => binary,
+        app_id => binary,
+        status => map,
+        '__mandatory' => [app_id, status]
     };
 
 api(Cmd, Syntax) ->

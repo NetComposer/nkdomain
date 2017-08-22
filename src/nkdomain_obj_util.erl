@@ -102,7 +102,7 @@ send_event(EvType, ObjId, ObjPath, Body, #?STATE{id=#obj_id_ext{srv_id=SrvId, ty
         domain = ObjPath,
         body = Body
     },
-    ?DEBUG("event sent to listeners: ~p", [Event], State),
+    ?DEBUG("event sent to listeners: ~p", [lager:pr(Event, ?MODULE)], State),
     send_session_event(Event, State),
     nkevent:send(Event),
     {ok, State}.

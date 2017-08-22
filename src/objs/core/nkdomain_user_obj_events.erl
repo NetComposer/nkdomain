@@ -34,17 +34,17 @@
 
 
 %% @private
-event({login, SessId, Meta}, State) ->
-    {event, {login, #{session_id=>SessId, meta=>Meta}}, State};
-
-event({session_status_updated, Type, SessId, Status}, State) ->
-    {event, {session_status_updated, #{session_type=>Type, session_id=>SessId, status=>Status}}, State};
+%%event({login, SessId, Meta}, State) ->
+%%    {event, {login, #{session_id=>SessId, meta=>Meta}}, State};
 
 event({session_started, Type, SessId}, State) ->
     {event, {session_started, #{session_type=>Type, session_id=>SessId}}, State};
 
 event({session_stopped, Type, SessId}, State) ->
     {event, {session_stopped, #{session_type=>Type, session_id=>SessId}}, State};
+
+event({status_updated, DomainId, AppId, Status}, #?STATE{id=#obj_id_ext{obj_id=UserId}}=State) ->
+    {event, {status_updated, UserId, DomainId, #{app_id=>AppId, status=>Status}}, State};
 
 event(_Event, State) ->
     {ok, State}.

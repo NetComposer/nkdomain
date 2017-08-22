@@ -48,7 +48,7 @@ find(SrvId, Id) ->
         #obj_id_ext{}=ObjIdExt ->
             ObjIdExt;
         not_found ->
-            case find_in_db(SrvId, Id) of
+            case find_in_db(SrvId, Id2) of
                 #obj_id_ext{}=ObjIdExt ->
                     ObjIdExt;
                 {alias, #obj_id_ext{obj_id=ObjId}=ObjIdExt} ->

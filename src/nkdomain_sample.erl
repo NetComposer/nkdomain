@@ -152,7 +152,6 @@ user_update_obj_name(Id, ObjName) ->
 user_make_token() ->
     cmd(<<"objects/user/make_token">>, #{ttl=>30}).
 
-
 user_avatar(Id) ->
     Dir = filename:join(code:priv_dir(nkdomain), "avatar1.png"),
     {ok, Bin} = file:read_file(Dir),
@@ -164,6 +163,11 @@ user_avatar(Id) ->
     },
     cmd(<<"objects/user/update">>, Data).
 
+user_get_status(AppId) ->
+    cmd(<<"objects/user/get_status">>, #{app_id=>AppId}).
+
+user_set_status(AppId, Status) ->
+    cmd(<<"objects/user/set_status">>, #{app_id=>AppId, status=>Status}).
 
 
 domain_get() ->
