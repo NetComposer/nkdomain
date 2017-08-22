@@ -190,7 +190,7 @@ api(<<"make_token">>, Type, #nkreq{data=Data, user_id=UserId, srv_id=SrvId}=Req)
     end;
 
 api(_Cmd, _Type, _Req) ->
-    lager:error("NKLOG NNN ~p", [_Cmd]),
+    lager:error("NKLOG API Not Implemented ~p", [_Cmd]),
     {error, not_implemented}.
 
 

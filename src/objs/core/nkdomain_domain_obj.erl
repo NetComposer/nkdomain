@@ -25,7 +25,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([search/3, search_all/3, search_type/3, search_all_types/3, search_childs/3, search_all_childs/3]).
--export([find_path/2, find_path/3, unload_childs/2]).
+-export([find_path/2, find_path/3, unload_childs/2, get_childs_type/3]).
 -export([object_info/0, object_parse/3, object_es_mapping/0,
          object_api_syntax/2, object_api_cmd/2]).
 -export([object_init/1, object_sync_op/3, object_async_op/2, object_enabled/2, object_link_down/2,
@@ -131,6 +131,11 @@ find_path(Srv, Id, Path) ->
         {error, Error} ->
             {error, Error}
     end.
+
+
+%% @doc
+get_childs_type(Srv, Id, Type) ->
+    nkdomain_obj:sync_op(Srv, Id, {?MODULE, get_childs_type, nklib_util:to_binary(Type)}).
 
 
 %% @doc
@@ -258,6 +263,11 @@ object_sync_op({?MODULE, unload_childs}, _From, State) ->
         end,
         maps:to_list(Objs)),
     {reply, ok, State};
+
+object_sync_op({?MODULE, get_childs_type, Type}, _From, State) ->
+    #?STATE{session=#session{obj_types=ObjTypes}} = State,
+    ObjNames = maps:get(Type, ObjTypes, #{}),
+    {reply, maps:values(ObjNames), State};
 
 object_sync_op(_Op, _From, _State) ->
     continue.
