@@ -256,11 +256,24 @@ object_async_op(_Op, _State) ->
 
 %% @private We received an event from a subscribed object
 object_handle_info({nkevent, #nkevent{type=Type}=Event}, State) ->
+    lager:error("NKLOG EV ~p", [Event]),
     case lists:member(Type, [<<"created">>, <<"updated">>, <<"deleted">>, <<"type_counter">>]) of
         true ->
             {noreply, do_event(Event, State)};
         false ->
             {noreply, State}
+    end;
+
+object_handle_info({'DOWN', _Ref, process, Pid, _Reason}, #?STATE{session=Session}=State) ->
+    #admin_session{reg_pids=RegPids} = Session,
+    case maps:find(Pid, RegPids) of
+        {ok, [domain]} ->
+            RegPids2 = maps:remove(Pid, RegPids),
+            Session2 = Session#admin_session{reg_pids=RegPids2},
+            Session3 = subscribe_domain(<<>>, Session2),
+            {noreply, State#?STATE{session=Session3}};
+        error ->
+            continue
     end;
 
 object_handle_info(_Info, _State) ->
@@ -297,10 +310,10 @@ do_switch_domain(Domain, Url, #?STATE{srv_id=SrvId, session=Session}=State) ->
                     case do_get_domain(SrvId, Session2, State) of
                         {ok, Updates, #admin_session{}=Session3} ->
                             #admin_session{domain_path=OldPath} = Session,
-                            subscribe_domain(OldPath, Session3),
-                            State3 = State#?STATE{session=Session3},
+                            Session4 = subscribe_domain(OldPath, Session3),
+                            State4 = State#?STATE{session=Session4},
                             % io:format("UPDATES:\n\n~p\n", [Updates]),
-                            {ok, #{elements=>lists:reverse(Updates)}, State3};
+                            {ok, #{elements=>lists:reverse(Updates)}, State4};
                         {error, Error, #admin_session{}=Session3} ->
                             State3 = State#?STATE{session=Session3},
                             {error, Error, State3}
@@ -430,9 +443,8 @@ find_url(Url, #admin_session{srv_id=SrvId}=Session) ->
 
 
 %% @private
-%% TODO we should subscribe to type_counter only on my base (top) domain
-%% And subscribe to any other object one-by-one
-subscribe_domain(OldPath, #admin_session{srv_id=SrvId, domain_path=NewPath}) ->
+%% TODO we should subscribe to type_counter only on my base (top) domain, and subscribe to any other object one-by-one
+subscribe_domain(OldPath, #admin_session{srv_id=SrvId, domain_path=NewPath, reg_pids=RegPids}=Session) ->
     Types = [<<"created">>, <<"updated">>, <<"deleted">>, <<"type_counter">>],
     case OldPath of
         <<>> ->
@@ -452,7 +464,22 @@ subscribe_domain(OldPath, #admin_session{srv_id=SrvId, domain_path=NewPath}) ->
         type => Types,
         domain => NewPath
     },
-    nkevent:reg(Reg2).
+    {ok, Pids} = nkevent:reg(Reg2),
+    RegPids2 = lists:foldl(
+        fun(Pid, Acc) ->
+            Objs = case maps:find(Pid, Acc) of
+                {ok, Keys} ->
+                    nklib_util:store_value(domain, Keys);
+                error ->
+                    erlang:monitor(process, Pid),
+                    [domain]
+            end,
+            Acc#{Pid => Objs}
+        end,
+        RegPids,
+        Pids),
+    Session#admin_session{reg_pids=RegPids2}.
+
 
 
 
