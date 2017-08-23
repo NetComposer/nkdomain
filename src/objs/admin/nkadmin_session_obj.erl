@@ -256,7 +256,6 @@ object_async_op(_Op, _State) ->
 
 %% @private We received an event from a subscribed object
 object_handle_info({nkevent, #nkevent{type=Type}=Event}, State) ->
-    lager:error("NKLOG EV ~p", [Event]),
     case lists:member(Type, [<<"created">>, <<"updated">>, <<"deleted">>, <<"type_counter">>]) of
         true ->
             {noreply, do_event(Event, State)};

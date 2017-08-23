@@ -6,7 +6,6 @@
     {mod, {nkdomain_app, []}},
     {applications, [
         yamerl,
-        nkdist,
         nkrole,
         nkservice,
         nkevent,
