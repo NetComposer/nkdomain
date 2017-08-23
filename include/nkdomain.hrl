@@ -66,12 +66,10 @@
     unload_policy :: permanent | {expires, nklib_util:m_timestamp()} | {ttl, integer()},
     timer :: reference(),
     timelog = [] :: [map()],
-    type_monitor :: reference(),
     domain_pid :: pid(),
     domain_enabled :: boolean(),
     parent_pid :: pid(),
     parent_enabled :: boolean()
-    %moved_to :: undefined | pid()
 }).
 
 

@@ -508,6 +508,7 @@ cmd(Pid, Cmd, Data) ->
     nkapi_client:cmd(Pid, Cmd, Data).
 
 
+%% Will not find aliases
 is_loaded(Id) ->
     case nkdomain_lib:find_loaded(Id) of
         #obj_id_ext{} ->

@@ -27,7 +27,7 @@
 -export([nkservice_rest_http/3]).
 -export([admin_tree_categories/2, admin_tree_get_category/2, admin_event/3,
          admin_element_action/5, admin_get_data/3]).
--export([object_admin_info/1, object_get_counter/3]).
+-export([object_admin_info/1]).
 -export([object_create/5, object_check_active/3, object_do_expired/2]).
 -export([object_syntax/2, object_parse/3]).
 -export([object_init/1, object_terminate/2, object_stop/2,
@@ -399,15 +399,6 @@ object_admin_info(Type) ->
         false ->
             #{}
     end.
-
-
-%% @doc
--spec object_get_counter(nkservice:id(), nkdomain:type(), nkdomain:path()) ->
-    {ok, integer()}.
-
-object_get_counter(SrvId, Type, DomainPath) ->
-    Module = nkdomain_all_types:get_module(Type),
-    nkdomain_type:get_counter(SrvId, Module, DomainPath).
 
 
 %% @doc

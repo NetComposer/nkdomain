@@ -188,11 +188,11 @@ unload(SrvId, Id) ->
     ok | {error, term()}.
 
 unload(SrvId, Id, Reason) ->
-    case nkdomain_lib:find_loaded(Id) of
-        #obj_id_ext{pid=Pid} ->
+    case nkdomain_lib:find(SrvId, Id) of
+        #obj_id_ext{pid=Pid} when is_pid(Pid) ->
             nkdomain_obj:async_op(SrvId, Pid, {unload, Reason});
-        _ ->
-            ok
+        not_found ->
+            {error, object_not_loaded}
     end.
 
 

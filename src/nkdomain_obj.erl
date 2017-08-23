@@ -47,7 +47,7 @@
 -behaviour(gen_server).
 
 -export([sync_op/3, sync_op/4, async_op/3]).
--export([start/4, new_type_master/1, object_deleted/1, conflict_detected/2]).
+-export([start/4, object_deleted/1, conflict_detected/2]).
 -export([init/1, terminate/2, code_change/3, handle_call/3,  handle_cast/2, handle_info/2]).
 -export([links_add/3, links_remove/3, links_iter/4]).
 -export([get_all/0, unload_all/0, get_state/2, get_time/2]).
@@ -242,11 +242,6 @@ async_op(SrvId, Id, Op) ->
         {error, Error} ->
             {error, Error}
     end.
-
-
-%% @private Called from nkdomain_type
-new_type_master(Pid) ->
-    gen_server:cast(Pid, nkdomain_new_type_master).
 
 
 %% @private Called when the object has been deleted on database
@@ -451,9 +446,6 @@ handle_cast(nkdomain_service_stopped, State) ->
     ?LLOG(warning, "service stopped", [], State),
     do_stop(service_down, State);
 
-handle_cast(nkdomain_new_type_master, State) ->
-    {noreply, register_type(State)};
-
 handle_cast(nkdomain_obj_deleted, State) ->
     do_stop(object_deleted, State#?STATE{is_dirty=false});
 
@@ -533,15 +525,6 @@ handle_info({'DOWN', _Ref, process, Pid, _Reason}, #?STATE{domain_pid=Pid}=State
     self() ! nkdomain_find_domain,
     State2 = do_enabled(State#?STATE{domain_pid=undefined, domain_enabled=false}),
     noreply(State2);
-
-handle_info({'DOWN', Ref, process, _Pid, _Reason}, #?STATE{type_monitor=Ref}=State) ->
-    Self = self(),
-    spawn_link(
-        fun() ->
-            timer:sleep(5000),
-            new_type_master(Self)
-        end),
-    {noreply, State};
 
 handle_info({'DOWN', Ref, process, _Pid, _Reason}=Info, State) ->
     case links_down(Ref, State) of
@@ -783,8 +766,9 @@ do_register(State) ->
         {ok, State2} ->
             case register_parent(State2) of
                 {ok, State3} ->
-                    State4 = register_type(State3),
-                    {ok, State4};
+                    #?STATE{id=#obj_id_ext{type=Type, obj_id=ObjId, path=Path}} = State,
+                    nklib_proc:put(?MODULE, {Type, ObjId, Path}),
+                    {ok, State3};
                 {error, Error} ->
                     {error, Error}
             end;
@@ -827,13 +811,6 @@ register_parent(#?STATE{srv_id=SrvId, id=ObjIdExt, parent_id=ParentId}=State) ->
         {error, Error} ->
             {error, Error}
     end.
-
-
-%% @private
-register_type(#?STATE{id=ObjIdExt, module=Module, type_monitor=OldMon}=State) ->
-    nklib_util:demonitor(OldMon),
-    {ok, Pid} = nkdomain_type:register(Module, ObjIdExt),
-    State#?STATE{type_monitor=monitor(process, Pid)}.
 
 
 %% @private

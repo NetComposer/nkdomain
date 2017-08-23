@@ -82,7 +82,8 @@ find_configs(Srv, SubType, Parent) ->
 %% @private
 object_info() ->
     #{
-        type => ?DOMAIN_CONFIG
+        type => ?DOMAIN_CONFIG,
+        default_ttl => 5*60*1000
     }.
 
 

@@ -85,8 +85,8 @@ get_category(_Category, _Session) ->
 
 %% @doc
 %% The counter_updated event is sent multiple times to the domain and all parent domains (in obj_id)
-event(#nkevent{type = <<"counter_updated">>, obj_id=ObjId}=Event, Updates, #admin_session{domain_path=ObjId}=Session) ->
-    #nkevent{subclass=ObjType, body=#{counter:=Counter}}=Event,
+event(#nkevent{type = <<"type_counter">>, obj_id=ObjId}=Event, Updates, #admin_session{domain_id=ObjId}=Session) ->
+    #nkevent{body=#{type:=ObjType, counter:=Counter}}=Event,
     case update_session(ObjType, Counter, Session) of
         {true, Item, Session2} ->
             {continue, [Event, [Item|Updates], Session2]};
@@ -167,8 +167,7 @@ element_action([?SESSIONS, Type], selected, _Value, Updates, Session) ->
     {ok, Updates2, Session2};
 
 element_action(_Id, _Action, _Value, Updates, Session) ->
-    lager:error("NKLOG AA ~p", [{_Id, _Action, _Value}]),
-
+    lager:error("NKLOG Admin Unhandled Element Action ~p", [{_Id, _Action, _Value}]),
     {ok, Updates, Session}.
 
 
@@ -402,10 +401,10 @@ get_session_items([], Acc, Session) ->
     {ok, [Item || {_Weigth, Item} <- lists:keysort(1, Acc)], Session};
 
 get_session_items([Type|Rest], Acc, Session) ->
-    #admin_session{srv_id=SrvId, domain_path=DomainPath} = Session,
+    #admin_session{srv_id=SrvId, domain_id=DomainId} = Session,
     case is_session(Type, Session) of
         {true, Info} ->
-            case SrvId:object_get_counter(SrvId, Type, DomainPath) of
+            case nkdomain_domain_obj:get_counter(SrvId, DomainId, Type) of
                 {ok, 0} ->
                     get_session_items(Rest, Acc, Session);
                 {ok, Counter} ->

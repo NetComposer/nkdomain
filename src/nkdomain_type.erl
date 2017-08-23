@@ -107,7 +107,7 @@ start_link(Module) ->
 
 init([Module]) ->
     #{type:=Type} = Module:object_info(),
-    ok = nkdist:register(master, nkdomain_types, Type, #{meta=>#{module=>Module}}),
+    % ok = nkdist:register(master, nkdomain_types, Type, #{meta=>#{module=>Module}}),
     {ok, #state{module=Module, type=Type, master=self()}}.
 
 

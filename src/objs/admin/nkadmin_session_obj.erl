@@ -256,7 +256,7 @@ object_async_op(_Op, _State) ->
 
 %% @private We received an event from a subscribed object
 object_handle_info({nkevent, #nkevent{type=Type}=Event}, State) ->
-    case lists:member(Type, [<<"created">>, <<"updated">>, <<"deleted">>, <<"counter_updated">>]) of
+    case lists:member(Type, [<<"created">>, <<"updated">>, <<"deleted">>, <<"type_counter">>]) of
         true ->
             {noreply, do_event(Event, State)};
         false ->
@@ -430,8 +430,10 @@ find_url(Url, #admin_session{srv_id=SrvId}=Session) ->
 
 
 %% @private
+%% TODO we should subscribe to type_counter only on my base (top) domain
+%% And subscribe to any other object one-by-one
 subscribe_domain(OldPath, #admin_session{srv_id=SrvId, domain_path=NewPath}) ->
-    Types = [<<"created">>, <<"updated">>, <<"deleted">>, <<"counter_updated">>],
+    Types = [<<"created">>, <<"updated">>, <<"deleted">>, <<"type_counter">>],
     case OldPath of
         <<>> ->
             ok;

@@ -107,13 +107,12 @@ find(SrvId, Id) ->
 %%    end.
 
 
-
-
+%% @private It will not find by aliases
 -spec find_loaded(binary()) ->
     #obj_id_ext{} | not_found.
 
 find_loaded(Id) ->
-    nkdomain_proc:find(Id).
+    nkdomain_proc:find(to_bin(Id)).
 
 
 %% @private

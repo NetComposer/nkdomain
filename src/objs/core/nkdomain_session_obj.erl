@@ -210,6 +210,7 @@ object_event(_Event, State) ->
 %% ===================================================================
 
 %% @private
+%% It will not find aliases
 object_check_active(SrvId, Id) ->
     case nkdomain_lib:find_loaded(Id) of
         #obj_id_ext{} ->
