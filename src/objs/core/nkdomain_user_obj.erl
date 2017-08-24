@@ -566,8 +566,8 @@ object_async_op({?MODULE, unregister_session, SessId}, State) ->
 object_async_op({?MODULE, launch_session_notifications, SessId}, #?STATE{session=Session}=State) ->
     #session{user_sessions=UserSessions} = Session,
     State2 = case lists:keyfind(SessId, #user_session.id, UserSessions) of
-        #user_session{} = Session ->
-            do_launch_session_tokens(Session, State);
+        #user_session{} = UserSession ->
+            do_launch_session_tokens(UserSession, State);
         false ->
             State
     end,

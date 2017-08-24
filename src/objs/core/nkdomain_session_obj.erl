@@ -194,8 +194,8 @@ object_api_cmd(Cmd, Req) ->
 
 
 %% @private
-object_event({enabled, false}, State) ->
-    nkdomain:unload(any, self(), session_is_disabled),
+object_event({enabled, false}, #?STATE{srv_id=SrvId}=State) ->
+    nkdomain:unload(SrvId, self(), session_is_disabled),
     {ok, State};
 
 object_event(_Event, State) ->
