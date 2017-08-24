@@ -5,6 +5,7 @@
     {registered, []},
     {mod, {nkdomain_app, []}},
     {applications, [
+        pbkdf2,
         yamerl,
         nkrole,
         nkservice,
