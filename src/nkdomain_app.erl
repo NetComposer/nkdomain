@@ -97,10 +97,10 @@ start(_Type, _Args) ->
             lager:info("NkDOMAIN v~s has started.", [Vsn]),
             nkdomain_i18n:reload(),
             register_types(),
-            {ok, DataDir} = application:get_env(riak_core, platform_data_dir),
-            FilesDir = filename:join(DataDir, "files"),
-            ok = filelib:ensure_dir(filename:join(FilesDir, "dummy")),
-            put(files_dir, FilesDir),
+            %{ok, DataDir} = application:get_env(riak_core, platform_data_dir),
+            %FilesDir = filename:join(DataDir, "files"),
+            %ok = filelib:ensure_dir(filename:join(FilesDir, "dummy")),
+            %put(files_dir, FilesDir),
             case get(start_root) of
                 true ->
                     spawn_link(
