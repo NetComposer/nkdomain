@@ -512,7 +512,7 @@ do_reg_all([#obj_id_ext{obj_id=ObjId, pid=Pid}=ObjIdExt|Rest], State) ->
 %% @private
 send_counter(Type, State) ->
     Value = get_type_counter(Type, State),
-    ?LLOG(notice, "counter ~s: ~p", [Type, Value], State),
+    ?DEBUG("counter ~s: ~p", [Type, Value], State),
     send_counter_parent(Type, Value, State),
     do_event({type_counter, Type, Value}, State).
 

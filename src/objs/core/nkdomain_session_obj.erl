@@ -154,10 +154,10 @@ object_api_syntax(<<"start">>, Syntax) ->
         id => binary,
         password => binary,
         domain_id => binary,
-        device_id => binary,
-        push_id => binary,
-        platform_id => binary,
-        platform_version => binary,
+        %device_id => binary,
+        %push_id => binary,
+        %platform_id => binary,
+        %platform_version => binary,
         meta => map,
         '__mandatory' => [id]
     };
