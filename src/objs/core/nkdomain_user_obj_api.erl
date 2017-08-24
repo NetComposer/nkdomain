@@ -43,7 +43,7 @@ cmd(<<"get_name">>, #nkreq{data=Data, srv_id=SrvId}=Req) ->
             case nkdomain_user_obj:get_name(SrvId, Id) of
                 {ok, Data2} ->
                     case Data of
-                        #{domain_id:=DomainId, get_status:=AppId} ->
+                        #{domain_id:=DomainId, app_id:=AppId} ->
                             case nkdomain_user_obj:get_status(SrvId, Id, DomainId, AppId) of
                                 {ok, Status} ->
                                     {ok, Data2#{status=>Status}};
