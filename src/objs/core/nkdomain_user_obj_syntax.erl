@@ -50,7 +50,9 @@ api(<<"get_token">>, Syntax) ->
 
 api(<<"get_name">>, Syntax) ->
     Syntax#{
-        id => binary
+        id => binary,
+        domain_id => binary,                    % For status
+        get_status => binary                    % Set the app_id
     };
 
 api(<<"add_push_device">>, Syntax) ->

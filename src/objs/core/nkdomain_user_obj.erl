@@ -546,7 +546,7 @@ object_sync_op({?MODULE, get_status, DomainId, AppId}, _From, State) ->
         #status{} ->
             {error, domain_invalid};
         false ->
-            {error, status_not_defined}
+            {ok, #{}}
     end,
     {reply, Reply, State};
 
