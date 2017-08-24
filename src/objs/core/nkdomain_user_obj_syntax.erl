@@ -59,7 +59,17 @@ api(<<"add_push_device">>, Syntax) ->
         domain_id => binary,
         app_id => binary,
         device_id => binary,
-        push_data => map,
+        push_data => #{
+            push_id => binary,
+            voip_push_id => binary,
+            platform_id => binary,
+            platform_version => binary,
+            base_url => binary,
+            device_manufacturer => binary,
+            device_name => binary,
+            device_os => binary,
+            user_agent => binary
+        },
         '__mandatory' => [app_id, device_id, push_data]
     };
 
