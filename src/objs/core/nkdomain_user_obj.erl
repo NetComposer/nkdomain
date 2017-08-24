@@ -33,7 +33,7 @@
 
 -export([fun_user_pass/1, user_pass/1]).
 -export([get_sessions/2, get_sessions/3]).
--export([register_session/6, unregister_session/3, set_status/5, get_status/4]).
+-export([register_session/6, unregister_session/3, launch_session_notifications/3, set_status/5, get_status/4]).
 -export([add_notification_op/5, remove_notification/4]).
 -export([add_push_device/6, remove_push_device/3, send_push/4, remove_push_devices/2]).
 
@@ -59,19 +59,17 @@
 -type sess_opts() ::
     #{
         notify_fun => notify_fun(),
+        presence => binary(),
         term() => term()
     }.
 
--type notify_opts() ::
-    #{
-    }.
-
--type notify_op() ::
-    created | {removed, term()}.
+-type notify_msg() ::
+    {token_created, nkdomain:obj_id(), map()} |
+    {token_removed, nkdomain:obj_id(), Reason::term()}.
 
 
 -type notify_fun() ::
-    fun((SessId::nkdomain:obj_id(), Pid::pid(), TokenId::nkdomain:obj_id(), Data::map(), notify_op()) -> ok).
+    fun((Pid::pid(), notify_msg()) -> ok).
 
 -type push_msg() ::
     #{
@@ -178,6 +176,11 @@ unregister_session(SrvId, Id, SessId) ->
     nkdomain_obj:async_op(SrvId, Id, {?MODULE, unregister_session, SessId}).
 
 
+%% @doc
+launch_session_notifications(SrvId, Id, SessId) ->
+    nkdomain_obj:async_op(SrvId, Id, {?MODULE, launch_session_notifications, SessId}).
+
+
 %% @doc Statuses currently indexed by AppId
 set_status(SrvId, Id, DomainId, AppId, Status) when is_map(Status) ->
     nkdomain_obj:async_op(SrvId, Id, {?MODULE, set_status, DomainId, AppId, Status}).
@@ -193,7 +196,7 @@ get_status(SrvId, Id, DomainId, AppId) ->
 %% See nkchat_session_obj:send_invitation() for a sample
 %% If the user object dies, the token will reload it automatically
 
--spec add_notification_op(nkservice:id(), nkdomain:id(), nkdomain:type(), notify_opts(), map()) ->
+-spec add_notification_op(nkservice:id(), nkdomain:id(), nkdomain:type(), #{}, map()) ->
     {ok, UserId::nkdomain:obj_id(), map()} | {error, term()}.
 
 add_notification_op(SrvId, Id, SessType, Opts, Base) ->
@@ -256,11 +259,12 @@ find_childs(SrvId, User) ->
     type :: nkdomain:type(),
     domain_id :: nkdomain:obj_id(),
     opts = #{} :: sess_opts(),
+    presence :: binary(),
     notify_fun :: fun(),
     pid :: pid()
 }).
 
--record(notify_msg, {
+-record(notify_token, {
     token_id :: binary(),
     domain_id :: nkdomain:obj_id(),
     session_type :: binary(),
@@ -284,7 +288,7 @@ find_childs(SrvId, User) ->
 
 -record(session, {
     user_sessions = [] :: [#user_session{}],
-    notify_msgs = [] :: [#notify_msg{}],
+    notify_tokens = [] :: [#notify_token{}],
     push_devices = [] :: [#push_device{}],
     statuses = [] :: [#status{}]
 }).
@@ -452,7 +456,7 @@ object_init(#?STATE{obj=#{?DOMAIN_USER:=User}}=State) ->
 
 %% @private Prepare the object for saving
 object_save(#?STATE{obj=Obj, session=Session}=State) ->
-    #session{notify_msgs=_Msgs, push_devices=Devices, statuses=Statuses} = Session,
+    #session{push_devices=Devices, statuses=Statuses} = Session,
     Push = do_save_push(Devices, []),
     Status = do_save_status(Statuses, []),
     #{?DOMAIN_USER:=User} = Obj,
@@ -559,6 +563,16 @@ object_async_op({?MODULE, unregister_session, SessId}, State) ->
     State2 = rm_session(SessId, State),
     {noreply, State2};
 
+object_async_op({?MODULE, launch_session_notifications, SessId}, #?STATE{session=Session}=State) ->
+    #session{user_sessions=UserSessions} = Session,
+    State2 = case lists:keyfind(SessId, #user_session.id, UserSessions) of
+        #user_session{} = Session ->
+            do_launch_session_tokens(Session, State);
+        false ->
+            State
+    end,
+    {noreply, State2};
+
 object_async_op({?MODULE, set_status, DomainId, AppId, UserStatus}, State) ->
     State2 = do_set_status(DomainId, AppId, UserStatus, State),
     {noreply, State2};
@@ -572,18 +586,18 @@ object_async_op({?MODULE, loaded_token, TokenId, Pid}, State) ->
                     #{
                         <<"session_type">> := SessType
                     } = Notification,
-                    Notify = #notify_msg{
+                    Notify = #notify_token{
                         token_id = TokenId,
                         domain_id = DomainId,
                         session_type = SessType,
                         data = Data
                     },
                     #?STATE{session=Session1} = State,
-                    #session{notify_msgs=Msgs} = Session1,
-                    Session2 = Session1#session{notify_msgs=[Notify|Msgs]},
+                    #session{notify_tokens=Msgs} = Session1,
+                    Session2 = Session1#session{notify_tokens=[Notify|Msgs]},
                     % Add usage so that the object is not unloaded
                     State2 = State#?STATE{session=Session2},
-                    notify_sessions(Notify, created, State2),
+                    notify_token_sessions(Notify, created, State2),
                     {noreply, State2};
                 _ ->
                     {noreply, State}
@@ -712,15 +726,16 @@ add_session(DomainId, Type, SessId, Opts, Pid, State) ->
         id = SessId,
         domain_id = DomainId,
         type = Type,
-        opts = Opts,
+        presence = maps:get(presence, Opts, <<>>),
+        opts = maps:without([notify_fun, presence], Opts),
         notify_fun = Fun,
         pid = Pid
     },
     UserSession = UserSessionTuple,
     State2 = nkdomain_obj:links_add(usage, {?MODULE, session, SessId, Pid}, State),
     State3 = do_event({session_started, Type, SessId}, State2),
-    State4 = store_session(UserSession, State3),
-    notify_session(DomainId, Type, SessId, Pid, Fun, State4).
+    store_session(UserSession, State3).
+    %notify_session(DomainId, Type, SessId, Pid, Fun, State4).
 
 
 %% @private
@@ -756,11 +771,11 @@ export_session(#user_session{id=Id, type=Type, opts=Opts, pid=Pid}) ->
 
 %% @doc
 do_remove_notification(TokenId, Reason, #?STATE{session=Session}=State) ->
-    #session{notify_msgs=Msgs1} = Session,
-    case lists:keytake(TokenId, #notify_msg.token_id, Msgs1) of
-        {value, #notify_msg{}=Notify, Msgs2} ->
-            notify_sessions(Notify, {removed, Reason}, State),
-            Session2 = Session#session{notify_msgs=Msgs2},
+    #session{notify_tokens=Msgs1} = Session,
+    case lists:keytake(TokenId, #notify_token.token_id, Msgs1) of
+        {value, #notify_token{}=Notify, Msgs2} ->
+            notify_token_sessions(Notify, {removed, Reason}, State),
+            Session2 = Session#session{notify_tokens=Msgs2},
             State#?STATE{session=Session2};
         false ->
             State
@@ -768,14 +783,19 @@ do_remove_notification(TokenId, Reason, #?STATE{session=Session}=State) ->
 
 
 %% @private
-notify_sessions(#notify_msg{domain_id=DomainId, session_type=Type, token_id=TokenId, data=Data}, Op, State) ->
+notify_token_sessions(#notify_token{domain_id=DomainId, session_type=Type, token_id=TokenId, data=Data}, Op, State) ->
     #?STATE{session=#session{user_sessions=UserSessions}} = State,
     ?DEBUG("notify sessions ~s ~s", [DomainId, Type], State),
     Num = lists:foldl(
-        fun(#user_session{id=SessId, pid=Pid, notify_fun=Fun, type=T, domain_id=D}, Acc) ->
-            case T==Type andalso D==DomainId andalso is_function(Fun, 5) of
+        fun(#user_session{pid=Pid, notify_fun=Fun, type=T, domain_id=D}, Acc) ->
+            case T==Type andalso D==DomainId andalso is_function(Fun, 2) of
                 true ->
-                    Fun(SessId, Pid, TokenId, Data, Op),
+                    case Op of
+                        created->
+                            Fun(Pid, {token_created, TokenId, Data});
+                        {removed, Reason} ->
+                            Fun(Pid, {token_removed, TokenId, Reason})
+                    end,
                     Acc+1;
                 false ->
                     Acc
@@ -806,21 +826,23 @@ notify_sessions(#notify_msg{domain_id=DomainId, session_type=Type, token_id=Toke
 
 
 %% @private
-notify_session(DomainId, Type, SessId, Pid, Fun, State) when is_function(Fun, 5) ->
-    #?STATE{session=#session{notify_msgs=Msgs}} = State,
-    lists:foreach(
-        fun(#notify_msg{token_id=Id, data=Data, session_type=T, domain_id=D}) ->
-            case T==Type andalso D==DomainId of
-                true ->
-                    Fun(SessId, Pid, Id, Data, created);
-                false ->
-                    ok
-            end
-        end,
-        Msgs),
-    State;
-
-notify_session(_DomainId, _Type, _SessId, _Pid, _Fun, State) ->
+do_launch_session_tokens(#user_session{domain_id=DomainId, type=Type, pid=Pid, notify_fun=Fun}, State) ->
+    case is_function(Fun, 2) of
+        true ->
+            #?STATE{session=#session{notify_tokens=Msgs}} = State,
+            lists:foreach(
+                fun(#notify_token{token_id=Id, data=Data, session_type=T, domain_id=D}) ->
+                    case T==Type andalso D==DomainId of
+                        true ->
+                            Fun(Pid, {token_created, Id, Data});
+                        false ->
+                            ok
+                    end
+                end,
+                Msgs);
+        false ->
+            ok
+    end,
     State.
 
 
