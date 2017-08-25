@@ -59,7 +59,8 @@
 -type sess_opts() ::
     #{
         notify_fun => notify_fun(),
-        presence => binary(),
+        presence_fun => presence_fun(),
+        presence => session_presence(),             % Used when calling presence_fun
         term() => term()
     }.
 
@@ -70,6 +71,12 @@
 
 -type notify_fun() ::
     fun((Pid::pid(), notify_msg()) -> ok).
+
+
+-type session_presence() :: term().
+-type user_presence() :: term().
+
+-type presence_fun() :: fun((UserId::binary(), [session_presence()]) -> {ok, user_presence()}).
 
 -type push_msg() ::
     #{
@@ -90,10 +97,12 @@
         base_url => binary()
     }.
 
+
 -type events() ::
     {session_started, nkdomain:type(), nkdomain:obj_id()} |
     {session_stopped, nkdomain:type(), nkdomain:obj_id()} |
-    {status_updated, DomainId::nkdomain:obj_id(), AppId::binary(), Status::map()}.
+    {status_updated, Domain::nkdomain:path(), AppId::binary(), Status::map()} |
+    {presence_updated, Domain::nkdomain:path(), nkdomain:type(), user_presence()}.
 
 
 %% ===================================================================
@@ -167,8 +176,13 @@ get_name(Srv, Id) ->
                        nkdomain:obj_id(), sess_opts()) ->
     ok | {error, term()}.
 
-register_session(SrvId, Id, DomainId, Type, SessId, Opts) ->
-    nkdomain_obj:sync_op(SrvId, Id, {?MODULE, register_session, DomainId, Type, SessId, Opts, self()}).
+register_session(SrvId, Id, Domain, Type, SessId, Opts) ->
+    case nkdomain_lib:find(SrvId, Domain) of
+        #obj_id_ext{type=?DOMAIN_DOMAIN, path=DomainPath} ->
+            nkdomain_obj:sync_op(SrvId, Id, {?MODULE, register_session, DomainPath, Type, SessId, Opts, self()});
+        {error, Error} ->
+            {error, Error}
+    end.
 
 
 %% @doc
@@ -182,13 +196,23 @@ launch_session_notifications(SrvId, Id, SessId) ->
 
 
 %% @doc Statuses currently indexed by AppId
-set_status(SrvId, Id, DomainId, AppId, Status) when is_map(Status) ->
-    nkdomain_obj:async_op(SrvId, Id, {?MODULE, set_status, DomainId, AppId, Status}).
+set_status(SrvId, Id, Domain, AppId, Status) when is_map(Status) ->
+    case nkdomain_lib:find(SrvId, Domain) of
+        #obj_id_ext{path=DomainPath} ->
+            nkdomain_obj:async_op(SrvId, Id, {?MODULE, set_status, DomainPath, AppId, Status});
+        {error, Error} ->
+            {error, Error}
+    end.
 
 
 %% @doc
-get_status(SrvId, Id, DomainId, AppId) ->
-    nkdomain_obj:sync_op(SrvId, Id, {?MODULE, get_status, DomainId, AppId}).
+get_status(SrvId, Id, Domain, AppId) ->
+    case nkdomain_lib:find(SrvId, Domain) of
+        #obj_id_ext{path=DomainPath} ->
+            nkdomain_obj:sync_op(SrvId, Id, {?MODULE, get_status, DomainPath, AppId});
+        {error, Error} ->
+            {error, Error}
+    end.
 
 
 %% @doc Adds notification info to a token
@@ -212,8 +236,13 @@ remove_notification(SrvId, Id, TokenId, Reason) ->
 
 
 %% @doc
-add_push_device(SrvId, Id, DomainId, AppId, DeviceId, PushData) ->
-    nkdomain_obj:async_op(SrvId, Id, {?MODULE, add_push_device, DomainId, AppId, DeviceId, PushData}).
+add_push_device(SrvId, Id, Domain, AppId, DeviceId, PushData) ->
+    case nkdomain_lib:find(SrvId, Domain) of
+        #obj_id_ext{path=DomainPath} ->
+            nkdomain_obj:async_op(SrvId, Id, {?MODULE, add_push_device, DomainPath, AppId, DeviceId, PushData});
+        {error, Error} ->
+            {error, Error}
+    end.
 
 
 %% @doc
@@ -257,30 +286,29 @@ find_childs(SrvId, User) ->
 -record(user_session, {
     id :: nkdomain:obj_id(),
     type :: nkdomain:type(),
-    domain_id :: nkdomain:obj_id(),
+    domain_path :: nkdomain:path(),
+    presence :: session_presence(),
     opts = #{} :: sess_opts(),
-    presence :: binary(),
-    notify_fun :: fun(),
     pid :: pid()
 }).
 
 -record(notify_token, {
     token_id :: binary(),
-    domain_id :: nkdomain:obj_id(),
+    domain_path :: nkdomain:path(),
     session_type :: binary(),
     data :: map()
 }).
 
 -record(push_device, {
     device_id :: binary(),
-    domain_id :: nkdomain:obj_id(),
+    domain_path :: nkdomain:path(),
     app_id :: binary(),
     push_data :: push_device(),
     updated_time :: binary()
 }).
 
 -record(status, {
-    domain_id :: nkdomain:obj_id(),
+    domain_path :: nkdomain:path(),
     app_id :: binary(),
     user_status :: map(),
     updated_time :: binary()
@@ -288,9 +316,12 @@ find_childs(SrvId, User) ->
 
 -record(session, {
     user_sessions = [] :: [#user_session{}],
+    user_session_notify = #{} :: #{nkdomain:type() => notify_fun()},
+    user_session_presence = #{} :: #{nkdomain:type() => presence_fun()},
     notify_tokens = [] :: [#notify_token{}],
     push_devices = [] :: [#push_device{}],
-    statuses = [] :: [#status{}]
+    statuses = [] :: [#status{}],
+    meta = #{}          % For future use
 }).
 
 
@@ -340,7 +371,7 @@ object_es_mapping() ->
             type => object,
             dynamic => false,
             properties => #{
-                domain_id => #{type => keyword},
+                domain_path => #{type => keyword},
                 app_id => #{type => keyword},
                 device_id => #{type => keyword},
                 push_data => #{enabled => false},
@@ -351,7 +382,7 @@ object_es_mapping() ->
             type => object,
             dynamic => false,
             properties => #{
-                domain_id => #{type => keyword},
+                domain_path => #{type => keyword},
                 app_id => #{type => keyword},
                 user_status => #{enabled => false},
                 updated_time => #{type => date}
@@ -391,21 +422,21 @@ object_parse(_SrvId, update, _Obj) ->
         address_t => binary,
         push => {list,
             #{
-                domain_id => binary,
+                domain_path => binary,
                 app_id => binary,
                 device_id => binary,
                 push_data => map,
                 updated_time => integer,
-                '__mandatory' => [domain_id, app_id, device_id, push_data, updated_time]
+                '__mandatory' => [domain_path, app_id, device_id, push_data, updated_time]
              }
         },
         status => {list,
              #{
-                 domain_id => binary,
+                 domain_path => binary,
                  app_id => binary,
                  user_status => map,
                  updated_time => integer,
-                 '__mandatory' => [domain_id, app_id, user_status, updated_time]
+                 '__mandatory' => [domain_path, app_id, user_status, updated_time]
              }
         },
         '__defaults' => #{vsn => <<"1">>}
@@ -506,13 +537,14 @@ object_sync_op({?MODULE, get_name}, _From, #?STATE{obj=Obj}=State) ->
     },
     {reply, {ok, Data}, State};
 
-object_sync_op({?MODULE, register_session, DomainId, Type, SessId, Opts, Pid}, _From, State) ->
+object_sync_op({?MODULE, register_session, DomainPath, Type, SessId, Opts, Pid}, _From, State) ->
     case find_session(SessId, State) of
         {ok, _} ->
             State2 = rm_session(SessId, State),
-            {reply, ok, add_session(DomainId, Type, SessId, Opts, Pid, State2)};
+            {reply, ok, add_session(DomainPath, Type, SessId, Opts, Pid, State2)};
         not_found ->
-            {reply, ok, add_session(DomainId, Type, SessId, Opts, Pid, State)}
+            State2 = add_session(DomainPath, Type, SessId, Opts, Pid, State),
+            {reply, ok, State2}
     end;
 
 object_sync_op({?MODULE, get_sessions}, _From, #?STATE{session=Session}=State) ->
@@ -542,10 +574,10 @@ object_sync_op({?MODULE, add_notification_op, SessType, _Opts, Base}, _From, Sta
     },
     {reply, {ok, UserId, Base#{?DOMAIN_USER=>UserData2}}, State};
 
-object_sync_op({?MODULE, get_status, DomainId, AppId}, _From, State) ->
+object_sync_op({?MODULE, get_status, DomainPath, AppId}, _From, State) ->
     #?STATE{session=#session{statuses=Statuses}} = State,
     Reply = case lists:keyfind(AppId, #status.app_id, Statuses) of
-        #status{domain_id=DomainId, user_status=UserStatus} ->
+        #status{domain_path=DomainPath, user_status=UserStatus} ->
             {ok, UserStatus};
         #status{} ->
             {error, domain_invalid};
@@ -560,8 +592,14 @@ object_sync_op(_Op, _From, _State) ->
 
 %% @private
 object_async_op({?MODULE, unregister_session, SessId}, State) ->
-    State2 = rm_session(SessId, State),
-    {noreply, State2};
+    case find_session(SessId, State) of
+        {ok, #user_session{domain_path=Path, type=Type}} ->
+            State2 = rm_session(SessId, State),
+            State3 = update_presence(Path, Type, State2),
+            {noreply, State3};
+        not_found ->
+            {noreply, State}
+    end;
 
 object_async_op({?MODULE, launch_session_notifications, SessId}, #?STATE{session=Session}=State) ->
     #session{user_sessions=UserSessions} = Session,
@@ -573,11 +611,11 @@ object_async_op({?MODULE, launch_session_notifications, SessId}, #?STATE{session
     end,
     {noreply, State2};
 
-object_async_op({?MODULE, set_status, DomainId, AppId, UserStatus}, State) ->
-    State2 = do_set_status(DomainId, AppId, UserStatus, State),
+object_async_op({?MODULE, set_status, DomainPath, AppId, UserStatus}, State) ->
+    State2 = do_set_status(DomainPath, AppId, UserStatus, State),
     {noreply, State2};
 
-object_async_op({?MODULE, loaded_token, TokenId, Pid}, State) ->
+object_async_op({?MODULE, loaded_token, TokenId, Pid}, #?STATE{srv_id=SrvId}=State) ->
     case nkdomain_token_obj:get_token_data(any, Pid) of
         {ok, #{domain_id:=DomainId, data:=Data}} ->
             case Data of
@@ -586,19 +624,25 @@ object_async_op({?MODULE, loaded_token, TokenId, Pid}, State) ->
                     #{
                         <<"session_type">> := SessType
                     } = Notification,
-                    Notify = #notify_token{
-                        token_id = TokenId,
-                        domain_id = DomainId,
-                        session_type = SessType,
-                        data = Data
-                    },
-                    #?STATE{session=Session1} = State,
-                    #session{notify_tokens=Msgs} = Session1,
-                    Session2 = Session1#session{notify_tokens=[Notify|Msgs]},
-                    % Add usage so that the object is not unloaded
-                    State2 = State#?STATE{session=Session2},
-                    notify_token_sessions(Notify, created, State2),
-                    {noreply, State2};
+                    case nkdomain_lib:find(SrvId, DomainId) of
+                        #obj_id_ext{path=DomainPath} ->
+                            Notify = #notify_token{
+                                token_id = TokenId,
+                                domain_path = DomainPath,
+                                session_type = SessType,
+                                data = Data
+                            },
+                            #?STATE{session=Session1} = State,
+                            #session{notify_tokens=Msgs} = Session1,
+                            Session2 = Session1#session{notify_tokens=[Notify|Msgs]},
+                            % Add usage so that the object is not unloaded
+                            State2 = State#?STATE{session=Session2},
+                            notify_token_sessions(Notify, created, State2),
+                            {noreply, State2};
+                        {error, _} ->
+                            ?LLOG(warning, "received invalid token", [], State),
+                            {noreply, State}
+                    end;
                 _ ->
                     {noreply, State}
             end;
@@ -615,8 +659,8 @@ object_async_op({?MODULE, remove_notification, TokenId, Reason}, State) ->
     State2 = do_remove_notification(TokenId, Reason, State),
     {noreply, State2};
 
-object_async_op({?MODULE, add_push_device, DomainId, AppId, DeviceId, PushData}, State) ->
-    State2 = add_push(DomainId, AppId, DeviceId, PushData, State),
+object_async_op({?MODULE, add_push_device, DomainPath, AppId, DeviceId, PushData}, State) ->
+    State2 = add_push(DomainPath, AppId, DeviceId, PushData, State),
     {noreply, State2};
 
 object_async_op({?MODULE, send_push, AppId, Push}, State) ->
@@ -648,10 +692,12 @@ object_handle_info(_Info, _State) ->
 %% @private
 object_link_down({usage, {?MODULE, session, SessId, _Pid}}, State) ->
     case find_session(SessId, State) of
-        {ok, #user_session{type=Type}} ->
+        {ok, #user_session{domain_path=Path, type=Type}} ->
             State2 = do_event({session_stopped, Type, SessId}, State),
             ?DEBUG("registered session down: ~s", [SessId], State2),
-            {ok, rm_session(SessId, State2)};
+            State3 = rm_session(SessId, State2),
+            State4 = update_presence(Path, Type, State3),
+            {ok, State4};
         not_found ->
             {ok, State}
     end;
@@ -709,6 +755,24 @@ check_email(_SrvId, Obj) ->
 
 
 %% @private
+update_presence(DomainPath, Type, State) ->
+    #?STATE{id=Id, session=Session} = State,
+    #obj_id_ext{obj_id=UserId} =Id,
+    #session{user_sessions=UserSessions, user_session_presence=PresFuns} = Session,
+    case maps:find(Type, PresFuns) of
+        {ok, Fun} ->
+            Presence = [
+                P || #user_session{type=T, domain_path=D, presence=P}
+                      <- UserSessions, T==Type andalso D==DomainPath
+            ],
+            {ok, Event} = Fun(UserId, Presence),
+            do_event({presence_updated, DomainPath, Type, Event}, State);
+        error ->
+            State
+    end.
+
+
+%% @private
 find_session(SessId, #?STATE{session=Session}) ->
     #session{user_sessions=UserSessions} = Session,
     case lists:keyfind(SessId, #user_session.id, UserSessions) of
@@ -720,22 +784,19 @@ find_session(SessId, #?STATE{session=Session}) ->
 
 
 %% @private
-add_session(DomainId, Type, SessId, Opts, Pid, State) ->
-    Fun = maps:get(notify_fun, Opts, none),
-    UserSessionTuple = #user_session{
+add_session(DomainPath, Type, SessId, Opts, Pid, State) ->
+    UserSession = #user_session{
         id = SessId,
-        domain_id = DomainId,
+        domain_path = DomainPath,
         type = Type,
-        presence = maps:get(presence, Opts, <<>>),
-        opts = maps:without([notify_fun, presence], Opts),
-        notify_fun = Fun,
+        presence = maps:get(presence, Opts, #{}),
+        opts = maps:without([notify_fun, presence_fun, presence], Opts),
         pid = Pid
     },
-    UserSession = UserSessionTuple,
     State2 = nkdomain_obj:links_add(usage, {?MODULE, session, SessId, Pid}, State),
     State3 = do_event({session_started, Type, SessId}, State2),
-    store_session(UserSession, State3).
-    %notify_session(DomainId, Type, SessId, Pid, Fun, State4).
+    State4 = store_session(UserSession, Opts, State3),
+    update_presence(DomainPath, Type, State4).
 
 
 %% @private
@@ -752,10 +813,30 @@ rm_session(SessId, #?STATE{session=Session}=State) ->
 
 
 %% @private
-store_session(#user_session{id=SessId}=UserSession, #?STATE{session=Session}=State) ->
-    #session{user_sessions=UserSessions} = Session,
+store_session(#user_session{id=SessId, type=Type}=UserSession, Opts, #?STATE{session=Session}=State) ->
+    #session{
+        user_sessions = UserSessions,
+        user_session_notify = Notify,
+        user_session_presence = Presence
+    } = Session,
     UserSessions2 = lists:keystore(SessId, #user_session.id, UserSessions, UserSession),
-    Session2 = Session#session{user_sessions=UserSessions2},
+    Notify2 = case maps:get(notify_fun, Opts, undefined) of
+        Fun1 when is_function(Fun1, 2) ->
+            Notify#{Type => Fun1};
+        _ ->
+            Notify
+    end,
+    Presence2 = case maps:get(presence_fun, Opts, undefined) of
+        Fun2 when is_function(Fun2, 2) ->
+            Presence#{Type => Fun2};
+        _ ->
+            Presence
+    end,
+    Session2 = Session#session{
+            user_sessions = UserSessions2,
+            user_session_notify = Notify2,
+            user_session_presence = Presence2
+    },
     State#?STATE{session=Session2}.
 
 
@@ -783,56 +864,63 @@ do_remove_notification(TokenId, Reason, #?STATE{session=Session}=State) ->
 
 
 %% @private
-notify_token_sessions(#notify_token{domain_id=DomainId, session_type=Type, token_id=TokenId, data=Data}, Op, State) ->
-    #?STATE{session=#session{user_sessions=UserSessions}} = State,
-    ?DEBUG("notify sessions ~s ~s", [DomainId, Type], State),
-    Num = lists:foldl(
-        fun(#user_session{pid=Pid, notify_fun=Fun, type=T, domain_id=D}, Acc) ->
-            case T==Type andalso D==DomainId andalso is_function(Fun, 2) of
-                true ->
-                    case Op of
-                        created->
-                            Fun(Pid, {token_created, TokenId, Data});
-                        {removed, Reason} ->
-                            Fun(Pid, {token_removed, TokenId, Reason})
-                    end,
-                    Acc+1;
-                false ->
-                    Acc
-            end
-        end,
-        0,
-        UserSessions),
-    case Op of
-        _ when Num > 0 ->
-            ok;
-        created ->
-            ?LLOG(notice, "no ~p session found: send wakeup", [Type], State),
-            Push = #{
-                type => simple,
-                title => <<"New user notification">>,
-                body => <<"Wake up">>
-            },
-            AppId = <<"user_notifications">>,
-            send_push(any, self(), AppId, Push);
-        {removed, Reason} ->
-            ?LLOG(notice, "~s session notification removed: ~p", [Type, Reason]),
-            Push = #{
-                type => remove
-            },
-            AppId = <<"user_notifications">>,
-            send_push(any, self(), AppId, Push)
+notify_token_sessions(#notify_token{domain_path=DomainPath, session_type=Type, token_id=TokenId, data=Data}, Op, State) ->
+    #?STATE{session=#session{user_sessions=UserSessions, user_session_notify=NotFuns}} = State,
+    case maps:find(Type, NotFuns) of
+        {ok, Fun} ->
+            ?DEBUG("notify sessions ~s ~s", [DomainPath, Type], State),
+            Num = lists:foldl(
+                fun(#user_session{pid=Pid, type=T, domain_path=D}, Acc) ->
+                    case T==Type andalso D==DomainPath of
+                        true ->
+                            case Op of
+                                created->
+                                    Fun(Pid, {token_created, TokenId, Data});
+                                {removed, Reason} ->
+                                    Fun(Pid, {token_removed, TokenId, Reason})
+                            end,
+                            Acc+1;
+                        false ->
+                            Acc
+                    end
+                end,
+                0,
+                UserSessions),
+            case Op of
+                _ when Num > 0 ->
+                    ok;
+                created ->
+                    ?LLOG(notice, "no ~p session found: send wakeup", [Type], State),
+                    Push = #{
+                        type => simple,
+                        title => <<"New user notification">>,
+                        body => <<"Wake up">>
+                    },
+                    AppId = <<"user_notifications">>,
+                    send_push(any, self(), AppId, Push);
+                {removed, Reason} ->
+                    ?LLOG(notice, "~s session notification removed: ~p", [Type, Reason]),
+                    Push = #{
+                        type => remove
+                    },
+                    AppId = <<"user_notifications">>,
+                    send_push(any, self(), AppId, Push)
+            end;
+        error ->
+            ok
     end.
 
 
+
 %% @private
-do_launch_session_tokens(#user_session{domain_id=DomainId, type=Type, pid=Pid, notify_fun=Fun}, State) ->
-    case is_function(Fun, 2) of
-        true ->
+do_launch_session_tokens(#user_session{domain_path=DomainPath, type=Type, pid=Pid}, State) ->
+    #?STATE{session=#session{user_session_notify=NotFuns}} = State,
+    case maps:find(Type, NotFuns) of
+        {ok, Fun} ->
             #?STATE{session=#session{notify_tokens=Msgs}} = State,
             lists:foreach(
-                fun(#notify_token{token_id=Id, data=Data, session_type=T, domain_id=D}) ->
-                    case T==Type andalso D==DomainId of
+                fun(#notify_token{token_id=Id, data=Data, session_type=T, domain_path=D}) ->
+                    case T==Type andalso D==DomainPath of
                         true ->
                             Fun(Pid, {token_created, Id, Data});
                         false ->
@@ -840,7 +928,7 @@ do_launch_session_tokens(#user_session{domain_id=DomainId, type=Type, pid=Pid, n
                     end
                 end,
                 Msgs);
-        false ->
+        error ->
             ok
     end,
     State.
@@ -852,18 +940,18 @@ do_load_push([], Acc) ->
 
 do_load_push([Push|Rest], Acc) ->
     #{
-        domain_id := DomainId,
+        domain_path := DomainPath,
         app_id := AppId,
         device_id := DeviceId,
         push_data := Data,
         updated_time := Time
     } = Push,
     PushDevice = #push_device{
-        domain_id   = DomainId,
-        app_id      = AppId,
-        device_id   = DeviceId,
-        push_data   = Data,
-        updated_time= Time
+        domain_path = DomainPath,
+        app_id = AppId,
+        device_id = DeviceId,
+        push_data = Data,
+        updated_time = Time
     },
     do_load_push(Rest, [PushDevice|Acc]).
 
@@ -874,16 +962,16 @@ do_save_push([], Acc) ->
 
 do_save_push([PushDevice|Rest], Acc) ->
     #push_device{
-        device_id   = DeviceId,
-        app_id      = AppId,
-        domain_id   = DomainId,
-        push_data   = Data,
-        updated_time= Time
+        device_id = DeviceId,
+        app_id = AppId,
+        domain_path = DomainPath,
+        push_data = Data,
+        updated_time = Time
     } = PushDevice,
     Push = #{
         device_id => DeviceId,
         app_id => AppId,
-        domain_id => DomainId,
+        domain_path => DomainPath,
         push_data => Data,
         updated_time => Time
     },
@@ -892,7 +980,7 @@ do_save_push([PushDevice|Rest], Acc) ->
 
 
 %% @private
-add_push(DomainId, AppId, DeviceId, PushData, State) ->
+add_push(DomainPath, AppId, DeviceId, PushData, State) ->
     #?STATE{session=Session} = State,
     #session{push_devices=PushDevices1} = Session,
     Now =nkdomain_util:timestamp(),
@@ -903,11 +991,11 @@ add_push(DomainId, AppId, DeviceId, PushData, State) ->
             };
         _ ->
             #push_device{
-                domain_id   = DomainId,
-                app_id      = AppId,
-                device_id   = DeviceId,
-                push_data   = PushData,
-                updated_time= Now
+                domain_path = DomainPath,
+                app_id = AppId,
+                device_id = DeviceId,
+                push_data = PushData,
+                updated_time = Now
             }
     end,
     PushDevices2 = lists:keystore(DeviceId, #push_device.device_id, PushDevices1, PushDevice),
@@ -956,13 +1044,13 @@ do_load_status([], Acc) ->
 
 do_load_status([Status|Rest], Acc) ->
     #{
-        domain_id := DomainId,
+        domain_path := DomainPath,
         app_id := AppId,
         user_status := UserStatus,
         updated_time := Time
     } = Status,
     Status2 = #status{
-        domain_id = DomainId,
+        domain_path = DomainPath,
         app_id = AppId,
         user_status = UserStatus,
         updated_time= Time
@@ -977,13 +1065,13 @@ do_save_status([], Acc) ->
 do_save_status([Status|Rest], Acc) ->
     #status{
         app_id = AppId,
-        domain_id = DomainId,
+        domain_path = DomainPath,
         user_status = UserStatus,
         updated_time= Time
     } = Status,
     Status2 = #{
         app_id => AppId,
-        domain_id => DomainId,
+        domain_path => DomainPath,
         user_status => UserStatus,
         updated_time => Time
     },
@@ -992,18 +1080,18 @@ do_save_status([Status|Rest], Acc) ->
 
 
 %% @private
-do_set_status(DomainId, AppId, UserStatus, #?STATE{session=Session}=State) ->
+do_set_status(DomainPath, AppId, UserStatus, #?STATE{session=Session}=State) ->
     #session{statuses=Statuses} = Session,
     Now = nkdomain_util:timestamp(),
     Status = #status{
         app_id = AppId,
-        domain_id = DomainId,
+        domain_path = DomainPath,
         user_status = UserStatus,
         updated_time= Now
     },
     Statuses2 = lists:keystore(AppId, #status.app_id, Statuses, Status),
     Session2 = Session#session{statuses=Statuses2},
-    State2 = do_event({status_updated, DomainId, AppId, UserStatus}, State),
+    State2 = do_event({status_updated, DomainPath, AppId, UserStatus}, State),
     State2#?STATE{session=Session2, is_dirty=true}.
 
 

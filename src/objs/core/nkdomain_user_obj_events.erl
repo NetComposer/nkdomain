@@ -46,6 +46,9 @@ event({session_stopped, Type, SessId}, State) ->
 event({status_updated, DomainId, AppId, Status}, #?STATE{id=#obj_id_ext{obj_id=UserId}}=State) ->
     {event, {status_updated, UserId, DomainId, #{app_id=>AppId, status=>Status}}, State};
 
+event({presence_updated, DomainId, Type, Presence}, #?STATE{id=#obj_id_ext{obj_id=UserId}}=State) ->
+    {event, {presence_updated, UserId, DomainId, #{type=>Type, presence=>Presence}}, State};
+
 event(_Event, State) ->
     {ok, State}.
 
