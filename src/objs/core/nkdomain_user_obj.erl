@@ -31,7 +31,7 @@
 -export([object_init/1, object_save/1, object_event/2,
          object_sync_op/3, object_async_op/2, object_link_down/2, object_handle_info/2]).
 -export([fun_user_pass/1, user_pass/1]).
--export([get_sessions/2, get_sessions/3, get_presence/4]).
+-export([get_sessions/2, get_sessions/3, get_presence/4, update_presence/4]).
 -export([register_session/6, unregister_session/3, launch_session_notifications/3, set_status/5, get_status/4]).
 -export([add_notification_op/5, remove_notification/4]).
 -export([add_push_device/6, remove_push_device/3, send_push/4, remove_push_devices/2]).
@@ -170,6 +170,11 @@ get_presence(SrvId, Id, Domain, Type) ->
         {error, Error} ->
             {error, Error}
     end.
+
+
+%% @doc
+update_presence(SrvId, Id, SessId, Presence) ->
+    nkdomain_obj:async_op(SrvId, Id, {?MODULE, update_presence, SessId, Presence}).
 
 
 %% @doc
@@ -663,7 +668,18 @@ object_async_op({?MODULE, unregister_session, SessId}, State) ->
     case find_session(SessId, State) of
         {ok, #user_session{domain_path=Path, type=Type}} ->
             State2 = rm_session(SessId, State),
-            State3 = update_presence(Path, Type, State2),
+            State3 = do_update_presence(Path, Type, State2),
+            {noreply, State3};
+        not_found ->
+            {noreply, State}
+    end;
+
+object_async_op({?MODULE, update_presence, SessId, Presence}, State) ->
+    case find_session(SessId, State) of
+        {ok, #user_session{domain_path=Path, type=Type}=UserSession} ->
+            UserSession2 = UserSession#user_session{presence=Presence},
+            State2 = store_session(UserSession2, #{}, State),
+            State3 = do_update_presence(Path, Type, State2),
             {noreply, State3};
         not_found ->
             {noreply, State}
@@ -764,7 +780,7 @@ object_link_down({usage, {?MODULE, session, SessId, _Pid}}, State) ->
             State2 = do_event({session_stopped, Type, SessId}, State),
             ?DEBUG("registered session down: ~s", [SessId], State2),
             State3 = rm_session(SessId, State2),
-            State4 = update_presence(Path, Type, State3),
+            State4 = do_update_presence(Path, Type, State3),
             {ok, State4};
         not_found ->
             {ok, State}
@@ -823,7 +839,7 @@ check_email(_SrvId, Obj) ->
 
 
 %% @private
-update_presence(DomainPath, Type, State) ->
+do_update_presence(DomainPath, Type, State) ->
     case do_get_presence(DomainPath, Type, State) of
         {ok, UserPres} ->
             do_event({presence_updated, DomainPath, Type, UserPres}, State);
@@ -874,7 +890,7 @@ add_session(DomainPath, Type, SessId, Opts, Pid, State) ->
     State2 = nkdomain_obj:links_add(usage, {?MODULE, session, SessId, Pid}, State),
     State3 = do_event({session_started, Type, SessId}, State2),
     State4 = store_session(UserSession, Opts, State3),
-    update_presence(DomainPath, Type, State4).
+    do_update_presence(DomainPath, Type, State4).
 
 
 %% @private
