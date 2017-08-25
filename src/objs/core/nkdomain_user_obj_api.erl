@@ -40,22 +40,8 @@ cmd(<<"login">>, Req) ->
 cmd(<<"get_name">>, #nkreq{data=Data, srv_id=SrvId}=Req) ->
     case nkdomain_api_util:get_id(?DOMAIN_USER, Data, Req) of
         {ok, Id} ->
-            case nkdomain_user_obj:get_name(SrvId, Id) of
-                {ok, Data2} ->
-                    case Data of
-                        #{domain_id:=DomainId, app_id:=AppId} ->
-                            case nkdomain_user_obj:get_status(SrvId, Id, DomainId, AppId) of
-                                {ok, Status} ->
-                                    {ok, Data2#{status=>Status}};
-                                {error, Error} ->
-                                    {error, Error}
-                            end;
-                        _ ->
-                            {ok, Data2}
-                    end;
-                {error, Error} ->
-                    {error, Error}
-            end;
+            Opts = maps:with([domain, app_id, session_types], Data),
+            nkdomain_user_obj:get_name(SrvId, Id, Opts);
         {error, Error} ->
             {error, Error}
     end;

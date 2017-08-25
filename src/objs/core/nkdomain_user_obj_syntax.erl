@@ -51,8 +51,9 @@ api(<<"get_token">>, Syntax) ->
 api(<<"get_name">>, Syntax) ->
     Syntax#{
         id => binary,
-        domain_id => binary,                    % If domain and app_id, status is added
-        app_id => binary                        %
+        domain => binary,                       % Necessary for both
+        app_id => binary,                       % Get status
+        session_types => {list, binary}         % Get presence
     };
 
 api(<<"add_push_device">>, Syntax) ->

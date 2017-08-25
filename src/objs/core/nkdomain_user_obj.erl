@@ -24,15 +24,14 @@
 -behavior(nkdomain_obj).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([create/2, auth/3, make_token/5, get_name/2]).
+-export([create/2, auth/3, make_token/5, get_name/2, get_name/3]).
 -export([find_childs/2]).
 -export([object_info/0, object_admin_info/0, object_create/2, object_es_mapping/0, object_es_unparse/3,
          object_parse/3, object_api_syntax/2, object_api_cmd/2, object_send_event/2]).
 -export([object_init/1, object_save/1, object_event/2,
          object_sync_op/3, object_async_op/2, object_link_down/2, object_handle_info/2]).
-
 -export([fun_user_pass/1, user_pass/1]).
--export([get_sessions/2, get_sessions/3]).
+-export([get_sessions/2, get_sessions/3, get_presence/4]).
 -export([register_session/6, unregister_session/3, launch_session_notifications/3, set_status/5, get_status/4]).
 -export([add_notification_op/5, remove_notification/4]).
 -export([add_push_device/6, remove_push_device/3, send_push/4, remove_push_devices/2]).
@@ -164,11 +163,36 @@ get_sessions(SrvId, UserId, Type) ->
 
 
 %% @doc
+get_presence(SrvId, Id, Domain, Type) ->
+    case nkdomain_lib:find(SrvId, Domain) of
+        #obj_id_ext{path=DomainPath} ->
+            nkdomain_obj:sync_op(SrvId, Id, {?MODULE, get_presence, DomainPath, Type});
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
+%% @doc
 -spec get_name(nkservice:id(), nkdomain:id()) ->
     {ok, map()} | {error, term()}.
 
 get_name(Srv, Id) ->
-    nkdomain_obj:sync_op(Srv, Id, {?MODULE, get_name}).
+    get_name(Srv, Id, #{}).
+
+
+%% @doc
+-type get_name_opts() ::
+    #{
+        domain => nkdomain:id(),
+        app_id => push_app_id(),
+        session_types => [nkdomain:type()]
+    }.
+
+-spec get_name(nkservice:id(), nkdomain:id(), get_name_opts()) ->
+    {ok, map()} | {error, term()}.
+
+get_name(Srv, Id, Opts) ->
+    nkdomain_obj:sync_op(Srv, Id, {?MODULE, get_name, Opts}).
 
 
 %% @doc
@@ -523,7 +547,7 @@ object_sync_op({?MODULE, check_pass, Pass}, _From, #?STATE{id=Id, obj=Obj}=State
             {reply, {ok, false}, State}
     end;
 
-object_sync_op({?MODULE, get_name}, _From, #?STATE{obj=Obj}=State) ->
+object_sync_op({?MODULE, get_name, Opts}, _From, #?STATE{srv_id=SrvId, obj=Obj}=State) ->
     Base = nkdomain_obj_util:get_obj_name(State),
     #{name:=UserName, surname:=UserSurName} = User = maps:get(?DOMAIN_USER, Obj),
     Data = Base#{
@@ -535,7 +559,49 @@ object_sync_op({?MODULE, get_name}, _From, #?STATE{obj=Obj}=State) ->
         address_t => maps:get(address_t, User, <<>>),
         icon_id => maps:get(icon_id, Obj, <<>>)
     },
-    {reply, {ok, Data}, State};
+    Path = case Opts of
+        #{domain:=Domain} ->
+            case nkdomain_util:is_path(Domain) of
+                {true, DP} ->
+                    DP;
+                {false, _} ->
+                    case nkdomain:find(SrvId, Domain) of
+                        #obj_id_ext{path=DP} -> DP;
+                        _ -> undefined
+                    end
+            end;
+        _ ->
+            undefined
+    end,
+    Data2 = case Path /= undefined andalso Opts of
+        #{app_id:=AppId} ->
+            case do_get_status(Path, AppId, State) of
+                {ok, Status} ->
+                    Data#{status=>Status};
+                {error, _} ->
+                    Data
+            end;
+        _ ->
+            Data
+    end,
+    Data3 = case Path /= undefined andalso Opts of
+        #{session_types:=Types} ->
+            Presence = lists:foldl(
+                fun(Type, Acc) ->
+                    case do_get_presence(Path, Type, State) of
+                        {ok, UserPres} ->
+                            Acc#{Type => UserPres};
+                        {error, _} ->
+                            Acc
+                    end
+                end,
+                #{},
+                Types),
+            Data2#{presence => Presence};
+        _ ->
+            Data2
+    end,
+    {reply, {ok, Data3}, State};
 
 object_sync_op({?MODULE, register_session, DomainPath, Type, SessId, Opts, Pid}, _From, State) ->
     case find_session(SessId, State) of
@@ -575,15 +641,11 @@ object_sync_op({?MODULE, add_notification_op, SessType, _Opts, Base}, _From, Sta
     {reply, {ok, UserId, Base#{?DOMAIN_USER=>UserData2}}, State};
 
 object_sync_op({?MODULE, get_status, DomainPath, AppId}, _From, State) ->
-    #?STATE{session=#session{statuses=Statuses}} = State,
-    Reply = case lists:keyfind(AppId, #status.app_id, Statuses) of
-        #status{domain_path=DomainPath, user_status=UserStatus} ->
-            {ok, UserStatus};
-        #status{} ->
-            {error, domain_invalid};
-        false ->
-            {ok, #{}}
-    end,
+    Reply = do_get_status(DomainPath, AppId, State),
+    {reply, Reply, State};
+
+object_sync_op({?MODULE, get_presence, DomainPath, Type}, _From, State) ->
+    Reply = do_get_presence(DomainPath, Type, State),
     {reply, Reply, State};
 
 object_sync_op(_Op, _From, _State) ->
@@ -756,19 +818,29 @@ check_email(_SrvId, Obj) ->
 
 %% @private
 update_presence(DomainPath, Type, State) ->
+    case do_get_presence(DomainPath, Type, State) of
+        {ok, UserPres} ->
+            do_event({presence_updated, DomainPath, Type, UserPres}, State);
+        {error, _} ->
+            State
+    end.
+
+
+%% @private
+do_get_presence(DomainPath, Type, State) ->
     #?STATE{id=Id, session=Session} = State,
     #obj_id_ext{obj_id=UserId} =Id,
     #session{user_sessions=UserSessions, user_session_presence=PresFuns} = Session,
     case maps:find(Type, PresFuns) of
         {ok, Fun} ->
             Presence = [
-                P || #user_session{type=T, domain_path=D, presence=P}
-                      <- UserSessions, T==Type andalso D==DomainPath
+                                     P || #user_session{type=T, domain_path=D, presence=P}
+                    <- UserSessions, T==Type andalso D==DomainPath
             ],
             {ok, Event} = Fun(UserId, Presence),
-            do_event({presence_updated, DomainPath, Type, Event}, State);
+            {ok, Event};
         error ->
-            State
+            {error, unknown_presence}
     end.
 
 
@@ -1036,6 +1108,19 @@ find_push_devices(AppId, State) ->
     #?STATE{session=Session} = State,
     #session{push_devices=Devices} = Session,
     [Device || #push_device{app_id=A}=Device <- Devices, A==AppId].
+
+
+%% @private
+do_get_status(DomainPath, AppId, State) ->
+    #?STATE{session=#session{statuses=Statuses}} = State,
+    case lists:keyfind(AppId, #status.app_id, Statuses) of
+        #status{domain_path=DomainPath, user_status=UserStatus} ->
+            {ok, UserStatus};
+        #status{} ->
+            {error, domain_invalid};
+        false ->
+            {ok, #{}}
+    end.
 
 
 %% @private
