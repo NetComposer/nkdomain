@@ -451,7 +451,10 @@ object_parse(_SrvId, update, _Obj) ->
                 device_id => binary,
                 push_data => map,
                 updated_time => integer,
-                '__mandatory' => [domain_path, app_id, device_id, push_data, updated_time]
+                '__mandatory' => [app_id, device_id, push_data, updated_time],
+                '__defaults' => #{domain_path => <<>>}
+                % add domain_path when all objects are updated
+                %'__mandatory' => [domain_path, app_id, device_id, push_data, updated_time]
              }
         },
         status => {list,
@@ -460,7 +463,10 @@ object_parse(_SrvId, update, _Obj) ->
                  app_id => binary,
                  user_status => map,
                  updated_time => integer,
-                 '__mandatory' => [domain_path, app_id, user_status, updated_time]
+                 '__mandatory' => [app_id, user_status, updated_time],
+                 '__defaults' => #{domain_path => <<>>}
+                 % add domain_path when all objects are updated
+                 % '__mandatory' => [domain_path, app_id, user_status, updated_time]
              }
         },
         '__defaults' => #{vsn => <<"1">>}
