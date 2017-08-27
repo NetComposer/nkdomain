@@ -81,12 +81,12 @@ get_data(Key, Spec, Session) ->
 
 
 %% @private
-get_agg(Field, Type, #admin_session{srv_id=SrvId, domain_id=DomainId}) ->
+get_agg(Field, Type, #admin_session{domain_id=DomainId}) ->
     Spec = #{
         filters => #{type => Type},
         size => 50
     },
-    case nkdomain:search_agg_field(SrvId, DomainId, Field, Spec, true) of
+    case nkdomain:search_agg_field(DomainId, Field, Spec, true) of
         {ok, _N, Data, #{agg_sum_other:=SumOther}} ->
             Base = case SumOther of
                 0 ->
@@ -96,7 +96,7 @@ get_agg(Field, Type, #admin_session{srv_id=SrvId, domain_id=DomainId}) ->
             end,
             Data2 = lists:foldl(
                 fun({ObjId, _Num}, Acc) ->
-                    case nkdomain:get_name(SrvId, ObjId) of
+                    case nkdomain:get_name(ObjId) of
                         {ok, #{name:=Name}} ->
                             [#{ id => ObjId, value => Name} | Acc];
                         _ ->

@@ -48,7 +48,7 @@ cmd(<<"create">>, Req) ->
     cmd(<<"start">>, Req);
 
 cmd(<<"start">>, #nkreq{session_module=nkapi_server, session_id=WsSessId}=Req) ->
-    #nkreq{data=Data, session_pid=Pid, user_id=UserId, srv_id=SrvId} = Req,
+    #nkreq{data=Data, session_pid=Pid, user_id=UserId} = Req,
     case nkdomain_api_util:get_id(?DOMAIN_DOMAIN, domain_id, Data, Req) of
         {ok, DomainId} ->
             Opts1 = maps:with([domain_id, url, language], Data),
@@ -57,7 +57,7 @@ cmd(<<"start">>, #nkreq{session_module=nkapi_server, session_id=WsSessId}=Req) -
                 session_events => maps:get(session_events, Data, ?ADMIN_DEF_EVENT_TYPES),
                 http_auth_id => WsSessId
             },
-            case nkadmin_session_obj:start(SrvId, DomainId, UserId, Opts2) of
+            case nkadmin_session_obj:start(DomainId, UserId, Opts2) of
                 {ok, SessId, _Pid, Updates} ->
                     Req2 = nkdomain_api_util:add_id(?DOMAIN_ADMIN_SESSION, SessId, Req),
                     {ok, Updates#{obj_id=>SessId}, Req2};
@@ -68,19 +68,19 @@ cmd(<<"start">>, #nkreq{session_module=nkapi_server, session_id=WsSessId}=Req) -
             {error, Error}
     end;
 
-cmd(<<"stop">>, #nkreq{data=Data, srv_id=SrvId}=Req) ->
+cmd(<<"stop">>, #nkreq{data=Data}=Req) ->
     case nkdomain_api_util:get_id(?DOMAIN_ADMIN_SESSION, Data, Req) of
         {ok, SessId} ->
-            nkdomain:unload(SrvId, SessId, user_stop);
+            nkdomain:unload(SessId, user_stop);
         {error, Error} ->
             {error, Error}
     end;
 
-cmd(<<"switch_domain">>, #nkreq{data=#{domain_id:=DomId}=Data, srv_id=SrvId}=Req) ->
+cmd(<<"switch_domain">>, #nkreq{data=#{domain_id:=DomId}=Data}=Req) ->
     case nkdomain_api_util:get_id(?DOMAIN_ADMIN_SESSION, Data, Req) of
         {ok, SessId} ->
             Url = maps:get(url, Data, <<>>),
-            case nkadmin_session_obj:switch_domain(SrvId, SessId, DomId, Url) of
+            case nkadmin_session_obj:switch_domain(SessId, DomId, Url) of
                 {ok, Reply} ->
                     {ok, Reply};
                 {error, Error} ->
@@ -90,12 +90,12 @@ cmd(<<"switch_domain">>, #nkreq{data=#{domain_id:=DomId}=Data, srv_id=SrvId}=Req
             {error, Error}
     end;
 
-cmd(<<"element_action">>, #nkreq{data=Data, srv_id=SrvId}=Req) ->
+cmd(<<"element_action">>, #nkreq{data=Data}=Req) ->
     #{element_id:=ElementId, action:=Action} = Data,
     Value = maps:get(value, Data, <<>>),
     case nkdomain_api_util:get_id(?DOMAIN_ADMIN_SESSION, Data, Req) of
         {ok, SessId} ->
-            case nkadmin_session_obj:element_action(SrvId, SessId, ElementId, Action, Value) of
+            case nkadmin_session_obj:element_action(SessId, ElementId, Action, Value) of
                 {ok, Reply} ->
                     {ok, Reply};
                 {error, Error} ->
@@ -105,11 +105,11 @@ cmd(<<"element_action">>, #nkreq{data=Data, srv_id=SrvId}=Req) ->
             {error, Error}
     end;
 
-cmd(<<"get_data">>, #nkreq{data=Data, srv_id=SrvId}=Req) ->
+cmd(<<"get_data">>, #nkreq{data=Data}=Req) ->
     #{element_id:=ElementId} = Data,
     case nkdomain_api_util:get_id(?DOMAIN_ADMIN_SESSION, Data, Req) of
         {ok, SessId} ->
-            case nkadmin_session_obj:get_data(SrvId, SessId, ElementId, Data) of
+            case nkadmin_session_obj:get_data(SessId, ElementId, Data) of
                 {ok, Reply} ->
                     {ok, Reply};
                 {error, Error} ->

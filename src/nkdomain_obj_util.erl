@@ -45,11 +45,11 @@
 
 event(Event, #?STATE{srv_id=SrvId, event_links=Links}=State) ->
     Fun = fun(Link, Data, Acc) ->
-        {ok, Acc2} = SrvId:object_reg_event(Link, Data, Event, Acc),
+        {ok, Acc2} = apply(SrvId, object_reg_event, [Link, Data, Event, Acc]),
         Acc2
     end,
     State2 = nklib_links:fold_values(Fun, State, Links),
-    {ok, State3} = SrvId:object_event(Event, State2),
+    {ok, State3} = apply(SrvId, object_event, [Event, State2]),
     State3.
 
 
@@ -113,7 +113,7 @@ send_session_event(#nkevent{type=Type}=Event, State) ->
     #?STATE{srv_id=SrvId, session_events=Events, session_link=Link} = State,
     case lists:member(Type, Events) of
         true ->
-            SrvId:object_session_event(Link, Event, State);
+            apply(SrvId, object_session_event, [Link, Event, State]);
         false ->
             ok
     end.

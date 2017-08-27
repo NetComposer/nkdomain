@@ -24,7 +24,7 @@
 -behavior(nkdomain_obj).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([find/1, delete_all/1]).
+-export([find/0, delete_all/0]).
 -export([object_info/0, object_admin_info/0, object_parse/3, object_es_mapping/0]).
 
 -include("nkdomain.hrl").
@@ -46,13 +46,13 @@
 
 
 %% @private
-find(SrvId) ->
-    nkdomain_domain_obj:search(SrvId, <<"root">>, #{filters=>#{type=>?DOMAIN_MAIL_PROVIDER}}).
+find() ->
+    nkdomain_domain_obj:search(<<"root">>, #{filters=>#{type=>?DOMAIN_MAIL_PROVIDER}}).
 
 
 %% @private
-delete_all(SrvId) ->
-    nkdomain:delete_all_childs_type(SrvId, <<"root">>, ?DOMAIN_MAIL_PROVIDER).
+delete_all() ->
+    nkdomain:delete_all_childs_type(<<"root">>, ?DOMAIN_MAIL_PROVIDER).
 
 
 

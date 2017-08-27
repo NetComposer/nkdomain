@@ -218,8 +218,8 @@ get_domain_items([], [{_ObjName, Item}], Session) ->
 get_domain_items([], Acc, Session) ->
     {ok, [Item || {_ObjName, Item} <- lists:sort(Acc)], Session};
 
-get_domain_items([ObjId|Rest], Acc, #admin_session{srv_id=SrvId}=Session) ->
-    case nkdomain:get_name(SrvId, ObjId) of
+get_domain_items([ObjId|Rest], Acc, Session) ->
+    case nkdomain:get_name(ObjId) of
         {ok, Map} ->
              #{
                 name := Name,
@@ -282,8 +282,8 @@ deleted_domain(ObjId, Updates, Session) ->
 
 
 %% @private
-selected_domain(ObjId, Updates, #admin_session{srv_id=SrvId}=Session) ->
-    case nkdomain_lib:load(SrvId, ObjId) of
+selected_domain(ObjId, Updates, Session) ->
+    case nkdomain_lib:load(ObjId) of
         #obj_id_ext{path=Path} ->
             {Updates2, Session2} = nkadmin_util:update_detail(Path, #{}, Updates, Session),
             {Updates2, Session2};
@@ -401,10 +401,10 @@ get_session_items([], Acc, Session) ->
     {ok, [Item || {_Weigth, Item} <- lists:keysort(1, Acc)], Session};
 
 get_session_items([Type|Rest], Acc, Session) ->
-    #admin_session{srv_id=SrvId, domain_id=DomainId} = Session,
+    #admin_session{domain_id=DomainId} = Session,
     case is_session(Type, Session) of
         {true, Info} ->
-            case nkdomain_domain_obj:get_counter(SrvId, DomainId, Type) of
+            case nkdomain_domain_obj:get_counter(DomainId, Type) of
                 {ok, 0} ->
                     get_session_items(Rest, Acc, Session);
                 {ok, Counter} ->

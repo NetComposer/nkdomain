@@ -56,10 +56,10 @@
 -spec read_obj(nkdomain:obj_id(), nkelastic:opts()) ->
     {ok, map(), meta()} | {error, object_not_found|term()}.
 
-read_obj(ObjId, #{srv_id:=SrvId}=EsOpts) ->
+read_obj(ObjId, EsOpts) ->
     case nkelastic:get(ObjId, EsOpts) of
         {ok, Map, Meta} ->
-            case SrvId:object_es_parse(SrvId, Map) of
+            case ?CALL_SRV(object_es_parse, [Map]) of
                 {ok, Obj, []} ->
                     {ok, Obj, Meta};
                 {ok, Obj, UnknownFields} ->
@@ -78,7 +78,7 @@ read_obj(ObjId, #{srv_id:=SrvId}=EsOpts) ->
     {ok, meta()} | {error, term()}.
 
 save_obj(ObjId, Obj, #{srv_id:=SrvId}=EsOpts) ->
-    Map = SrvId:object_es_unparse(SrvId, Obj),
+    Map = ?CALL_SRV(object_es_unparse, [Obj]),
     nkelastic:put(ObjId, Map, EsOpts).
 
 
@@ -105,7 +105,7 @@ delete_obj(ObjId, EsOpts) ->
 
 %% @doc Finds an object from its ID or Path
 -spec find_obj(nkdomain:id(), nkelastic:opts()) ->
-    {ok, nkdomain:type(), nkdomain:obj_id(), nkdomain:path()} | {error, object_not_found|term()}.
+    {ok, Srv::binary(), nkdomain:type(), nkdomain:obj_id(), nkdomain:path()} | {error, object_not_found|term()}.
 
 find_obj(Id, EsOpts) ->
     Filters = case nkdomain_util:is_path(Id) of
@@ -117,11 +117,11 @@ find_obj(Id, EsOpts) ->
     case do_search_objs(#{filters=>Filters}, EsOpts) of
         {ok, 0, []} ->
             {error, object_not_found};
-        {ok, 1, [{Type, ObjId, ObjPath}]} ->
-            {ok, Type, ObjId, ObjPath};
-        {ok, _, [{Type, ObjId, ObjPath}|_]} ->
+        {ok, 1, [{Srv, Type, ObjId, ObjPath}]} ->
+            {ok, Srv, Type, ObjId, ObjPath};
+        {ok, _, [{Srv, Type, ObjId, ObjPath}|_]} ->
             ?LLOG(warning, "Multiple objects for path ~s", [ObjPath]),
-            {ok, Type, ObjId, ObjPath}
+            {ok, Srv, Type, ObjId, ObjPath}
     end.
 
 
@@ -166,7 +166,7 @@ search_all_types(Id, Spec, EsOpts) ->
 
 %% @doc Finds all objects on a path
 -spec search_childs(nkdomain:id(), search_spec(), nkelastic:opts()) ->
-    {ok, integer(), [{nkdomain:type(), nkdomain:obj_id(), nkdomain:path()}], meta()} | {error, term()}.
+    {ok, integer(), [{Srv::binary(), nkdomain:type(), nkdomain:obj_id(), nkdomain:path()}], meta()} | {error, term()}.
 
 search_childs(Id, Spec, EsOpts) ->
     case filter_childs(Id, Spec, EsOpts) of
@@ -235,7 +235,7 @@ search_agg_field(Id, Field, Spec, SubChilds, EsOpts) ->
 
 %% @doc Finds all objects having an alias
 -spec search_obj_alias(binary(), nkelastic:opts()) ->
-    {ok, integer(), [{nkdomain:type(), nkdomain:obj_id()}], meta()} | {error, term()}.
+    {ok, integer(), [{Srv::binary(), nkdomain:type(), nkdomain:obj_id()}], meta()} | {error, term()}.
 
 search_obj_alias(Alias, EsOpts) ->
     do_search_objs(#{filters=>#{aliases=>Alias}}, EsOpts).
@@ -317,14 +317,14 @@ clean(EsOpts) ->
 
 
 %% @private
-do_clean_active(#{srv_id:=SrvId}=EsOpts) ->
+do_clean_active(EsOpts) ->
     Spec = #{
         filters => #{active=>true},
         size => ?ES_ITER_SIZE,
         fields => [<<"type">>]
     },
     Fun = fun(#{<<"obj_id">>:=ObjId, <<"type">>:=Type}, Acc) ->
-        case SrvId:object_check_active(SrvId, Type, ObjId) of
+        case ?CALL_SRV(object_check_active, [Type, ObjId]) of
             false ->
                 {ok, Acc+1};
             true ->
@@ -339,14 +339,14 @@ do_clean_active(#{srv_id:=SrvId}=EsOpts) ->
 
 
 %% @private
-do_clean_expired(#{srv_id:=SrvId}=EsOpts) ->
+do_clean_expired(EsOpts) ->
     Time = nkdomain_util:timestamp() + 10000,
     Spec = #{
         filters => #{expires_time => <<"<", (to_bin(Time))/binary>>},
         size => ?ES_ITER_SIZE
     },
     Fun = fun(#{<<"obj_id">>:=ObjId}, Acc) ->
-        SrvId:object_do_expired(ObjId),
+        ?CALL_SRV(object_do_expired, [ObjId]),
         {ok, Acc+1}
     end,
     case iterate(Spec, Fun, 0, EsOpts) of
@@ -365,17 +365,17 @@ do_clean_expired(#{srv_id:=SrvId}=EsOpts) ->
 
 %% @private
 -spec do_search_objs(search_spec(), nkelastic:opts()) ->
-    {ok, N::integer(), [{nkdomain:type(), nkdomain:obj_id(), nkdomain:path()}]} | {error, term()}.
+    {ok, N::integer(), [{Srv::binary(), nkdomain:type(), nkdomain:obj_id(), nkdomain:path()}]} | {error, term()}.
 
 do_search_objs(Spec, EsOpts) ->
     Spec2 = Spec#{
-        fields => [<<"type">>, <<"path">>]
+        fields => [<<"srv_id">>, <<"type">>, <<"path">>]
     },
     case do_search(Spec2, EsOpts) of
         {ok, N, Data, _Aggs, _Meta} ->
             Data2 = lists:map(
-                fun(#{<<"obj_id">>:=ObjId, <<"type">>:=Type, <<"path">>:=Path}) ->
-                    {Type, ObjId, Path}
+                fun(#{<<"obj_id">>:=ObjId, <<"srv_id">>:=SrvId, <<"type">>:=Type, <<"path">>:=Path}) ->
+                    {SrvId, Type, ObjId, Path}
                 end,
                 Data),
             {ok, N, Data2};
@@ -488,7 +488,7 @@ filter_childs(Id, Spec, EsOpts) ->
             {ok, parent_filter(Id2, Spec)};
         {true, Path} ->
             case find_obj(Path, EsOpts) of
-                {ok, _Type, ObjId, _Path} ->
+                {ok, _Srv, _Type, ObjId, _Path} ->
                     {ok, parent_filter(ObjId, Spec)};
                 {error, _} ->
                     {error, object_not_found}
@@ -510,7 +510,7 @@ filter_all_childs(Id, Spec, EsOpts) ->
             {ok, path_filter(Path, Spec)};
         {false, Id2} ->
             case find_obj(Id2, EsOpts) of
-                {ok, _Type, _ObjId, Path} ->
+                {ok, _Srv, _Type, _ObjId, Path} ->
                     {ok, path_filter(Path, Spec)};
                 {error, _} ->
                     {error, object_not_found}

@@ -21,7 +21,7 @@
 -module(nkdomain_api_util).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([session_login/1, token_login/1, check_token/2, check_raw_token/2]).
+-export([session_login/1, token_login/1, check_token/2, check_raw_token/1]).
 -export([search/1, get_id/3, get_id/4, add_id/3, add_meta/3, remove_meta/2]).
 -export_type([login_data/0, session_meta/0]).
 
@@ -61,12 +61,12 @@
     {ok, DomainId::nkdomain:obj_id(), UserId::nkdomain:obj_id(), SessId::nkdomain:obj_id(), pid(), #nkreq{}} |
     {error, term()}.
 
-session_login(#nkreq{srv_id=SrvId, data=Data, session_meta=SessMeta}=Req) ->
+session_login(#nkreq{data=Data, session_meta=SessMeta}=Req) ->
     #{id:=User} = Data,
     Auth = #{password => maps:get(password, Data, <<>>)},
-    case get_domain(SrvId, Data) of
+    case get_domain(Data) of
         {ok, DomainId} ->
-            case nkdomain_user_obj:auth(SrvId, User, Auth) of
+            case nkdomain_user_obj:auth(User, Auth) of
                 {ok, UserId, _UserDomainId} ->
                     SessData1 = maps:with([device_id, push_id, platform_id, platform_version], Data),
                     SessData2 = maps:with([local, remote], SessMeta),
@@ -74,7 +74,7 @@ session_login(#nkreq{srv_id=SrvId, data=Data, session_meta=SessMeta}=Req) ->
                     SessData3 = maps:merge(SessData1, SessData2#{login_meta => LoginMeta}),
                     SessOpts1 = maps:with([session_id, session_link], SessMeta),
                     SessOpts2 = SessOpts1#{data=>SessData3},
-                    case nkdomain_session_obj:start(SrvId, DomainId, UserId, SessOpts2) of
+                    case nkdomain_session_obj:start(DomainId, UserId, SessOpts2) of
                         {ok, SessId, Pid} ->
                             Req2 = add_meta(login_meta, LoginMeta, Req),
                             Req3 = add_id(?DOMAIN_DOMAIN, DomainId, Req2),
@@ -96,18 +96,18 @@ session_login(#nkreq{srv_id=SrvId, data=Data, session_meta=SessMeta}=Req) ->
 -spec token_login(#nkreq{}) ->
     {ok, TokenId::nkdomain:obj_id(), TTLSecs::integer()} | {error, term()}.
 
-token_login(#nkreq{srv_id=SrvId, data=Data, session_meta=SessMeta}) ->
+token_login(#nkreq{data=Data, session_meta=SessMeta}) ->
     #{id:=User} = Data,
     Auth = #{password => maps:get(password, Data, <<>>)},
-    case get_domain(SrvId, Data) of
+    case get_domain(Data) of
         {ok, DomainId} ->
-            case nkdomain_user_obj:auth(SrvId, User, Auth) of
+            case nkdomain_user_obj:auth(User, Auth) of
                 {ok, UserId, _UserDomainId} ->
                     LoginMeta = maps:get(meta, Data, #{}),
                     TokenData1 = maps:with([session_id, local, remote], SessMeta),
                     TokenData2 = TokenData1#{login_meta => LoginMeta},
                     TokenOpts = maps:with([ttl], Data),
-                    nkdomain_user_obj:make_token(SrvId, DomainId, UserId, TokenOpts, TokenData2);
+                    nkdomain_user_obj:make_token(DomainId, UserId, TokenOpts, TokenData2);
                 {error, Error} ->
                     {error, Error}
             end;
@@ -117,8 +117,8 @@ token_login(#nkreq{srv_id=SrvId, data=Data, session_meta=SessMeta}) ->
 
 
 %% @doc
-check_token(Token, #nkreq{srv_id=SrvId}=Req) ->
-    case check_raw_token(SrvId, Token) of
+check_token(Token, Req) ->
+    case check_raw_token(Token) of
         {ok, UserId, DomainId, LoginMeta, SessId} ->
             Req2 = add_meta(login_meta, LoginMeta, Req),
             Req3 = add_id(?DOMAIN_DOMAIN, DomainId, Req2),
@@ -134,8 +134,8 @@ check_token(Token, #nkreq{srv_id=SrvId}=Req) ->
 
 
 %% @doc
-check_raw_token(SrvId, Token) ->
-    case nkdomain:get_obj(SrvId, Token) of
+check_raw_token(Token) ->
+    case nkdomain:get_obj(Token) of
         {ok, #{type:=?DOMAIN_SESSION, ?DOMAIN_SESSION:=Data}=Obj} ->
             #{domain_id:=DomainId, created_by:=UserId} = Obj,
             LoginMeta = maps:get(login_meta, Data, #{}),
@@ -154,7 +154,7 @@ check_raw_token(SrvId, Token) ->
                 Bin when is_binary(Bin) ->
                     case binary:split(Bin, <<":">>) of
                         [Login, Pass] ->
-                            case nkdomain_user_obj:auth(SrvId, Login, #{password=>Pass}) of
+                            case nkdomain_user_obj:auth(Login, #{password=>Pass}) of
                                 {ok, UserId, DomainId} ->
                                     {ok, UserId, DomainId, #{}, <<>>};
                                 {error, Error} ->
@@ -170,22 +170,22 @@ check_raw_token(SrvId, Token) ->
 
 
 %% @private
-get_domain(SrvId, #{domain_id:=Domain}) ->
-    load_domain(SrvId, Domain);
+get_domain(#{domain_id:=Domain}) ->
+    load_domain(Domain);
 
-get_domain(SrvId, #{id:=User}) ->
-    case nkdomain_lib:find(SrvId, User) of
+get_domain(#{id:=User}) ->
+    case nkdomain_lib:find(User) of
         #obj_id_ext{path=Path} ->
             {ok, Domain, _} = nkdomain_util:get_parts(?DOMAIN_USER, Path),
-            load_domain(SrvId, Domain);
+            load_domain(Domain);
         {error, Error} ->
             {error, Error}
     end.
 
 
 %% @private
-load_domain(SrvId, Domain) ->
-    case nkdomain_lib:find(SrvId, Domain) of
+load_domain(Domain) ->
+    case nkdomain_lib:find(Domain) of
         #obj_id_ext{type = ?DOMAIN_DOMAIN, obj_id=DomainId} ->
             {ok, DomainId};
         {error, _} ->

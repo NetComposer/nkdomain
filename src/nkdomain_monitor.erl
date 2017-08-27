@@ -141,12 +141,12 @@ load_obj(Id, Obj, Monitor) ->
     {ok, nkdomain:obj_id(), pid(), monitor()} |
     {error, Error} when Error :: object_not_found | member_already_present | term().
 
-add_obj(Id, Obj, #obj_monitor{srv_id=SrvId, regtag=RegTag}=Monitor) ->
+add_obj(Id, Obj, #obj_monitor{regtag=RegTag}=Monitor) ->
     case get_obj(Id, Monitor) of
         {enabled, _, _}  ->
             {error, object_already_exists};
         _ ->
-            case nkdomain_lib:load(SrvId, Id, #{register=>{RegTag, self()}}) of
+            case nkdomain_lib:load(Id, #{register=>{RegTag, self()}}) of
                 #obj_id_ext{obj_id=ObjId, pid=Pid} ->
                     case do_add_enabled(ObjId, Obj, Pid, Monitor) of
                         {ok, Monitor2} ->
@@ -164,13 +164,13 @@ add_obj(Id, Obj, #obj_monitor{srv_id=SrvId, regtag=RegTag}=Monitor) ->
 -spec rm_obj(nkobject:id(), monitor()) ->
     {ok, monitor()} | {error, member_not_found|object_not_found|term()}.
 
-rm_obj(Id, #obj_monitor{srv_id=SrvId, objs=Objs}=Monitor) ->
+rm_obj(Id, #obj_monitor{objs=Objs}=Monitor) ->
     Id2 = nklib_util:to_binary(Id),
     case maps:find(Id2, Objs) of
         {ok, _} ->
             {ok, do_remove(Id2, Monitor)};
         error ->
-            case nkdomain_lib:find(SrvId, Id2) of
+            case nkdomain_lib:find(Id2) of
                 #obj_id_ext{obj_id=ObjId} ->
                     case maps:find(ObjId, Objs) of
                         {ok, _} ->

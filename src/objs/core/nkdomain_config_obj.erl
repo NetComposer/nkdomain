@@ -24,7 +24,7 @@
 -behavior(nkdomain_obj).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([find_configs/3]).
+-export([find_configs/2]).
 -export([object_info/0, object_es_mapping/0, object_parse/3,
          object_api_syntax/2, object_api_cmd/2]).
 -export([object_admin_info/0]).
@@ -46,8 +46,8 @@
 
 
 %% @doc
-find_configs(Srv, SubType, Parent) ->
-    case nkdomain_lib:load(Srv, Parent) of
+find_configs(SubType, Parent) ->
+    case nkdomain_lib:load(Parent) of
         #obj_id_ext{obj_id=DomainId} ->
             Search = #{
                 filters => #{
@@ -58,7 +58,7 @@ find_configs(Srv, SubType, Parent) ->
                 fields => [created_time, ?DOMAIN_CONFIG],
                 sort => [#{created_time => #{order => desc}}]
             },
-            case nkdomain:search(Srv, Search) of
+            case nkdomain:search(Search) of
                 {ok, _N, Data, _Meta} ->
                     Data2 = lists:map(
                         fun(#{<<"obj_id">>:=ObjId, <<"created_time">>:=Time, ?DOMAIN_CONFIG:=Config}) ->

@@ -24,11 +24,11 @@
 -behavior(nkdomain_obj).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([start/4]).
+-export([start/3]).
 -export([object_info/0, object_es_mapping/0, object_parse/3, object_api_syntax/2, object_api_cmd/2,
          object_init/1, object_stop/2, object_event/2]).
 -export([object_admin_info/0]).
--export([object_check_active/2]).
+-export([object_check_active/1]).
 
 -include("nkdomain.hrl").
 -include("nkdomain_debug.hrl").
@@ -56,10 +56,10 @@
 %% ===================================================================
 
 %% @doc Creates a new session
--spec start(nkservice:id(), nkdomain:id(), nkdomain:id(), create_opts()) ->
+-spec start(nkdomain:id(), nkdomain:id(), create_opts()) ->
     {ok, nkdomain:obj_id(), pid()} | {error, term()}.
 
-start(SrvId, DomainId, UserId, Opts) ->
+start(DomainId, UserId, Opts) ->
         Obj1 = #{
             type => ?DOMAIN_SESSION,
             domain_id => DomainId,
@@ -75,7 +75,7 @@ start(SrvId, DomainId, UserId, Opts) ->
                 Obj1
         end,
         CreateOpts = maps:with([session_link], Opts),
-        case nkdomain_obj_make:create(SrvId, Obj2, CreateOpts) of
+        case nkdomain_obj_make:create(Obj2, CreateOpts) of
             {ok, #obj_id_ext{obj_id=SessId2, pid=Pid}, _} ->
                 {ok, SessId2, Pid};
             {error, Error} ->
@@ -127,11 +127,11 @@ object_parse(_SrvId, _Mode, _Obj) ->
 
 
 %% @private
-object_init(#?STATE{srv_id=SrvId, domain_id=DomainId, id=Id, obj=Obj}=State) ->
+object_init(#?STATE{domain_id=DomainId, id=Id, obj=Obj}=State) ->
     %% TODO Link again if moved process
     #obj_id_ext{obj_id=SessId} = Id,
     #{created_by:=UserId} = Obj,
-    ok = nkdomain_user_obj:register_session(SrvId, UserId, DomainId, ?DOMAIN_SESSION, SessId, #{}),
+    ok = nkdomain_user_obj:register_session(UserId, DomainId, ?DOMAIN_SESSION, SessId, #{}),
     State2 = nkdomain_obj_util:link_to_session_server(?MODULE, State),
     {ok, State2}.
 
@@ -194,8 +194,8 @@ object_api_cmd(Cmd, Req) ->
 
 
 %% @private
-object_event({enabled, false}, #?STATE{srv_id=SrvId}=State) ->
-    nkdomain:unload(SrvId, self(), session_is_disabled),
+object_event({enabled, false}, State) ->
+    nkdomain:unload(self(), session_is_disabled),
     {ok, State};
 
 object_event(_Event, State) ->
@@ -211,13 +211,13 @@ object_event(_Event, State) ->
 
 %% @private
 %% It will not find aliases
-object_check_active(SrvId, Id) ->
+object_check_active(Id) ->
     case nkdomain_lib:find_loaded(Id) of
         #obj_id_ext{} ->
             true;
         _ ->
             lager:notice("NkDOMAIN: removing stalle active object ~s", [Id]),
-            SrvId:object_db_delete(SrvId, Id),
+            ?CALL_SRV(object_db_delete, [Id]),
             false
     end.
 

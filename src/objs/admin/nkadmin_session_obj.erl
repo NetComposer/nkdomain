@@ -23,8 +23,8 @@
 -behavior(nkdomain_obj).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([start/4]).
--export([switch_domain/4, element_action/5, get_data/4]).
+-export([start/3]).
+-export([switch_domain/3, element_action/4, get_data/3]).
 -export([find_all/0]).
 -export([object_info/0, object_parse/3, object_es_mapping/0,
          object_api_syntax/2, object_api_cmd/2]).
@@ -66,10 +66,10 @@
 
 
 %% @doc Creates a new session
--spec start(nkservice:id(), nkdomain:id(), nkdomain:id(), start_opts()) ->
+-spec start(nkdomain:id(), nkdomain:id(), start_opts()) ->
     {ok, nkdomain:obj_id(), pid()} | {error, term()}.
 
-start(SrvId, DomainId, UserId, Opts) ->
+start(DomainId, UserId, Opts) ->
     Obj = #{
         type => ?DOMAIN_ADMIN_SESSION,
         domain_id => DomainId,
@@ -80,15 +80,15 @@ start(SrvId, DomainId, UserId, Opts) ->
     },
     Opts2 = maps:with([session_link, session_events], Opts),
     Opts3 = Opts2#{meta => maps:with([languaje, http_auth_id], Opts)},
-    case nkdomain_obj_make:create(SrvId, Obj, Opts3) of
+    case nkdomain_obj_make:create(Obj, Opts3) of
         {ok, #obj_id_ext{obj_id=SessId, pid=Pid}, _} ->
             AdminDomainId = maps:get(domain_id, Opts, DomainId),
             Url = maps:get(url, Opts, <<>>),
-            case switch_domain(any, Pid, AdminDomainId, Url) of
+            case switch_domain(Pid, AdminDomainId, Url) of
                 {ok, Updates} ->
                     {ok, SessId, Pid, Updates};
                 {error, Error} ->
-                    nkdomain:unload(any, Pid, start_error),
+                    nkdomain:unload(Pid, start_error),
                     {error, Error}
             end;
         {error, Error} ->
@@ -97,23 +97,23 @@ start(SrvId, DomainId, UserId, Opts) ->
 
 
 %% @doc
-switch_domain(SrvId, Id, DomainId, Url) ->
-    nkdomain_obj:sync_op(SrvId, Id, {?MODULE, switch_domain, DomainId, Url}).
+switch_domain(Id, DomainId, Url) ->
+    nkdomain_obj:sync_op(Id, {?MODULE, switch_domain, DomainId, Url}).
 
 
 %% @doc
-element_action(SrvId, Id, ElementId, Action, Value) ->
-    nkdomain_obj:sync_op(SrvId, Id, {?MODULE, element_action, ElementId, Action, Value}).
+element_action(Id, ElementId, Action, Value) ->
+    nkdomain_obj:sync_op(Id, {?MODULE, element_action, ElementId, Action, Value}).
 
 
 %% @doc
-get_data(SrvId, Id, ElementId, Data) ->
-    nkdomain_obj:sync_op(SrvId, Id, {?MODULE, get_data, ElementId, Data}).
+get_data(Id, ElementId, Data) ->
+    nkdomain_obj:sync_op(Id, {?MODULE, get_data, ElementId, Data}).
 
 
 %% @private
 find_all() ->
-    nkdomain_domain_obj:search_all(root, root, #{filters=>#{type=>?DOMAIN_ADMIN_SESSION}}).
+    nkdomain_domain_obj:search_all(root, #{filters=>#{type=>?DOMAIN_ADMIN_SESSION}}).
 
 
 
@@ -183,7 +183,7 @@ object_init(#?STATE{srv_id=SrvId, domain_id=DomainId, id=Id, obj=Obj, meta=Meta}
         user_id = UserId,
         language = maps:get(language, Meta, <<"en">>)
     },
-    ok = nkdomain_user_obj:register_session(SrvId, UserId, DomainId, ?DOMAIN_ADMIN_SESSION, SessId, #{}),
+    ok = nkdomain_user_obj:register_session(UserId, DomainId, ?DOMAIN_ADMIN_SESSION, SessId, #{}),
     State2 = nkdomain_obj_util:link_to_session_server(?MODULE, State),
     State3 = State2#?STATE{meta=#{}, session=Session},
     {ok, State3}.
@@ -285,9 +285,9 @@ object_handle_info(_Info, _State) ->
 
 %% @private
 do_switch_domain(Domain, Url, #?STATE{srv_id=SrvId, session=Session}=State) ->
-    case nkdomain_lib:load(SrvId, Domain) of
+    case nkdomain_lib:load(Domain) of
         #obj_id_ext{obj_id=DomainId, path=Path, type= ?DOMAIN_DOMAIN} ->
-            case nkdomain_domain_obj:search_all_types(SrvId, DomainId, #{}) of
+            case nkdomain_domain_obj:search_all_types(DomainId, #{}) of
                 {ok, _, TypeList, _Meta} ->
                     Url2 = case Url of
                         <<"#", U/binary>> -> U;
@@ -332,7 +332,7 @@ do_get_domain(SrvId, Session, State) ->
 
 %% @private
 do_get_domain_frame(SrvId, Updates, Session, State) ->
-    case SrvId:admin_get_frame(Session) of
+    case apply(SrvId, admin_get_frame, [Session]) of
         {ok, Frame, Session2} ->
             do_get_domain_tree(SrvId, [Frame|Updates], Session2, State);
         {error, Error, Session2} ->
@@ -342,7 +342,7 @@ do_get_domain_frame(SrvId, Updates, Session, State) ->
 
 %% @private
 do_get_domain_tree(SrvId, Updates, Session, State) ->
-    case SrvId:admin_get_tree(Session) of
+    case apply(SrvId, admin_get_tree, [Session]) of
         {ok, Tree, Session2} ->
             do_get_domain_detail(SrvId, [Tree|Updates], Session2, State);
         {error, Error, Session2} ->
@@ -354,7 +354,7 @@ do_get_domain_detail(SrvId, Updates, Session, State) ->
     #admin_session{detail_url=Url} = Session,
     case find_url(Url, Session) of
         {ok, Parts} ->
-            case SrvId:admin_element_action(Parts, selected, <<>>, Updates, Session) of
+            case apply(SrvId, admin_element_action, [Parts, selected, <<>>, Updates, Session]) of
                 {ok, Updates2, Session2} ->
                     {ok, Updates2, Session2};
                 {error, Error, Session2} ->
@@ -371,7 +371,7 @@ do_get_domain_detail(SrvId, Updates, Session, State) ->
 
 %% @private Event from subscribed object
 do_event(Event, #?STATE{srv_id=SrvId, session=Session}=State) ->
-    {ok, UpdList, Session2} = SrvId:admin_event(Event, [], Session),
+    {ok, UpdList, Session2} = apply(SrvId, admin_event, [Event, [], Session]),
     State2 = State#?STATE{session=Session2},
     case UpdList of
         [] ->
@@ -391,7 +391,7 @@ send_event(Event, State) ->
 
 do_element_action(Parts, Action, Value, State) ->
     #?STATE{srv_id=SrvId, session=Session} = State,
-    case SrvId:admin_element_action(Parts, Action, Value, [], Session) of
+    case apply(SrvId, admin_element_action, [Parts, Action, Value, [], Session]) of
         {ok, UpdList, Session2} ->
             State2 = State#?STATE{session=Session2},
             case UpdList of
@@ -408,7 +408,7 @@ do_element_action(Parts, Action, Value, State) ->
 %% @private
 do_get_data(ElementId, Spec, State) ->
     #?STATE{srv_id=SrvId, session=Session} = State,
-    case SrvId:admin_get_data(ElementId, Spec, Session) of
+    case apply(SrvId, admin_get_data, [ElementId, Spec, Session]) of
         {ok, Reply, Session2} ->
             State2 = State#?STATE{session=Session2},
             {ok, Reply, State2};
@@ -419,18 +419,18 @@ do_get_data(ElementId, Spec, State) ->
 
 
 %% @private
-find_url(<<"_id/", ObjId/binary>>, #admin_session{srv_id=SrvId}=Session) ->
-    case nkdomain_lib:find(SrvId, ObjId) of
+find_url(<<"_id/", ObjId/binary>>, Session) ->
+    case nkdomain_lib:find(ObjId) of
         #obj_id_ext{path=Path} ->
             find_url(Path, Session);
         {error, _Error} ->
             {error, url_unknown}
     end;
 
-find_url(Url, #admin_session{srv_id=SrvId}=Session) ->
+find_url(Url, Session) ->
     case nkadmin_util:get_url_key(Url, Session) of
         undefined ->
-            case nkdomain_lib:find(SrvId, Url) of
+            case nkdomain_lib:find(Url) of
                 #obj_id_ext{type=Type, path=Path} ->
                     {ok, [<<"obj">>, Type, Path]};
                 {error, _} ->

@@ -36,7 +36,7 @@
 api(<<"create">>, Type, #nkreq{data=Data, srv_id=SrvId, user_id=UserId}=Req) ->
     case nkdomain_api_util:get_id(?DOMAIN_DOMAIN, domain_id, Data, Req) of
         {ok, DomainId} ->
-            case SrvId:object_create(SrvId, DomainId, Type, UserId, Data) of
+            case apply(nkroot, object_create, [SrvId, DomainId, Type, UserId, Data]) of
                 {ok, ObjIdExt, Unknown} ->
                     #obj_id_ext{obj_id=ObjId, path=Path} = ObjIdExt,
                     Req2 = nkservice_api:add_unknown(Unknown, Req),
@@ -48,34 +48,34 @@ api(<<"create">>, Type, #nkreq{data=Data, srv_id=SrvId, user_id=UserId}=Req) ->
             {error, Error}
     end;
 
-api(<<"get">>, Type, #nkreq{data=Data, srv_id=SrvId}=Req) ->
+api(<<"get">>, Type, #nkreq{data=Data}=Req) ->
     case nkdomain_api_util:get_id(Type, Data, Req) of
         {ok, Id} ->
-            nkdomain:get_obj(SrvId, Id);
+            nkdomain:get_obj(Id);
         {error, Error} ->
             {error, Error}
     end;
 
-api(<<"get_info">>, Type, #nkreq{data=Data, srv_id=SrvId}=Req) ->
+api(<<"get_info">>, Type, #nkreq{data=Data}=Req) ->
     case nkdomain_api_util:get_id(Type, Data, Req) of
         {ok, Id} ->
-            nkdomain:get_info(SrvId, Id);
+            nkdomain:get_info(Id);
         {error, Error} ->
             {error, Error}
     end;
 
-api(<<"get_name">>, Type, #nkreq{data=Data, srv_id=SrvId}=Req) ->
+api(<<"get_name">>, Type, #nkreq{data=Data}=Req) ->
     case nkdomain_api_util:get_id(Type, Data, Req) of
         {ok, Id} ->
-            nkdomain:get_name(SrvId, Id);
+            nkdomain:get_name(Id);
         {error, Error} ->
             {error, Error}
     end;
 
-api(<<"stop">>, Type, #nkreq{data=Data, srv_id=SrvId}=Req) ->
+api(<<"stop">>, Type, #nkreq{data=Data}=Req) ->
     case nkdomain_api_util:get_id(Type, Data, Req) of
         {ok, Id} ->
-            case nkdomain:unload(SrvId, Id, user_stop) of
+            case nkdomain:unload(Id, user_stop) of
                 ok ->
                     {ok, #{}};
                 {error, Error} ->
@@ -85,10 +85,10 @@ api(<<"stop">>, Type, #nkreq{data=Data, srv_id=SrvId}=Req) ->
             {error, Error}
     end;
 
-api(<<"delete">>, Type, #nkreq{data=Data, srv_id=SrvId}=Req) ->
+api(<<"delete">>, Type, #nkreq{data=Data}=Req) ->
     case nkdomain_api_util:get_id(Type, Data, Req) of
         {ok, Id} ->
-            case nkdomain:delete(SrvId, Id) of
+            case nkdomain:delete(Id) of
                 ok ->
                     {ok, #{}};
                 {error, Error} ->
@@ -98,10 +98,10 @@ api(<<"delete">>, Type, #nkreq{data=Data, srv_id=SrvId}=Req) ->
             {error, Error}
     end;
 
-api(<<"update">>, Type, #nkreq{data=Data, srv_id=SrvId}=Req) ->
+api(<<"update">>, Type, #nkreq{data=Data}=Req) ->
     case nkdomain_api_util:get_id(Type, Data, Req) of
         {ok, Id} ->
-            case nkdomain:update(SrvId, Id, maps:remove(id, Data)) of
+            case nkdomain:update(Id, maps:remove(id, Data)) of
                 {ok, Unknown} ->
                     Req2 = nkservice_api:add_unknown(Unknown, Req),
                     {ok, #{}, Req2};
@@ -112,10 +112,10 @@ api(<<"update">>, Type, #nkreq{data=Data, srv_id=SrvId}=Req) ->
             {error, Error}
     end;
 
-api(<<"update_obj_name">>, Type, #nkreq{data=#{obj_name:=ObjName}=Data, srv_id=SrvId}=Req) ->
+api(<<"update_obj_name">>, Type, #nkreq{data=#{obj_name:=ObjName}=Data}=Req) ->
     case nkdomain_api_util:get_id(Type, Data, Req) of
         {ok, Id} ->
-            case nkdomain:update_name(SrvId, Id, ObjName) of
+            case nkdomain:update_name(Id, ObjName) of
                 {ok, ObjName2} ->
                     {ok, #{obj_name=>ObjName2}, Req};
                 {error, Error} ->
@@ -125,10 +125,10 @@ api(<<"update_obj_name">>, Type, #nkreq{data=#{obj_name:=ObjName}=Data, srv_id=S
             {error, Error}
     end;
 
-api(<<"enable">>, Type, #nkreq{data=#{enable:=Enable}=Data, srv_id=SrvId}=Req) ->
+api(<<"enable">>, Type, #nkreq{data=#{enable:=Enable}=Data}=Req) ->
     case nkdomain_api_util:get_id(Type, Data, Req) of
         {ok, Id} ->
-            case nkdomain:enable(SrvId, Id, Enable) of
+            case nkdomain:enable(Id, Enable) of
                 ok ->
                     {ok, #{}};
                 {error, Error} ->
@@ -154,13 +154,13 @@ api(<<"find">>, Type, #nkreq{data=Data, srv_id=SrvId}=Req) ->
             {error, Error}
     end;
 
-api(<<"find_all">>, Type, #nkreq{data=Data, srv_id=SrvId}=Req) ->
+api(<<"find_all">>, Type, #nkreq{data=Data}=Req) ->
     case nkdomain_api_util:get_id(?DOMAIN_DOMAIN, domain_id, Data, Req) of
         {ok, DomainId} ->
             Filters1 = maps:get(filters, Data, #{}),
             Filters2 = Filters1#{type=>Type},
             Data2 = Data#{filters=>Filters2},
-            case nkdomain_domain_obj:search_all(SrvId, DomainId, Data2) of
+            case nkdomain_domain_obj:search_all(DomainId, Data2) of
                 {ok, Total, List, _Meta} ->
                     {ok, #{<<"total">>=>Total, <<"data">>=>List}};
                 {error, Error} ->

@@ -130,10 +130,10 @@ get_provider(SrvId, _Obj) ->
 
 
 %% @private
-do_get_provider(SrvId, ProviderId) ->
-    case nkdomain_lib:load(SrvId, ProviderId) of
+do_get_provider(_SrvId, ProviderId) ->
+    case nkdomain_lib:load(ProviderId) of
         #obj_id_ext{obj_id=ProviderObjId, type = ?DOMAIN_MAIL_PROVIDER} ->
-            case nkdomain:get_obj(SrvId, ProviderObjId) of
+            case nkdomain:get_obj(ProviderObjId) of
                 {ok, #{?DOMAIN_MAIL_PROVIDER:=Data}} ->
                     {ok, ProviderObjId, Data};
                 _ ->

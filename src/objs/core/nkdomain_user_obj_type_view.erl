@@ -123,8 +123,8 @@ view(Session) ->
 
 
 %% @private
-get_domains(#admin_session{srv_id=SrvId, domain_id=DomainId}) ->
-    case nkdomain:search_agg_field(SrvId, DomainId, <<"domain_id">>, #{size=>50}, true) of
+get_domains(#admin_session{domain_id=DomainId}) ->
+    case nkdomain:search_agg_field(DomainId, <<"domain_id">>, #{size=>50}, true) of
         {ok, _N, Data, #{agg_sum_other:=SumOther}} ->
             Base = case SumOther of
                 0 ->
@@ -134,7 +134,7 @@ get_domains(#admin_session{srv_id=SrvId, domain_id=DomainId}) ->
             end,
             Data2 = lists:foldl(
                 fun({ObjId, _Num}, Acc) ->
-                    case nkdomain:get_name(SrvId, ObjId) of
+                    case nkdomain:get_name(ObjId) of
                         {ok, #{name:=Name}} ->
                             [#{ id => ObjId, value => Name} | Acc];
                         _ ->
@@ -150,8 +150,8 @@ get_domains(#admin_session{srv_id=SrvId, domain_id=DomainId}) ->
 
 
 %% @private
-get_creators(#admin_session{srv_id=SrvId, domain_id=DomainId}) ->
-    case nkdomain:search_agg_field(SrvId, DomainId, <<"created_by">>, #{size=>50}, true) of
+get_creators(#admin_session{domain_id=DomainId}) ->
+    case nkdomain:search_agg_field(DomainId, <<"created_by">>, #{size=>50}, true) of
         {ok, _N, Data, #{agg_sum_other:=SumOther}} ->
             Base = case SumOther of
                 0 ->
@@ -161,7 +161,7 @@ get_creators(#admin_session{srv_id=SrvId, domain_id=DomainId}) ->
             end,
             Data2 = lists:foldl(
                 fun({ObjId, _Num}, Acc) ->
-                    case nkdomain:get_name(SrvId, ObjId) of
+                    case nkdomain:get_name(ObjId) of
                         {ok, #{name:=Name}} ->
                             [#{ id => ObjId, value => Name} | Acc];
                         _ ->

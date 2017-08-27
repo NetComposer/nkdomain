@@ -46,11 +46,11 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -behaviour(gen_server).
 
--export([sync_op/3, sync_op/4, async_op/3]).
--export([start/4, object_deleted/1, conflict_detected/2]).
+-export([sync_op/2, sync_op/3, async_op/2]).
+-export([start/3, object_deleted/1, conflict_detected/2]).
 -export([init/1, terminate/2, code_change/3, handle_call/3,  handle_cast/2, handle_info/2]).
 -export([links_add/3, links_remove/3, links_iter/4]).
--export([get_all/0, unload_all/0, get_state/2, get_time/2]).
+-export([get_all/0, unload_all/0, get_state/1, get_time/1]).
 -export([do_update_name/2, do_stop/2]).
 -export_type([event/0, status/0]).
 
@@ -166,23 +166,11 @@
 
 
 %% @private
--spec start(nkservice:id(), nkdomain:obj(), loaded|created, start_opts()) ->
+-spec start(nkdomain:obj(), loaded|created, start_opts()) ->
     {ok, pid()} | {error, term()}.
 
-%%start(SrvId, #{obj_id:=ObjId}=Obj, Op, Meta) ->
-%%    case nkdomain_lib:get_node(ObjId) of
-%%        {ok, Node} ->
-%%            case rpc:call(Node, gen_server, start, [?MODULE, {Op, SrvId, Obj, Meta}, []]) of
-%%                {ok, Pid} -> {ok, Pid};
-%%                {error, {already_registered, Pid}} -> {ok, Pid};
-%%                {error, Error} -> {error, Error}
-%%            end;
-%%        {error, Error} ->
-%%            {error, Error}
-%%    end.
-
-start(SrvId, Obj, Op, Meta) ->
-    case gen_server:start(?MODULE, {Op, SrvId, Obj, Meta}, []) of
+start(Obj, Op, Meta) ->
+    case gen_server:start(?MODULE, {Op, Obj, Meta}, []) of
         {ok, Pid} -> {ok, Pid};
         {error, {already_registered, Pid}} -> {ok, Pid};
         {error, Error} -> {error, Error}
@@ -190,36 +178,36 @@ start(SrvId, Obj, Op, Meta) ->
 
 
 %% @doc
--spec sync_op(nkservice:id(), nkdomain:id()|pid(), sync_op()) ->
+-spec sync_op(nkdomain:id()|pid(), sync_op()) ->
     term() | {error, timeout|process_not_found|object_not_found|term()}.
 
-sync_op(SrvId, IdOrPid, Op) ->
-    sync_op(SrvId, IdOrPid, Op, ?DEF_SYNC_CALL).
+sync_op(IdOrPid, Op) ->
+    sync_op(IdOrPid, Op, ?DEF_SYNC_CALL).
 
 
 %% @doc
--spec sync_op(nkservice:id(), pid()|nkservice:id(), sync_op(), timeout()) ->
+-spec sync_op(nkomain:id()|pid(), sync_op(), timeout()) ->
     term() | {error, timeout|process_not_found|object_not_found|term()}.
 
-sync_op(_SrvId, Pid, Op, Timeout) when is_pid(Pid) ->
+sync_op(Pid, Op, Timeout) when is_pid(Pid) ->
     nkservice_util:call(Pid, {nkdomain_sync_op, Op}, Timeout);
 
-sync_op(SrvId, Id, Op, Timeout) ->
-    sync_op(SrvId, Id, Op, Timeout, 5).
+sync_op(Id, Op, Timeout) ->
+    sync_op(Id, Op, Timeout, 5).
 
 
 %% @private
-sync_op(_SrvId, _Id, _Op, _Timeout, 0) ->
+sync_op(_Id, _Op, _Timeout, 0) ->
     {error, process_not_found};
 
-sync_op(SrvId, Id, Op, Timeout, Tries) ->
-    case nkdomain_lib:load(SrvId, Id) of
+sync_op(Id, Op, Timeout, Tries) ->
+    case nkdomain_lib:load(Id) of
         #obj_id_ext{pid=Pid} when is_pid(Pid) ->
-            case sync_op(SrvId, Pid, Op, Timeout) of
+            case sync_op(Pid, Op, Timeout) of
                 {error, process_not_found} ->
                     lager:notice("NkDOMAIN SynOP failed, retrying..."),
                     timer:sleep(250),
-                    sync_op(SrvId, Id, Op, Timeout, Tries-1);
+                    sync_op(Id, Op, Timeout, Tries-1);
                 Other ->
                     Other
             end;
@@ -229,16 +217,16 @@ sync_op(SrvId, Id, Op, Timeout, Tries) ->
 
 
 %% @doc
--spec async_op(nkservice:id(), nkdomain:id()|pid(), async_op()) ->
+-spec async_op(nkdomain:id()|pid(), async_op()) ->
     ok | {error, process_not_found|object_not_found|term()}.
 
-async_op(_SrvId, Pid, Op) when is_pid(Pid) ->
+async_op(Pid, Op) when is_pid(Pid) ->
     gen_server:cast(Pid, {nkdomain_async_op, Op});
 
-async_op(SrvId, Id, Op) ->
-    case nkdomain_lib:load(SrvId, Id) of
+async_op(Id, Op) ->
+    case nkdomain_lib:load(Id) of
         #obj_id_ext{pid=Pid} when is_pid(Pid) ->
-            async_op(SrvId, Pid, Op);
+            async_op(Pid, Op);
         {error, Error} ->
             {error, Error}
     end.
@@ -250,13 +238,13 @@ object_deleted(Pid) ->
 
 
 %% @private
-get_state(SrvId, Id) ->
-    sync_op(SrvId, Id, get_state).
+get_state(Id) ->
+    sync_op(Id, get_state).
 
 
 %% @private
-get_time(SrvId, Id) ->
-    sync_op(SrvId, Id, get_time).
+get_time(Id) ->
+    sync_op(Id, get_time).
 
 
 %% @private
@@ -271,14 +259,14 @@ conflict_detected(Pid, WinnerPid) ->
 
 get_all() ->
     [
-        {Type, ObjId, Path, Pid} ||
-        {{Type, ObjId, Path}, Pid} <- nklib_proc:values(?MODULE)
+        {SrvId, Type, ObjId, Path, Pid} ||
+        {{SrvId, Type, ObjId, Path}, Pid} <- nklib_proc:values(?MODULE)
     ].
 
 %% @private
 unload_all() ->
     lists:foreach(
-        fun({_Module, _ObjId, _Path, Pid}) -> async_op(none, Pid, {unload, normal}) end,
+        fun({_Module, _ObjId, _Path, Pid}) -> async_op(Pid, {unload, normal}) end,
         get_all()).
 
 
@@ -293,6 +281,7 @@ unload_all() ->
 
 init({Op, SrvId, Obj, Meta}) when Op==loaded; Op==created ->
     #{
+        srv_id := SrvId,
         type := Type,
         obj_id := ObjId,
         path := Path,
@@ -551,7 +540,7 @@ handle_info(Msg, State) ->
     {ok, state()}.
 
 code_change(OldVsn, #?STATE{srv_id=SrvId}=State, Extra) ->
-    SrvId:object_code_change(OldVsn, State, Extra).
+    apply(SrvId, object_code_change, [OldVsn, State, Extra]).
 
 
 %% @private
@@ -933,14 +922,14 @@ do_rm_child(ObjId, #?STATE{childs=Childs}=State) ->
 
 
 %% @private
-do_update_name(ObjName, #?STATE{srv_id=SrvId, id=Id, obj=Obj}=State) ->
+do_update_name(ObjName, #?STATE{id=Id, obj=Obj}=State) ->
     #obj_id_ext{type=Type, path=Path1} = Id,
     case nkdomain_util:get_parts(Type, Path1) of
         {ok, _Domain, ObjName} ->
             {ok, State};
         {ok, Domain, _} ->
             Path2 = nkdomain_util:make_path(Domain, Type, ObjName),
-            case nkdomain_lib:find(SrvId, Path2) of
+            case nkdomain_lib:find(Path2) of
                 {error, object_not_found} ->
                     Id2 = Id#obj_id_ext{path=Path2, obj_name=ObjName},
                     Update = #{
@@ -976,13 +965,13 @@ do_update_name(ObjName, #?STATE{srv_id=SrvId, id=Id, obj=Obj}=State) ->
 do_update(Update, #?STATE{id=Id, obj=Obj}=State) ->
     #obj_id_ext{srv_id=SrvId, type=Type} = Id,
     Update2 = Update#{type=>Type},
-    case SrvId:object_parse(SrvId, update, Update2) of
+    case apply(SrvId, object_parse, [update, Update2]) of
         {ok, Update3, UnknownFields} ->
             case ?ADD_TO_OBJ_DEEP(Update3, Obj) of
                 Obj ->
                     {ok, UnknownFields, State};
                 Obj3 ->
-                    case SrvId:object_parse(SrvId, load, Obj3) of
+                    case apply(SrvId, object_parse, [load, Obj3]) of
                         {ok, Obj4, _} ->
                             Time = nkdomain_util:timestamp(),
                             Obj5 = ?ADD_TO_OBJ(updated_time, Time, Obj4),
@@ -1021,7 +1010,7 @@ do_enabled(Enabled, #?STATE{is_enabled=Enabled}=State) ->
 do_enabled(Enabled, #?STATE{object_info=Info}=State) ->
     case Enabled==false andalso Info of
         #{stop_after_disabled:=true} ->
-            async_op(any, self(), {unload, object_is_disabled});
+            async_op(self(), {unload, object_is_disabled});
         _ ->
             ok
     end,
@@ -1090,6 +1079,7 @@ noreply(#?STATE{}=State) ->
 
 
 %% @private
+%% Will call the service's functions
 handle(Fun, Args, #?STATE{srv_id=SrvId}=State) ->
     apply(SrvId, Fun, Args++[State]).
 

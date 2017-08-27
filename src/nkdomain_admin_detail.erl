@@ -47,8 +47,7 @@ element_action([?TYPE_VIEW, Type], updated, Value, Updates, Session) ->
     {ok, Mod} = get_type_view_mod(Type, Session),
     case Mod:element_updated(ObjId, ObjValue, Session) of
         {ok, Update} ->
-            #admin_session{srv_id=SrvId} = Session,
-            case nkdomain:update(SrvId, ObjId, Update) of
+            case nkdomain:update(ObjId, Update) of
                 {ok, _} ->
                     {ok, Updates, Session};
                 {error, Error} ->
@@ -60,8 +59,7 @@ element_action([?TYPE_VIEW, Type], updated, Value, Updates, Session) ->
 element_action([<<"obj">>, Type, Path], selected, _Value, Updates, Session) ->
     case get_obj_view_mod(Type, Session) of
         {ok, Mod} ->
-            #admin_session{srv_id=SrvId} = Session,
-            case nkdomain_lib:load(SrvId, Path) of
+            case nkdomain_lib:load(Path) of
                 #obj_id_ext{}=ObjIdExt ->
                     {Detail, Session2} = Mod:view(ObjIdExt, Session),
                     {Updates3, Session3} = nkadmin_util:update_detail(Path, Detail, Updates, Session2),

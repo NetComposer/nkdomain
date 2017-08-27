@@ -25,7 +25,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([http_post/4, http_get/2]).
--export([find/1, delete_all/1]).
+-export([find/0, delete_all/0]).
 -export([object_info/0, object_es_mapping/0, object_parse/3, object_api_syntax/2, object_api_cmd/2]).
 -export([object_admin_info/0]).
 
@@ -50,14 +50,14 @@ http_post(Domain, StoreId, Name, Req) ->
     Headers = nkservice_rest_http:get_headers(Req),
     Token = nklib_util:get_value(<<"x-netcomposer-auth">>, Headers, <<>>),
     SrvId = nkservice_rest_http:get_srv_id(Req),
-    case nkdomain_api_util:check_raw_token(SrvId, Token) of
+    case nkdomain_api_util:check_raw_token(Token) of
         {ok, UserId, _UserDomainId, _LoginMeta, _SessId} ->
             CT = nkservice_rest_http:get_ct(Req),
             File1 = #{
                 content_type => CT,
                 store_id => StoreId
             },
-            case get_store(SrvId, File1) of
+            case get_store(File1) of
                 {ok, StoreObjId, Store} ->
                     FileId = make_file_id(),
                     MaxSize = maps:get(max_file_size, Store, ?MAX_FILE_SIZE),
@@ -70,6 +70,7 @@ http_post(Domain, StoreId, Name, Req) ->
                                         size => byte_size(Body)
                                     },
                                     Obj = #{
+                                        srv_id => SrvId,
                                         obj_id => FileId,
                                         type => ?DOMAIN_FILE,
                                         domain_id => Domain,
@@ -77,7 +78,7 @@ http_post(Domain, StoreId, Name, Req) ->
                                         name => Name,
                                         ?DOMAIN_FILE => maps:merge(File2, FileMeta)
                                     },
-                                    nkdomain_obj_make:create(SrvId, Obj);
+                                    nkdomain_obj_make:create(Obj);
                                 {error, Error} ->
                                     {error, Error}
                             end;
@@ -103,12 +104,12 @@ http_get(FileId, Req) ->
             Auth0
     end,
     SrvId = nkservice_rest_http:get_srv_id(Req),
-    case nkdomain_api_util:check_raw_token(SrvId, Token) of
+    case nkdomain_api_util:check_raw_token(Token) of
         {ok, _UserId, _UserDomainId, _LoginMeta, _SessId} ->
-            case nkdomain:get_obj(SrvId, FileId) of
+            case nkdomain:get_obj(FileId) of
                 {ok, #{obj_id:=FileObjId, ?DOMAIN_FILE:=File}} ->
                     CT = maps:get(content_type, File),
-                    case get_store(SrvId, File) of
+                    case get_store(File) of
                         {ok, _StoreObjId, Store} ->
                             case nkfile:download(SrvId, Store, File#{name=>FileObjId}) of
                                 {ok, _, Body} ->
@@ -129,13 +130,13 @@ http_get(FileId, Req) ->
 
 
 %% @private
-find(SrvId) ->
-    nkdomain_domain_obj:search(SrvId, <<"root">>, #{filters=>#{type=>?DOMAIN_FILE}}).
+find() ->
+    nkdomain_domain_obj:search(<<"root">>, #{filters=>#{type=>?DOMAIN_FILE}}).
 
 
 %% @private
-delete_all(SrvId) ->
-    nkdomain:delete_all_childs_type(SrvId, <<"root">>, ?DOMAIN_FILE).
+delete_all() ->
+    nkdomain:delete_all_childs_type(<<"root">>, ?DOMAIN_FILE).
 
 
 
@@ -214,13 +215,14 @@ object_api_cmd(<<"create">>, #nkreq{srv_id=SrvId, data=Obj, user_id=UserId} = Re
     case nkdomain_api_util:get_id(?DOMAIN_DOMAIN, domain_id, Obj, Req) of
         {ok, DomainId} ->
             Obj2 = Obj#{
+                srv_id => SrvId,
                 type => ?DOMAIN_FILE,
                 created_by => UserId,
                 domain_id => DomainId
             },
             #{?DOMAIN_FILE:=#{body:=Body} = File} = Obj2,
             File2 = maps:remove(body, File#{size=>byte_size(Body)}),
-            case get_store(SrvId, File2) of
+            case get_store(File2) of
                 {ok, StoreId, Store} ->
                     FileId = make_file_id(),
                     case upload(SrvId, StoreId, Store, FileId, Body) of
@@ -230,7 +232,7 @@ object_api_cmd(<<"create">>, #nkreq{srv_id=SrvId, data=Obj, user_id=UserId} = Re
                                 obj_id => FileId,
                                 ?DOMAIN_FILE := maps:merge(File3, FileMeta)
                             },
-                            case nkdomain_obj_make:create(SrvId, Obj3) of
+                            case nkdomain_obj_make:create(Obj3) of
                                 {ok, ObjIdExt, Unknown} ->
                                     #obj_id_ext{obj_id=ObjId, path=Path} = ObjIdExt,
                                     Req2 = nkservice_api:add_unknown(Unknown, Req),
@@ -249,9 +251,9 @@ object_api_cmd(<<"create">>, #nkreq{srv_id=SrvId, data=Obj, user_id=UserId} = Re
     end;
 
 object_api_cmd(<<"get_inline">>, #nkreq{srv_id=SrvId, data=#{id:=Id}}) ->
-    case nkdomain:get_obj(SrvId, Id) of
+    case nkdomain:get_obj(Id) of
         {ok, #{obj_id:=FileId, ?DOMAIN_FILE:=File}=Obj} ->
-            case get_store(SrvId, File) of
+            case get_store(File) of
                 {ok, _StoreId, Store} ->
                     case download(SrvId, Store, FileId, File) of
                         {ok, Body} ->
@@ -300,23 +302,23 @@ download(SrvId, Store, FileId, File) ->
 
 
 %% @private
-get_store(SrvId, #{store_id:=StoreId}) when StoreId /= <<>> ->
-    do_get_store(SrvId, StoreId);
+get_store(#{store_id:=StoreId}) when StoreId /= <<>> ->
+    do_get_store(StoreId);
 
-get_store(SrvId, _Obj) ->
-    case SrvId:config_nkdomain() of
+get_store(_Obj) ->
+    case apply(nkroot, config_nkdomain, []) of
         #nkdomain_cache{file_store=StoreId} ->
-            do_get_store(SrvId, StoreId);
+            do_get_store(StoreId);
         _ ->
             {error, store_id_missing}
     end.
 
 
 %% @private
-do_get_store(SrvId, StoreId) ->
-    case nkdomain_lib:load(SrvId, StoreId) of
+do_get_store(StoreId) ->
+    case nkdomain_lib:load(StoreId) of
         #obj_id_ext{obj_id=StoreObjId, type = ?DOMAIN_FILE_STORE} ->
-            case nkdomain:get_obj(SrvId, StoreObjId) of
+            case nkdomain:get_obj(StoreObjId) of
                 {ok, #{?DOMAIN_FILE_STORE:=Data}} ->
                     {ok, StoreObjId, Data};
                 _ ->

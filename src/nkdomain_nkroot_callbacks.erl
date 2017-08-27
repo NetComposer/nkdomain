@@ -19,7 +19,7 @@
 %% -------------------------------------------------------------------
 
 %% @doc NkDomain service callback module
--module(nkdomain_callbacks).
+-module(nkdomain_nkroot_callbacks).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -export([error/1]).
 -export([object_apply/3]).
@@ -28,18 +28,18 @@
 -export([admin_tree_categories/2, admin_tree_get_category/2, admin_event/3,
          admin_element_action/5, admin_get_data/3]).
 -export([object_admin_info/1]).
--export([object_create/5, object_check_active/3, object_do_expired/2]).
+-export([object_create/5, object_check_active/2, object_do_expired/1]).
 -export([object_syntax/2, object_parse/3]).
 -export([object_init/1, object_terminate/2, object_stop/2,
          object_event/2, object_reg_event/4, object_session_event/3, object_sync_op/3, object_async_op/2,
-         object_save/1, object_delete/1, object_archive/1, object_link_down/2, object_enabled/2,
+         object_save/1, object_delete/1, object_link_down/2, object_enabled/2,
          object_handle_call/3, object_handle_cast/2, object_handle_info/2, object_conflict_detected/4]).
 -export([object_send_push/5]).
--export([object_db_init/1, object_db_start/1, object_db_read/2, object_db_save/2, object_db_delete/2]).
--export([object_db_find_obj/2, object_db_search/2, object_db_search_alias/2,
-         object_db_search_types/3, object_db_search_all_types/3,
-         object_db_search_childs/3, object_db_search_all_childs/3, object_db_search_agg_field/5,
-         object_db_delete_all_childs/3, object_db_clean/1]).
+-export([object_db_init/1, object_db_read/1, object_db_save/1, object_db_delete/1]).
+-export([object_db_find_obj/1, object_db_search/1, object_db_search_alias/1,
+         object_db_search_types/2, object_db_search_all_types/2,
+         object_db_search_childs/2, object_db_search_all_childs/2, object_db_search_agg_field/4,
+         object_db_delete_all_childs/2, object_db_clean/0]).
 -export([plugin_deps/0, plugin_syntax/0, plugin_config/2]).
 -export([service_api_syntax/2, service_api_allow/1, service_api_cmd/1]).
 -export([api_server_http_auth/2, api_server_reg_down/3]).
@@ -227,6 +227,7 @@ object_syntax(SrvId, load) ->
         obj_name => binary,
         domain_id => binary,
         parent_id => binary,
+        srv_id => binary,
         subtype => {list, binary},
         created_by => binary,
         created_time => integer,
@@ -244,9 +245,9 @@ object_syntax(SrvId, load) ->
         tags => {list, binary},
         aliases => {list, binary},
         icon_id => binary,
-        %icon_content_type => binary,
+        '_schema_vsn' => any,
         '_store_vsn' => any,
-        '__mandatory' => [type, obj_id, domain_id, path, created_time]
+        '__mandatory' => [type, obj_id, domain_id, path, srv_id, created_time]
     },
     % Some parsers need to now the server_id
     Opts = #{domain_srv_id=>SrvId},
@@ -261,7 +262,6 @@ object_syntax(SrvId, update) ->
         tags => {list, binary},
         aliases => {list, binary},
         icon_id => binary
-        %icon_content_type => binary
     },
     % Some parsers need to now the server_id
     Opts = #{domain_srv_id=>SrvId},
@@ -308,18 +308,18 @@ object_create(SrvId, DomainId, Type, UserId, Obj) ->
                 created_by => UserId,
                 domain_id => DomainId
             },
-            case erlang:function_exported(Module, object_create, 2) of
+            case erlang:function_exported(Module, object_create, 1) of
                 true ->
                     % If the objects has its own object creation function,
                     % parse it so that it can be useful
-                    case SrvId:object_parse(SrvId, create, Obj2) of
+                    case ?CALL_SRV(object_parse, [SrvId, create, Obj2]) of
                         {ok, Obj3, _} ->
-                            Module:object_create(SrvId, Obj3);
+                            Module:object_create(Obj3);
                         {error, Error} ->
                             {error, Error}
                     end;
                 false ->
-                    nkdomain_obj_make:create(SrvId, Obj2)
+                    nkdomain_obj_make:create(Obj2)
             end
     end.
 
@@ -366,11 +366,11 @@ object_parse(SrvId, Mode, Map) ->
 %% @doc Called if an active object is detected on storage
 %% If 'true' is returned, the object is ok
 %% If 'false' is returned, it only means that the object has been processed
--spec object_check_active(srv_id(), type(), obj_id()) ->
+-spec object_check_active(type(), obj_id()) ->
     boolean().
 
-object_check_active(SrvId, Type, ObjId) ->
-    case nkdomain_obj_util:call_type(object_check_active, [SrvId, ObjId], Type) of
+object_check_active(Type, ObjId) ->
+    case nkdomain_obj_util:call_type(object_check_active, [ObjId], Type) of
         ok -> true;
         true -> true;
         false -> false
@@ -378,13 +378,12 @@ object_check_active(SrvId, Type, ObjId) ->
 
 
 %% @doc Called if an object is over its expired time
--spec object_do_expired(srv_id(), obj_id()) ->
+-spec object_do_expired(obj_id()) ->
     any().
 
-object_do_expired(_SrvId, ObjId) ->
+object_do_expired(ObjId) ->
     lager:notice("NkDOMAIN: removing expired object ~s", [ObjId]),
     ok.
-%%    nkdomain:archive(SrvId, ObjId, object_clean_expire).
 
 
 %% @doc
@@ -434,14 +433,6 @@ object_init(State) ->
 
 object_terminate(Reason, State) ->
     call_module(object_terminate, [Reason], State).
-
-
-%%%% @private
-%%-spec object_start(state()) ->
-%%    {ok, state()} | continue().
-%%
-%%object_start(State) ->
-%%    call_module(object_start, [], State).
 
 
 %% @private
@@ -528,11 +519,11 @@ object_async_op(Op, State) ->
 -spec object_save(state()) ->
     {ok, state(), Meta::map()} | {error, term(), state()}.
 
-object_save(#?STATE{srv_id=SrvId}=State) ->
+object_save(State) ->
     case call_module(object_save, [], State) of
         {ok, #?STATE{obj=Obj2}=State2} ->
             Obj3 = Obj2#{<<"vsn">> => <<"1">>},
-            case SrvId:object_db_save(SrvId, Obj3) of
+            case ?CALL_SRV(object_db_save, [Obj3]) of
                 {ok, Meta} ->
                     {ok, State2, Meta};
                 {error, Error} ->
@@ -547,10 +538,10 @@ object_save(#?STATE{srv_id=SrvId}=State) ->
 -spec object_delete(state()) ->
     {ok, state(), Meta::map()} | {error, term(), state()}.
 
-object_delete(#?STATE{srv_id=SrvId, id=#obj_id_ext{obj_id=ObjId}}=State) ->
+object_delete(#?STATE{id=#obj_id_ext{obj_id=ObjId}}=State) ->
     case call_module(object_delete, [], State) of
         {ok, State2} ->
-            case SrvId:object_db_delete(SrvId, ObjId) of
+            case ?CALL_SRV(object_db_delete, [ObjId]) of
                 {ok, Meta} ->
                     {ok, State2, Meta};
                 {error, Error} ->
@@ -560,27 +551,6 @@ object_delete(#?STATE{srv_id=SrvId, id=#obj_id_ext{obj_id=ObjId}}=State) ->
             {error, Error, State}
     end.
 
-
-%% @doc Called to save the archived version to disk
--spec object_archive(state()) ->
-    {ok, state()} | {error, term(), state()}.
-
-object_archive(#?STATE{srv_id=_SrvId}=State) ->
-    {ok, State}.
-
-%%    {ok, State2} = call_module(object_restore, [], State),
-%%    case call_module(object_archive, [], State2) of
-%%        {ok, State3} ->
-%%            Map = SrvId:object_unparse(State3#?STATE{obj=Obj}),
-%%            case nkdomain_store:archive(SrvId, ObjId, Map) of
-%%                ok ->
-%%                    {ok, State3};
-%%                {error, Error} ->
-%%                    {error, Error, State3}
-%%            end;
-%%        {error, Error} ->
-%%            {error, Error, State2}
-%%    end.
 
 %% @doc Called when a linked process goes down
 -spec object_link_down(event|{child, nkdomain:obj_id()}|{usage, nklib_links:link()}, state()) ->
@@ -662,122 +632,121 @@ object_db_init(_State) ->
     {error, db_not_defined}.
 
 
-%% @doc Once the database is initialized, apps can add their own starting objects
--spec object_db_start(nkservice:id()) ->
-    ok | {error, term()}.
-
-object_db_start(_SrvId) ->
-    ok.
+%%%% @doc Once the database is initialized, apps can add their own starting objects
+%%-spec object_db_start() ->
+%%    ok | {error, term()}.
+%%
+%%object_db_start() ->
+%%    ok.
 
 
 %% @doc Reads and parses object from database, using ObjId
--spec object_db_read(srv_id(), obj_id()) ->
+-spec object_db_read(obj_id()) ->
     {ok, nkdomain:obj(), Meta::map()} | {error, term()}.
 
-object_db_read(_SrvId, _ObjId) ->
+object_db_read(_ObjId) ->
     {error, db_not_defined}.
 
 
 %% @doc Saves an object to database
--spec object_db_save(nkservice:id(), nkdomain:obj()) ->
+-spec object_db_save(nkdomain:obj()) ->
     {ok, Meta::map()} | {error, term()}.
 
-object_db_save(_SrvId, _Obj) ->
+object_db_save(_Obj) ->
     {error, db_not_defined}.
 
 
 %% @doc Deletes an object from database
--spec object_db_delete(nkservice:id(), nkdomain:obj_id()) ->
+-spec object_db_delete(nkdomain:obj_id()) ->
     {ok, Meta::map()} | {error, term()}.
 
-object_db_delete(_SrvId, _ObjId) ->
+object_db_delete(_ObjId) ->
     {error, db_not_defined}.
-
 
 
 %% @doc Finds an object from its ID or Path
--spec object_db_find_obj(nkservice:id(), nkdomain:id()) ->
-    {ok, nkdomain:type(), nkdomain:obj_id(), nkdomain:path()} | {error, object_not_found|term()}.
+-spec object_db_find_obj(nkdomain:id()) ->
+    {ok, Srv::binary(), nkdomain:type(), nkdomain:obj_id(), nkdomain:path()} | {error, object_not_found|term()}.
 
-object_db_find_obj(_SrvId, _ObjId) ->
+object_db_find_obj(_ObjId) ->
     {error, db_not_defined}.
 
 
 %% @doc
--spec object_db_search_types(srv_id(), obj_id(), nkdomain:search_spec()) ->
+-spec object_db_search_types(obj_id(), nkdomain:search_spec()) ->
+    {ok, Total::integer(), [{Srv::binary(), type(), integer()}]} | {error, term()}.
+
+object_db_search_types(_ObjId, _Spec) ->
+    {error, db_not_defined}.
+
+
+%% @doc
+-spec object_db_search_all_types(path(), nkdomain:search_spec()) ->
     {ok, Total::integer(), [{type(), integer()}]} | {error, term()}.
 
-object_db_search_types(_SrvId, _ObjId, _Spec) ->
+object_db_search_all_types(_ObjId, _Spec) ->
     {error, db_not_defined}.
 
 
 %% @doc
--spec object_db_search_all_types(srv_id(), path(), nkdomain:search_spec()) ->
-    {ok, Total::integer(), [{type(), integer()}]} | {error, term()}.
-
-object_db_search_all_types(_SrvId, _ObjId, _Spec) ->
-    {error, db_not_defined}.
-
-
-%% @doc
--spec object_db_search_childs(srv_id(), obj_id(), nkdomain:search_spec()) ->
-    {ok, Total::integer(), [{type(), obj_id(), path()}]} |
+-spec object_db_search_childs(obj_id(), nkdomain:search_spec()) ->
+    {ok, Total::integer(), [{Srv::binary(), type(), obj_id(), path()}]} |
     {error, term()}.
 
-object_db_search_childs(_SrvId, _ObjId, _Spec) ->
+object_db_search_childs(_ObjId, _Spec) ->
     {error, db_not_defined}.
 
 
 %% @doc
--spec object_db_search_all_childs(srv_id(), path(), nkdomain:search_spec()) ->
-    {ok, Total::integer(), [{type(), obj_id(), path()}]} |
+-spec object_db_search_all_childs(path(), nkdomain:search_spec()) ->
+    {ok, Total::integer(), [{Srv::binary(), type(), obj_id(), path()}]} |
     {error, term()}.
 
-object_db_search_all_childs(_SrvId, _Path, _Spec) ->
+object_db_search_all_childs(_Path, _Spec) ->
     {error, db_not_defined}.
 
 
 %% @doc
--spec object_db_search_alias(srv_id(), nkdomain:alias()) ->
-    {ok, Total::integer(), [{type(), obj_id(), path()}]} |
+-spec object_db_search_alias(nkdomain:alias()) ->
+    {ok, Total::integer(), [{Srv::binary(), type(), obj_id(), path()}]} |
     {error, term()}.
 
-object_db_search_alias(_SrvId, _Alias) ->
+object_db_search_alias(_Alias) ->
     {error, db_not_defined}.
 
 
 %% @doc
--spec object_db_search(srv_id(), nkdomain:search_spec()) ->
+-spec object_db_search(nkdomain:search_spec()) ->
     {ok, Total::integer(), Objs::[map()], map(), Meta::map()} |
     {error, term()}.
 
-object_db_search(_SrvId, _Spec) ->
+object_db_search(_Spec) ->
     {error, db_not_defined}.
 
 
 %% @doc
--spec object_db_search_agg_field(nkservice:id(), nkdomain:id(), binary(),
+-spec object_db_search_agg_field(nkdomain:id(), binary(),
                                  nkdomain:search_spec(), SubChilds::boolean()) ->
     {ok, Total::integer(), [{nkdomain:type(), integer()}], Map::map()} | {error, term()}.
 
-object_db_search_agg_field(_SrvId, _Id, _Field, _Spec, _SubChilds) ->
+object_db_search_agg_field(_Id, _Field, _Spec, _SubChilds) ->
     {error, db_not_defined}.
 
 
 %% @doc Must stop loaded objects
--spec object_db_delete_all_childs(srv_id(), path(), nkdomain:search_spec()) ->
+-spec object_db_delete_all_childs(path(), nkdomain:search_spec()) ->
     {ok, Total::integer()} | {error, term()}.
 
-object_db_delete_all_childs(_SrvId, _Path, _Spec) ->
+object_db_delete_all_childs(_Path, _Spec) ->
     {error, db_not_defined}.
 
 
 %% @doc Called to perform a cleanup of the store (expired objects, etc.)
 %% Should call object_check_active/3 for each 'active' object found
--spec object_db_clean(srv_id()) ->
+-spec object_db_clean() ->
     ok | {error, term()}.
 
-object_db_clean(_SrvId) ->
+object_db_clean() ->
     {error, db_not_defined}.
 
 
@@ -923,19 +892,19 @@ api_server_http_auth(#nkreq{}=Req, HttpReq) ->
 
 %% @private
 plugin_deps() ->
-    [nkapi, nkadmin, nkmail, nkmail_smtp_client, nkfile_filesystem, nkfile_s3, nkservice_rest, nkservice_webserver].
+    [].
 
 
 %% @private
 plugin_syntax() ->
     #{
-        nkdomain => nkdomain_service:syntax()
+        nkdomain => nkdomain_nkroot:syntax()
     }.
 
 
 %% @private
 plugin_config(#{nkdomain:=DomCfg}=Config, _Service) ->
-    nkdomain_service:config(DomCfg, Config);
+    nkdomain_nkroot:config(DomCfg, Config);
 
 plugin_config(Config, _Service) ->
     {ok, Config}.
@@ -943,14 +912,14 @@ plugin_config(Config, _Service) ->
 
 %% @private
 service_init(_Service, State) ->
-    nkdomain_service:init(State).
+    nkdomain_nkroot:init(State).
 
 
 %% @private
 service_handle_cast(nkdomain_load_domain, State) ->
     #{id:=SrvId} = State,
     #{domain:=Domain} = SrvId:config(),
-    case nkdomain_lib:load(SrvId, Domain) of
+    case nkdomain_lib:load(Domain) of
         #obj_id_ext{type = ?DOMAIN_DOMAIN, obj_id=ObjId, path=Path, pid=Pid} ->
             lager:info("Service loaded domain ~s (~s)", [Path, ObjId]),
             monitor(process, Pid),

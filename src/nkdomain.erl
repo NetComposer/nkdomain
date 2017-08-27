@@ -23,10 +23,10 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 
--export([find/2, load/2, unload/2, unload/3, get_obj/2, get_info/2, get_name/2, get_domain_id/2]).
--export([enable/3, update/3, update_name/3, delete/2, send_info/4]).
--export([search/2, search_type/2, delete_all_childs/2, delete_all_childs_type/3, search_agg_field/5]).
--export([clean/1]).
+-export([find/1, load/1, unload/1, unload/2, get_obj/1, get_info/1, get_name/1, get_domain_id/1]).
+-export([enable/2, update/2, update_name/2, delete/1, send_info/3]).
+-export([search/1, search_type/1, delete_all_childs/1, delete_all_childs_type/2, search_agg_field/4]).
+-export([clean/0]).
 -export_type([obj_id/0, obj_name/0, obj/0, path/0, id/0, type/0]).
 -export_type([timestamp/0]).
 
@@ -53,11 +53,6 @@
 
 -type timestamp() :: nklib_util:m_timestamp().
 
-%% ===================================================================
-%% Public
-%% ===================================================================
-
-
 
 
 %% ===================================================================
@@ -66,142 +61,129 @@
 
 
 %% @doc Finds and object from UUID or Path, in memory and disk
--spec find(nkservice:id(), id()) ->
-    {ok, type(), obj_id(), path(), pid()|undefined} | {error, object_not_found|term()}.
+-spec find(id()) ->
+    {ok,  type(), obj_id(), path(), pid()|undefined} | {error, object_not_found|term()}.
 
-find(SrvId, Id) ->
-    case nkdomain_lib:find(SrvId, Id) of
-        #obj_id_ext{type=Type, obj_id=ObjId, path=Path, pid=Pid} ->
-            {ok, Type, ObjId, Path, Pid};
+find(Id) ->
+    case nkdomain_lib:find(Id) of
+        #obj_id_ext{srv_id=SrvId, type=Type, obj_id=ObjId, path=Path, pid=Pid} ->
+            {ok, SrvId, Type, ObjId, Path, Pid};
         {error, Error} ->
             {error, Error}
     end.
-
-
-%%%% @doc Finds and object from UUID or Path, in memory and disk
-%%-spec find_obj(nkservice:id(), id()) ->
-%%    {ok, type(), obj_id(), path(), pid()|undefined} | {error, object_not_found|term()}.
-%%
-%%find_obj(SrvId, Id) ->
-%%    case nkdomain_lib:find_obj(SrvId, Id) of
-%%        #obj_id_ext{type=Type, obj_id=ObjId, path=Path, pid=Pid} ->
-%%            {ok, Type, ObjId, Path, Pid};
-%%        {error, Error} ->
-%%            {error, Error}
-%%    end.
 
 
 %% @doc Finds an objects's pid or loads it from storage
--spec load(nkservice:id(), id()) ->
-    {ok, type(), obj_id(), path(), pid()} |  {error, object_not_found|term()}.
+-spec load(id()) ->
+    {ok,  type(), obj_id(), path(), pid()} |  {error, object_not_found|term()}.
 
-load(SrvId, Id) ->
-    case nkdomain_lib:load(SrvId, Id) of
-        #obj_id_ext{type=Type, obj_id=ObjId, path=Path, pid=Pid} ->
-            {ok, Type, ObjId, Path, Pid};
+load(Id) ->
+    case nkdomain_lib:load(Id) of
+        #obj_id_ext{srv_id=SrvId, type=Type, obj_id=ObjId, path=Path, pid=Pid} ->
+            {ok, SrvId, Type, ObjId, Path, Pid};
         {error, Error} ->
             {error, Error}
     end.
 
 
 %% @doc
--spec get_obj(nkservice:id(), id()) ->
+-spec get_obj(id()|pid()) ->
     {ok, obj()} | {error, term()}.
 
-get_obj(SrvId, Id) ->
-    nkdomain_obj:sync_op(SrvId, Id, get_obj).
+get_obj(Id) ->
+    nkdomain_obj:sync_op(Id, get_obj).
 
 
 %% @doc
--spec get_info(nkservice:id(), id()) ->
+-spec get_info(id()|pid()) ->
     {ok, map()} | {error, term()}.
 
-get_info(SrvId, Id) ->
-    nkdomain_obj:sync_op(SrvId, Id, get_obj_info).
+get_info(Id) ->
+    nkdomain_obj:sync_op(Id, get_obj_info).
 
 
 %% @doc
--spec get_name(nkservice:id(), id()) ->
+-spec get_name(id()|pid()) ->
     {ok, map()} | {error, term()}.
 
-get_name(SrvId, Id) ->
-    nkdomain_obj:sync_op(SrvId, Id, get_obj_name).
+get_name(Id) ->
+    nkdomain_obj:sync_op(Id, get_obj_name).
 
 
 %% @doc
--spec get_domain_id(nkservice:id(), id()) ->
+-spec get_domain_id(id()|pid()) ->
     {ok, nkdomain:obj_id()} | {error, term()}.
 
-get_domain_id(SrvId, Id) ->
-    nkdomain_obj:sync_op(SrvId, Id, get_domain_id).
+get_domain_id(Id) ->
+    nkdomain_obj:sync_op(Id, get_domain_id).
 
 
 %% @doc Enables/disabled an object
--spec enable(nkservice:id(), id(), boolean()) ->
+-spec enable(id()|pid(), boolean()) ->
     ok | {error, term()}.
 
-enable(SrvId, Id, Enable) ->
-    nkdomain_obj:sync_op(SrvId, Id, {enable, Enable}).
+enable(Id, Enable) ->
+    nkdomain_obj:sync_op(Id, {enable, Enable}).
 
 
 %% @doc Updates an object
--spec update(nkservice:id(), id(), map()) ->
+-spec update(id()|pid(), map()) ->
     {ok, UnknownFields::[binary()]} | {error, term()}.
 
-update(SrvId, Id, Update) ->
-    nkdomain_obj:sync_op(SrvId, Id, {update, Update}).
+update(Id, Update) ->
+    nkdomain_obj:sync_op(Id, {update, Update}).
 
 
 %% @doc Updates an object's obj_name
--spec update_name(nkservice:id(), id(), binary()) ->
+-spec update_name(id()|pid(), binary()) ->
     ok | {error, term()}.
 
-update_name(SrvId, Id, ObjName) ->
-    nkdomain_obj:sync_op(SrvId, Id, {update_name, ObjName}).
+update_name(Id, ObjName) ->
+    nkdomain_obj:sync_op(Id, {update_name, ObjName}).
 
 
 %% @doc Remove an object
--spec delete(nkservice:id(), id()) ->
+-spec delete(id()|pid()) ->
     {ok, binary()} | {error, term()}.
 
-delete(SrvId, Id) ->
-    nkdomain_obj:sync_op(SrvId, Id, delete).
+delete(Id) ->
+    nkdomain_obj:sync_op(Id, delete).
 
 
 %% @doc Sends an INFO
--spec send_info(nkservice:id(), id(), Info::atom()|binary(), Body::map()) ->
+-spec send_info(id()|pid(), Info::atom()|binary(), Body::map()) ->
     ok | {error, term()}.
 
-send_info(SrvId, Id, Info, Body) when is_map(Body) ->
-    nkdomain_obj:async_op(SrvId, Id, {send_info, Info, Body}).
+send_info(Id, Info, Body) when is_map(Body) ->
+    nkdomain_obj:async_op(Id, {send_info, Info, Body}).
 
 
 %% @doc Unloads the object
--spec unload(nkservice:id(), id()) ->
+-spec unload(id()|pid()) ->
     ok | {error, term()}.
 
-unload(SrvId, Id) ->
-    unload(SrvId, Id, user_stop).
+unload(Id) ->
+    unload(Id, normal).
 
 %% @doc Unloads the object
--spec unload(nkservice:id(), id(), Reason::nkservice:error()) ->
+-spec unload(id()|pid(), Reason::nkservice:error()) ->
     ok | {error, term()}.
 
-unload(SrvId, Id, Reason) ->
-    case nkdomain_lib:find(SrvId, Id) of
+unload(Id, Reason) ->
+    case nkdomain_lib:find(Id) of
         #obj_id_ext{pid=Pid} when is_pid(Pid) ->
-            nkdomain_obj:async_op(SrvId, Pid, {unload, Reason});
+            nkdomain_obj:async_op(Pid, {unload, Reason});
         {error, Error} ->
             {error, Error}
     end.
 
 
 %% @doc
--spec search(nkservice:id(), search_spec()) ->
+-spec search(search_spec()) ->
     {ok, integer(), Data::[map()], Meta::map()} | {error, term()}.
 
-search(SrvId, Spec) ->
-    case SrvId:object_db_search(SrvId, Spec) of
+search(Spec) ->
+    case ?CALL_SRV(object_db_search, [Spec]) of
         {ok, Total, List, _Aggs, Meta} ->
             {ok, Total, List, Meta};
         {error, Error} ->
@@ -209,20 +191,20 @@ search(SrvId, Spec) ->
     end.
 
 %% @doc
--spec search_type(nkservice:id(), type()) ->
+-spec search_type(type()) ->
     {ok, integer(), Data::[map()], Meta::map()} | {error, term()}.
 
-search_type(SrvId, Type) ->
-    search(SrvId, #{filters=>#{type=>Type}}).
+search_type(Type) ->
+    search(#{filters=>#{type=>Type}}).
 
 
 
 %% @doc Finds types
--spec search_agg_field(nkdomain:obj_id(), binary(), nkdomain:search_spec(), boolean(), nkelastic:opts()) ->
+-spec search_agg_field(nkdomain:obj_id(), binary(), nkdomain:search_spec(), boolean()) ->
     {ok, integer(), [{nkdomain:type(), integer()}], map()} | {error, term()}.
 
-search_agg_field(SrvId, Id, Field, Spec, SubChilds) ->
-    case SrvId:object_db_search_agg_field(SrvId, Id, Field, Spec, SubChilds) of
+search_agg_field(Id, Field, Spec, SubChilds) ->
+    case ?CALL_SRV(object_db_search_agg_field, [Id, Field, Spec, SubChilds]) of
         {ok, Total, Data, Meta} ->
             {ok, Total, Data, Meta};
         {error, Error} ->
@@ -231,16 +213,16 @@ search_agg_field(SrvId, Id, Field, Spec, SubChilds) ->
 
 
 %%%% @doc Archives an object
-%%-spec archive(nkservice:id(), obj_id(), nkservice:error()) ->
+%%-spec archive( obj_id(), nkservice:error()) ->
 %%    ok | {error, term()}.
 %%
-%%archive(SrvId, ObjId, Reason) ->
-%%    case SrvId:object_db_read(SrvId, ObjId) of
+%%archive(ObjId, Reason) ->
+%%    case SrvId:object_db_read(ObjId) of
 %%        {ok, Obj, _Meta} ->
-%%            Obj2 = nkdomain_util:add_destroyed(SrvId, Reason, Obj),
-%%            case nkdomain_store:archive(SrvId, ObjId, Obj2) of
+%%            Obj2 = nkdomain_util:add_destroyed(Reason, Obj),
+%%            case nkdomain_store:archive(ObjId, Obj2) of
 %%                ok ->
-%%                    nkdomain_store:delete(SrvId, ObjId);
+%%                    nkdomain_store:delete(ObjId);
 %%                {error, Error} ->
 %%                    {error, Error}
 %%            end;
@@ -251,21 +233,21 @@ search_agg_field(SrvId, Id, Field, Spec, SubChilds) ->
 
 
 %% @doc
-delete_all_childs(SrvId, Id) ->
-    SrvId:object_db_delete_all_childs(SrvId, Id, #{}).
+delete_all_childs(Id) ->
+    ?CALL_SRV(object_db_delete_all_childs, [Id, #{}]).
 
 
 %% @doc
-delete_all_childs_type(SrvId, Id, Type) ->
+delete_all_childs_type(Id, Type) ->
     Spec = #{filters => #{type=>nklib_util:to_binary(Type)}},
-    SrvId:object_db_delete_all_childs(SrvId, Id, Spec).
+    ?CALL_SRV(object_db_delete_all_childs, [Id, Spec]).
 
 
 %% @private Performs a periodic cleanup
--spec clean(nkservice:id()) ->
+-spec clean() ->
     {ok, map()} | {error, term()}.
 
-clean(SrvId) ->
-    SrvId:object_db_clean(SrvId).
+clean() ->
+    ?CALL_SRV(object_db_clean, []).
 
 

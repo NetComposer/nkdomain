@@ -81,8 +81,8 @@ test_basic_1(Pid) ->
 
 
 test_create_user(Pid) ->
-    {error, object_not_found} = nkdomain:find(?SRV, "/users/tuser1"),
-    {error, object_not_found} = nkdomain:load(?SRV, "/users/tuser1"),
+    {error, object_not_found} = nkdomain:find("/users/tuser1"),
+    {error, object_not_found} = nkdomain:load("/users/tuser1"),
 
     %% Create user /users/tuser1,
     U2_Create = #{
@@ -120,17 +120,17 @@ test_create_user(Pid) ->
     % Find user by several ways
     {ok, U2} = cmd(Pid, <<"objects/user/get">>, #{id=><<"/users/tuser1">>}),
     #obj_id_ext{type= <<"user">>, obj_id=U2Id, pid=Pid1} = F1 = nkdomain_lib:find(?SRV, "/users/tuser1"),
-    F1 = nkdomain_lib:find(?SRV, U2Id),
-    F1 = nkdomain_lib:load(?SRV, "/users/tuser1"),
-    F1 = nkdomain_lib:load(?SRV, U2Id),
+    F1 = nkdomain_lib:find(U2Id),
+    F1 = nkdomain_lib:load("/users/tuser1"),
+    F1 = nkdomain_lib:load(U2Id),
 
     % Unload the user
-    ok = nkdomain:unload(?SRV, U2Id, normal),
+    ok = nkdomain:unload(U2Id),
     timer:sleep(100),
-    {ok, <<"user">>, U2Id, <<"/users/tuser1">>, undefined} = F2 = nkdomain:find(?SRV, "/users/tuser1"),
-    F2 = nkdomain:find(?SRV, U2Id),
+    {ok, _, <<"user">>, U2Id, <<"/users/tuser1">>, undefined} = F2 = nkdomain:find("/users/tuser1"),
+    F2 = nkdomain:find(U2Id),
     {ok, <<"user">>, U2Id, <<"/users/tuser1">>, Pid2} = F3 = nkdomain:load(?SRV, "/users/tuser1"),
-    F3 = nkdomain:find(?SRV, U2Id),
+    F3 = nkdomain:find(U2Id),
     false = Pid1 == Pid2,
 
     % Update the user
@@ -192,7 +192,7 @@ test_session1(Pid) ->
     nkapi_client:stop(Pid2),
     timer:sleep(1200),
     false = is_process_alive(SPid),
-    {error, object_not_found} = nkdomain:find(?SRV, SessId),
+    {error, object_not_found} = nkdomain:find(SessId),
 %%    {1, [S2]} = find_archive(SessId),
 %%    #{
 %%        <<"obj_id">>:=SessId,
@@ -227,9 +227,9 @@ test_session2(Pid) ->
     #obj_id_ext{type= <<"session">>, obj_id=SessId, path=Path, pid=undefined} = nkdomain_lib:find(?SRV, SessId),
 
     % If we force a clean of the database, the stale object is deleted and archived
-    {ok, #{inactive:=N}} = nkdomain:clean(?SRV),
+    {ok, #{inactive:=N}} = nkdomain:clean(),
     true = N >= 1,
-    {error, object_not_found} = nkdomain:find(?SRV, SessId),
+    {error, object_not_found} = nkdomain:find(SessId),
     % Archive has a 1-second refresh time
 %%    timer:sleep(1100),
 %%    {1, [#{<<"destroyed_code">>:=<<"object_clean_process">>}]} = find_archive(SessId),
@@ -246,7 +246,7 @@ test_session3(Admin) ->
     {ok, #{<<"path">>:=<<"/users/tuser1">>}} = cmd(Pid, <<"objects/user/get">>, #{}),
     {ok, #{}} = cmd(Pid, <<"objects/user/enable">>, #{enable=>false}),
     timer:sleep(1500),
-    {error, object_not_found} = nkdomain:find(?SRV, SessId),
+    {error, object_not_found} = nkdomain:find(SessId),
 %%    {1, [#{<<"destroyed_code">>:=<<"session_is_disabled">>}]} = find_archive(SessId),
     false = is_process_alive(Pid),
     false = is_process_alive(SPid),
@@ -412,10 +412,10 @@ test_basic_2(Pid) ->
     true = is_loaded("/stest1/stest2/users/u1"),
 
     % We unload everything. We need to unload childs before or they will restart father
-    nkdomain:unload(?SRV, "/stest1/stest2/users/u1", normal),
-    nkdomain:unload(?SRV, "/stest1/stest2", normal),
-    nkdomain:unload(?SRV, "/stest1/users/u1", normal),
-    nkdomain:unload(?SRV, "/stest1", normal),
+    nkdomain:unload("/stest1/stest2/users/u1"),
+    nkdomain:unload("/stest1/stest2"),
+    nkdomain:unload("/stest1/users/u1"),
+    nkdomain:unload("/stest1"),
     timer:sleep(100),
     false = is_loaded("/stest1"),
     false = is_loaded("/stest1/users/u1"),
@@ -447,23 +447,23 @@ test_basic_2(Pid) ->
 %% ===================================================================
 
 remove_data() ->
-    case nkdomain:find(?SRV, "/users/tuser1") of
+    case nkdomain:find("/users/tuser1") of
         {ok, <<"user">>, UId, _, _} ->
-            {ok, _} = ?SRV:object_db_delete(?SRV, UId);
+            {ok, _} = ?CALL_SRV(object_db_delete, [UId]);
         {error, object_not_found} ->
             ok
     end,
-    case nkdomain_domain_obj:search_childs(?SRV, "/stest1", #{}) of
+    case nkdomain_domain_obj:search_childs("/stest1", #{}) of
         {ok, 0, []} ->
             ok;
         _ ->
             %% lager:notice("Deleting all childs for /stest1"),
-            nkdomain:delete_all_childs(?SRV, "/stest1")
+            nkdomain:delete_all_childs("/stest1")
     end,
-    case nkdomain:find(?SRV, "/stest1") of
+    case nkdomain:find("/stest1") of
         {ok, ?DOMAIN_DOMAIN, S1Id_0, _, _} ->
             %% lager:warning("/stest1 was already present"),
-            ok = nkdomain:delete(?SRV, S1Id_0);
+            ok = nkdomain:delete(S1Id_0);
         {error, object_not_found} ->
             ok
     end.
@@ -532,4 +532,4 @@ p1() ->
         created_time => 0,
         <<"user">> => #{name => n1}
     },
-    nkdomain_callbacks:object_parse(?SRV, load, Obj).
+    'nkdomain_callbacks.erl':object_parse(?SRV, load, Obj).

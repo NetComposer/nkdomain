@@ -35,7 +35,7 @@
 
 %% @doc
 view(#obj_id_ext{obj_id=ObjId, pid=Pid}, Session) ->
-    case nkdomain:get_obj(any, Pid) of
+    case nkdomain:get_obj(Pid) of
         {ok, Obj} ->
             Data = #{
                 id => <<?ID/binary, "__", ObjId/binary>>,

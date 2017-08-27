@@ -25,7 +25,7 @@
 -module(nkdomain_obj_make).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([make/2, make_obj_id/1, make_name/1, create/2, create/3]).
+-export([make/1, make_obj_id/1, make_name/1, create/1, create/2]).
 
 -include("nkdomain.hrl").
 
@@ -62,10 +62,10 @@
 
 
 %% @doc
--spec make(nkservice:id(), make_opts()) ->
+-spec make(make_opts()) ->
     {ok, nkdomain:obj()} | {error, term()}.
 
-make(SrvId, Opts) ->
+make(Opts) ->
     #{
         type := Type,
         domain_id := Domain,
@@ -73,15 +73,15 @@ make(SrvId, Opts) ->
     } = Opts,
     Parent = maps:get(parent_id, Opts, Domain),
     try
-        {DomainId, DomainPath} = case nkdomain_lib:find(SrvId, Domain) of
-            #obj_id_ext{type=?DOMAIN_DOMAIN, obj_id=DomainId0, path=DomainPath0} ->
-                {DomainId0, DomainPath0};
+        {DomainId, DomainPath, DomSrvId} = case nkdomain_lib:find(Domain) of
+            #obj_id_ext{srv_id=DomSrvId0, type=?DOMAIN_DOMAIN, obj_id=DomainId0, path=DomainPath0} ->
+                {DomainId0, DomainPath0, DomSrvId0};
             {error, object_not_found} ->
                 throw({could_not_load_domain, Domain});
             {error, DomainError} ->
                 throw(DomainError)
         end,
-        ParentId = case nkdomain_lib:find(SrvId, Parent) of
+        ParentId = case nkdomain_lib:find(Parent) of
             #obj_id_ext{obj_id=ParentId0} ->
                 ParentId0;
             {error, object_not_found} ->
@@ -89,7 +89,7 @@ make(SrvId, Opts) ->
             {error, ParentError} ->
                 throw(ParentError)
         end,
-        UserId = case nkdomain_lib:find(SrvId, User) of
+        UserId = case nkdomain_lib:find(User) of
             #obj_id_ext{type = ?DOMAIN_USER, obj_id=UserId0} ->
                 UserId0;
             {error, object_not_found} ->
@@ -122,8 +122,15 @@ make(SrvId, Opts) ->
         Now = nkdomain_util:timestamp(),
         Obj1 = maps:without([obj_name, ttl], Opts),
         Obj2 = maps:merge(#{Type2=>#{}}, Obj1),
+        SrvId = case Opts of
+            #{srv_id:=SrvId0} ->
+                SrvId0;
+            _ ->
+                DomSrvId
+        end,
         Obj3 = Obj2#{
             obj_id => ObjId2,
+            srv_id => SrvId,
             type => Type2,
             domain_id => DomainId,
             path => <<BasePath/binary, $/, Name2/binary>>,  % Must be unique
@@ -168,23 +175,23 @@ make_name(ObjId) ->
 
 
 %% @doc
--spec create(nkservice:id(), make_opts()) ->
+-spec create(make_opts()) ->
     {ok, #obj_id_ext{}, [Unknown::binary()]} | {error, term()}.
 
-create(SrvId, MakeOpts) ->
-    create(SrvId, MakeOpts, #{}).
+create(MakeOpts) ->
+    create(MakeOpts, #{}).
 
 
 %% @doc
--spec create(nkservice:id(), make_opts(), nkdomain:start_ots()) ->
+-spec create(make_opts(), nkdomain:start_ots()) ->
     {ok, #obj_id_ext{}, [Unknown::binary()]} | {error, term()}.
 
-create(SrvId, MakeOpts, Opts) ->
-    case make(SrvId, MakeOpts) of
+create(MakeOpts, Opts) ->
+    case make(MakeOpts) of
         {ok, Obj2} ->
-            case SrvId:object_parse(SrvId, create, Obj2) of
+            case apply(nkroot, object_parse, [create, Obj2]) of
                 {ok, Obj3, Unknown} ->
-                    case nkdomain_lib:create(SrvId, Obj3, Opts) of
+                    case nkdomain_lib:create(Obj3, Opts) of
                         #obj_id_ext{}=ObjIdExt ->
                             {ok, ObjIdExt, Unknown};
                         {error, Error} ->

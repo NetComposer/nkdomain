@@ -22,8 +22,8 @@
 -module(nkdomain_store_es_util).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([get_opts/1, db_init/2, normalize/1, normalize_multi/1]).
--export([reload_index/1, delete_index/1]).
+-export([get_opts/0, db_init/2, normalize/1, normalize_multi/1]).
+-export([reload_index/1, delete_index/0]).
 
 -define(LLOG(Type, Txt, Args),
     lager:Type("NkDOMAIN Store ES "++Txt, Args)).
@@ -37,43 +37,43 @@
 
 
 %% @doc
-get_opts(SrvId) ->
-    case SrvId:config_nkdomain() of
+get_opts() ->
+    case ?CALL_SRV(config_nkdomain, []) of
         #nkdomain_cache{db_store={elastic, _IndexOpts, EsOpts}} -> {ok, EsOpts};
         _ -> not_found
     end.
 
 
 %% @doc
-db_init(IndexOpts, Opts) ->
-    case nkelastic:update_or_create_index(IndexOpts, Opts) of
+db_init(IndexOpts, EsOpts) ->
+    case nkelastic:update_or_create_index(IndexOpts, EsOpts) of
         {ok, _} ->
-            db_init_mappings(Opts);
+            db_init_mappings(EsOpts);
         {error, Error} ->
             {error, {create_index, Error}}
     end.
 
 
 %% @doc
-db_init_mappings(#{srv_id:=SrvId}=Opts) ->
+db_init_mappings(EsOpts) ->
     Modules = nkdomain_all_types:get_all_modules(),
-    Base = SrvId:object_es_mapping(),
-    Mappings = do_get_mappings(SrvId, Modules, Base),
-    case nkelastic:add_mapping(Mappings, Opts) of
+    Base = ?CALL_SRV(object_es_mapping, []),
+    Mappings = do_get_mappings(Modules, Base),
+    case nkelastic:add_mapping(Mappings, EsOpts) of
         {ok, _} ->
-            db_init_root(Opts);
+            db_init_root(EsOpts);
         {error, Error} ->
             {error, {update_mappings, Error}}
     end.
 
 
 %% @private
-do_get_mappings(_SrvId, [], Acc) ->
+do_get_mappings([], Acc) ->
     Acc;
 
-do_get_mappings(SrvId, [Module|Rest], Acc) ->
+do_get_mappings([Module|Rest], Acc) ->
     #{type:=Type} = Module:object_info(),
-    Mapping = case SrvId:object_es_mapping(SrvId, Type) of
+    Mapping = case ?CALL_SRV(object_es_mapping, [Type]) of
         not_exported ->
             #{enabled => false};
         not_indexed ->
@@ -85,14 +85,14 @@ do_get_mappings(SrvId, [Module|Rest], Acc) ->
                 properties => Map
             }
     end,
-    do_get_mappings(SrvId, Rest, Acc#{Type => Mapping}).
+    do_get_mappings(Rest, Acc#{Type => Mapping}).
 
 
 %% @private
-db_init_root(Opts) ->
-    case nkelastic:get(<<"root">>, Opts) of
+db_init_root(EsOpts) ->
+    case nkelastic:get(<<"root">>, EsOpts) of
         {ok, #{<<"type">>:=?DOMAIN_DOMAIN}, _} ->
-            db_init_admin(Opts);
+            db_init_admin(EsOpts);
         {error, object_not_found} ->
             Now = nkdomain_util:timestamp(),
             Obj = #{
@@ -109,17 +109,17 @@ db_init_root(Opts) ->
                 updated_by => <<"admin">>,
                 ?DOMAIN_DOMAIN => #{}
             },
-            {ok, _} = nkelastic:put(<<"root">>, Obj, Opts),
+            {ok, _} = nkelastic:put(<<"root">>, Obj, EsOpts),
             ?LLOG(warning, "created ROOT domain", []),
-            db_init_admin(Opts);
+            db_init_admin(EsOpts);
         {error, Error} ->
             {error, {object_create, Error}}
     end.
 
 
 %% @private
-db_init_admin(Opts) ->
-    case nkelastic:get(<<"admin">>, Opts) of
+db_init_admin(EsOpts) ->
+    case nkelastic:get(<<"admin">>, EsOpts) of
         {ok, #{<<"type">>:=?DOMAIN_USER}, _} ->
             ok;
         {error, object_not_found} ->
@@ -142,7 +142,7 @@ db_init_admin(Opts) ->
                     password => nkdomain_user_obj:user_pass("netcomposer")
                 }
             },
-            {ok, _} = nkelastic:put(<<"admin">>, Obj, Opts),
+            {ok, _} = nkelastic:put(<<"admin">>, Obj, EsOpts),
             ?LLOG(warning, "created ADMIN user. Password is 'netcomposer'. Change it NOW", []),
             ok;
         {error, Error} ->
@@ -191,8 +191,8 @@ reload_index(SrvId) ->
 
 
 %% @doc CAUTION!
-delete_index(SrvId) ->
-    {ok, EsOpts} = nkdomain_store_es_util:get_opts(SrvId),
+delete_index() ->
+    {ok, EsOpts} = nkdomain_store_es_util:get_opts(),
     nkelastic:delete_index(EsOpts).
 
 

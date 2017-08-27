@@ -61,55 +61,29 @@ start(Type) ->
 
 %% @private OTP standard start callback
 start(_Type, _Args) ->
-    Syntax = #{
-        start_root => boolean,
-        elastic_url => binary,
-        elastic_user => binary,
-        elastic_pass => binary,
-        store_pgsql =>  any,
-        listen_ip => binary,
-        listen_port => integer,
-        listen_secure => boolean,
-        api_server => binary,
-        admin_url => binary,
-        file_url => binary,
-        role_proxy_timeout => {integer, 1, none},
-        user_password_pbkdf2_iters => {integer, 1, none},
-        '__defaults' => #{
-            start_root => false,
-            elastic_url => <<"http://127.0.0.1:9200/">>,
-            listen_ip => <<"127.0.0.1">>,
-            listen_port => 9301,
-            listen_secure => false,
-            role_proxy_timeout => 10000,
-            user_password_pbkdf2_iters => 1
-        }
-    },
+    Syntax = nkdomain_nkroot:syntax(),
     case nklib_config:load_env(?APP, Syntax) of
         {ok, _} ->
             {ok, Pid} = nkdomain_sup:start_link(),
-            %% lager:info("waiting for nkdist"),
-            %% important -- we need to tell nkdist to wait for riak
-            %% core to be fully initialized and ready
-            % nkdist:wait_for_service(),
-            %% ok = riak_core_ring_events:add_guarded_handler(nkdomain_ring_handler, []),
             {ok, Vsn} = application:get_key(nkdomain, vsn),
             lager:info("NkDOMAIN v~s has started.", [Vsn]),
             nkdomain_i18n:reload(),
             register_types(),
-            %{ok, DataDir} = application:get_env(riak_core, platform_data_dir),
-            %FilesDir = filename:join(DataDir, "files"),
-            %ok = filelib:ensure_dir(filename:join(FilesDir, "dummy")),
-            %put(files_dir, FilesDir),
-            case get(start_root) of
+            case get(start_nkroot) of
                 true ->
                     spawn_link(
                         fun() ->
                             timer:sleep(2000),
-                            nkdomain_root:start()
+                            case nkdomain_nkroot:start() of
+                                {ok, _} ->
+                                    lager:info("NkDOMAIN root started");
+                                {error, Error} ->
+                                    lager:error("NkDOMAN root could not start: ~p", [Error]),
+                                    error(service_start_error)
+                            end
                         end);
                 false ->
-                    lager:warning("Root domain not started")
+                    lager:warning("NkDOMAIN root domain not started")
             end,
             {ok, Pid};
         {error, Error} ->
