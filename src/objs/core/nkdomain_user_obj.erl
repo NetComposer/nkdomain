@@ -26,7 +26,7 @@
 
 -export([create/1, auth/2, make_token/4, get_name/1, get_name/2]).
 -export([find_childs/1]).
--export([object_info/0, object_admin_info/0, object_create/1, object_es_mapping/0, object_es_unparse/3,
+-export([object_info/0, object_admin_info/0, object_create/1, object_es_mapping/0, object_es_unparse/2,
          object_parse/3, object_api_syntax/2, object_api_cmd/2, object_send_event/2]).
 -export([object_init/1, object_save/1, object_event/2,
          object_sync_op/3, object_async_op/2, object_link_down/2, object_handle_info/2]).

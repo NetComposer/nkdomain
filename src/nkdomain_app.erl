@@ -100,19 +100,19 @@ stop(_) ->
 
 %% @doc Register our types
 register_types() ->
-    ok = nkdomain_all_types:register(nkdomain_domain_obj),
-    ok = nkdomain_all_types:register(nkdomain_user_obj),
-    ok = nkdomain_all_types:register(nkdomain_session_obj),
-    ok = nkdomain_all_types:register(nkdomain_config_obj),
-    ok = nkdomain_all_types:register(nkdomain_token_obj),
+    ok = nkdomain_all_types:register(?NKSRV, nkdomain_domain_obj),
+    ok = nkdomain_all_types:register(?NKSRV, nkdomain_user_obj),
+    ok = nkdomain_all_types:register(?NKSRV, nkdomain_session_obj),
+    ok = nkdomain_all_types:register(?NKSRV, nkdomain_config_obj),
+    ok = nkdomain_all_types:register(?NKSRV, nkdomain_token_obj),
 
-    ok = nkdomain_all_types:register(nkdomain_mail_obj),
-    ok = nkdomain_all_types:register(nkdomain_mail_provider_obj),
+    ok = nkdomain_all_types:register(?NKSRV, nkdomain_mail_obj),
+    ok = nkdomain_all_types:register(?NKSRV, nkdomain_mail_provider_obj),
 
-    ok = nkdomain_all_types:register(nkdomain_file_store_obj),
-    ok = nkdomain_all_types:register(nkdomain_file_obj),
+    ok = nkdomain_all_types:register(?NKSRV, nkdomain_file_store_obj),
+    ok = nkdomain_all_types:register(?NKSRV, nkdomain_file_obj),
 
-    ok = nkdomain_all_types:register(nkadmin_session_obj).
+    ok = nkdomain_all_types:register(?NKSRV, nkadmin_session_obj).
 
 
 

@@ -79,7 +79,7 @@ create(DomainId, ParentId, CreatorId, SubType, Opts, Data) ->
 
 %% @doc
 check_ttl(Type, Opts) ->
-    Mod = nkdomain_all_types:get_module(Type),
+    Mod = nkdomain_all_types:get_module(?NKSRV, Type),
     Info = case erlang:function_exported(Mod, object_info, 0) of
         true ->
             Mod:object_admin_info();

@@ -24,7 +24,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -export([event/2, status/2, search_syntax/1, get_obj_info/1, get_obj_name/1]).
 -export([send_event/1, send_event/3, send_event/4, send_event/5]).
--export([call_type/3]).
+-export([call_type/4]).
 -export([link_to_session_server/2, unlink_from_session_server/2]).
 -export([get_obj_session/1, set_obj_session/2]).
 
@@ -211,8 +211,8 @@ get_obj_name(#?STATE{id=#obj_id_ext{obj_id=ObjId, path=Path}, obj=Obj}) ->
 
 
 %% @private
-call_type(Fun, Args, Type) ->
-    case nkdomain_all_types:get_module(Type) of
+call_type(SrvId, Type, Fun, Args) ->
+    case nkdomain_all_types:get_module(SrvId, Type) of
         undefined ->
             ok;
         Module ->

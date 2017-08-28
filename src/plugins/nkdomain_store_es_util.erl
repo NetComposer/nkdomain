@@ -55,6 +55,7 @@ db_init(IndexOpts, EsOpts) ->
 
 
 %% @doc
+%% TODO: each service could have their own type
 db_init_mappings(EsOpts) ->
     Modules = nkdomain_all_types:get_all_modules(),
     Base = ?CALL_SRV(object_es_mapping, []),
@@ -72,8 +73,7 @@ do_get_mappings([], Acc) ->
     Acc;
 
 do_get_mappings([Module|Rest], Acc) ->
-    #{type:=Type} = Module:object_info(),
-    Mapping = case ?CALL_SRV(object_es_mapping, [Type]) of
+    Mapping = case ?CALL_SRV(object_es_mapping, [Module]) of
         not_exported ->
             #{enabled => false};
         not_indexed ->
@@ -85,6 +85,7 @@ do_get_mappings([Module|Rest], Acc) ->
                 properties => Map
             }
     end,
+    #{type:=Type} = Module:object_info(),
     do_get_mappings(Rest, Acc#{Type => Mapping}).
 
 

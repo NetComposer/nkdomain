@@ -77,7 +77,7 @@ read_obj(ObjId, EsOpts) ->
 -spec save_obj(nkdomain:obj_id(), map(), nkelastic:opts()) ->
     {ok, meta()} | {error, term()}.
 
-save_obj(ObjId, Obj, #{srv_id:=SrvId}=EsOpts) ->
+save_obj(ObjId, Obj, EsOpts) ->
     Map = ?CALL_SRV(object_es_unparse, [Obj]),
     nkelastic:put(ObjId, Map, EsOpts).
 
@@ -323,8 +323,8 @@ do_clean_active(EsOpts) ->
         size => ?ES_ITER_SIZE,
         fields => [<<"type">>]
     },
-    Fun = fun(#{<<"obj_id">>:=ObjId, <<"type">>:=Type}, Acc) ->
-        case ?CALL_SRV(object_check_active, [Type, ObjId]) of
+    Fun = fun(#{<<"obj_id">>:=ObjId, <<"type">>:=Type, <<"srv_id">>:=SrvId}, Acc) ->
+        case ?CALL_SRV(object_check_active, [SrvId, Type, ObjId]) of
             false ->
                 {ok, Acc+1};
             true ->
