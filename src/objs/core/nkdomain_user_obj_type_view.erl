@@ -208,6 +208,7 @@ table_data(#{start:=Start, size:=Size, sort:=Sort, filter:=Filter}, #admin_sessi
                            <<"obj_name">>,
                            <<"created_time">>,
                            <<"created_by">>,
+                           <<"enabled">>,
                            <<"user.name">>, <<"user.surname">>, <<"user.email">>],
                 sort => SortSpec,
                 from => Start,
@@ -305,13 +306,19 @@ table_iter([Entry|Rest], Pos, Acc) ->
         } = User
     } = Entry,
     Email = maps:get(<<"email">>, User, <<>>),
-    Enabled = maps:get(<<"enabled">>, Entry, true),
     {ok, Domain, ShortName} = nkdomain_util:get_parts(?DOMAIN_USER, Path),
+    Enabled = maps:get(<<"enabled">>, Entry, true),
+    ObjName = case Enabled of
+        true ->
+            <<"<a href=\"#_id/", ObjId/binary, "\">", ShortName/binary, "</a>">>;
+        false ->
+            ShortName
+    end,
     Data = #{
         checkbox => <<"0">>,
         pos => Pos,
         id => ObjId,
-        obj_name => <<"<a href=\"#_id/", ObjId/binary, "\">", ShortName/binary, "</a>">>,
+        obj_name => ObjName,
         domain => Domain,
         name => Name,
         surname => Surname,
