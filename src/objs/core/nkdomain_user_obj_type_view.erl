@@ -305,10 +305,7 @@ table_iter([Entry|Rest], Pos, Acc) ->
         } = User
     } = Entry,
     Email = maps:get(<<"email">>, User, <<>>),
-    Enabled = case maps:get(<<"enabled">>, Entry, true) of
-        true -> <<"fa-times">>;
-        false -> <<"fa-check">>
-    end,
+    Enabled = maps:get(<<"enabled">>, Entry, true),
     {ok, Domain, ShortName} = nkdomain_util:get_parts(?DOMAIN_USER, Path),
     Data = #{
         checkbox => <<"0">>,
@@ -321,7 +318,7 @@ table_iter([Entry|Rest], Pos, Acc) ->
         email => Email,
         created_by => <<"<a href=\"#_id/", CreatedBy/binary, "\">", CreatedBy/binary, "</a>">>,
         created_time => CreatedTime,
-        enabled_icon => Enabled
+        enabled => Enabled
     },
     table_iter(Rest, Pos+1, [Data|Acc]).
 
