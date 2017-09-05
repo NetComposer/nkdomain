@@ -41,6 +41,7 @@
 -define(NETWORKS,       <<"domain_tree_networks">>).
 -define(SERVICES,       <<"domain_tree_services">>).
 
+-define(TYPE_VIEW,      <<"domain_detail_type_view">>).
 
 %% ===================================================================
 %% Public
@@ -164,6 +165,22 @@ element_action([?RESOURCES, Type], selected, _Value, Updates, Session) ->
 element_action([?SESSIONS, Type], selected, _Value, Updates, Session) ->
     Path = <<$/, (nkdomain_util:class(Type))/binary>>,
     {Updates2, Session2} = nkadmin_util:update_detail(Path, #{}, Updates, Session),
+    {ok, Updates2, Session2};
+
+element_action([?TYPE_VIEW|_Type], enable, #{<<"ids">>:=Ids}, Updates, Session) ->
+    {Updates2, Session2} = type_view_enable(true, Ids, Updates, Session),
+    {ok, Updates2, Session2};
+
+element_action([?TYPE_VIEW|_Type], disable, #{<<"ids">>:=Ids}, Updates, Session) ->
+    {Updates2, Session2} = type_view_enable(false, Ids, Updates, Session),
+    {ok, Updates2, Session2};
+
+element_action([?TYPE_VIEW|_Type], delete, #{<<"ids">>:=Ids}, Updates, Session) ->
+    {Updates2, Session2} = type_view_delete(Ids, Updates, Session),
+    {ok, Updates2, Session2};
+
+element_action([?TYPE_VIEW|Type], new, _Value, Updates, Session) ->
+    {Updates2, Session2} = type_view_new(Type, Updates, Session),
     {ok, Updates2, Session2};
 
 element_action(_Id, _Action, _Value, Updates, Session) ->
@@ -451,5 +468,38 @@ update_session(Type, Counter, #admin_session{sessions=Sessions}=Session) ->
 
 
 %% ===================================================================
-%% Util
+%% Type View
 %% ===================================================================
+
+%% @private
+type_view_enable(_Enable, [], Updates, Session) ->
+    {Updates, Session};
+
+type_view_enable(Enable, [Id|Rest], Updates, #admin_session{srv_id=SrvId}=Session) ->
+    case nkdomain:enable(SrvId, Id, Enable) of
+        ok ->
+            ?LLOG(info, "object enabled (~p): ~s", [Enable, Id], Session),
+            ok;
+        {error, Error} ->
+            ?LLOG(warning, "could not enable ~s: ~p", [Id, Error], Session)
+    end,
+    type_view_enable(Enable, Rest, Updates, Session).
+
+
+%% @private
+type_view_delete([], Updates, Session) ->
+    {Updates, Session};
+
+type_view_delete([Id|Rest], Updates, #admin_session{srv_id=SrvId}=Session) ->
+    case nkdomain:delete(SrvId, Id) of
+        ok ->
+            ok;
+        {error, Error} ->
+            ?LLOG(warning, "could not delete ~s: ~p", [Id, Error], Session)
+    end,
+    type_view_delete( Rest, Updates, Session).
+
+
+%% @private
+type_view_new(_Type, Updates, Session) ->
+    {Updates, Session}.
