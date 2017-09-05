@@ -96,6 +96,11 @@
         base_url => binary()
     }.
 
+-type notification_opts() ::
+    #{
+        wakeup_push => term()
+    }.
+
 
 -type events() ::
     {session_started, nkdomain:type(), nkdomain:obj_id()} |
@@ -249,7 +254,7 @@ get_status(SrvId, Id, Domain, AppId) ->
 %% See nkchat_session_obj:send_invitation() for a sample
 %% If the user object dies, the token will reload it automatically
 
--spec add_notification_op(nkservice:id(), nkdomain:id(), nkdomain:type(), #{}, map()) ->
+-spec add_notification_op(nkservice:id(), nkdomain:id(), nkdomain:type(), notification_opts(), map()) ->
     {ok, UserId::nkdomain:obj_id(), map()} | {error, term()}.
 
 add_notification_op(SrvId, Id, SessType, Opts, Base) ->
@@ -639,16 +644,21 @@ object_sync_op({?MODULE, get_sessions, Type}, _From, #?STATE{session=Session}=St
         UserSessions2),
     {reply, {ok, Reply}, State};
 
-object_sync_op({?MODULE, add_notification_op, SessType, _Opts, Base}, _From, State) ->
+object_sync_op({?MODULE, add_notification_op, SessType, Opts, Base}, _From, State) ->
     #?STATE{srv_id=SrvId, id=#obj_id_ext{obj_id=UserId}} = State,
     UserData1 = maps:get(?DOMAIN_USER, Base, #{}),
-    UserData2 = UserData1#{
-        <<"notification">> => #{
-            <<"user_id">> => UserId,
-            <<"srv_id">> => SrvId,
-            <<"session_type">> => SessType
-        }
+    UserNot1 = #{
+        <<"user_id">> => UserId,
+        <<"srv_id">> => SrvId,
+        <<"session_type">> => SessType
     },
+    UserNot2 = case Opts of
+        #{wakeup_push:=Push} ->
+            UserNot1#{<<"wakeup_push">> => Push};
+        _ ->
+            UserNot1
+    end,
+    UserData2 = UserData1#{<<"notification">> => UserNot2},
     {reply, {ok, UserId, Base#{?DOMAIN_USER=>UserData2}}, State};
 
 object_sync_op({?MODULE, get_status, DomainPath, AppId}, _From, State) ->
@@ -984,14 +994,15 @@ notify_token_sessions(#notify_token{domain_path=DomainPath, session_type=Type, t
                 _ when Num > 0 ->
                     ok;
                 created ->
-                    ?LLOG(notice, "no ~p session found: send wakeup", [Type], State),
-                    Push = #{
-                        type => simple,
-                        title => <<"New user notification">>,
-                        body => <<"Wake up">>
-                    },
-                    AppId = <<"user_notifications">>,
-                    send_push(any, self(), AppId, Push);
+                    ?LLOG(notice, "no ~p session found: send wakeup", [Data], State),
+                    ok;
+%%                    Push = #{
+%%                        type => simple,
+%%                        title => <<"New user notification">>,
+%%                        body => <<"Wake up">>
+%%                    },
+%%                    AppId = <<"user_notifications">>,
+%%                    send_push(any, self(), AppId, Push);
                 {removed, Reason} ->
                     ?LLOG(notice, "~s session notification removed: ~p", [Type, Reason]),
                     Push = #{
