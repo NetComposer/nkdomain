@@ -2,14 +2,11 @@
 -compile(export_all).
 
 -include("nkdomain.hrl").
+-include("nkdomain_vsn.hrl").
+
 -include_lib("nkservice/include/nkservice.hrl").
 -include_lib("nkmail/include/nkmail.hrl").
 
--define(HTTP, "https://127.0.0.1:9306/s/v06").
--define(WS, "wss://127.0.0.1:9306/s/v06/_api/ws").
-
-%%-define(HTTP, "https://v1.netc.io/d/v03").
-%%-define(WS, "wss://v1.netc.io/d/v03/_api/ws").
 
 -define(ADMIN_PASS, "netcomposer").
 
