@@ -74,7 +74,7 @@ find_loaded(Id) ->
 
 %% @private
 find_in_db(Id) ->
-    case ?CALL_SRV(object_db_find_obj, [Id]) of
+    case ?CALL_NKROOT(object_db_find_obj, [Id]) of
         {ok, Srv, Type, ObjId, Path} ->
             {ok, _, ObjName} = nkdomain_util:get_parts(Type, Path),
             case catch binary_to_existing_atom(Srv, latin1) of
@@ -84,7 +84,7 @@ find_in_db(Id) ->
                     #obj_id_ext{srv_id=SrvId, type=Type, obj_id=ObjId, path=Path, obj_name=ObjName}
             end;
         {error, object_not_found} ->
-            case ?CALL_SRV(object_db_search_alias, [Id]) of
+            case ?CALL_NKROOT(object_db_search_alias, [Id]) of
                 {ok, 0, []} ->
                     {error, object_not_found};
                 {ok, N, [{Srv, Type, ObjId, Path}|_]}->
@@ -119,7 +119,7 @@ load(Id) ->
         #obj_id_ext{pid=Pid}=ObjIdExt when is_pid(Pid) ->
             ObjIdExt;
         #obj_id_ext{obj_id=ObjId, path=Path}=ObjIdExt ->
-            case ?CALL_SRV(object_db_read, [ObjId]) of
+            case ?CALL_NKROOT(object_db_read, [ObjId]) of
                 {ok, #{path:=Path}=Obj, _Meta} ->
                     case nkdomain_obj:start(Obj, loaded, #{}) of
                         {ok, Pid} ->
@@ -148,7 +148,7 @@ create(Obj) ->
     #obj_id_ext{} | {error, term()}.
 
 create(#{srv_id:=SrvId, type:=Type, obj_id:=ObjId, path:=Path}=Obj, Meta) ->
-    case ?CALL_SRV(object_db_find_obj, [Path]) of
+    case ?CALL_NKROOT(object_db_find_obj, [Path]) of
         {error, object_not_found} ->
             case nkdomain_obj:start(Obj, created, Meta) of
                 {ok, Pid} ->

@@ -26,7 +26,7 @@
 
 -export([search/2, search_all/2, search_type/2, search_all_types/2, search_childs/2, search_all_childs/2]).
 -export([find_path/1, find_path/2, unload_childs/1, get_childs_type/2, get_counter/2]).
--export([object_info/0, object_parse/3, object_es_mapping/0,
+-export([object_info/0, object_parse/2, object_es_mapping/0,
          object_api_syntax/2, object_send_event/2, object_api_cmd/2]).
 -export([object_init/1, object_sync_op/3, object_async_op/2, object_enabled/2, object_link_down/2,
          object_handle_info/2]).
@@ -77,7 +77,7 @@ search_all(Id, Spec) ->
 search_type(Id, Spec) ->
     case nkdomain_lib:find(Id) of
         #obj_id_ext{obj_id=ObjId} ->
-            ?CALL_SRV(object_db_search_types, [ObjId, Spec]);
+            ?CALL_NKROOT(object_db_search_types, [ObjId, Spec]);
         {error, Error} ->
             {error, Error}
     end.
@@ -87,7 +87,7 @@ search_type(Id, Spec) ->
 search_all_types(Id, Spec) ->
     case nkdomain_lib:find(Id) of
         #obj_id_ext{path=Path} ->
-            ?CALL_SRV(object_db_search_all_types, [Path, Spec]);
+            ?CALL_NKROOT(object_db_search_all_types, [Path, Spec]);
         {error, Error} ->
             {error, Error}
     end.
@@ -97,7 +97,7 @@ search_all_types(Id, Spec) ->
 search_childs(Id, Spec) ->
     case nkdomain_lib:find(Id) of
         #obj_id_ext{obj_id=ObjId} ->
-            ?CALL_SRV(object_db_search_childs, [ObjId, Spec]);
+            ?CALL_NKROOT(object_db_search_childs, [ObjId, Spec]);
         {error, Error} ->
             {error, Error}
     end.
@@ -107,7 +107,7 @@ search_childs(Id, Spec) ->
 search_all_childs(Id, Spec) ->
     case nkdomain_lib:find(Id) of
         #obj_id_ext{path=Path} ->
-            ?CALL_SRV(object_db_search_all_childs, [Path, Spec]);
+            ?CALL_NKROOT(object_db_search_all_childs, [Path, Spec]);
         {error, Error} ->
             {error, Error}
     end.
@@ -182,7 +182,7 @@ object_es_mapping() ->
 
 
 %% @private
-object_parse(_SrvId, _Mode, _Obj) ->
+object_parse(_Mode, _Obj) ->
     #{
         vsn => binary,
         defaults => map,

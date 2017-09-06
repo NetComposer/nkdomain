@@ -44,7 +44,7 @@
 %% ===================================================================
 
 %% @doc
-error(_)   		                        -> continue.
+error(_) -> continue.
 
 
 
@@ -53,11 +53,13 @@ error(_)   		                        -> continue.
 %% ===================================================================
 
 plugin_deps() ->
-    [nkdomain, nkelastic].
+    [nkdomain_nkroot, nkelastic].
 
 
 %% Other plugins can also parse db_clusters
 plugin_syntax() ->
+    lager:warning("NKLOG SYNB1"),
+
     #{
         nkdomain => #{
             db_store => binary,
@@ -141,7 +143,7 @@ object_es_mapping() ->
     map() | not_exported.
 
 object_es_mapping(Module) when is_atom(Module) ->
-    ?CALL_SRV(object_apply, [Module, object_es_mapping, []]).
+    ?CALL_NKROOT(object_apply, [Module, object_es_mapping, []]).
 
 
 %% @doc Must return the submapping for a type
@@ -149,7 +151,7 @@ object_es_mapping(Module) when is_atom(Module) ->
     map() | not_exported.
 
 object_es_mapping(SrvId, Type) ->
-    ?CALL_SRV(object_apply, [SrvId, Type, object_es_mapping, []]).
+    ?CALL_NKROOT(object_apply, [SrvId, Type, object_es_mapping, []]).
 
 
 %% @doc Must parse an object
@@ -157,7 +159,7 @@ object_es_mapping(SrvId, Type) ->
     {ok, nkdomain:obj(), Unknown::[binary()]} | {error, term()}.
 
 object_es_parse(Map) ->
-    ?CALL_SRV(object_parse, [?NKSRV, load, Map]).
+    ?CALL_NKROOT(object_parse, [load, Map]).
 
 
 %% @doc Called to serialize an object to ES format
@@ -165,7 +167,7 @@ object_es_parse(Map) ->
     map().
 
 object_es_unparse(#{srv_id:=SrvId, type:=Type}=Obj) ->
-    BaseKeys = maps:keys(?CALL_SRV(object_es_mapping, [])),
+    BaseKeys = maps:keys(?CALL_NKROOT(object_es_mapping, [])),
     BaseMap1 = maps:with(BaseKeys, Obj),
     BaseMap2 = case BaseMap1 of
         #{pid:=Pid} ->
@@ -185,14 +187,14 @@ object_es_unparse(#{srv_id:=SrvId, type:=Type}=Obj) ->
         _ ->
             BaseMap3
     end,
-    case ?CALL_SRV(object_es_mapping, [SrvId, Type]) of
+    case ?CALL_NKROOT(object_es_mapping, [SrvId, Type]) of
         not_exported ->
             BaseMap4#{Type => #{}};
         not_indexed ->
             ModData = maps:get(Type, Obj, #{}),
             BaseMap4#{Type => ModData};
         Map when is_map(Map) ->
-            case ?CALL_SRV(object_apply, [SrvId, Type, object_es_unparse, [Obj, BaseMap4]]) of
+            case ?CALL_NKROOT(object_apply, [SrvId, Type, object_es_unparse, [Obj, BaseMap4]]) of
                 not_exported ->
                     ModData = maps:get(Type, Obj, #{}),
                     ModKeys = maps:keys(Map),
@@ -214,8 +216,8 @@ object_es_unparse(#{srv_id:=SrvId, type:=Type}=Obj) ->
     {ok, nkservice:state()} | {error, term()}.
 
 object_db_init(State) ->
-    case ?CALL_SRV(config_nkdomain, []) of
-        #nkdomain_cache{db_store={elastic, IndexOpts, EsOpts}} ->
+    case nkdomain_store_es_util:get_index_opts() of
+        {ok, IndexOpts, EsOpts} ->
             case nkdomain_store_es_util:db_init(IndexOpts, EsOpts) of
                 ok ->
                     {ok, State};

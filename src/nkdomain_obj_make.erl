@@ -40,6 +40,7 @@
         type => nkdomain:type(),                        % Mandatory
         domain_id => binary(),                          % Mandatory
         created_by => binary(),                         % Mandatory
+        srv_id => atom(),                               % Will take domain's if not present
         name => binary(),
         expires_time => nklib_util:m_timestamp(),
         parent_id => nkdomain:obj_id(),
@@ -108,6 +109,8 @@ make(Opts) ->
                 make_name(ObjId1);
             Name0 ->
                 nkdomain_util:name(Name0)
+
+
         end,
         Name2 = case Type2 of
             ?DOMAIN_DOMAIN ->
@@ -189,7 +192,7 @@ create(MakeOpts) ->
 create(MakeOpts, Opts) ->
     case make(MakeOpts) of
         {ok, Obj2} ->
-            case apply(nkroot, object_parse, [create, Obj2]) of
+            case ?CALL_NKROOT(object_parse, [create, Obj2]) of
                 {ok, Obj3, Unknown} ->
                     case nkdomain_lib:create(Obj3, Opts) of
                         #obj_id_ext{}=ObjIdExt ->

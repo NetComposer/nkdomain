@@ -24,7 +24,7 @@
 -behavior(nkdomain_obj).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([object_info/0, object_admin_info/0, object_parse/3, object_es_mapping/0,
+-export([object_info/0, object_admin_info/0, object_parse/2, object_es_mapping/0,
          object_api_syntax/2, object_api_cmd/2]).
 
 -include_lib("nkdomain.hrl").
@@ -74,7 +74,7 @@ object_es_mapping() ->
 
 
 %% @private
-object_parse(_SrvId, _Mode, _Obj) ->
+object_parse(_Mode, _Obj) ->
     #{
         vsn => binary,
         '__defaults' => #{vsn => <<"1">>}
@@ -91,10 +91,10 @@ object_api_syntax(_Cmd, Syntax) ->
 
 
 %% @private
-object_api_cmd(<<"send">>, #nkreq{srv_id=SrvId, data=Data}) ->
-    case get_provider(SrvId, Data) of
+object_api_cmd(<<"send">>, #nkreq{data=Data}) ->
+    case get_provider(Data) of
         {ok, _, Provider} ->
-            case nkmail:send(SrvId, Provider, Data) of
+            case nkmail:send(?NKSRV, Provider, Data) of
                 {ok, Meta} ->
                     {ok, #{result=>Meta}};
                 {error, Error} ->
@@ -117,20 +117,20 @@ object_api_cmd(_Cmd, _Req) ->
 
 
 %% @private
-get_provider(SrvId, #{provider_id:=ProviderId}) ->
-    do_get_provider(SrvId, ProviderId);
+get_provider(#{provider_id:=ProviderId}) ->
+    do_get_provider(ProviderId);
 
-get_provider(SrvId, _Obj) ->
-    case SrvId:config_nkdomain() of
-        #nkdomain_cache{email_provider=ProviderId} ->
-            do_get_provider(SrvId, ProviderId);
+get_provider(_Obj) ->
+    case ?CALL_NKROOT(config_nkdomain_nkroot, []) of
+        #nkdomain_config_cache{email_provider=ProviderId} ->
+            do_get_provider(ProviderId);
         _ ->
             {error, provider_id_missing}
     end.
 
 
 %% @private
-do_get_provider(_SrvId, ProviderId) ->
+do_get_provider(ProviderId) ->
     case nkdomain_lib:load(ProviderId) of
         #obj_id_ext{obj_id=ProviderObjId, type = ?DOMAIN_MAIL_PROVIDER} ->
             case nkdomain:get_obj(ProviderObjId) of

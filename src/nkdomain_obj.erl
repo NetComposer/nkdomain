@@ -279,7 +279,7 @@ unload_all() ->
 -spec init(term()) ->
     {ok, state()} | {error, term()}.
 
-init({Op, SrvId, Obj, Meta}) when Op==loaded; Op==created ->
+init({Op, Obj, Meta}) when Op==loaded; Op==created ->
     #{
         srv_id := SrvId,
         type := Type,
@@ -755,8 +755,8 @@ do_register(State) ->
         {ok, State2} ->
             case register_parent(State2) of
                 {ok, State3} ->
-                    #?STATE{id=#obj_id_ext{type=Type, obj_id=ObjId, path=Path}} = State,
-                    nklib_proc:put(?MODULE, {Type, ObjId, Path}),
+                    #?STATE{id=#obj_id_ext{type=Type, srv_id=SrvId, obj_id=ObjId, path=Path}} = State,
+                    nklib_proc:put(?MODULE, {SrvId, Type, ObjId, Path}),
                     {ok, State3};
                 {error, Error} ->
                     {error, Error}
@@ -770,15 +770,15 @@ do_register(State) ->
 register_domain(#?STATE{id=#obj_id_ext{obj_id = <<"root">>, type = ?DOMAIN_DOMAIN}}=State) ->
     {ok, State};
 
-register_domain(#?STATE{srv_id=SrvId, id=ObjIdExt, domain_id=DomainId}=State) ->
-    case sync_op(SrvId, DomainId, {nkdomain_reg_obj, ObjIdExt}) of
+register_domain(#?STATE{id=ObjIdExt, domain_id=DomainId}=State) ->
+    case sync_op(DomainId, {nkdomain_reg_obj, ObjIdExt}) of
         {ok, Enabled, Pid} ->
             ?DEBUG("registered with domain (enabled:~p)", [Enabled], State),
             monitor(process, Pid),
             State2 = do_enabled(State#?STATE{domain_pid=Pid, domain_enabled=Enabled}),
             {ok, State2};
         {error, object_not_found} ->
-            {error, {could_not_load_domain, DomainId}};
+            {error, {could_not_load_domain2, DomainId}};
         {error, Error} ->
             {error, Error}
     end.
@@ -788,8 +788,8 @@ register_domain(#?STATE{srv_id=SrvId, id=ObjIdExt, domain_id=DomainId}=State) ->
 register_parent(#?STATE{id=#obj_id_ext{obj_id = <<"root">>, type = ?DOMAIN_DOMAIN}}=State) ->
     {ok, State};
 
-register_parent(#?STATE{srv_id=SrvId, id=ObjIdExt, parent_id=ParentId}=State) ->
-    case sync_op(SrvId, ParentId, {nkdomain_reg_child, ObjIdExt}) of
+register_parent(#?STATE{id=ObjIdExt, parent_id=ParentId}=State) ->
+    case sync_op(ParentId, {nkdomain_reg_child, ObjIdExt}) of
         {ok, Enabled, Pid} ->
             ?DEBUG("registered with parent (enabled:~p)", [Enabled], State),
             monitor(process, Pid),
@@ -964,7 +964,7 @@ do_update_name(ObjName, #?STATE{id=Id, obj=Obj}=State) ->
 %% @private
 do_update(Update, #?STATE{id=Id, obj=Obj}=State) ->
     #obj_id_ext{srv_id=SrvId, type=Type} = Id,
-    Update2 = Update#{type=>Type},
+    Update2 = Update#{type=>Type, srv_id=>SrvId},
     case apply(SrvId, object_parse, [update, Update2]) of
         {ok, Update3, UnknownFields} ->
             case ?ADD_TO_OBJ_DEEP(Update3, Obj) of

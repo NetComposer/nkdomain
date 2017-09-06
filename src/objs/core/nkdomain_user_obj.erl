@@ -27,7 +27,7 @@
 -export([create/1, auth/2, make_token/4, get_name/1, get_name/2]).
 -export([find_childs/1]).
 -export([object_info/0, object_admin_info/0, object_create/1, object_es_mapping/0, object_es_unparse/2,
-         object_parse/3, object_api_syntax/2, object_api_cmd/2, object_send_event/2]).
+         object_parse/2, object_api_syntax/2, object_api_cmd/2, object_send_event/2]).
 -export([object_init/1, object_save/1, object_event/2,
          object_sync_op/3, object_async_op/2, object_link_down/2, object_handle_info/2]).
 -export([fun_user_pass/1, user_pass/1]).
@@ -46,6 +46,7 @@
     lager:Type("NkDOMAIN User "++Txt, Args)).
 
 -define(INVALID_PASSWORD_TIME, 500).
+-define(USER_PASS_ITERS, 10).
 
 %-define(MAX_EXPIRE, 60).    % Secs
 
@@ -445,7 +446,7 @@ object_es_unparse(Obj, Base) ->
 
 
 %% @private
-object_parse(_SrvId, update, _Obj) ->
+object_parse(update, _Obj) ->
     #{
         vsn => binary,
         name => binary,
@@ -482,9 +483,9 @@ object_parse(_SrvId, update, _Obj) ->
         '__defaults' => #{vsn => <<"1">>}
     };
 
-object_parse(SrvId, Mode, Obj) ->
-    {BaseSyn, Opts} = SrvId:object_syntax(SrvId, Mode),
-    Syntax1 = object_parse(SrvId, update, Obj),
+object_parse(Mode, Obj) ->
+    {BaseSyn, Opts} = ?CALL_NKROOT(object_syntax, [Mode]),
+    Syntax1 = object_parse(update, Obj),
     Syntax2 = Syntax1#{'__mandatory' => [name, surname]},
     case nklib_syntax:parse(Obj, BaseSyn#{?DOMAIN_USER=>Syntax2}, Opts) of
         {ok, Obj2, Unknown} ->
@@ -541,9 +542,9 @@ object_save(#?STATE{obj=Obj, session=Session}=State) ->
 object_event(Event, State) ->
     case Event of
         {child_loaded, ?DOMAIN_TOKEN, TokenId, Pid} ->
-            nkdomain_obj:async_op(any, self(), {?MODULE, loaded_token, TokenId, Pid});
+            nkdomain_obj:async_op(self(), {?MODULE, loaded_token, TokenId, Pid});
         {child_unloaded, ?DOMAIN_TOKEN, TokenId} ->
-            nkdomain_obj:async_op(any, self(), {?MODULE, unloaded_token, TokenId});
+            nkdomain_obj:async_op(self(), {?MODULE, unloaded_token, TokenId});
         _ ->
             ok
     end,
@@ -821,7 +822,7 @@ user_pass(Pass) ->
             Pass2;
         _ ->
             Salt = <<"netcomposer">>,
-            Iters = nkdomain_app:get(user_password_pbkdf2_iters),
+            Iters = ?USER_PASS_ITERS,
             {ok, Pbkdf2} = pbkdf2:pbkdf2(sha, Pass2, Salt, Iters),
             Hash = nklib_util:lhash(Pbkdf2),
             <<"NKD!!", Hash/binary, "!">>

@@ -22,7 +22,7 @@
 -module(nkdomain_store_es_util).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([get_opts/0, db_init/2, normalize/1, normalize_multi/1]).
+-export([get_opts/0, get_index_opts/0, db_init/2, normalize/1, normalize_multi/1]).
 -export([reload_index/1, delete_index/0]).
 
 -define(LLOG(Type, Txt, Args),
@@ -38,9 +38,21 @@
 
 %% @doc
 get_opts() ->
-    case ?CALL_SRV(config_nkdomain, []) of
-        #nkdomain_cache{db_store={elastic, _IndexOpts, EsOpts}} -> {ok, EsOpts};
-        _ -> not_found
+    case get_index_opts() of
+        {ok, _IndexOpts, EsOpts} ->
+            {ok, EsOpts};
+        _ ->
+            not_found
+    end.
+
+
+%% @doc
+get_index_opts() ->
+    case ?CALL_NKROOT(config_nkdomain_nkroot, []) of
+        #nkdomain_config_cache{db_store={elastic, IndexOpts, EsOpts}} ->
+            {ok, IndexOpts, EsOpts};
+        _ ->
+            not_found
     end.
 
 
@@ -58,7 +70,7 @@ db_init(IndexOpts, EsOpts) ->
 %% TODO: each service could have their own type
 db_init_mappings(EsOpts) ->
     Modules = nkdomain_all_types:get_all_modules(),
-    Base = ?CALL_SRV(object_es_mapping, []),
+    Base = ?CALL_NKROOT(object_es_mapping, []),
     Mappings = do_get_mappings(Modules, Base),
     case nkelastic:add_mapping(Mappings, EsOpts) of
         {ok, _} ->
@@ -73,7 +85,7 @@ do_get_mappings([], Acc) ->
     Acc;
 
 do_get_mappings([Module|Rest], Acc) ->
-    Mapping = case ?CALL_SRV(object_es_mapping, [Module]) of
+    Mapping = case ?CALL_NKROOT(object_es_mapping, [Module]) of
         not_exported ->
             #{enabled => false};
         not_indexed ->
@@ -100,6 +112,7 @@ db_init_root(EsOpts) ->
                 type => ?DOMAIN_DOMAIN,
                 obj_id => <<"root">>,
                 path => <<"/">>,
+                srv_id => ?NKSRV,
                 obj_name => <<>>,
                 domain_id => <<>>,
                 parent_id => <<>>,
@@ -129,6 +142,7 @@ db_init_admin(EsOpts) ->
                 type => ?DOMAIN_USER,
                 obj_id => <<"admin">>,
                 path => <<"/users/admin">>,
+                srv_id => ?NKSRV,
                 obj_name => <<"admin">>,
                 domain_id => <<"root">>,
                 parent_id => <<"root">>,

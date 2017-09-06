@@ -25,7 +25,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([find/0, delete_all/0]).
--export([object_info/0, object_admin_info/0, object_parse/3, object_es_mapping/0]).
+-export([object_info/0, object_admin_info/0, object_parse/2, object_es_mapping/0]).
 
 -include("nkdomain.hrl").
 -include_lib("nkapi/include/nkapi.hrl").
@@ -85,8 +85,9 @@ object_es_mapping() ->
 %% @private
 %% @see nkfile_filesystem:store_syntax()
 %% @see nkfile_s3:store_syntax()
-object_parse(SrvId, _Mode, Obj) ->
+object_parse(_Mode, Obj) ->
     #{?DOMAIN_FILE_STORE:=Config} = Obj,
+    SrvId = nkdomain_util:get_srv_id(Obj),
     case nkfile:parse_store(SrvId, Config, #{path=>?DOMAIN_FILE_STORE}) of
         {ok, Store, UnknownTypes} ->
             {type_obj, Store, UnknownTypes};

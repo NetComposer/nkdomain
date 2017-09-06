@@ -4,8 +4,7 @@
 -include("nkdomain.hrl").
 -include_lib("nkservice/include/nkservice.hrl").
 
--define(WS, "ws://127.0.0.1:9306/s/_api/ws").
--define(SRV, sipstorm_v01).
+-define(WS, "wss://127.0.0.1:9306/s/v06/_api/ws").
 -define(ADMIN_PASS, "netcomposer").
 
 
@@ -119,7 +118,7 @@ test_create_user(Pid) ->
 
     % Find user by several ways
     {ok, U2} = cmd(Pid, <<"objects/user/get">>, #{id=><<"/users/tuser1">>}),
-    #obj_id_ext{type= <<"user">>, obj_id=U2Id, pid=Pid1} = F1 = nkdomain_lib:find(?SRV, "/users/tuser1"),
+    #obj_id_ext{type= <<"user">>, obj_id=U2Id, pid=Pid1} = F1 = nkdomain_lib:find("/users/tuser1"),
     F1 = nkdomain_lib:find(U2Id),
     F1 = nkdomain_lib:load("/users/tuser1"),
     F1 = nkdomain_lib:load(U2Id),
@@ -129,7 +128,7 @@ test_create_user(Pid) ->
     timer:sleep(100),
     {ok, _, <<"user">>, U2Id, <<"/users/tuser1">>, undefined} = F2 = nkdomain:find("/users/tuser1"),
     F2 = nkdomain:find(U2Id),
-    {ok, <<"user">>, U2Id, <<"/users/tuser1">>, Pid2} = F3 = nkdomain:load(?SRV, "/users/tuser1"),
+    {ok, _, <<"user">>, U2Id, <<"/users/tuser1">>, Pid2} = F3 = nkdomain:load("/users/tuser1"),
     F3 = nkdomain:find(U2Id),
     false = Pid1 == Pid2,
 
@@ -161,7 +160,7 @@ test_session1(Pid) ->
     {ok, Pid2, SessId} = login("/users/tuser1", pass2),
     {ok, #{<<"path">>:=<<"/users/tuser1">>, <<"obj_id">>:=UId}} = cmd(Pid2, <<"objects/user/get">>, #{}),
     {ok, #{<<"path">>:=<<"/users/admin">>}} = cmd(Pid, <<"objects/user/get">>, #{}),
-    {ok, <<"session">>, SessId, _, SPid} = nkdomain:find(?SRV, SessId),
+    {ok, _, <<"session">>, SessId, _, SPid} = nkdomain:find(SessId),
     true = is_pid(SPid),
 
     % Object has active childs, we cannot delete it
@@ -181,8 +180,8 @@ test_session1(Pid) ->
         <<"path">> := <<"/sessions/", _/binary>>,
         <<"created_by">> := UId,
         <<"session">> := #{
-            <<"local">> := <<"ws:0.0.0.0:", _/binary>>,
-            <<"remote">> := <<"ws:127.0.0.1:", _/binary>>
+            <<"local">> := <<"wss:0.0.0.0:", _/binary>>,
+            <<"remote">> := <<"wss:127.0.0.1:", _/binary>>
         }
     }} =
         cmd(Pid2, <<"objects/session/get">>, #{}),
@@ -207,24 +206,24 @@ test_session1(Pid) ->
 test_session2(Pid) ->
     % Get the admin user (without id) and its current session
     {ok, #{<<"obj_id">>:=SessId}} = cmd(Pid, <<"objects/session/get">>, #{}),
-    #obj_id_ext{type = <<"session">>, obj_id=SessId, path=Path, pid=SessPid} = nkdomain_lib:find(?SRV, SessId),
+    #obj_id_ext{type = <<"session">>, obj_id=SessId, path=Path, pid=SessPid} = nkdomain_lib:find(SessId),
 
-    {ok, Childs} = nkdomain_obj:sync_op(?SRV, <<"admin">>, get_childs),
+    {ok, Childs} = nkdomain_obj:sync_op(<<"admin">>, get_childs),
     true = maps:is_key(SessId, Childs),
 
     % If we kill the session, admin notices and the web socket is closed
     % We link with admin so that it is not unloaded after stopping its childs for 10 secs
     spawn_link(
         fun() ->
-            ok = nkdomain_obj:sync_op(?SRV, <<"admin">>, {register, usage, {please_dont_stop, self()}}),
+            ok = nkdomain_obj:sync_op(<<"admin">>, {register, usage, {please_dont_stop, self()}}),
             timer:sleep(10000)
         end),
     timer:sleep(50),
     exit(SessPid, kill),
     timer:sleep(100),
-    {ok, Childs2} = nkdomain_obj:sync_op(?SRV, <<"admin">>, get_childs),
+    {ok, Childs2} = nkdomain_obj:sync_op(<<"admin">>, get_childs),
     false = maps:is_key(SessId, Childs2),
-    #obj_id_ext{type= <<"session">>, obj_id=SessId, path=Path, pid=undefined} = nkdomain_lib:find(?SRV, SessId),
+    #obj_id_ext{type= <<"session">>, obj_id=SessId, path=Path, pid=undefined} = nkdomain_lib:find(SessId),
 
     % If we force a clean of the database, the stale object is deleted and archived
     {ok, #{inactive:=N}} = nkdomain:clean(),
@@ -240,7 +239,7 @@ test_session2(Pid) ->
 test_session3(Admin) ->
     % Do login over tuser1, check the session is created and loaded
     {ok, Pid, SessId} = login("/users/tuser1", pass2),
-    #obj_id_ext{type= <<"session">>, obj_id=SessId, pid=SPid, path = <<"/sessions/", _/binary>>} = nkdomain_lib:find(?SRV, SessId),
+    #obj_id_ext{type= <<"session">>, obj_id=SessId, pid=SPid, path = <<"/sessions/", _/binary>>} = nkdomain_lib:find(SessId),
     true = is_pid(SPid),
 
     {ok, #{<<"path">>:=<<"/users/tuser1">>}} = cmd(Pid, <<"objects/user/get">>, #{}),
@@ -448,8 +447,8 @@ test_basic_2(Pid) ->
 
 remove_data() ->
     case nkdomain:find("/users/tuser1") of
-        {ok, <<"user">>, UId, _, _} ->
-            {ok, _} = ?CALL_SRV(object_db_delete, [UId]);
+        {ok, _, <<"user">>, UId, _, _} ->
+            {ok, _} = ?CALL_NKROOT(object_db_delete, [UId]);
         {error, object_not_found} ->
             ok
     end,
@@ -461,7 +460,7 @@ remove_data() ->
             nkdomain:delete_all_childs("/stest1")
     end,
     case nkdomain:find("/stest1") of
-        {ok, ?DOMAIN_DOMAIN, S1Id_0, _, _} ->
+        {ok, _, ?DOMAIN_DOMAIN, S1Id_0, _, _} ->
             %% lager:warning("/stest1 was already present"),
             ok = nkdomain:delete(S1Id_0);
         {error, object_not_found} ->
@@ -485,7 +484,7 @@ login(User, Pass) ->
         password=> nklib_util:to_binary(Pass),
         meta => #{a=>nklib_util:to_binary(User)}
     },
-    case nkapi_client:start(?SRV, ?WS, Login, Fun, #{}, <<"objects/user/login">>) of
+    case nkapi_client:start(?NKSRV, ?WS, Login, Fun, #{}, <<"objects/user/login">>) of
         {ok, #{<<"session_id">>:=SessId}, Pid} -> {ok, Pid, SessId};
         {error, Error} -> {error, Error}
     end.
@@ -522,14 +521,3 @@ is_loaded(Id) ->
 %% ===================================================================
 %% Parse
 %% ===================================================================
-
-p1() ->
-    Obj = #{
-        type => user,
-        obj_id => a,
-        path => "/",
-        domain_id => p1,
-        created_time => 0,
-        <<"user">> => #{name => n1}
-    },
-    'nkdomain_callbacks.erl':object_parse(?SRV, load, Obj).

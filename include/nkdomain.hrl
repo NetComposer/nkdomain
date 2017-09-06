@@ -31,7 +31,7 @@
 -define(ADD_TO_OBJ_DEEP(Update, Obj), nklib_util:map_merge(Update, Obj)).
 -define(REMOVE_FROM_OBJ(Key, Obj), maps:remove(Key, Obj)).
 
--define(CALL_SRV(Fun, Args), apply(?NKSRV, Fun, Args)).
+-define(CALL_NKROOT(Fun, Args), apply(?NKSRV, Fun, Args)).
 
 -define(STATE, nkstate_v1).
 
@@ -75,7 +75,7 @@
 }).
 
 
--record(nkdomain_cache, {
+-record(nkdomain_config_cache, {
     db_store :: binary(),
     file_store :: binary,
     email_provider :: binary()

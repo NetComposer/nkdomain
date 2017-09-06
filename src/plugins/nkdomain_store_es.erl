@@ -59,7 +59,7 @@
 read_obj(ObjId, EsOpts) ->
     case nkelastic:get(ObjId, EsOpts) of
         {ok, Map, Meta} ->
-            case ?CALL_SRV(object_es_parse, [Map]) of
+            case ?CALL_NKROOT(object_es_parse, [Map]) of
                 {ok, Obj, []} ->
                     {ok, Obj, Meta};
                 {ok, Obj, UnknownFields} ->
@@ -78,7 +78,7 @@ read_obj(ObjId, EsOpts) ->
     {ok, meta()} | {error, term()}.
 
 save_obj(ObjId, Obj, EsOpts) ->
-    Map = ?CALL_SRV(object_es_unparse, [Obj]),
+    Map = ?CALL_NKROOT(object_es_unparse, [Obj]),
     nkelastic:put(ObjId, Map, EsOpts).
 
 
@@ -321,10 +321,11 @@ do_clean_active(EsOpts) ->
     Spec = #{
         filters => #{active=>true},
         size => ?ES_ITER_SIZE,
-        fields => [<<"type">>]
+        fields => [<<"type">>, <<"srv_id">>]
     },
-    Fun = fun(#{<<"obj_id">>:=ObjId, <<"type">>:=Type, <<"srv_id">>:=SrvId}, Acc) ->
-        case ?CALL_SRV(object_check_active, [SrvId, Type, ObjId]) of
+    Fun = fun(#{<<"obj_id">>:=ObjId, <<"type">>:=Type}=Obj, Acc) ->
+        SrvId = nkdomain_util:get_srv_id(Obj),
+        case ?CALL_NKROOT(object_check_active, [SrvId, Type, ObjId]) of
             false ->
                 {ok, Acc+1};
             true ->
@@ -346,7 +347,7 @@ do_clean_expired(EsOpts) ->
         size => ?ES_ITER_SIZE
     },
     Fun = fun(#{<<"obj_id">>:=ObjId}, Acc) ->
-        ?CALL_SRV(object_do_expired, [ObjId]),
+        ?CALL_NKROOT(object_do_expired, [ObjId]),
         {ok, Acc+1}
     end,
     case iterate(Spec, Fun, 0, EsOpts) of

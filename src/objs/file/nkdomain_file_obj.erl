@@ -26,7 +26,7 @@
 
 -export([http_post/4, http_get/2]).
 -export([find/0, delete_all/0]).
--export([object_info/0, object_es_mapping/0, object_parse/3, object_api_syntax/2, object_api_cmd/2]).
+-export([object_info/0, object_es_mapping/0, object_parse/2, object_api_syntax/2, object_api_cmd/2]).
 -export([object_admin_info/0]).
 
 -include("nkdomain.hrl").
@@ -172,12 +172,12 @@ object_es_mapping() ->
 
 
 %% @private
-object_parse(_SrvId, update, _Obj) ->
+object_parse(update, _Obj) ->
     #{};
 
-object_parse(_SrvId, _Mode, _Obj) ->
+object_parse(_Mode, _Obj) ->
      #{
-         vsn => binary,
+        vsn => binary,
         content_type => binary,
         store_id => binary,
         size => integer,
@@ -306,8 +306,8 @@ get_store(#{store_id:=StoreId}) when StoreId /= <<>> ->
     do_get_store(StoreId);
 
 get_store(_Obj) ->
-    case apply(nkroot, config_nkdomain, []) of
-        #nkdomain_cache{file_store=StoreId} ->
+    case ?CALL_NKROOT(config_nkdomain, []) of
+        #nkdomain_config_cache{file_store=StoreId} ->
             do_get_store(StoreId);
         _ ->
             {error, store_id_missing}

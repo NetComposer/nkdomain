@@ -36,7 +36,7 @@
 api(<<"create">>, Type, #nkreq{data=Data, srv_id=SrvId, user_id=UserId}=Req) ->
     case nkdomain_api_util:get_id(?DOMAIN_DOMAIN, domain_id, Data, Req) of
         {ok, DomainId} ->
-            case apply(nkroot, object_create, [SrvId, DomainId, Type, UserId, Data]) of
+            case ?CALL_NKROOT(object_create, [SrvId, DomainId, Type, UserId, Data]) of
                 {ok, ObjIdExt, Unknown} ->
                     #obj_id_ext{obj_id=ObjId, path=Path} = ObjIdExt,
                     Req2 = nkservice_api:add_unknown(Unknown, Req),

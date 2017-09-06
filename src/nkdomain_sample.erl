@@ -11,7 +11,6 @@
 %%-define(HTTP, "https://v1.netc.io/d/v03").
 %%-define(WS, "wss://v1.netc.io/d/v03/_api/ws").
 
--define(SRV, sipstorm_v01).
 -define(ADMIN_PASS, "netcomposer").
 
 
@@ -25,7 +24,7 @@ login(User, Pass) ->
         password=> nklib_util:to_binary(Pass),
         meta => #{a=>nklib_util:to_binary(User)}
     },
-    {ok, #{<<"session_id">>:=SessId}, Pid} = nkapi_client:start(?SRV, ?WS, Login, Fun, #{}, <<"objects/session/start">>),
+    {ok, #{<<"session_id">>:=SessId}, Pid} = nkapi_client:start(?NKSRV, ?WS, Login, Fun, #{}, <<"objects/session/start">>),
     {ok, SessId, Pid}.
 
 
@@ -37,7 +36,7 @@ login(User, Pass, Domain) ->
         meta => #{a=>nklib_util:to_binary(User)},
         domain_id => Domain
     },
-    {ok, #{<<"session_id">>:=SessId}, Pid} = nkapi_client:start(?SRV, ?WS, Login, Fun, #{}, <<"objects/session/start">>),
+    {ok, #{<<"session_id">>:=SessId}, Pid} = nkapi_client:start(?NKSRV, ?WS, Login, Fun, #{}, <<"objects/session/start">>),
     {ok, SessId, Pid}.
 
 

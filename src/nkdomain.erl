@@ -183,7 +183,7 @@ unload(Id, Reason) ->
     {ok, integer(), Data::[map()], Meta::map()} | {error, term()}.
 
 search(Spec) ->
-    case ?CALL_SRV(object_db_search, [Spec]) of
+    case ?CALL_NKROOT(object_db_search, [Spec]) of
         {ok, Total, List, _Aggs, Meta} ->
             {ok, Total, List, Meta};
         {error, Error} ->
@@ -204,7 +204,7 @@ search_type(Type) ->
     {ok, integer(), [{nkdomain:type(), integer()}], map()} | {error, term()}.
 
 search_agg_field(Id, Field, Spec, SubChilds) ->
-    case ?CALL_SRV(object_db_search_agg_field, [Id, Field, Spec, SubChilds]) of
+    case ?CALL_NKROOT(object_db_search_agg_field, [Id, Field, Spec, SubChilds]) of
         {ok, Total, Data, Meta} ->
             {ok, Total, Data, Meta};
         {error, Error} ->
@@ -234,13 +234,13 @@ search_agg_field(Id, Field, Spec, SubChilds) ->
 
 %% @doc
 delete_all_childs(Id) ->
-    ?CALL_SRV(object_db_delete_all_childs, [Id, #{}]).
+    ?CALL_NKROOT(object_db_delete_all_childs, [Id, #{}]).
 
 
 %% @doc
 delete_all_childs_type(Id, Type) ->
     Spec = #{filters => #{type=>nklib_util:to_binary(Type)}},
-    ?CALL_SRV(object_db_delete_all_childs, [Id, Spec]).
+    ?CALL_NKROOT(object_db_delete_all_childs, [Id, Spec]).
 
 
 %% @private Performs a periodic cleanup
@@ -248,6 +248,6 @@ delete_all_childs_type(Id, Type) ->
     {ok, map()} | {error, term()}.
 
 clean() ->
-    ?CALL_SRV(object_db_clean, []).
+    ?CALL_NKROOT(object_db_clean, []).
 
 

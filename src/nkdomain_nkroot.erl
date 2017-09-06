@@ -41,10 +41,10 @@ start() ->
         nkdomain => nklib_config:get_env(nkdomain),
         debug => [
             %% {nkapi_client, #{nkpacket=>true}},
-            %nkapi_server,
+            nkapi_server,
             %% nkelastic
             %% {nkelastic, [full]},
-            %{nkdomain_obj, all}
+            {nkdomain_obj, all}
         ]
     },
     nkservice:start(?NKSRV, Spec).
@@ -72,7 +72,6 @@ syntax() ->
         db_store => binary,
         file_stores => {list, BaseFile#{id=>binary}},
         default_file_store => binary,
-        user_password_pbkdf2_iters => {integer, 1, none},
         default_store_id => binary,
         mail_providers => {list, mail_syntax()},
         default_mail_provider => binary,
@@ -128,6 +127,8 @@ config(Env, Base) ->
         false ->
             Config3
     end,
+    %% Plugin nkdomain_store_es should have inserted already its
+    %% configuration
     DbStore = case Config4 of
         #{nkdomain_db_store:=DbStore0} ->
             DbStore0;
@@ -138,7 +139,7 @@ config(Env, Base) ->
         {ok, #{default_file_store:=FileStore}=Config5} ->
             case parse_mail_providers(Env, Config5) of
                 {ok, #{default_mail_provider:=MailProvider}=Config6} ->
-                    Cache = #nkdomain_cache{
+                    Cache = #nkdomain_config_cache{
                         db_store = DbStore,
                         file_store = FileStore,
                         email_provider = MailProvider
@@ -155,7 +156,7 @@ config(Env, Base) ->
 %% @private
 %% Called from nkdomain_nkroot_callbacks:service_init/2
 init(State) ->
-    case ?CALL_SRV(object_db_init, [State]) of
+    case ?CALL_NKROOT(object_db_init, [State]) of
         {ok, State2} ->
             ok = load_file_stores(),
             ok = load_mail_providers(),
@@ -219,7 +220,7 @@ do_parse_file_stores([Data|Rest], Acc) ->
 
 %% @private
 load_file_stores() ->
-    case apply(nkroot, config, []) of
+    case ?CALL_NKROOT(config, []) of
         #{nkdomain_file_stores:=Stores} ->
             load_file_stores(maps:to_list(Stores));
         _ ->
@@ -234,6 +235,7 @@ load_file_stores([{Id, Data}|Rest]) ->
     Obj = #{
         obj_name => Id,
         type => ?DOMAIN_FILE_STORE,
+        srv_id => ?NKSRV,
         domain_id => <<"root">>,
         created_by => <<"admin">>,
         ?DOMAIN_FILE_STORE => Data
@@ -296,7 +298,7 @@ do_parse_mail_providers([Data|Rest], Acc) ->
 
 %% @private
 load_mail_providers() ->
-    case apply(nkroot, config, []) of
+    case ?CALL_NKROOT(config, []) of
         #{nkdomain_mail_providers:=Providers} ->
             load_mail_providers(maps:to_list(Providers));
         _ ->
@@ -313,6 +315,7 @@ load_mail_providers([{Id, Data}|Rest]) ->
         type => ?DOMAIN_MAIL_PROVIDER,
         domain_id => <<"root">>,
         created_by => <<"admin">>,
+        srv_id => ?NKSRV,
         ?DOMAIN_MAIL_PROVIDER => Data
     },
     case nkdomain_obj_make:create(Obj) of

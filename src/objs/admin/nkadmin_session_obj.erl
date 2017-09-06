@@ -26,7 +26,7 @@
 -export([start/3]).
 -export([switch_domain/3, element_action/4, get_data/3]).
 -export([find_all/0]).
--export([object_info/0, object_parse/3, object_es_mapping/0,
+-export([object_info/0, object_parse/2, object_es_mapping/0,
          object_api_syntax/2, object_api_cmd/2]).
 -export([object_init/1, object_stop/2, object_send_event/2,
          object_sync_op/3, object_async_op/2, object_handle_info/2]).
@@ -149,7 +149,7 @@ object_es_mapping() ->
 
 
 %% @private
-object_parse(_SrvId, _Mode, _Obj) ->
+object_parse(_Mode, _Obj) ->
     #{
         vsn => binary,
         '__defaults' => #{vsn => <<"1">>}

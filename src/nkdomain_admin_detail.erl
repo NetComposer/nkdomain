@@ -94,7 +94,7 @@ element_action(_Elements, _Action, _Value, Updates, Session) ->
 
 %% @private
 get_type_view_mod(Type, #admin_session{srv_id=SrvId}) ->
-    case ?CALL_SRV(object_admin_info, [SrvId, Type]) of
+    case ?CALL_NKROOT(object_admin_info, [SrvId, Type]) of
         #{type_view_mod:=Mod} ->
             {ok, Mod};
         _ ->
@@ -103,7 +103,7 @@ get_type_view_mod(Type, #admin_session{srv_id=SrvId}) ->
 
 %% @private
 get_obj_view_mod(Type, #admin_session{srv_id=SrvId}) ->
-    case ?CALL_SRV(object_admin_info, [SrvId, Type]) of
+    case ?CALL_NKROOT(object_admin_info, [SrvId, Type]) of
         #{obj_view_mod:=Mod} ->
             {ok, Mod};
         _ ->

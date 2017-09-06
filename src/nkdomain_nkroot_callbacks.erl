@@ -29,7 +29,7 @@
          admin_element_action/5, admin_get_data/3]).
 -export([object_admin_info/2]).
 -export([object_create/5, object_check_active/3, object_do_expired/1]).
--export([object_syntax/2, object_parse/3]).
+-export([object_syntax/1, object_syntax_srv_id/1, object_parse/2]).
 -export([object_init/1, object_terminate/2, object_stop/2,
          object_event/2, object_reg_event/4, object_session_event/3, object_sync_op/3, object_async_op/2,
          object_save/1, object_delete/1, object_link_down/2, object_enabled/2,
@@ -61,7 +61,7 @@
 -type obj_id() :: nkdomain:obj_id().
 -type type() :: nkdomain:type().
 -type path() :: nkdomain:path().
--type srv_id() :: nkservice:id().
+%-type srv_id() :: nkservice:id().
 -type continue() :: continue | {continue, list()}.
 -type state() :: #?STATE{}.
 
@@ -215,10 +215,10 @@ nkservice_rest_http(_Method, _Path, _Req) ->
 
 
 %% @doc Object syntax
--spec object_syntax(nkservice:id(), load|update|create) ->
+-spec object_syntax(load|update|create) ->
     {nklib_syntax:syntax(), nklib_syntax:parse_opts()}.
 
-object_syntax(SrvId, load) ->
+object_syntax(load) ->
     Syntax = #{
         vsn => binary,
         obj_id => binary,
@@ -227,7 +227,7 @@ object_syntax(SrvId, load) ->
         obj_name => binary,
         domain_id => binary,
         parent_id => binary,
-        srv_id => binary,
+        srv_id => fun ?MODULE:object_syntax_srv_id/1,
         subtype => {list, binary},
         created_by => binary,
         created_time => integer,
@@ -250,12 +250,13 @@ object_syntax(SrvId, load) ->
         '__mandatory' => [type, obj_id, domain_id, path, srv_id, created_time]
     },
     % Some parsers need to now the server_id
-    Opts = #{domain_srv_id=>SrvId},
-    {Syntax, Opts};
+    %%    Opts = #{domain_srv_id=>SrvId},
+    {Syntax, #{}};
 
-object_syntax(SrvId, update) ->
+object_syntax(update) ->
     Syntax = #{
         type => ignore,             % Do not count as unknown is updates
+        srv_id => ignore,           % "
         enabled => boolean,
         name => binary,
         description => binary,
@@ -264,12 +265,25 @@ object_syntax(SrvId, update) ->
         icon_id => binary
     },
     % Some parsers need to now the server_id
-    Opts = #{domain_srv_id=>SrvId},
-    {Syntax, Opts};
+    %% Opts = #{domain_srv_id=>SrvId},
+    {Syntax, #{}};
 
-object_syntax(SrvId, create) ->
-    {Base, Opts} = object_syntax(SrvId, load),
+object_syntax(create) ->
+    {Base, Opts} = object_syntax(load),
     {Base#{obj_name => binary, '__mandatory':=[]}, Opts}.
+
+
+%% @private
+object_syntax_srv_id(Srv) ->
+    case catch nklib_util:to_existing_atom(Srv) of
+        {'EXIT', _} ->
+            ?LLOG(warning, "loading object for unknown domain '~s'", [Srv]),
+            {ok, ?NKSRV};
+        Atom ->
+            {ok, Atom}
+    end.
+
+
 
 
 %% ===================================================================
@@ -311,13 +325,14 @@ object_create(SrvId, DomainId, Type, UserId, Obj) ->
             Obj2 = Obj#{
                 type => Type,
                 created_by => UserId,
-                domain_id => DomainId
+                domain_id => DomainId,
+                srv_id => SrvId
             },
             case erlang:function_exported(Module, object_create, 1) of
                 true ->
                     % If the objects has its own object creation function,
                     % parse it so that it can be useful
-                    case ?CALL_SRV(object_parse, [SrvId, create, Obj2]) of
+                    case ?CALL_NKROOT(object_parse, [create, Obj2]) of
                         {ok, Obj3, _} ->
                             Module:object_create(Obj3);
                         {error, Error} ->
@@ -335,26 +350,28 @@ object_create(SrvId, DomainId, Type, UserId, Obj) ->
 %% load:   used when loading an object from disk
 %% update: used when updating an object, only fields allowed to be updated
 %%         must be included
--spec object_parse(srv_id(), create|load|update, map()) ->
+-spec object_parse(create|load|update, map()) ->
     {ok, nkdomain:obj(), Unknown::[binary()]} | {error, term()}.
 
-object_parse(SrvId, Mode, Map) ->
+object_parse(Mode, Map) ->
     Type = case Map of
         #{<<"type">>:=Type0} -> Type0;
         #{type:=Type0} -> Type0;
         _ -> <<>>
     end,
+    SrvId = nkdomain_util:get_srv_id(Map),
     case nkdomain_all_types:get_module(SrvId, Type) of
         undefined ->
             {error, {invalid_type, Type}};
         Module ->
-            case Module:object_parse(SrvId, Mode, Map) of
+            case Module:object_parse(Mode, Map) of
                 {ok, Obj2, UnknownFields} ->
                     {ok, Obj2, UnknownFields};
                 {error, Error} ->
+                    lager:error("NKLOG E1 ~p", [Module]),
                     {error, Error};
                 {type_obj, TypeObj, UnknownFields1} ->
-                    {BaseSyn, Opts} = SrvId:object_syntax(SrvId, Mode),
+                    {BaseSyn, Opts} = ?CALL_NKROOT(object_syntax, [Mode]),
                     case nklib_syntax:parse(Map, BaseSyn#{Type=>ignore}, Opts) of
                         {ok, Obj, UnknownFields2} ->
                             {ok, Obj#{Type=>TypeObj}, UnknownFields1++UnknownFields2};
@@ -362,7 +379,7 @@ object_parse(SrvId, Mode, Map) ->
                             {error, Error}
                     end;
                 Syntax when Syntax==any; is_map(Syntax) ->
-                    {BaseSyn, Opts} = SrvId:object_syntax(SrvId, Mode),
+                    {BaseSyn, Opts} = ?CALL_NKROOT(object_syntax, [Mode]),
                     nklib_syntax:parse(Map, BaseSyn#{Type=>Syntax}, Opts)
             end
     end.
@@ -528,7 +545,7 @@ object_save(State) ->
     case call_module(object_save, [], State) of
         {ok, #?STATE{obj=Obj2}=State2} ->
             Obj3 = Obj2#{<<"vsn">> => <<"1">>},
-            case ?CALL_SRV(object_db_save, [Obj3]) of
+            case ?CALL_NKROOT(object_db_save, [Obj3]) of
                 {ok, Meta} ->
                     {ok, State2, Meta};
                 {error, Error} ->
@@ -546,7 +563,7 @@ object_save(State) ->
 object_delete(#?STATE{id=#obj_id_ext{obj_id=ObjId}}=State) ->
     case call_module(object_delete, [], State) of
         {ok, State2} ->
-            case ?CALL_SRV(object_db_delete, [ObjId]) of
+            case ?CALL_NKROOT(object_db_delete, [ObjId]) of
                 {ok, Meta} ->
                     {ok, State2, Meta};
                 {error, Error} ->

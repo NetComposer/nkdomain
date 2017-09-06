@@ -22,7 +22,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([make_path/3, is_path/1, get_parts/1, get_parts/2, class/1, type/1, name/1, field/2, fields/2]).
--export([add_destroyed/3]).
+-export([get_srv_id/1, add_destroyed/3]).
 -export([timestamp/0]).
 -export_type([error/0]).
 
@@ -186,6 +186,19 @@ name(Name) ->
     nklib_parse:normalize(Name, #{space=>$_, allowed=>[$-, $., $_]}).
 
 
+%% @private
+get_srv_id(Obj) ->
+    Srv = case Obj of
+        #{srv_id:=SrvId0} -> SrvId0;
+        #{<<"srv_id">>:=SrvId0} -> SrvId0
+    end,
+    case catch nklib_util:to_existing_atom(Srv) of
+        {'EXIT', _} ->
+            lager:warning("NkDOMAIN: loading object for unknown domain '~s'", [Srv]),
+            ?NKSRV;
+        SrvId ->
+            SrvId
+    end.
 
 
 

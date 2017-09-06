@@ -25,7 +25,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([start/3]).
--export([object_info/0, object_es_mapping/0, object_parse/3, object_api_syntax/2, object_api_cmd/2,
+-export([object_info/0, object_es_mapping/0, object_parse/2, object_api_syntax/2, object_api_cmd/2,
          object_init/1, object_stop/2, object_event/2]).
 -export([object_admin_info/0]).
 -export([object_check_active/1]).
@@ -116,7 +116,7 @@ object_es_mapping() ->
 
 
 %% @private
-object_parse(_SrvId, _Mode, _Obj) ->
+object_parse(_Mode, _Obj) ->
     #{
         vsn => binary,
         local => binary,
@@ -217,7 +217,7 @@ object_check_active(Id) ->
             true;
         _ ->
             lager:notice("NkDOMAIN: removing stalle active object ~s", [Id]),
-            ?CALL_SRV(object_db_delete, [Id]),
+            ?CALL_NKROOT(object_db_delete, [Id]),
             false
     end.
 

@@ -198,7 +198,7 @@ search({ok, Total, List}) ->
         total => Total,
         data =>
             lists:map(
-                fun({Type, ObjId, Path}) -> #{type=>Type, obj_id=>ObjId, path=>Path} end,
+                fun({SrvId, Type, ObjId, Path}) -> #{srv_id=>SrvId, type=>Type, obj_id=>ObjId, path=>Path} end,
                 List)
     },
     {ok, Data};

@@ -25,7 +25,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([create/6]).
--export([object_info/0, object_es_mapping/0, object_parse/3, object_send_event/2,
+-export([object_info/0, object_es_mapping/0, object_parse/2, object_send_event/2,
          object_sync_op/3, object_async_op/2]).
 -export([object_admin_info/0]).
 -export([get_token_data/1, consume_token/2]).
@@ -137,7 +137,7 @@ object_es_mapping() ->
 
 
 %% @private
-object_parse(_SrvId, _Mode, _Obj) ->
+object_parse(_Mode, _Obj) ->
     #{
         vsn => binary,
         data => any,
