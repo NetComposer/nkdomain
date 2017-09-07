@@ -34,6 +34,7 @@
 -define(LLOG(Type, Txt, Args),
     lager:Type("NkDOMAIN Types "++Txt, Args)).
 
+-include("nkdomain.hrl").
 
 %% ===================================================================
 %% Types
@@ -52,7 +53,19 @@
     module() | undefined.
 
 get_module(SrvId, Type) ->
-    lookup({type, to_bin(SrvId), to_bin(Type)}).
+    SrvId2 = to_bin(SrvId),
+    Type2 = to_bin(Type),
+    case lookup({type, SrvId2, Type2}) of
+        undefined ->
+            case to_bin(?NKSRV) of
+                SrvId2 ->
+                    undefined;
+                NkRoot ->
+                    lookup({type, NkRoot, Type2})
+            end;
+        Module ->
+            Module
+    end.
 
 
 %% @doc Gets all registered modules
@@ -84,7 +97,7 @@ get_all_types() ->
     [nkdomain:type()].
 
 get_service_types(SrvId) ->
-    lookup({service_types, to_bin(SrvId)}, []).
+    lookup({service, to_bin(SrvId)}, []).
 
 
 %% @doc Gets all services types
@@ -214,10 +227,10 @@ register_type(SrvId, Type, Module, #state{types=Types}=State) ->
     ets:insert(?MODULE, [
         {all_modules, AllModules2},
         {all_types, AllTypes2},
-        {all_service, AllServices2},
+        {all_services, AllServices2},
         {{service, SrvId}, AllServiceTypes2},
         {{type, SrvId, Type}, Module},
-        {{module, Module}, AtomSrv, Type}
+        {{module, Module}, {AtomSrv, Type}}
     ]),
     case maps:is_key(Type, Types) of
         false ->

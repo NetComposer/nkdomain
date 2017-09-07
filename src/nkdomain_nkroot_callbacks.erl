@@ -825,14 +825,14 @@ service_api_allow(#nkreq{cmd = <<"objects/", _/binary>>, req_state={_Type, Modul
             Other
     end;
 
-service_api_allow(#nkreq{cmd = <<"session", _/binary>>}) ->
-    true;
-
-service_api_allow(#nkreq{cmd = <<"event", _/binary>>}) ->
-    true;
-
-service_api_allow(#nkreq{cmd = <<"nkadmin", _/binary>>}) ->
-    true;
+%%service_api_allow(#nkreq{cmd = <<"session", _/binary>>}) ->
+%%    true;
+%%
+%%service_api_allow(#nkreq{cmd = <<"event", _/binary>>}) ->
+%%    true;
+%%
+%%service_api_allow(#nkreq{cmd = <<"nkadmin", _/binary>>}) ->
+%%    true;
 
 service_api_allow(_Req) ->
     continue.

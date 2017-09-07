@@ -24,7 +24,7 @@
 -behavior(nkdomain_obj).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([start/3]).
+-export([start/4]).
 -export([object_info/0, object_es_mapping/0, object_parse/2, object_api_syntax/2, object_api_cmd/2,
          object_init/1, object_stop/2, object_event/2]).
 -export([object_admin_info/0]).
@@ -56,14 +56,15 @@
 %% ===================================================================
 
 %% @doc Creates a new session
--spec start(nkdomain:id(), nkdomain:id(), create_opts()) ->
+-spec start(nkservice:id(), nkdomain:id(), nkdomain:id(), create_opts()) ->
     {ok, nkdomain:obj_id(), pid()} | {error, term()}.
 
-start(DomainId, UserId, Opts) ->
+start(SrvId, DomainId, UserId, Opts) ->
         Obj1 = #{
             type => ?DOMAIN_SESSION,
             domain_id => DomainId,
             parent_id => UserId,
+            srv_id => SrvId,
             created_by => UserId,
             active => true,
             ?DOMAIN_SESSION => maps:get(data, Opts, #{})
@@ -220,4 +221,11 @@ object_check_active(Id) ->
             ?CALL_NKROOT(object_db_delete, [Id]),
             false
     end.
+
+
+
+%% ===================================================================
+%% Internal
+%% ===================================================================
+
 

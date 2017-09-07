@@ -56,34 +56,37 @@
 %% Public
 %% ===================================================================
 
+
+
 %% @doc Uses login_data() and session_meta()
 -spec session_login(#nkreq{}) ->
     {ok, DomainId::nkdomain:obj_id(), UserId::nkdomain:obj_id(), SessId::nkdomain:obj_id(), pid(), #nkreq{}} |
     {error, term()}.
 
-session_login(#nkreq{data=Data, session_meta=SessMeta}=Req) ->
+session_login(#nkreq{srv_id=SrvId, data=Data, session_meta=SessMeta}=Req) ->
     #{id:=User} = Data,
     Auth = #{password => maps:get(password, Data, <<>>)},
-    case get_domain(Data) of
-        {ok, DomainId} ->
-            case nkdomain_user_obj:auth(User, Auth) of
-                {ok, UserId, _UserDomainId} ->
-                    SessData1 = maps:with([device_id, push_id, platform_id, platform_version], Data),
-                    SessData2 = maps:with([local, remote], SessMeta),
-                    LoginMeta = maps:get(meta, Data, #{}),
-                    SessData3 = maps:merge(SessData1, SessData2#{login_meta => LoginMeta}),
-                    SessOpts1 = maps:with([session_id, session_link], SessMeta),
-                    SessOpts2 = SessOpts1#{data=>SessData3},
-                    case nkdomain_session_obj:start(DomainId, UserId, SessOpts2) of
-                        {ok, SessId, Pid} ->
-                            Req2 = add_meta(login_meta, LoginMeta, Req),
-                            Req3 = add_id(?DOMAIN_DOMAIN, DomainId, Req2),
-                            Req4 = add_id(?DOMAIN_USER, UserId, Req3),
-                            Req5 = add_id(?DOMAIN_SESSION, SessId, Req4),
-                            {ok, DomainId, UserId, SessId, Pid, Req5#nkreq{user_id=UserId}};
-                        {error, Error} ->
-                            {error, Error}
-                    end;
+    case nkdomain_user_obj:auth(User, Auth) of
+        {ok, UserId, UserDomainId} ->
+            DomainId = case Data of
+                #{domain_id:=DomainId0} ->
+                    DomainId0;
+                _ ->
+                    UserDomainId
+            end,
+            SessData1 = maps:with([device_id, push_id, platform_id, platform_version], Data),
+            SessData2 = maps:with([local, remote], SessMeta),
+            LoginMeta = maps:get(meta, Data, #{}),
+            SessData3 = maps:merge(SessData1, SessData2#{login_meta => LoginMeta}),
+            SessOpts1 = maps:with([session_id, session_link], SessMeta),
+            SessOpts2 = SessOpts1#{data=>SessData3},
+            case nkdomain_session_obj:start(SrvId, DomainId, UserId, SessOpts2) of
+                {ok, SessId, Pid} ->
+                    Req2 = add_meta(login_meta, LoginMeta, Req),
+                    Req3 = add_id(?DOMAIN_DOMAIN, DomainId, Req2),
+                    Req4 = add_id(?DOMAIN_USER, UserId, Req3),
+                    Req5 = add_id(?DOMAIN_SESSION, SessId, Req4),
+                    {ok, DomainId, UserId, SessId, Pid, Req5#nkreq{user_id=UserId}};
                 {error, Error} ->
                     {error, Error}
             end;
@@ -191,6 +194,7 @@ load_domain(Domain) ->
         {error, _} ->
             {error, {domain_unknown, Domain}}
     end.
+
 
 %% @doc
 search({ok, Total, List}) ->
