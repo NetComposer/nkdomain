@@ -58,8 +58,6 @@ plugin_deps() ->
 
 %% Other plugins can also parse db_clusters
 plugin_syntax() ->
-    lager:warning("NKLOG SYNB1"),
-
     #{
         nkdomain => #{
             db_store => binary,
