@@ -150,21 +150,8 @@ object_stop(_Reason, State) ->
 %% @private
 
 %% @doc
-object_api_syntax(<<"start">>, Syntax) ->
-    Syntax#{
-        id => binary,
-        password => binary,
-        domain_id => binary,
-        %device_id => binary,
-        %push_id => binary,
-        %platform_id => binary,
-        %platform_version => binary,
-        meta => map,
-        '__mandatory' => [id]
-    };
-
 object_api_syntax(Cmd, Syntax) ->
-    nkdomain_obj_syntax:syntax(Cmd, ?DOMAIN_SESSION, Syntax).
+    nkdomain_session_obj_syntax:api(Cmd, Syntax).
 
 
 %%%% @private
@@ -173,25 +160,8 @@ object_api_syntax(Cmd, Syntax) ->
 
 
 %% @private
-object_api_cmd(<<"start">>, #nkreq{session_module=nkapi_server}=Req) ->
-    #nkreq{
-        session_id = SessId,
-        session_pid = SessPid,
-        session_meta = SessMeta
-    } = Req,
-    SessMeta2 = maps:with([local, remote], SessMeta),
-    SessMeta3 = SessMeta2#{session_id=>SessId, session_link=>{nkapi_server, SessPid}},
-    Req2 = Req#nkreq{session_meta=SessMeta3},
-    case nkdomain_api_util:session_login(Req2) of
-        {ok, DomainId, UserId, SessId, _SessPid, Req3} ->
-            Reply = #{domain_id=>DomainId, user_id=>UserId, session_id=>SessId},
-            {ok, Reply, Req3};
-        {error, Error} ->
-            {error, Error}
-    end;
-
 object_api_cmd(Cmd, Req) ->
-    nkdomain_obj_api:api(Cmd, ?DOMAIN_SESSION, Req).
+    nkdomain_session_obj_cmd:cmd(Cmd, Req).
 
 
 %% @private

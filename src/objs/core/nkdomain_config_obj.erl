@@ -121,7 +121,7 @@ object_api_syntax(Cmd, Syntax) ->
 
 %% @private
 object_api_cmd(Cmd, Req) ->
-    nkdomain_obj_api:api(Cmd, ?DOMAIN_CONFIG, Req).
+    nkdomain_obj_cmd:api(Cmd, ?DOMAIN_CONFIG, Req).
 
 
 

@@ -192,12 +192,8 @@ nkservice_rest_http(get, [<<"_file">>, FileId], Req) ->
     end;
 
 nkservice_rest_http(post, [<<"_file">>], Req) ->
-    Qs = nkservice_rest_http:get_qs(Req),
-    Name = nklib_util:get_value(<<"name">>, Qs, <<>>),
-    Domain = nklib_util:get_value(<<"domain">>, Qs, <<"/">>),
-    StoreId = nklib_util:get_value(<<"store_id">>, Qs, <<>>),
-    case nkdomain_file_obj:http_post(Domain, StoreId, Name, Req) of
-        {ok, #obj_id_ext{obj_id=ObjId, path=Path}, _Unknown} ->
+    case nkdomain_file_obj:http_post(Req) of
+        {ok, ObjId, Path} ->
             Reply = #{obj_id=>ObjId, path=>Path},
             nkservice_rest_http:reply_json({ok, Reply}, Req);
         {error, Error} ->
@@ -368,7 +364,6 @@ object_parse(Mode, Map) ->
                 {ok, Obj2, UnknownFields} ->
                     {ok, Obj2, UnknownFields};
                 {error, Error} ->
-                    lager:error("NKLOG E1 ~p", [Module]),
                     {error, Error};
                 {type_obj, TypeObj, UnknownFields1} ->
                     {BaseSyn, Opts} = ?CALL_NKROOT(object_syntax, [Mode]),
@@ -828,9 +823,9 @@ service_api_allow(#nkreq{cmd = <<"objects/", _/binary>>, req_state={_Type, Modul
 %%service_api_allow(#nkreq{cmd = <<"session", _/binary>>}) ->
 %%    true;
 %%
-%%service_api_allow(#nkreq{cmd = <<"event", _/binary>>}) ->
-%%    true;
-%%
+service_api_allow(#nkreq{cmd = <<"event", _/binary>>}) ->
+    true;
+
 %%service_api_allow(#nkreq{cmd = <<"nkadmin", _/binary>>}) ->
 %%    true;
 
@@ -850,7 +845,7 @@ service_api_cmd(#nkreq{cmd = <<"objects/", _/binary>>, req_state={Type, Module, 
                         true ->
                             apply(Module, object_api_cmd, [Cmd, Req2]);
                         false ->
-                            nkdomain_obj_api:api(Cmd, Type, Req2)
+                            nkdomain_obj_cmd:api(Cmd, Type, Req2)
                     end,
                     Reply2 = case Reply of
                         ok ->
@@ -870,7 +865,7 @@ service_api_cmd(#nkreq{cmd = <<"objects/", _/binary>>, req_state={Type, Module, 
                 true ->
                     apply(Module, object_api_cmd, [Cmd, Req]);
                 false ->
-                    nkdomain_obj_api:api(Cmd, Type, Req)
+                    nkdomain_obj_cmd:api(Cmd, Type, Req)
             end
     end;
 

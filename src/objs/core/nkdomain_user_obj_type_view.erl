@@ -200,7 +200,7 @@ table_data(#{start:=Start, size:=Size, sort:=Sort, filter:=Filter}, #admin_sessi
     Offset = maps:get(<<"timezone_offset">>, Filter, 0),
     case table_filter(maps:to_list(Filter), #{timezone_offset => Offset}, #{type=>user}) of
         {ok, Filters} -> 
-            lager:warning("NKLOG Filters ~s", [nklib_json:encode_pretty(Filters)]),
+            % lager:warning("NKLOG Filters ~s", [nklib_json:encode_pretty(Filters)]),
 
             FindSpec = #{
                 filters => Filters,

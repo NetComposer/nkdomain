@@ -942,7 +942,6 @@ do_update_name(ObjName, #?STATE{id=Id, obj=Obj}=State) ->
                     State2 = State#?STATE{id=Id2, obj=Obj2, is_dirty=true},
                     case register_domain(State2) of
                         {ok, State3} ->
-                            lager:error("NKLOG UNREGISTER ~p", [Path1]),
                             case do_save(object_updated, State3) of
                                 {ok, State4} ->
                                     {ok, State4};

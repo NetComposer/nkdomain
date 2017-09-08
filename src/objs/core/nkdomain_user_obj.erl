@@ -510,7 +510,7 @@ object_send_event(Event, State) ->
 
 %% @private
 object_api_cmd(Cmd, Req) ->
-    nkdomain_user_obj_api:cmd(Cmd, Req).
+    nkdomain_user_obj_cmd:cmd(Cmd, Req).
 
 
 

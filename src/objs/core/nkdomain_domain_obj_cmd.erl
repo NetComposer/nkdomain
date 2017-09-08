@@ -19,7 +19,7 @@
 %% -------------------------------------------------------------------
 
 %% @doc User Object API
--module(nkdomain_domain_obj_api).
+-module(nkdomain_domain_obj_cmd).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([cmd/2]).
@@ -113,7 +113,7 @@ cmd(<<"unload_childs">>, #nkreq{data=Data}=Req) ->
     end;
 
 cmd(Cmd, Req) ->
-    nkdomain_obj_api:api(Cmd, ?DOMAIN_DOMAIN, Req).
+    nkdomain_obj_cmd:api(Cmd, ?DOMAIN_DOMAIN, Req).
 
 
 %% ===================================================================

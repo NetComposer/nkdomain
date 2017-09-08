@@ -202,7 +202,7 @@ object_send_event(Event, State) ->
 
 %% @private
 object_api_cmd(Cmd, Req) ->
-    nkdomain_domain_obj_api:cmd(Cmd, Req).
+    nkdomain_domain_obj_cmd:cmd(Cmd, Req).
 
 
 %% @private
@@ -443,16 +443,13 @@ find_obj(Base, Type, ObjName, #?STATE{id=Id, session=Session}=State) ->
                     {ok, #obj_id_ext{type=Type, obj_name=ObjName, pid=Pid}} = maps:find(ObjId, ObjIds),
                     {ok, ObjId, Pid};
                 error ->
-                    %lager:error("NKLOG not found ~p", [{Type, ObjName}]),
                     {error, object_not_found}
             end;
         _ ->
-            %lager:error("NKLOG Base: ~s (~s)", [Base, DomainPath]),
             Size = byte_size(DomainPath),
             case Base of
                 <<DomainPath:Size/binary, Rest/binary>> ->
                     Dom = get_first_domain(Rest),
-                    %lager:warning("NKLOG R1: ~p, D: ~p", [Rest, Dom]),
                     Domains = maps:get(?DOMAIN_DOMAIN, ObjTypes, #{}),
                     case maps:find(Dom, Domains) of
                         {ok, SubDomId} ->

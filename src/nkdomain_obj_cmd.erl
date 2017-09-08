@@ -18,7 +18,7 @@
 %%
 %% -------------------------------------------------------------------
 
--module(nkdomain_obj_api).
+-module(nkdomain_obj_cmd).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([api/3]).
