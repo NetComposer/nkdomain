@@ -73,10 +73,12 @@ start(_Type, _Args) ->
                 true ->
                     spawn_link(
                         fun() ->
-                            timer:sleep(2000),
+                            timer:sleep(1000),
                             case nkdomain_nkroot:start() of
                                 {ok, _} ->
-                                    lager:info("NkDOMAIN root started");
+                                    lager:info("NkDOMAIN root started"),
+                                    %% TODO HACK to start C4 provisionally
+                                    application:start(sipstorm_c4);
                                 {error, Error} ->
                                     lager:error("NkDOMAN root could not start: ~p", [Error]),
                                     error(service_start_error)
