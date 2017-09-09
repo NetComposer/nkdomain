@@ -130,13 +130,8 @@ error(store_id_missing)                 -> "Missing Store Id";
 error(url_unknown)      		        -> "Unknown url";
 error(user_is_disabled) 		        -> "User is disabled";
 error(user_unknown)                     -> "Unknown user";
-
 error(db_not_defined)                   -> "Object database not defined";
-
-
 error(_)   		                        -> continue.
-
-
 
 
 %% ===================================================================

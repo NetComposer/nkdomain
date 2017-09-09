@@ -31,6 +31,7 @@
 -export([object_init/1, object_stop/2, object_send_event/2,
          object_sync_op/3, object_async_op/2, object_handle_info/2]).
 -export([object_admin_info/0]).
+-export([find_url_class/1]).
 -export_type([session/0]).
 
 -include_lib("nkadmin/include/nkadmin.hrl").
@@ -203,12 +204,17 @@ object_stop(_Reason, #?STATE{session_link={Mod, Pid}}=State) ->
 
 
 %% @private
-object_sync_op({?MODULE, switch_domain, DomainId, Url}, _From, State) ->
-    case do_switch_domain(DomainId, Url, State) of
-        {ok, Reply, State2} ->
-            {reply, {ok, Reply}, State2};
-        {error, Error} ->
-            {reply, {error, Error}, State}
+object_sync_op({?MODULE, switch_domain, Domain, Url}, _From, State) ->
+    case nkdomain_lib:load(Domain) of
+        #obj_id_ext{obj_id=DomainId, path=Path, type= ?DOMAIN_DOMAIN} ->
+            case do_switch_domain(DomainId, Path, Url, State) of
+                {ok, Reply, State2} ->
+                    {reply, {ok, Reply}, State2};
+                {error, Error} ->
+                    {reply, {error, Error}, State}
+            end;
+        not_found ->
+            {error, domain_unknown, State}
     end;
 
 object_sync_op({?MODULE, element_action, <<"url">>, updated, Url}, _From, State) ->
@@ -284,77 +290,73 @@ object_handle_info(_Info, _State) ->
 %% ===================================================================
 
 %% @private
-do_switch_domain(Domain, Url, #?STATE{srv_id=SrvId, session=Session}=State) ->
-    case nkdomain_lib:load(Domain) of
-        #obj_id_ext{obj_id=DomainId, path=Path, type= ?DOMAIN_DOMAIN} ->
-            case nkdomain_domain_obj:search_all_types(DomainId, #{}) of
-                {ok, _, TypeList, _Meta} ->
-                    Url2 = case Url of
-                        <<"#", U/binary>> -> U;
-                        _ -> Url
-                    end,
-                    Types = [Type || {Type, _Counter} <- TypeList],
-                    Session2 = Session#admin_session{
-                        domain_id = DomainId,
-                        domain_path = Path,
-                        detail_url = case Url2 of <<>> -> Path; _ -> Url2 end,
-                        db_types = Types,
-                        resources = [],
-                        sessions = #{},
-                        detail = #{},
-                        object_tags = #{},
-                        key_data = #{},
-                        url_to_key = #{}
-                    },
-                    case do_get_domain(SrvId, Session2, State) of
-                        {ok, Updates, #admin_session{}=Session3} ->
-                            #admin_session{domain_path=OldPath} = Session,
-                            Session4 = subscribe_domain(OldPath, Session3),
-                            State4 = State#?STATE{session=Session4},
-                            % io:format("UPDATES:\n\n~p\n", [Updates]),
-                            {ok, #{elements=>lists:reverse(Updates)}, State4};
-                        {error, Error, #admin_session{}=Session3} ->
-                            State3 = State#?STATE{session=Session3},
-                            {error, Error, State3}
-                    end;
-                {error, Error} ->
-                    {error, Error, State}
+do_switch_domain(DomainId, Path, Url, #?STATE{session=Session}=State) ->
+    case nkdomain_domain_obj:search_all_types(DomainId, #{}) of
+        {ok, _, TypeList, _Meta} ->
+            Url2 = case Url of
+                <<"#", U/binary>> -> U;
+                _ -> Url
+            end,
+            Types = [Type || {Type, _Counter} <- TypeList],
+            Session2 = Session#admin_session{
+                domain_id   = DomainId,
+                domain_path = Path,
+                url         = case Url2 of <<>> -> Path; _ -> Url2 end,
+                detail      = #{},
+                db_types    = Types,
+                resources   = [],
+                sessions    = #{},
+                object_tags = #{},
+                key_data    = #{},
+                special_urls= #{}
+            },
+            case do_get_domain(Session2, State) of
+                {ok, Updates, #admin_session{}=Session3} ->
+                    #admin_session{domain_path=OldPath} = Session,
+                    Session4 = subscribe_domain(OldPath, Session3),
+                    State4 = State#?STATE{session=Session4},
+                    % io:format("UPDATES:\n\n~p\n", [Updates]),
+                    {ok, #{elements=>lists:reverse(Updates)}, State4};
+                {error, Error, #admin_session{}=Session3} ->
+                    State3 = State#?STATE{session=Session3},
+                    {error, Error, State3}
             end;
-        not_found ->
-            {error, domain_unknown, State}
+        {error, Error} ->
+            {error, Error, State}
     end.
 
 
 %% @private
-do_get_domain(SrvId, Session, State) ->
-    do_get_domain_frame(SrvId, [], Session, State).
+do_get_domain(Session, State) ->
+    do_get_domain_frame([], Session, State).
 
 
 %% @private
-do_get_domain_frame(SrvId, Updates, Session, State) ->
-    case apply(SrvId, admin_get_frame, [Session]) of
+do_get_domain_frame(Updates, Session, State) ->
+    case handle(admin_get_frame, [], Session) of
         {ok, Frame, Session2} ->
-            do_get_domain_tree(SrvId, [Frame|Updates], Session2, State);
+            do_get_domain_tree([Frame|Updates], Session2, State);
         {error, Error, Session2} ->
             {error, Error, Session2}
     end.
 
 
 %% @private
-do_get_domain_tree(SrvId, Updates, Session, State) ->
-    case apply(SrvId, admin_get_tree, [Session]) of
+do_get_domain_tree(Updates, Session, State) ->
+    case handle(admin_get_tree, [], Session) of
         {ok, Tree, Session2} ->
-            do_get_domain_detail(SrvId, [Tree|Updates], Session2, State);
+            do_get_domain_detail([Tree|Updates], Session2, State);
         {error, Error, Session2} ->
             {error, Error, Session2}
     end.
 
 
-do_get_domain_detail(SrvId, Updates, Session, State) ->
-    #admin_session{detail_url=Url} = Session,
+%% @private
+do_get_domain_detail(Updates, Session, State) ->
+    #admin_session{url=Url} = Session,
     case find_url(Url, Session) of
         {ok, Parts} ->
-            case apply(SrvId, admin_element_action, [Parts, selected, <<>>, Updates, Session]) of
+            case handle(admin_element_action, [Parts, selected, <<>>, Updates], Session) of
                 {ok, Updates2, Session2} ->
                     {ok, Updates2, Session2};
                 {error, Error, Session2} ->
@@ -370,8 +372,8 @@ do_get_domain_detail(SrvId, Updates, Session, State) ->
 
 
 %% @private Event from subscribed object
-do_event(Event, #?STATE{srv_id=SrvId, session=Session}=State) ->
-    {ok, UpdList, Session2} = apply(SrvId, admin_event, [Event, [], Session]),
+do_event(Event, #?STATE{session=Session}=State) ->
+    {ok, UpdList, Session2} = handle(admin_event, [Event, []], Session),
     State2 = State#?STATE{session=Session2},
     case UpdList of
         [] ->
@@ -387,11 +389,9 @@ send_event(Event, State) ->
 
 
 %% @private
-
-
 do_element_action(Parts, Action, Value, State) ->
-    #?STATE{srv_id=SrvId, session=Session} = State,
-    case apply(SrvId, admin_element_action, [Parts, Action, Value, [], Session]) of
+    #?STATE{session=Session} = State,
+    case handle(admin_element_action, [Parts, Action, Value, []], Session) of
         {ok, UpdList, Session2} ->
             State2 = State#?STATE{session=Session2},
             case UpdList of
@@ -407,8 +407,8 @@ do_element_action(Parts, Action, Value, State) ->
 
 %% @private
 do_get_data(ElementId, Spec, State) ->
-    #?STATE{srv_id=SrvId, session=Session} = State,
-    case apply(SrvId, admin_get_data, [ElementId, Spec, Session]) of
+    #?STATE{session=Session} = State,
+    case handle(admin_get_data, [ElementId, Spec], Session) of
         {ok, Reply, Session2} ->
             State2 = State#?STATE{session=Session2},
             {ok, Reply, State2};
@@ -419,25 +419,46 @@ do_get_data(ElementId, Spec, State) ->
 
 
 %% @private
-find_url(<<"_id/", ObjId/binary>>, Session) ->
+find_url(<<"_id/", ObjId/binary>>, _Session) ->
     case nkdomain_lib:find(ObjId) of
-        #obj_id_ext{path=Path} ->
-            find_url(Path, Session);
+        #obj_id_ext{srv_id=SrvId, type=Type, path=Path} ->
+            {ok, [<<"_obj">>, SrvId, ObjId, Type, Path]};
         {error, _Error} ->
             {error, url_unknown}
     end;
 
 find_url(Url, Session) ->
-    case nkadmin_util:get_url_key(Url, Session) of
+    case nkadmin_util:get_special_url(Url, Session) of
         undefined ->
-            case nkdomain_lib:find(Url) of
-                #obj_id_ext{type=Type, path=Path} ->
-                    {ok, [<<"obj">>, Type, Path]};
+            #admin_session{domain_path=Base} = Session,
+            Url2 = nkdomain_util:append(Base, Url),
+            case nkdomain_lib:find(Url2) of
+                #obj_id_ext{srv_id=SrvId, obj_id=ObjId, type=Type, path=Path} ->
+                    {ok, [<<"_path">>, SrvId, ObjId, Type, Path]};
                 {error, _} ->
-                    {error, url_unknown}
+                    find_url_class(Url2)
             end;
         Key ->
             {ok, binary:split(Key, <<"__">>, [global])}
+    end.
+
+
+%% @private
+find_url_class(Url) ->
+    case lists:reverse(binary:split(Url, <<"/">>, [global])) of
+        [Class|Rest] ->
+            case nkdomain_util:type(Class) of
+                {ok, Type} ->
+                    Path = case nklib_util:bjoin(lists:reverse(Rest), <<"/">>) of
+                        <<>> -> <<"/">>;
+                        Path0 -> Path0
+                    end,
+                    {ok, [<<"_type">>, Path, Type]};
+                error ->
+                    {error, url_unknown}
+            end;
+        _ ->
+            {error, url_unknown}
     end.
 
 
@@ -480,5 +501,6 @@ subscribe_domain(OldPath, #admin_session{srv_id=SrvId, domain_path=NewPath, reg_
     Session#admin_session{reg_pids=RegPids2}.
 
 
-
-
+%% @private
+handle(Fun, Args, #admin_session{srv_id=SrvId}=Session) ->
+    apply(SrvId, Fun, Args++[Session]).

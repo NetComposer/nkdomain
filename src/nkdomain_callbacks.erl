@@ -21,8 +21,8 @@
 %% @doc NkDomain service callback module
 -module(nkdomain_callbacks).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
--export([error/1]).
 
+-export([error/1, i18n/3]).
 -export([admin_tree_categories/2, admin_tree_get_category/2, admin_event/3,
          admin_element_action/5, admin_get_data/3]).
 -export([object_init/1, object_terminate/2, object_stop/2,
@@ -57,6 +57,16 @@ error(Error) ->
     ?CALL_NKROOT(error, [Error]).
 
 
+%% @doc 
+i18n(SrvId, Key, Lang) ->
+    case nklib_i18n:get(SrvId, Key, Lang) of
+        <<>> when SrvId == ?NKSRV ->
+            <<>>;
+        <<>> ->
+            nklib_i18n:get(?NKSRV, Key, Lang);
+        Text ->
+            Text
+    end.
 
 
 %% ===================================================================

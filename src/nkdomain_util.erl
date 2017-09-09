@@ -22,7 +22,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([make_path/3, is_path/1, get_parts/1, get_parts/2, class/1, type/1, name/1, field/2, fields/2]).
--export([get_srv_id/1, add_destroyed/3]).
+-export([append/2, get_srv_id/1, add_destroyed/3]).
 -export([timestamp/0]).
 -export_type([error/0]).
 
@@ -200,6 +200,14 @@ get_srv_id(Obj) ->
             SrvId
     end.
 
+
+%% @doc
+append(PathA, PathB) ->
+    PathA1 = case to_bin(PathA) of
+        <<"/">> -> <<>>;
+        P1 -> P1
+    end,
+    <<PathA1/binary, $/, (to_bin(PathB))/binary>>.
 
 
 %% @doc

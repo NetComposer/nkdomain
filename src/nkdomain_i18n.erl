@@ -22,6 +22,7 @@
 -behavior(nklib_i18n).
 
 -export([i18n/0, reload/0]).
+-include("nkdomain.hrl").
 
 
 i18n() -> #{
@@ -121,4 +122,4 @@ i18n() -> #{
 
 
 reload() ->
-    ok = nklib_i18n:load(?MODULE).
+    ok = nklib_i18n:load(?NKSRV, ?MODULE).
