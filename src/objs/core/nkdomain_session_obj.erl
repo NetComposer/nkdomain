@@ -151,7 +151,7 @@ object_stop(_Reason, State) ->
 
 %% @doc
 object_api_syntax(Cmd, Syntax) ->
-    nkdomain_session_obj_syntax:api(Cmd, Syntax).
+    nkdomain_session_obj_syntax:syntax(Cmd, Syntax).
 
 
 %%%% @private

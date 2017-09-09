@@ -23,7 +23,7 @@
 -module(nkdomain_session_obj_syntax).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([api/2]).
+-export([syntax/2]).
 
 -include("nkdomain.hrl").
 
@@ -31,7 +31,7 @@
 %% Syntax
 %% ===================================================================
 
-api(<<"start">>, Syntax) ->
+syntax(<<"start">>, Syntax) ->
     Syntax#{
         id => binary,
         password => binary,
@@ -44,6 +44,6 @@ api(<<"start">>, Syntax) ->
         '__mandatory' => [id]
     };
 
-api(Cmd, Syntax) ->
+syntax(Cmd, Syntax) ->
     nkdomain_obj_syntax:syntax(Cmd, ?DOMAIN_SESSION, Syntax).
 

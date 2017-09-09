@@ -19,7 +19,7 @@
 %% -------------------------------------------------------------------
 
 %% @doc Session Object API
--module(nkadmin_session_obj_api).
+-module(nkadmin_session_obj_cmd).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([cmd/2]).
@@ -55,7 +55,7 @@ cmd(<<"start">>, #nkreq{session_module=nkapi_server, session_id=WsSessId}=Req) -
             Opts2 = Opts1#{
                 session_link => {nkapi_server, Pid},
                 session_events => maps:get(session_events, Data, ?ADMIN_DEF_EVENT_TYPES),
-                http_auth_id => WsSessId
+                http_auth_id => WsSessId            % To get files
             },
             case nkadmin_session_obj:start(DomainId, UserId, Opts2) of
                 {ok, SessId, _Pid, Updates} ->

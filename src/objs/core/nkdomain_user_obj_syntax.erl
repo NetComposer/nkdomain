@@ -23,7 +23,7 @@
 -module(nkdomain_user_obj_syntax).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([api/2]).
+-export([syntax/2]).
 
 -include("nkdomain.hrl").
 
@@ -35,10 +35,10 @@
 
 %% @doc
 %% TODO to remove
-api(<<"login">>, Syntax) ->
+syntax(<<"login">>, Syntax) ->
     nkdomain_session_obj:object_api_syntax(<<"start">>, Syntax);
 
-api(<<"get_token">>, Syntax) ->
+syntax(<<"get_token">>, Syntax) ->
     Syntax#{
         id => binary,
         password => binary,
@@ -48,7 +48,7 @@ api(<<"get_token">>, Syntax) ->
         '__mandatory' => [id]
     };
 
-api(<<"get_name">>, Syntax) ->
+syntax(<<"get_name">>, Syntax) ->
     Syntax#{
         id => binary,
         domain => binary,                       % Necessary for both
@@ -56,7 +56,7 @@ api(<<"get_name">>, Syntax) ->
         session_types => {list, binary}         % Get presence
     };
 
-api(<<"add_push_device">>, Syntax) ->
+syntax(<<"add_push_device">>, Syntax) ->
     Syntax#{
         id => binary,
         domain_id => binary,
@@ -76,14 +76,14 @@ api(<<"add_push_device">>, Syntax) ->
         '__mandatory' => [app_id, device_id, push_data]
     };
 
-api(<<"remove_push_device">>, Syntax) ->
+syntax(<<"remove_push_device">>, Syntax) ->
     Syntax#{
         id => binary,
         device_id => binary,
         '__mandatory' => [device_id]
     };
 
-api(<<"get_status">>, Syntax) ->
+syntax(<<"get_status">>, Syntax) ->
     Syntax#{
         id => binary,
         domain_id => binary,
@@ -91,7 +91,7 @@ api(<<"get_status">>, Syntax) ->
         '__mandatory' => [app_id]
     };
 
-api(<<"set_status">>, Syntax) ->
+syntax(<<"set_status">>, Syntax) ->
     Syntax#{
         id => binary,
         domain_id => binary,
@@ -100,5 +100,5 @@ api(<<"set_status">>, Syntax) ->
         '__mandatory' => [app_id, status]
     };
 
-api(Cmd, Syntax) ->
+syntax(Cmd, Syntax) ->
     nkdomain_obj_syntax:syntax(Cmd, ?DOMAIN_USER, Syntax).

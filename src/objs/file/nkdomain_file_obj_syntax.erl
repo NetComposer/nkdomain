@@ -23,7 +23,7 @@
 -module(nkdomain_file_obj_syntax).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([api/2]).
+-export([syntax/2]).
 
 -include("nkdomain.hrl").
 
@@ -31,7 +31,7 @@
 %% Syntax
 %% ===================================================================
 
-api(<<"create">>, Syntax) ->
+syntax(<<"create">>, Syntax) ->
     Syntax#{
         name => binary,
         ?DOMAIN_FILE => #{
@@ -43,12 +43,12 @@ api(<<"create">>, Syntax) ->
         '__mandatory' => [name]
     };
 
-api(<<"get_inline">>, Syntax) ->
+syntax(<<"get_inline">>, Syntax) ->
     Syntax#{
         id => binary,
         '__mandatory' => [id]
     };
 
-api(Cmd, Syntax) ->
+syntax(Cmd, Syntax) ->
     nkdomain_obj_syntax:syntax(Cmd, ?DOMAIN_FILE, Syntax).
 

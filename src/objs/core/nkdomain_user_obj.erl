@@ -500,7 +500,7 @@ object_parse(Mode, Obj) ->
 
 % @private
 object_api_syntax(Cmd, Syntax) ->
-    nkdomain_user_obj_syntax:api(Cmd, Syntax).
+    nkdomain_user_obj_syntax:syntax(Cmd, Syntax).
 
 
 %% @private
