@@ -21,7 +21,7 @@
 -module(nkdomain_obj_cmd).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([api/3]).
+-export([cmd/3]).
 
 -include("nkdomain.hrl").
 -include_lib("nkservice/include/nkservice.hrl").
@@ -33,7 +33,7 @@
 %% ===================================================================
 
 %% @doc
-api(<<"create">>, Type, #nkreq{data=Data, srv_id=SrvId, user_id=UserId}=Req) ->
+cmd(<<"create">>, Type, #nkreq{data=Data, srv_id=SrvId, user_id=UserId} = Req) ->
     case nkdomain_api_util:get_id(?DOMAIN_DOMAIN, domain_id, Data, Req) of
         {ok, DomainId} ->
             case ?CALL_NKROOT(object_create, [SrvId, DomainId, Type, UserId, Data]) of
@@ -48,7 +48,7 @@ api(<<"create">>, Type, #nkreq{data=Data, srv_id=SrvId, user_id=UserId}=Req) ->
             {error, Error}
     end;
 
-api(<<"get">>, Type, #nkreq{data=Data}=Req) ->
+cmd(<<"get">>, Type, #nkreq{data=Data} = Req) ->
     case nkdomain_api_util:get_id(Type, Data, Req) of
         {ok, Id} ->
             nkdomain:get_obj(Id);
@@ -56,7 +56,7 @@ api(<<"get">>, Type, #nkreq{data=Data}=Req) ->
             {error, Error}
     end;
 
-api(<<"get_info">>, Type, #nkreq{data=Data}=Req) ->
+cmd(<<"get_info">>, Type, #nkreq{data=Data} = Req) ->
     case nkdomain_api_util:get_id(Type, Data, Req) of
         {ok, Id} ->
             nkdomain:get_info(Id);
@@ -64,7 +64,7 @@ api(<<"get_info">>, Type, #nkreq{data=Data}=Req) ->
             {error, Error}
     end;
 
-api(<<"get_name">>, Type, #nkreq{data=Data}=Req) ->
+cmd(<<"get_name">>, Type, #nkreq{data=Data} = Req) ->
     case nkdomain_api_util:get_id(Type, Data, Req) of
         {ok, Id} ->
             nkdomain:get_name(Id);
@@ -72,7 +72,7 @@ api(<<"get_name">>, Type, #nkreq{data=Data}=Req) ->
             {error, Error}
     end;
 
-api(<<"stop">>, Type, #nkreq{data=Data}=Req) ->
+cmd(<<"stop">>, Type, #nkreq{data=Data} = Req) ->
     case nkdomain_api_util:get_id(Type, Data, Req) of
         {ok, Id} ->
             case nkdomain:unload(Id, user_stop) of
@@ -85,7 +85,7 @@ api(<<"stop">>, Type, #nkreq{data=Data}=Req) ->
             {error, Error}
     end;
 
-api(<<"delete">>, Type, #nkreq{data=Data}=Req) ->
+cmd(<<"delete">>, Type, #nkreq{data=Data} = Req) ->
     case nkdomain_api_util:get_id(Type, Data, Req) of
         {ok, Id} ->
             case nkdomain:delete(Id) of
@@ -98,7 +98,7 @@ api(<<"delete">>, Type, #nkreq{data=Data}=Req) ->
             {error, Error}
     end;
 
-api(<<"update">>, Type, #nkreq{data=Data}=Req) ->
+cmd(<<"update">>, Type, #nkreq{data=Data} = Req) ->
     case nkdomain_api_util:get_id(Type, Data, Req) of
         {ok, Id} ->
             case nkdomain:update(Id, maps:remove(id, Data)) of
@@ -112,7 +112,7 @@ api(<<"update">>, Type, #nkreq{data=Data}=Req) ->
             {error, Error}
     end;
 
-api(<<"update_obj_name">>, Type, #nkreq{data=#{obj_name:=ObjName}=Data}=Req) ->
+cmd(<<"update_obj_name">>, Type, #nkreq{data=#{obj_name:=ObjName} = Data} = Req) ->
     case nkdomain_api_util:get_id(Type, Data, Req) of
         {ok, Id} ->
             case nkdomain:update_name(Id, ObjName) of
@@ -125,7 +125,7 @@ api(<<"update_obj_name">>, Type, #nkreq{data=#{obj_name:=ObjName}=Data}=Req) ->
             {error, Error}
     end;
 
-api(<<"enable">>, Type, #nkreq{data=#{enable:=Enable}=Data}=Req) ->
+cmd(<<"enable">>, Type, #nkreq{data=#{enable:=Enable} = Data} = Req) ->
     case nkdomain_api_util:get_id(Type, Data, Req) of
         {ok, Id} ->
             case nkdomain:enable(Id, Enable) of
@@ -138,7 +138,7 @@ api(<<"enable">>, Type, #nkreq{data=#{enable:=Enable}=Data}=Req) ->
             {error, Error}
     end;
 
-api(<<"find">>, Type, #nkreq{data=Data, srv_id=SrvId}=Req) ->
+cmd(<<"find">>, Type, #nkreq{data=Data, srv_id=SrvId} = Req) ->
     case nkdomain_api_util:get_id(?DOMAIN_DOMAIN, domain_id, Data, Req) of
         {ok, DomainId} ->
             Filters1 = maps:get(filters, Data, #{}),
@@ -154,7 +154,7 @@ api(<<"find">>, Type, #nkreq{data=Data, srv_id=SrvId}=Req) ->
             {error, Error}
     end;
 
-api(<<"find_all">>, Type, #nkreq{data=Data}=Req) ->
+cmd(<<"find_all">>, Type, #nkreq{data=Data} = Req) ->
     case nkdomain_api_util:get_id(?DOMAIN_DOMAIN, domain_id, Data, Req) of
         {ok, DomainId} ->
             Filters1 = maps:get(filters, Data, #{}),
@@ -170,7 +170,7 @@ api(<<"find_all">>, Type, #nkreq{data=Data}=Req) ->
             {error, Error}
     end;
 
-api(<<"make_token">>, Type, #nkreq{data=Data, user_id=UserId, srv_id=SrvId}=Req) ->
+cmd(<<"make_token">>, Type, #nkreq{data=Data, user_id=UserId, srv_id=SrvId} = Req) ->
     case nkdomain_api_util:get_id(?DOMAIN_DOMAIN, domain_id, Data, Req) of
         {ok, DomainId} ->
             case nkdomain_api_util:get_id(Type, Data, Req) of
@@ -189,7 +189,7 @@ api(<<"make_token">>, Type, #nkreq{data=Data, user_id=UserId, srv_id=SrvId}=Req)
             {error, Error}
     end;
 
-api(_Cmd, _Type, _Req) ->
+cmd(_Cmd, _Type, _Req) ->
     lager:error("NKLOG API Not Implemented ~p", [_Cmd]),
     {error, not_implemented}.
 

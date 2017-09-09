@@ -90,4 +90,4 @@ cmd(<<"get_inline">>, #nkreq{data=#{id:=Id}}) ->
     end;
 
 cmd(Cmd, Req) ->
-    nkdomain_obj_cmd:api(Cmd, ?DOMAIN_FILE, Req).
+    nkdomain_obj_cmd:cmd(Cmd, ?DOMAIN_FILE, Req).

@@ -845,7 +845,7 @@ service_api_cmd(#nkreq{cmd = <<"objects/", _/binary>>, req_state={Type, Module, 
                         true ->
                             apply(Module, object_api_cmd, [Cmd, Req2]);
                         false ->
-                            nkdomain_obj_cmd:api(Cmd, Type, Req2)
+                            nkdomain_obj_cmd:cmd(Cmd, Type, Req2)
                     end,
                     Reply2 = case Reply of
                         ok ->
@@ -865,7 +865,7 @@ service_api_cmd(#nkreq{cmd = <<"objects/", _/binary>>, req_state={Type, Module, 
                 true ->
                     apply(Module, object_api_cmd, [Cmd, Req]);
                 false ->
-                    nkdomain_obj_cmd:api(Cmd, Type, Req)
+                    nkdomain_obj_cmd:cmd(Cmd, Type, Req)
             end
     end;
 

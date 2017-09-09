@@ -113,7 +113,7 @@ cmd(<<"unload_childs">>, #nkreq{data=Data}=Req) ->
     end;
 
 cmd(Cmd, Req) ->
-    nkdomain_obj_cmd:api(Cmd, ?DOMAIN_DOMAIN, Req).
+    nkdomain_obj_cmd:cmd(Cmd, ?DOMAIN_DOMAIN, Req).
 
 
 %% ===================================================================

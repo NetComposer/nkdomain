@@ -49,4 +49,4 @@ cmd(<<"start">>, #nkreq{session_module=nkapi_server}=Req) ->
     end;
 
 cmd(Cmd, Req) ->
-    nkdomain_obj_cmd:api(Cmd, ?DOMAIN_SESSION, Req).
+    nkdomain_obj_cmd:cmd(Cmd, ?DOMAIN_SESSION, Req).

@@ -113,7 +113,7 @@ cmd(<<"set_status">>, #nkreq{data=Data}=Req) ->
     end;
 
 cmd(Cmd, Req) ->
-    nkdomain_obj_cmd:api(Cmd, ?DOMAIN_USER, Req).
+    nkdomain_obj_cmd:cmd(Cmd, ?DOMAIN_USER, Req).
 
 
 %% ===================================================================
