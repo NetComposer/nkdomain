@@ -964,13 +964,13 @@ do_update_name(ObjName, #?STATE{id=Id, obj=Obj}=State) ->
 do_update(Update, #?STATE{id=Id, obj=Obj}=State) ->
     #obj_id_ext{srv_id=SrvId, type=Type} = Id,
     Update2 = Update#{type=>Type, srv_id=>SrvId},
-    case apply(SrvId, object_parse, [update, Update2]) of
+    case ?CALL_NKROOT(object_parse, [update, Update2]) of
         {ok, Update3, UnknownFields} ->
             case ?ADD_TO_OBJ_DEEP(Update3, Obj) of
                 Obj ->
                     {ok, UnknownFields, State};
                 Obj3 ->
-                    case apply(SrvId, object_parse, [load, Obj3]) of
+                    case ?CALL_NKROOT(object_parse, [load, Obj3]) of
                         {ok, Obj4, _} ->
                             Time = nkdomain_util:timestamp(),
                             Obj5 = ?ADD_TO_OBJ(updated_time, Time, Obj4),
