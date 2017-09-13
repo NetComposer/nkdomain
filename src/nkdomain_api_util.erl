@@ -99,7 +99,7 @@ session_login(#nkreq{srv_id=SrvId, data=Data, session_meta=SessMeta}=Req) ->
 -spec token_login(#nkreq{}) ->
     {ok, TokenId::nkdomain:obj_id(), TTLSecs::integer()} | {error, term()}.
 
-token_login(#nkreq{data=Data, session_meta=SessMeta}) ->
+token_login(#nkreq{srv_id=SrvId, data=Data, session_meta=SessMeta}) ->
     #{id:=User} = Data,
     Auth = #{password => maps:get(password, Data, <<>>)},
     case get_domain(Data) of
@@ -109,8 +109,9 @@ token_login(#nkreq{data=Data, session_meta=SessMeta}) ->
                     LoginMeta = maps:get(meta, Data, #{}),
                     TokenData1 = maps:with([session_id, local, remote], SessMeta),
                     TokenData2 = TokenData1#{login_meta => LoginMeta},
-                    TokenOpts = maps:with([ttl], Data),
-                    nkdomain_user_obj:make_token(DomainId, UserId, TokenOpts, TokenData2);
+                    TokenOpts1 = maps:with([ttl], Data),
+                    TokenOpts2 = TokenOpts1#{srv_id=>SrvId},
+                    nkdomain_user_obj:make_token(DomainId, UserId, TokenOpts2, TokenData2);
                 {error, Error} ->
                     {error, Error}
             end;

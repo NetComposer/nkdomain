@@ -24,7 +24,7 @@
 -behavior(nkdomain_obj).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([create/6]).
+-export([create/2]).
 -export([object_info/0, object_es_mapping/0, object_parse/2, object_send_event/2,
          object_sync_op/3, object_async_op/2]).
 -export([object_admin_info/0]).
@@ -41,26 +41,31 @@
 %% Types
 %% ===================================================================
 
+-type create_token() ::
+    #{
+        domain_id => nkdomain:id(),     % Mandatory
+        parent_id => nkdomain:id(),     % Mandatory
+        created_by => nkdomain:id(),    % Mandatory
+        subtype => nkdomain:subtype(),
+        srv_id => nkservice:id(),
+        ttl => integer()
+    }.
+
 
 %% ===================================================================
 %% API
 %% ===================================================================
 
 %% @doc
--spec create(nkdomain:id(), nkdomain:id(), nkdomain:id(), nkdomain:subtype(),
-             nkdomain_obj_make:make_opts(), map()) ->
+-spec create(create_token(), map()) ->
     {ok, TokenId::nkdomain:obj_id(), pid(), integer(), [Unknown::binary()]} | {error, term()}.
 
-create(DomainId, ParentId, CreatorId, SubType, Opts, Data) ->
-    case check_ttl(SubType, Opts) of
-        {ok, SecsTTL} ->
-            Obj = Opts#{
+create(TokenOpts, Data) ->
+    case check_ttl(TokenOpts) of
+        {ok, TTL} ->
+            Obj = TokenOpts#{
                 type => ?DOMAIN_TOKEN,
-                domain_id => DomainId,
-                parent_id => ParentId,
-                created_by => CreatorId,
-                subtype => SubType,
-                ttl => SecsTTL,
+                ttl => TTL,
                 ?DOMAIN_TOKEN => #{
                     vsn => <<"1">>,
                     data => Data
@@ -68,7 +73,7 @@ create(DomainId, ParentId, CreatorId, SubType, Opts, Data) ->
             },
             case nkdomain_obj_make:create(Obj) of
                 {ok, #obj_id_ext{obj_id=TokenId, pid=Pid}, Unknown} ->
-                    {ok, TokenId, Pid, SecsTTL, Unknown};
+                    {ok, TokenId, Pid, TTL, Unknown};
                 {error, Error} ->
                     {error, Error}
             end;
@@ -78,8 +83,9 @@ create(DomainId, ParentId, CreatorId, SubType, Opts, Data) ->
 
 
 %% @doc
-check_ttl(Type, Opts) ->
-    Mod = nkdomain_all_types:get_module(?NKSRV, Type),
+check_ttl(TokenOpts) ->
+    SubType = maps:get(subtype, TokenOpts, ?DOMAIN_TOKEN),
+    Mod = nkdomain_all_types:get_module(?NKSRV, SubType),
     Info = case erlang:function_exported(Mod, object_info, 0) of
         true ->
             Mod:object_admin_info();
@@ -88,7 +94,7 @@ check_ttl(Type, Opts) ->
     end,
     DefTTL = maps:get(default_token_ttl, Info, ?DEF_TOKEN_TTL),
     MaxTTL = maps:get(max_token_ttl, Info, ?MAX_TOKEN_TTL),
-    case maps:get(ttl, Opts, DefTTL) of
+    case maps:get(ttl, TokenOpts, DefTTL) of
         TTL when TTL>=0, TTL < MaxTTL ->
             {ok, TTL};
         _ ->

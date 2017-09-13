@@ -452,11 +452,11 @@ http_login() ->
         ttl => 60,
         meta => #{b=>2}
     },
-    {ok, #{<<"token_id">>:=TokenId}} = http([], <<"objects/user/get_token"/utf8>>, Data),
+    {ok, #{<<"token_id">>:=TokenId}} = http_api(?HTTP, [], <<"objects/user/get_token"/utf8>>, Data),
     TokenId.
 
 http_domain_find(Token, Id) ->
-    http(Token, <<"objects/domain/find"/utf8>>, #{id=>Id}).
+    http_api(?HTTP, Token, <<"objects/domain/find"/utf8>>, #{id=>Id}).
 
 
 http_domain_find(User, Pass, Id) ->
@@ -464,14 +464,14 @@ http_domain_find(User, Pass, Id) ->
 
 
 http(User, Pass, Cmd, Data) ->
-    http(base64:encode(list_to_binary([User, ":", Pass])), Cmd, Data).
+    http_api(?HTTP, base64:encode(list_to_binary([User, ":", Pass])), Cmd, Data).
 
 
-http(Token, Cmd, Data) ->
+http_api(Url, Token, Cmd, Data) ->
     Hds = [{"X-NetComposer-Auth", nklib_util:to_list(Token)}],
     Body = nklib_json:encode_pretty(#{cmd=>to_bin(Cmd), data=>Data}),
-    Url = <<?HTTP, "/_api"/utf8>>,
-    {ok, {{_, 200, _}, _Hs, B}} = httpc:request(post, {to_list(Url), Hds, "application/json", Body}, [], []),
+    Url2 = <<(to_bin(Url))/binary, "/_api"/utf8>>,
+    {ok, {{_, 200, _}, _Hs, B}} = httpc:request(post, {to_list(Url2), Hds, "application/json", Body}, [], []),
     case nklib_json:decode(B) of
         #{<<"result">>:=<<"ok">>}=Result ->
             {ok, maps:get(<<"data"/utf8>>, Result)};

@@ -144,7 +144,13 @@ auth(UserId, #{password:=Pass}) ->
     {ok, nkdomain:obj_id(), integer()} | {error, term()}.
 
 make_token(DomainId, UserId, TokenOpts, TokenData) ->
-    case nkdomain_token_obj:create(DomainId, UserId, UserId, ?DOMAIN_USER, TokenOpts, TokenData) of
+    TokenOpts2 = TokenOpts#{
+        domain_id => DomainId,
+        parent_id => UserId,
+        created_by => UserId,
+        subtype => ?DOMAIN_USER
+    },
+    case nkdomain_token_obj:create(TokenOpts2, TokenData) of
         {ok, TokenId, _Pid, TTL, _Unknown} ->
             {ok, TokenId, TTL};
         {error, Error} ->
