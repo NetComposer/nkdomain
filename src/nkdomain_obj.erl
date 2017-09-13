@@ -289,7 +289,7 @@ init({Op, Obj, Meta}) when Op==loaded; Op==created ->
         domain_id := DomainId,
         parent_id := ParentId
     } = Obj,
-    Module = nkdomain_all_types:get_module(SrvId, Type),
+    Module = nkdomain_all_types:get_module(Type),
     false = Module==undefined,
     Enabled = case maps:find(enabled, Meta) of
         {ok, false} ->

@@ -23,10 +23,9 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -behaviour(gen_server).
 
--export([get_module/2, get_all_modules/0]).
+-export([get_module/1, get_all_modules/0]).
 -export([get_type/1, get_all_types/0]).
--export([get_service_types/1, get_all_services/0]).
--export([register/2]).
+-export([register/1]).
 -export([start_link/0]).
 -export([init/1, terminate/2, code_change/3, handle_call/3,
          handle_cast/2, handle_info/2]).
@@ -49,23 +48,12 @@
 
 
 %% @doc Finds a type's module
--spec get_module(nkservice:id(), nkdomain:type()) ->
+-spec get_module(nkdomain:type()) ->
     module() | undefined.
 
-get_module(SrvId, Type) ->
-    SrvId2 = to_bin(SrvId),
+get_module(Type) ->
     Type2 = to_bin(Type),
-    case lookup({type, SrvId2, Type2}) of
-        undefined ->
-            case to_bin(?NKSRV) of
-                SrvId2 ->
-                    undefined;
-                NkRoot ->
-                    lookup({type, NkRoot, Type2})
-            end;
-        Module ->
-            Module
-    end.
+    lookup({type, Type2}).
 
 
 %% @doc Gets all registered modules
@@ -78,7 +66,7 @@ get_all_modules() ->
 
 %% @doc Finds a module's type
 -spec get_type(module()) ->
-    {nkservice:id(), nkdomain:type()} | undefined.
+    nkdomain:type() | undefined.
 
 get_type(Module) ->
     lookup({module, Module}).
@@ -92,34 +80,17 @@ get_all_types() ->
     lookup(all_types, []).
 
 
-%% @doc Gets all services types
--spec get_service_types(nkservice:id()) ->
-    [nkdomain:type()].
-
-get_service_types(SrvId) ->
-    lookup({service, to_bin(SrvId)}, []).
-
-
-%% @doc Gets all services types
--spec get_all_services() ->
-    [nkdomain:srv_id()].
-
-get_all_services() ->
-    lookup(all_services, []).
-
-
 %% @doc Gets the obj module for a type
--spec register(nkservice:id(), module()) ->
+-spec register(module()) ->
     ok.
 
-register(SrvId, Module) ->
+register(Module) ->
     #{type:=Type} = Module:object_info(),
     Type2 = to_bin(Type),
-    SrvId2 = to_bin(SrvId),
     _ = binary_to_atom(Type2, utf8),
     % Ensure we have the corresponding atoms loaded
     % We store the bin version of the service
-    gen_server:call(?MODULE, {register_type, SrvId2, Type2, Module}).
+    gen_server:call(?MODULE, {register_type, Type2, Module}).
 
 
 
@@ -152,8 +123,8 @@ init([]) ->
     {noreply, #state{}} | {reply, term(), #state{}} |
     {stop, Reason::term(), #state{}} | {stop, Reason::term(), Reply::term(), #state{}}.
 
-handle_call({register_type, SrvId, Type, Module}, _From, State) ->
-    State2 = register_type(SrvId, Type, Module, State),
+handle_call({register_type, Type, Module}, _From, State) ->
+    State2 = register_type(Type, Module, State),
     {reply, ok, State2};
 
 handle_call(Msg, _From, State) ->
@@ -214,23 +185,16 @@ lookup(Term, Default) ->
 
 
 %% @private
-register_type(SrvId, Type, Module, #state{types=Types}=State) ->
-    AtomSrv = binary_to_existing_atom(SrvId, utf8),
+register_type(Type, Module, #state{types=Types}=State) ->
     AllModules1 = get_all_modules(),
     AllModules2 = lists:usort([Module|AllModules1]),
     AllTypes1 = get_all_types(),
     AllTypes2 = lists:usort([Type|AllTypes1]),
-    AllServices1 = get_all_services(),
-    AllServices2 = lists:usort([AtomSrv|AllServices1]),
-    AllServiceTypes1 = get_service_types(AtomSrv),
-    AllServiceTypes2 = lists:usort([Type|AllServiceTypes1]),
     ets:insert(?MODULE, [
         {all_modules, AllModules2},
         {all_types, AllTypes2},
-        {all_services, AllServices2},
-        {{service, SrvId}, AllServiceTypes2},
-        {{type, SrvId, Type}, Module},
-        {{module, Module}, {AtomSrv, Type}}
+        {{type, Type}, Module},
+        {{module, Module}, Type}
     ]),
     case maps:is_key(Type, Types) of
         false ->

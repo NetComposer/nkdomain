@@ -295,8 +295,8 @@ get_resources_category(Types, Session) ->
 
 
 %% @private
-is_resource(Type, #admin_session{srv_id=SrvId}) ->
-    case ?CALL_NKROOT(object_admin_info, [SrvId, Type]) of
+is_resource(Type, _Session) ->
+    case ?CALL_NKROOT(object_admin_info, [Type]) of
         #{class:=resource} = Info ->
             {true, Info};
         _ ->
@@ -363,8 +363,8 @@ get_sessions_category(Types, Session) ->
 
 
 %% @private
-is_session(Type, #admin_session{srv_id=SrvId}) ->
-    case ?CALL_NKROOT(object_admin_info, [SrvId, Type]) of
+is_session(Type, _Session) ->
+    case ?CALL_NKROOT(object_admin_info, [Type]) of
         #{class:=session} = Info ->
             {true, Info};
         _ ->

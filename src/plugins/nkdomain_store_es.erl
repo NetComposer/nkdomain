@@ -321,11 +321,10 @@ do_clean_active(EsOpts) ->
     Spec = #{
         filters => #{active=>true},
         size => ?ES_ITER_SIZE,
-        fields => [<<"type">>, <<"srv_id">>]
+        fields => [<<"type">>]
     },
-    Fun = fun(#{<<"obj_id">>:=ObjId, <<"type">>:=Type}=Obj, Acc) ->
-        SrvId = nkdomain_util:get_srv_id(Obj),
-        case ?CALL_NKROOT(object_check_active, [SrvId, Type, ObjId]) of
+    Fun = fun(#{<<"obj_id">>:=ObjId, <<"type">>:=Type}, Acc) ->
+        case ?CALL_NKROOT(object_check_active, [Type, ObjId]) of
             false ->
                 {ok, Acc+1};
             true ->

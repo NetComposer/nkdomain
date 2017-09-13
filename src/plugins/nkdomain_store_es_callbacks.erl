@@ -23,7 +23,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([error/1]).
--export([object_es_mapping/0, object_es_mapping/1, object_es_mapping/2, object_es_parse/1, object_es_unparse/1]).
+-export([object_es_mapping/0, object_es_mapping/1, object_es_parse/1, object_es_unparse/1]).
 -export([object_db_init/1, object_db_read/1, object_db_save/1, object_db_delete/1,
          object_db_find_obj/1, object_db_search/1, object_db_search_alias/1,
          object_db_search_childs/2, object_db_search_all_childs/2,
@@ -137,19 +137,14 @@ object_es_mapping() ->
 
 
 %% @doc Must return the submapping for a type
--spec object_es_mapping(module()) ->
+-spec object_es_mapping(module()|nkdomain:type()) ->
     map() | not_exported.
 
 object_es_mapping(Module) when is_atom(Module) ->
-    ?CALL_NKROOT(object_apply, [Module, object_es_mapping, []]).
+    ?CALL_NKROOT(object_apply, [Module, object_es_mapping, []]);
 
-
-%% @doc Must return the submapping for a type
--spec object_es_mapping(nkservice:id(), nkdomain:type()) ->
-    map() | not_exported.
-
-object_es_mapping(SrvId, Type) ->
-    ?CALL_NKROOT(object_apply, [SrvId, Type, object_es_mapping, []]).
+object_es_mapping(Type) when is_binary(Type) ->
+    ?CALL_NKROOT(object_apply, [Type, object_es_mapping, []]).
 
 
 %% @doc Must parse an object
@@ -164,7 +159,7 @@ object_es_parse(Map) ->
 -spec object_es_unparse(nkdomain:obj()) ->
     map().
 
-object_es_unparse(#{srv_id:=SrvId, type:=Type}=Obj) ->
+object_es_unparse(#{type:=Type}=Obj) ->
     BaseKeys = maps:keys(?CALL_NKROOT(object_es_mapping, [])),
     BaseMap1 = maps:with(BaseKeys, Obj),
     BaseMap2 = case BaseMap1 of
@@ -185,14 +180,14 @@ object_es_unparse(#{srv_id:=SrvId, type:=Type}=Obj) ->
         _ ->
             BaseMap3
     end,
-    case ?CALL_NKROOT(object_es_mapping, [SrvId, Type]) of
+    case ?CALL_NKROOT(object_es_mapping, [Type]) of
         not_exported ->
             BaseMap4#{Type => #{}};
         not_indexed ->
             ModData = maps:get(Type, Obj, #{}),
             BaseMap4#{Type => ModData};
         Map when is_map(Map) ->
-            case ?CALL_NKROOT(object_apply, [SrvId, Type, object_es_unparse, [Obj, BaseMap4]]) of
+            case ?CALL_NKROOT(object_apply, [Type, object_es_unparse, [Obj, BaseMap4]]) of
                 not_exported ->
                     ModData = maps:get(Type, Obj, #{}),
                     ModKeys = maps:keys(Map),

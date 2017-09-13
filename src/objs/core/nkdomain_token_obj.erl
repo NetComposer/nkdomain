@@ -85,7 +85,7 @@ create(TokenOpts, Data) ->
 %% @doc
 check_ttl(TokenOpts) ->
     SubType = maps:get(subtype, TokenOpts, ?DOMAIN_TOKEN),
-    Mod = nkdomain_all_types:get_module(?NKSRV, SubType),
+    Mod = nkdomain_all_types:get_module(SubType),
     Info = case erlang:function_exported(Mod, object_info, 0) of
         true ->
             Mod:object_admin_info();

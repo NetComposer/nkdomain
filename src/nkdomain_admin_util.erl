@@ -86,8 +86,8 @@ get_data(_Parts, _Spec, Session) ->
 
 
 %% @private
-get_type_info(Type, #admin_session{srv_id=SrvId}) ->
-    case ?CALL_NKROOT(object_admin_info, [SrvId, Type]) of
+get_type_info(Type, _Session) ->
+    case ?CALL_NKROOT(object_admin_info, [Type]) of
         Info when is_map(Info) ->
             {true, Info};
         _ ->
@@ -96,8 +96,8 @@ get_type_info(Type, #admin_session{srv_id=SrvId}) ->
 
 
 %% @private
-get_type_view_mod(Type, #admin_session{srv_id=SrvId}) ->
-    case ?CALL_NKROOT(object_admin_info, [SrvId, Type]) of
+get_type_view_mod(Type, _Session) ->
+    case ?CALL_NKROOT(object_admin_info, [Type]) of
         #{type_view_mod:=Mod} ->
             {ok, Mod};
         _ ->
@@ -105,8 +105,8 @@ get_type_view_mod(Type, #admin_session{srv_id=SrvId}) ->
     end.
 
 %% @private
-get_obj_view_mod(Type, #admin_session{srv_id=SrvId}) ->
-    case ?CALL_NKROOT(object_admin_info, [SrvId, Type]) of
+get_obj_view_mod(Type, _Session) ->
+    case ?CALL_NKROOT(object_admin_info, [Type]) of
         #{obj_view_mod:=Mod} ->
             {ok, Mod};
         _ ->

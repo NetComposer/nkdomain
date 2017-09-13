@@ -73,12 +73,11 @@ start(_Type, _Args) ->
                 true ->
                     spawn_link(
                         fun() ->
-                            timer:sleep(1000),
+                            timer:sleep(5000),
                             case nkdomain_nkroot:start() of
                                 {ok, _} ->
                                     lager:info("NkDOMAIN root started"),
                                     %% TODO HACK to start C4 provisionally
-                                    application:start(sipstorm_c4),      % Load env
                                     ok = sipstorm_c4_util:start();
                                 {error, Error} ->
                                     lager:error("NkDOMAN root could not start: ~p", [Error]),
@@ -103,19 +102,19 @@ stop(_) ->
 
 %% @doc Register our types
 register_types() ->
-    ok = nkdomain_all_types:register(?NKSRV, nkdomain_domain_obj),
-    ok = nkdomain_all_types:register(?NKSRV, nkdomain_user_obj),
-    ok = nkdomain_all_types:register(?NKSRV, nkdomain_session_obj),
-    ok = nkdomain_all_types:register(?NKSRV, nkdomain_config_obj),
-    ok = nkdomain_all_types:register(?NKSRV, nkdomain_token_obj),
+    ok = nkdomain_all_types:register(nkdomain_domain_obj),
+    ok = nkdomain_all_types:register(nkdomain_user_obj),
+    ok = nkdomain_all_types:register(nkdomain_session_obj),
+    ok = nkdomain_all_types:register(nkdomain_config_obj),
+    ok = nkdomain_all_types:register(nkdomain_token_obj),
 
-    ok = nkdomain_all_types:register(?NKSRV, nkdomain_mail_obj),
-    ok = nkdomain_all_types:register(?NKSRV, nkdomain_mail_provider_obj),
+    ok = nkdomain_all_types:register(nkdomain_mail_obj),
+    ok = nkdomain_all_types:register(nkdomain_mail_provider_obj),
 
-    ok = nkdomain_all_types:register(?NKSRV, nkdomain_file_store_obj),
-    ok = nkdomain_all_types:register(?NKSRV, nkdomain_file_obj),
+    ok = nkdomain_all_types:register(nkdomain_file_store_obj),
+    ok = nkdomain_all_types:register(nkdomain_file_obj),
 
-    ok = nkdomain_all_types:register(?NKSRV, nkadmin_session_obj).
+    ok = nkdomain_all_types:register(nkadmin_session_obj).
 
 
 

@@ -22,13 +22,12 @@
 -module(nkdomain_nkroot_callbacks).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -export([error/1]).
--export([object_apply/3, object_apply/4]).
-
+-export([object_apply/3]).
 -export([nkservice_rest_http/3]).
 -export([admin_tree_categories/2, admin_tree_get_category/2, admin_event/3,
          admin_element_action/5, admin_get_data/3]).
--export([object_admin_info/2]).
--export([object_create/5, object_check_active/3, object_do_expired/1]).
+-export([object_admin_info/1]).
+-export([object_create/5, object_check_active/2, object_do_expired/1]).
 -export([object_syntax/1, object_syntax_srv_id/1, object_parse/2]).
 -export([object_init/1, object_terminate/2, object_stop/2,
          object_event/2, object_reg_event/4, object_session_event/3, object_sync_op/3, object_async_op/2,
@@ -291,15 +290,10 @@ object_apply(Module, Fun, Args) when is_atom(Module) ->
             apply(Module, Fun, Args);
         false ->
             not_exported
-    end.
+    end;
 
-
-%% @doc Calls an object's function
--spec object_apply(nkservice:id(), nkdomain:type(), atom(), list()) ->
-    not_exported | term().
-
-object_apply(SrvId, Type, Fun, Args) ->
-    Module = nkdomain_all_types:get_module(SrvId, Type),
+object_apply(Type, Fun, Args) when is_binary(Type) ->
+    Module = nkdomain_all_types:get_module(Type),
     true = is_atom(Module),
     object_apply(Module, Fun, Args).
 
@@ -309,7 +303,7 @@ object_apply(SrvId, Type, Fun, Args) ->
     {ok, #obj_id_ext{}, [Unknown::binary()]} | {error, term()}.
 
 object_create(SrvId, DomainId, Type, UserId, Obj) ->
-    case nkdomain_all_types:get_module(SrvId, Type) of
+    case nkdomain_all_types:get_module(Type) of
         undefined ->
             {error, unknown_type};
         Module ->
@@ -350,8 +344,7 @@ object_parse(Mode, Map) ->
         #{type:=Type0} -> Type0;
         _ -> <<>>
     end,
-    SrvId = nkdomain_util:get_srv_id(Map),
-    case nkdomain_all_types:get_module(SrvId, Type) of
+    case nkdomain_all_types:get_module(Type) of
         undefined ->
             {error, {invalid_type, Type}};
         Module ->
@@ -378,11 +371,11 @@ object_parse(Mode, Map) ->
 %% @doc Called if an active object is detected on storage
 %% If 'true' is returned, the object is ok
 %% If 'false' is returned, it only means that the object has been processed
--spec object_check_active(nkservice:id(), type(), obj_id()) ->
+-spec object_check_active(type(), obj_id()) ->
     boolean().
 
-object_check_active(SrvId, Type, ObjId) ->
-    case nkdomain_obj_util:call_type(SrvId, Type, object_check_active, [ObjId]) of
+object_check_active(Type, ObjId) ->
+    case nkdomain_obj_util:call_type(Type, object_check_active, [ObjId]) of
         ok -> true;
         true -> true;
         false -> false
@@ -399,11 +392,11 @@ object_do_expired(ObjId) ->
 
 
 %% @doc
--spec object_admin_info(nkservice:id(), nkdomain:type()) ->
+-spec object_admin_info(nkdomain:type()) ->
     nkdomain_admin:object_admin_info().
 
-object_admin_info(SrvId, Type) ->
-    Module = nkdomain_all_types:get_module(SrvId, Type),
+object_admin_info(Type) ->
+    Module = nkdomain_all_types:get_module(Type),
     case erlang:function_exported(Module, object_admin_info, 0) of
         true ->
             Module:object_admin_info();
@@ -770,12 +763,12 @@ object_db_clean() ->
 
 
 %% @doc
-service_api_syntax(Syntax, #nkreq{srv_id=SrvId, cmd = <<"objects/", Rest/binary>>}=Req) ->
+service_api_syntax(Syntax, #nkreq{cmd = <<"objects/", Rest/binary>>}=Req) ->
     case binary:split(Rest, <<"/">>) of
         [] ->
             continue;
         [Type, Cmd] ->
-            case nkdomain_all_types:get_module(SrvId, Type) of
+            case nkdomain_all_types:get_module(Type) of
                 undefined ->
                     continue;
                 Module ->
