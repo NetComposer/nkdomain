@@ -23,20 +23,19 @@
 -module(nkdomain_user_obj_type_view).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([view/1, table_data/2, element_updated/3]).
+-export([view/1, table_data/2]).
 
 -include("nkdomain.hrl").
 -include_lib("nkadmin/include/nkadmin.hrl").
 
--define(ID, <<"domain_detail_type_view__user">>).
--define(ID_SUBDOMAINS, <<"domain_detail_type_view__user__subdomains">>).
-
 %% @doc
 view(Session) ->
+    TableId = nkdomain_admin_util:make_type_view(?DOMAIN_USER),
+    SubDomainsFilterId = nkdomain_admin_util:make_type_view_subfilter(?DOMAIN_USER),
     Spec = #{
-        table_id => ?ID,
-        subdomains_id => ?ID_SUBDOMAINS,
-        filters => [?ID_SUBDOMAINS],
+        table_id => TableId,
+        subdomains_id => SubDomainsFilterId,
+        filters => [SubDomainsFilterId],
         columns => [
             #{
                 id => checkbox,
@@ -113,13 +112,11 @@ view(Session) ->
 %            }
         ]},
     Table = #{
-        id => ?ID,
+        id => TableId,
         class => webix_ui,
         value => nkadmin_webix_datatable:datatable(Spec, Session)
     },
-    KeyData = #{data_fun => fun ?MODULE:table_data/2},
-    Session2 = nkadmin_util:set_key_data(?ID, KeyData, Session),
-    {Table, Session2}.
+    {Table, Session}.
 
 
 %% @private
@@ -135,8 +132,17 @@ get_domains(#admin_session{domain_id=DomainId}) ->
             Data2 = lists:foldl(
                 fun({ObjId, _Num}, Acc) ->
                     case nkdomain:get_name(ObjId) of
-                        {ok, #{name:=Name}} ->
-                            [#{ id => ObjId, value => Name} | Acc];
+                        {ok, #{name:=Name, obj_name:=ObjName}} ->
+                            Name2 = case Name of
+                                <<>> ->
+                                    case ObjName of
+                                        <<>> -> <<"/">>;
+                                        _ -> ObjName
+                                    end;
+                                _ ->
+                                    Name
+                            end,
+                            [#{ id => ObjId, value => Name2} | Acc];
                         _ ->
                             Acc
                     end
@@ -176,10 +182,8 @@ get_creators(#admin_session{domain_id=DomainId}) ->
     end.
 
 
-
-
 %% @doc
-table_data(#{start:=Start, size:=Size, sort:=Sort, filter:=Filter}, #admin_session{srv_id=SrvId, domain_id=DomainId}) ->
+table_data(#{start:=Start, size:=Size, sort:=Sort, filter:=Filter}, #admin_session{domain_id=DomainId}) ->
     SortSpec = case Sort of
         {<<"obj_name">>, Order} ->
             <<Order/binary, ":path">>;
@@ -214,11 +218,12 @@ table_data(#{start:=Start, size:=Size, sort:=Sort, filter:=Filter}, #admin_sessi
                 from => Start,
                 size => Size
             },
-            Fun = case Filter of
-                #{?ID_SUBDOMAINS := 0} -> search;
-                _ -> search_all
+            SubDomainsFilterId = nkdomain_admin_util:make_type_view_subfilter(?DOMAIN_USER),
+            Fun = case maps:get(SubDomainsFilterId, Filter) of
+                0 -> search;
+                1 -> search_all
             end,
-            case nkdomain_domain_obj:Fun(SrvId, DomainId, FindSpec) of
+            case nkdomain_domain_obj:Fun(DomainId, FindSpec) of
                 {ok, Total, List, _Meta} ->
                     Data = table_iter(List, Start+1, []),
                     {ok, Total, Data};
@@ -330,18 +335,18 @@ table_iter([Entry|Rest], Pos, Acc) ->
     table_iter(Rest, Pos+1, [Data|Acc]).
 
 
-%% @private
-element_updated(_ObjId, Value, _Session) ->
-    #{
-        <<"name">> := Name,
-        <<"surname">> := Surname,
-        <<"email">> := Email
-    } = Value,
-    Update = #{
-        ?DOMAIN_USER => #{
-            name => Name,
-            surname => Surname,
-            email => Email
-        }
-    },
-    {ok, Update}.
+%%%% @private
+%%element_updated(_ObjId, Value, _Session) ->
+%%    #{
+%%        <<"name">> := Name,
+%%        <<"surname">> := Surname,
+%%        <<"email">> := Email
+%%    } = Value,
+%%    Update = #{
+%%        ?DOMAIN_USER => #{
+%%            name => Name,
+%%            surname => Surname,
+%%            email => Email
+%%        }
+%%    },
+%%    {ok, Update}.

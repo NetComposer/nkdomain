@@ -24,24 +24,14 @@
 -export([categories/2, get_category/2, event/3, element_action/5]).
 
 -include("nkdomain.hrl").
+-include("nkdomain_admin.hrl").
 -include_lib("nkadmin/include/nkadmin.hrl").
 -include_lib("nkevent/include/nkevent.hrl").
 
 -define(LLOG(Type, Txt, Args, Session),
     lager:Type("NkDOMAN Admin (~s) " ++ Txt, [Session#admin_session.session_id|Args])).
 
--define(OVERVIEW,       <<"domain_tree_overview">>).
--define(DASHBOARD,      <<"domain_tree_overview_dashboard">>).
--define(DOMAINS,        <<"domain_tree_overview_domains">>).        % "Domains & Groups"
--define(DOMAINS_ID,     <<"domain_tree_overview_domains_id">>).
--define(DOMAINS_ALL,    <<"domain_tree_overview_domains_all">>).
--define(ALERTS,         <<"domain_tree_overview_alerts">>).
--define(RESOURCES,      <<"domain_tree_resources">>).
--define(SESSIONS,       <<"domain_tree_sessions">>).
--define(NETWORKS,       <<"domain_tree_networks">>).
--define(SERVICES,       <<"domain_tree_services">>).
 
--define(TYPE_VIEW,      <<"domain_detail_type_view">>).
 
 %% ===================================================================
 %% Public
@@ -67,7 +57,7 @@ get_category(overview, Session) ->
             {ok, Dashboards, Session3} = get_dashboards(Session2),
             {ok, Alerts, Session4} = get_alerts(Session3),
             Items = [Dashboards, Domains, Alerts],
-            Category = nkadmin_util:menu_item(?OVERVIEW, menuCategory, #{items=>Items}, Session4),
+            Category = nkadmin_util:menu_item(?ADMIN_OVERVIEW, menuCategory, #{items=>Items}, Session4),
             {ok, Category, Session4};
         {error, Error} ->
             {error, Error, Session}
@@ -127,30 +117,31 @@ event(Event, Updates, Session) ->
     {continue, [Event, Updates, Session]}.
 
 
-%% @doc
-element_action([?DASHBOARD], selected, _Value, Updates, Session) ->
+%% @doc See nkdomain_admin_detail:element_action/5
+element_action([?ADMIN_DASHBOARD], selected, _Value, Updates, Session) ->
     {Updates2, Session2} = nkadmin_util:update_detail(<<"/dashboard">>, #{}, Updates, Session),
     {ok, Updates2, Session2};
 
 %% "Domains & Groups"
-element_action([?DOMAINS], selected, _Value, Updates, Session) ->
+element_action([?ADMIN_DOMAINS], selected, _Value, Updates, Session) ->
     {ok, Updates, Session};
 
-element_action([?DOMAINS_ALL], selected, _Value, Updates, Session) ->
+%% "All Domains" Same as selecting the type "domain"
+element_action([?ADMIN_DOMAINS_ALL], selected, _Value, Updates, Session) ->
     nkdomain_admin_detail:selected_type(?DOMAIN_DOMAIN, <<"/">>, Updates, Session);
 
-element_action([?DOMAINS_ID, ObjId], selected, _Value, Updates, Session) ->
+element_action([?ADMIN_DOMAINS_ID, ObjId], selected, _Value, Updates, Session) ->
     {Updates2, Session2} = selected_domain(ObjId, Updates, Session),
     {ok, Updates2, Session2};
 
-element_action([?ALERTS], selected, _Value, Updates, Session) ->
+element_action([?ADMIN_ALERTS], selected, _Value, Updates, Session) ->
     {Updates2, Session2} = nkadmin_util:update_detail(<<"/alerts">>, #{}, Updates, Session),
     {ok, Updates2, Session2};
 
-element_action([?RESOURCES, Type], selected, _Value, Updates, Session) ->
+element_action([?ADMIN_RESOURCES, Type], selected, _Value, Updates, Session) ->
     nkdomain_admin_detail:selected_type(Type, <<"/">>, Updates, Session);
 
-element_action([?SESSIONS, Type], selected, _Value, Updates, Session) ->
+element_action([?ADMIN_SESSIONS, Type], selected, _Value, Updates, Session) ->
     nkdomain_admin_detail:selected_type(Type, <<"/">>, Updates, Session);
 
 element_action(_Id, _Action, _Value, Updates, Session) ->
@@ -165,8 +156,8 @@ element_action(_Id, _Action, _Value, Updates, Session) ->
 
 %% @private
 get_dashboards(Session) ->
-    Session2 = nkadmin_util:set_special_url(<<"/dashboard">>, ?DASHBOARD, Session),
-    {ok, nkadmin_util:menu_item(?DASHBOARD, menuEntry, #{}, Session), Session2}.
+    Session2 = nkadmin_util:set_special_url(<<"/dashboard">>, ?ADMIN_DASHBOARD, Session),
+    {ok, nkadmin_util:menu_item(?ADMIN_DASHBOARD, menuEntry, #{}, Session), Session2}.
 
 
 
@@ -196,11 +187,11 @@ get_domains(DomainList, Session) ->
     % We will generate a menu entry for each domain
     % Id will be ?DOMAINS_ID __ ObjId
     {ok, Items, Session2} = get_domain_items(DomainList, [], Session),
-    Items2 = Items ++ [nkadmin_util:menu_item(?DOMAINS_ALL, menuEntry, #{}, Session2)],
-    Element = nkadmin_util:menu_item(?DOMAINS, menuGroup, #{items=>Items2}, Session2),
-    % Session3 = nkadmin_util:set_key_data(?DOMAINS_ALL, #{domain_ids=>DomainList}, Session2),
-    Session4 = nkadmin_util:set_special_url(<<"/domains">>, ?DOMAINS_ALL, Session2),
-    {ok, Element, Session4}.
+    Items2 = Items ++ [nkadmin_util:menu_item(?ADMIN_DOMAINS_ALL, menuEntry, #{}, Session2)],
+    Element = nkadmin_util:menu_item(?ADMIN_DOMAINS, menuGroup, #{items=>Items2}, Session2),
+    % Session3 = nkadmin_util:set_key_data(?ADMIN_DOMAINS_ALL, #{domain_ids=>DomainList}, Session2),
+    % Session4 = nkadmin_util:set_special_url(<<"/domains">>, ?ADMIN_DOMAINS_ALL, Session2),
+    {ok, Element, Session2}.
 
 
 %% @private
@@ -221,7 +212,7 @@ get_domain_items([ObjId|Rest], Acc, Session) ->
                 _ ->
                     Value1
             end,
-            Id = << ?DOMAINS_ID/binary, "__", ObjId/binary>>,
+            Id = << ?ADMIN_DOMAINS_ID/binary, "__", ObjId/binary>>,
             Item = nkadmin_util:menu_item(Id, menuEntry, Value2, Session),
             % Session2 = nkadmin_util:set_url_key(<<$/, ObjName/binary>>, Id, Session),
             get_domain_items(Rest, [{ObjName, Item}|Acc], Session);
@@ -233,9 +224,9 @@ get_domain_items([ObjId|Rest], Acc, Session) ->
 
 %% @private
 created_domain(ObjId, DomainId, Updates, #admin_session{domain_id=DomainId}=Session) ->
-    #{domain_ids:=DomList1} = nkadmin_util:get_key_data(?DOMAINS_ALL, Session),
+    #{domain_ids:=DomList1} = nkadmin_util:get_key_data(?ADMIN_DOMAINS_ALL, Session),
     DomList2 = nklib_util:store_value(ObjId, DomList1),
-    Session2 = nkadmin_util:set_key_data(?DOMAINS_ALL, #{domain_ids=>DomList2}, Session),
+    Session2 = nkadmin_util:set_key_data(?ADMIN_DOMAINS_ALL, #{domain_ids=>DomList2}, Session),
     {ok, Item, Session3} = get_domains(DomList2, Session2),
     {[Item|Updates], Session3};
 
@@ -245,7 +236,7 @@ created_domain(_ObjId, _DomainId, Updates, Session) ->
 
 %% @private
 updated_domain(ObjId, Updates, Session) ->
-    #{domain_ids:=DomList} = nkadmin_util:get_key_data(?DOMAINS_ALL, Session),
+    #{domain_ids:=DomList} = nkadmin_util:get_key_data(?ADMIN_DOMAINS_ALL, Session),
     case lists:member(ObjId, DomList) of
         true ->
             {ok, [Item], Session2} = get_domain_items([ObjId], [], Session),
@@ -257,11 +248,11 @@ updated_domain(ObjId, Updates, Session) ->
 
 %% @private
 deleted_domain(ObjId, Updates, Session) ->
-    #{domain_ids:=DomList} = nkadmin_util:get_key_data(?DOMAINS_ALL, Session),
+    #{domain_ids:=DomList} = nkadmin_util:get_key_data(?ADMIN_DOMAINS_ALL, Session),
     case lists:member(ObjId, DomList) of
         true ->
             DomList2 = DomList -- [ObjId],
-            Session2 = nkadmin_util:set_key_data(?DOMAINS_ALL, #{domain_ids=>DomList2}, Session),
+            Session2 = nkadmin_util:set_key_data(?ADMIN_DOMAINS_ALL, #{domain_ids=>DomList2}, Session),
             {ok, Item, Session3} = get_domains(DomList2, Session2),
             {[Item|Updates], Session3};
         false ->
@@ -287,8 +278,8 @@ selected_domain(ObjId, Updates, Session) ->
 
 %% @private
 get_alerts(Session) ->
-    Session2 = nkadmin_util:set_special_url(<<"/alerts">>, ?DASHBOARD, Session),
-    Item = nkadmin_util:menu_item(?ALERTS, menuEntry, #{badge=>3}, Session),
+    Session2 = nkadmin_util:set_special_url(<<"/alerts">>, ?ADMIN_DASHBOARD, Session),
+    Item = nkadmin_util:menu_item(?ADMIN_ALERTS, menuEntry, #{badge=>3}, Session),
     {ok, Item, Session2}.
 
 
@@ -299,7 +290,7 @@ get_alerts(Session) ->
 %% @private
 get_resources_category(Types, Session) ->
     {ok, Items, Session2} = get_resource_items(Types, [], Session),
-    Category = nkadmin_util:menu_item(?RESOURCES, menuCategory, #{items=>Items}, Session2),
+    Category = nkadmin_util:menu_item(?ADMIN_RESOURCES, menuCategory, #{items=>Items}, Session2),
     {ok, Category, Session2}.
 
 
@@ -324,7 +315,7 @@ get_resource_items([Type|Rest], Acc, Session) ->
     case is_resource(Type, Session) of
         {true, Info} ->
             Weight = maps:get(weight, Info, 9000),
-            Key = << ?RESOURCES/binary, "__", Type/binary>>,
+            Key = << ?ADMIN_RESOURCES/binary, "__", Type/binary>>,
             Item = nkadmin_util:menu_item(Key, menuEntry, #{}, Session),
             #admin_session{resources=Resources} = Session,
             Session2 = case lists:member(Type, Resources) of
@@ -367,7 +358,7 @@ update_resource(Type, Updates, #admin_session{resources=Resources}=Session) ->
 %% @private
 get_sessions_category(Types, Session) ->
     {ok, Items, Session2} = get_session_items(Types, [], Session),
-    Category = nkadmin_util:menu_item(?SESSIONS, menuCategory, #{items=>Items}, Session2),
+    Category = nkadmin_util:menu_item(?ADMIN_SESSIONS, menuCategory, #{items=>Items}, Session2),
     {ok, Category, Session2}.
 
 
@@ -397,7 +388,7 @@ get_session_items([Type|Rest], Acc, Session) ->
                     get_session_items(Rest, Acc, Session);
                 {ok, Counter} ->
                     Weight = maps:get(weight, Info, 9000),
-                    Key = <<?SESSIONS/binary, "__", Type/binary>>,
+                    Key = <<?ADMIN_SESSIONS/binary, "__", Type/binary>>,
                     Item = nkadmin_util:menu_item(Key, menuEntry, #{counter=>Counter}, Session),
                     #admin_session{sessions=Sessions} = Session,
                     Session2 = Session#admin_session{sessions=Sessions#{Type=>Counter}},

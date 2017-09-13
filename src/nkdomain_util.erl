@@ -42,7 +42,12 @@
 
 %% @doc 
 make_path(Base, Type, ObjName) ->
-    Class = class(Type),
+    Class = case to_bin(Type) of
+        ?DOMAIN_DOMAIN ->
+            <<>>;
+        _ ->
+            class(Type)
+    end,
     case Base of
         <<"/">> ->
             <<$/, Class/binary, $/, ObjName/binary>>;
@@ -160,10 +165,8 @@ get_parts(Type, Path) ->
 
 
 %% @private
-class(?DOMAIN_DOMAIN) ->
-    <<>>;
 class(Type) ->
-    <<Type/binary, "s">>.
+    <<(to_bin(Type))/binary, "s">>.
 
 
 %% @private

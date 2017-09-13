@@ -172,7 +172,7 @@ object_send_event(Event, State) ->
     nkadmin_session_obj_events:event(Event, State).
 
 
-%% @private When the object is loaded, we make our cache
+%% @private
 object_init(#?STATE{srv_id=SrvId, domain_id=DomainId, id=Id, obj=Obj, meta=Meta}=State) ->
     #obj_id_ext{obj_id=SessId} = Id,
     #{created_by:=UserId} = Obj,
@@ -235,8 +235,7 @@ object_sync_op({?MODULE, element_action, <<"breadcrumbs">>, selected, Val}, _Fro
     object_sync_op({?MODULE, element_action, <<"url">>, updated, Val}, _From, State);
 
 object_sync_op({?MODULE, element_action, ElementId, Action, Value}, _From, State) ->
-    Parts = binary:split(ElementId, <<"__">>, [global]),
-    case do_element_action(Parts, Action, Value, State) of
+    case do_element_action(get_id_parts(ElementId), Action, Value, State) of
         {ok, Reply, State2} ->
             {reply, {ok, Reply}, State2};
         {error, Error, State2} ->
@@ -244,7 +243,7 @@ object_sync_op({?MODULE, element_action, ElementId, Action, Value}, _From, State
     end;
 
 object_sync_op({?MODULE, get_data, ElementId, Data}, _From, State) ->
-    case do_get_data(ElementId, Data, State) of
+    case do_get_data(get_id_parts(ElementId), Data, State) of
         {ok, Reply, State2} ->
             {reply, {ok, Reply}, State2};
         {error, Error, State2} ->
@@ -406,9 +405,9 @@ do_element_action(Parts, Action, Value, State) ->
 
 
 %% @private
-do_get_data(ElementId, Spec, State) ->
+do_get_data(Parts, Spec, State) ->
     #?STATE{session=Session} = State,
-    case handle(admin_get_data, [ElementId, Spec], Session) of
+    case handle(admin_get_data, [Parts, Spec], Session) of
         {ok, Reply, Session2} ->
             State2 = State#?STATE{session=Session2},
             {ok, Reply, State2};
@@ -439,7 +438,7 @@ find_url(Url, Session) ->
                     find_url_class(Url2)
             end;
         Key ->
-            {ok, binary:split(Key, <<"__">>, [global])}
+            {ok, get_id_parts(Key)}
     end.
 
 
@@ -499,6 +498,11 @@ subscribe_domain(OldPath, #admin_session{srv_id=SrvId, domain_path=NewPath, reg_
         RegPids,
         Pids),
     Session#admin_session{reg_pids=RegPids2}.
+
+
+%% @private
+get_id_parts(ElementId) ->
+    binary:split(ElementId, <<"__">>, [global]).
 
 
 %% @private

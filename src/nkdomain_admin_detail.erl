@@ -26,10 +26,9 @@
 
 
 -include("nkdomain.hrl").
+-include("nkdomain_admin.hrl").
 -include_lib("nkadmin/include/nkadmin.hrl").
 -include_lib("nkevent/include/nkevent.hrl").
-
--define(TYPE_VIEW, <<"domain_detail_type_view">>).
 
 -define(LLOG(Type, Txt, Args, Session),
     lager:Type("NkDOMAN Admin (~s) " ++ Txt, [Session#admin_session.session_id|Args])).
@@ -40,12 +39,18 @@
 %% ===================================================================
 
 %% @doc
-element_action([?TYPE_VIEW, Type], updated, Value, Updates, Session) ->
+element_action([<<"_type">>, Path, Type], selected, _Value, Updates, Session) ->
+    selected_type(Type, Path, Updates, Session);
+
+element_action([<<"_path">>, _SrvId, ObjId, Type, Path], selected, _Value, Updates, Session) ->
+    selected_obj(ObjId, Type, Path, Updates, Session);
+
+element_action([?ADMIN_TYPE_VIEW, Type], updated, Value, Updates, Session) ->
     #{
         <<"obj_id">> := ObjId,
         <<"value">> := ObjValue
     } = Value,
-    {ok, Mod} = get_type_view_mod(Type, Session),
+    {ok, Mod} = nkdomain_admin_util:get_type_view_mod(Type, Session),
     case Mod:element_updated(ObjId, ObjValue, Session) of
         {ok, Update} ->
             case nkdomain:update(ObjId, Update) of
@@ -57,27 +62,21 @@ element_action([?TYPE_VIEW, Type], updated, Value, Updates, Session) ->
             end
     end;
 
-element_action([?TYPE_VIEW|_Type], enable, #{<<"ids">>:=Ids}, Updates, Session) ->
+element_action([?ADMIN_TYPE_VIEW|_Type], enable, #{<<"ids">>:=Ids}, Updates, Session) ->
     {Updates2, Session2} = type_view_enable(true, Ids, Updates, Session),
     {ok, Updates2, Session2};
 
-element_action([?TYPE_VIEW|_Type], disable, #{<<"ids">>:=Ids}, Updates, Session) ->
+element_action([?ADMIN_TYPE_VIEW|_Type], disable, #{<<"ids">>:=Ids}, Updates, Session) ->
     {Updates2, Session2} = type_view_enable(false, Ids, Updates, Session),
     {ok, Updates2, Session2};
 
-element_action([?TYPE_VIEW|_Type], delete, #{<<"ids">>:=Ids}, Updates, Session) ->
+element_action([?ADMIN_TYPE_VIEW|_Type], delete, #{<<"ids">>:=Ids}, Updates, Session) ->
     {Updates2, Session2} = type_view_delete(Ids, Updates, Session),
     {ok, Updates2, Session2};
 
-element_action([?TYPE_VIEW|Type], new, _Value, Updates, Session) ->
+element_action([?ADMIN_TYPE_VIEW|Type], new, _Value, Updates, Session) ->
     {Updates2, Session2} = type_view_new(Type, Updates, Session),
     {ok, Updates2, Session2};
-
-element_action([<<"_type">>, Path, Type], selected, _Value, Updates, Session) ->
-    selected_type(Type, Path, Updates, Session);
-
-element_action([<<"_path">>, _SrvId, ObjId, Type, Path], selected, _Value, Updates, Session) ->
-    selected_obj(ObjId, Type, Path, Updates, Session);
 
 element_action([<<"domain_detail_form">>, <<"user">>, <<"messages">>], selected, _Value, Updates, Session) ->
     Opts = #{table_id => <<"domain_detail_form__user__messages__table">>, header => <<"MESSAGES">>},
@@ -101,8 +100,8 @@ element_action(_Elements, _Action, _Value, Updates, Session) ->
 %% @doc
 selected_type(Type, Path, Updates, Session) ->
     Class = nkdomain_util:class(Type),
-    Path2 = nkdomain_util:append(Path, <<$/, Class/binary>>),
-    case get_type_info(Type, Session) of
+    Path2 = nkdomain_util:append(Path, Class),
+    case nkdomain_admin_util:get_type_info(Type, Session) of
         {true, #{type_view_mod:=Mod}} ->
             {Detail, Session2} = Mod:view(Session),
             {Updates3, Session3} = nkadmin_util:update_detail(Path2, Detail, Updates, Session2),
@@ -116,7 +115,7 @@ selected_type(Type, Path, Updates, Session) ->
 
 %% @doc
 selected_obj(ObjId, Type, Path, Updates, Session) ->
-    case get_obj_view_mod(Type, Session) of
+    case nkdomain_admin_util:get_obj_view_mod(Type, Session) of
         {ok, Mod} ->
             case nkdomain_lib:load(ObjId) of
                 #obj_id_ext{}=ObjIdExt ->
@@ -140,33 +139,6 @@ selected_obj(ObjId, Type, Path, Updates, Session) ->
 %% ===================================================================
 
 
-%% @private
-get_type_info(Type, #admin_session{srv_id=SrvId}) ->
-    case ?CALL_NKROOT(object_admin_info, [SrvId, Type]) of
-        Info when is_map(Info) ->
-            {true, Info};
-        _ ->
-            false
-    end.
-
-
-%% @private
-get_type_view_mod(Type, #admin_session{srv_id=SrvId}) ->
-    case ?CALL_NKROOT(object_admin_info, [SrvId, Type]) of
-        #{type_view_mod:=Mod} ->
-            {ok, Mod};
-        _ ->
-            not_found
-    end.
-
-%% @private
-get_obj_view_mod(Type, #admin_session{srv_id=SrvId}) ->
-    case ?CALL_NKROOT(object_admin_info, [SrvId, Type]) of
-        #{obj_view_mod:=Mod} ->
-            {ok, Mod};
-        _ ->
-            not_found
-    end.
 
 
 %% ===================================================================

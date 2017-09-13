@@ -22,9 +22,12 @@
 -module(nkdomain_admin_util).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -export([get_data/3, get_agg/3, table_filter_time/3, obj_url/2]).
+-export([get_type_info/2, get_type_view_mod/2, get_obj_view_mod/2]).
 -export([search_spec/1, time/2, time2/2, get_file_url/2]).
+-export([make_type_view/1, make_type_view_subfilter/1]).
 
 -include("nkdomain.hrl").
+-include("nkdomain_admin.hrl").
 -include_lib("nkevent/include/nkevent.hrl").
 -include_lib("nkadmin/include/nkadmin.hrl").
 
@@ -38,10 +41,9 @@
 
 
 %% @doc
-get_data(Key, Spec, Session) ->
-    % lager:warning("NKLOG Spec ~p", [Spec]),
-    case nkadmin_util:get_key_data(Key, Session) of
-        #{data_fun:=Fun} ->
+get_data([?ADMIN_TYPE_VIEW, Type], Spec, Session) ->
+    case get_type_view_mod(Type, Session) of
+        {ok, Mod} ->
             Start = maps:get(start, Spec, 0),
             Size = case maps:find('end', Spec) of
                 {ok, End} when End > Start -> End-Start;
@@ -63,7 +65,7 @@ get_data(Key, Spec, Session) ->
                 filter => Filter,
                 sort => Sort
             },
-            case Fun(FunSpec, Session) of
+            case Mod:table_data(FunSpec, Session) of
                 {ok, Total, Data} ->
                     Reply = #{
                         total_count => Total,
@@ -76,8 +78,41 @@ get_data(Key, Spec, Session) ->
                     {ok, #{total_count=>0, pos=>0, data=>[]}, Session}
             end;
         _ ->
-            {error, object_not_found, Session}
+            {error, unrecognized_element, Session}
+    end;
+
+get_data(_Parts, _Spec, Session) ->
+    {error, unrecognized_element, Session}.
+
+
+%% @private
+get_type_info(Type, #admin_session{srv_id=SrvId}) ->
+    case ?CALL_NKROOT(object_admin_info, [SrvId, Type]) of
+        Info when is_map(Info) ->
+            {true, Info};
+        _ ->
+            false
     end.
+
+
+%% @private
+get_type_view_mod(Type, #admin_session{srv_id=SrvId}) ->
+    case ?CALL_NKROOT(object_admin_info, [SrvId, Type]) of
+        #{type_view_mod:=Mod} ->
+            {ok, Mod};
+        _ ->
+            not_found
+    end.
+
+%% @private
+get_obj_view_mod(Type, #admin_session{srv_id=SrvId}) ->
+    case ?CALL_NKROOT(object_admin_info, [SrvId, Type]) of
+        #{obj_view_mod:=Mod} ->
+            {ok, Mod};
+        _ ->
+            not_found
+    end.
+
 
 
 %% @private
@@ -182,6 +217,17 @@ time2(Spec, SecsOffset) ->
 %% @doc
 get_file_url(FileId, #admin_session{http_auth_id=AuthId}) ->
     <<"../_file/", FileId/binary, "?auth=", AuthId/binary>>.
+
+
+%% @doc
+make_type_view(Type) ->
+    <<?ADMIN_TYPE_VIEW/binary, "__", (to_bin(Type))/binary>>.
+
+
+%% @doc
+make_type_view_subfilter(Type) ->
+    <<(make_type_view(Type))/binary, "__subdomains">>.
+
 
 
 %% @private

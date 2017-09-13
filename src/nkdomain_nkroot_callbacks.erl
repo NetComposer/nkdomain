@@ -168,8 +168,8 @@ admin_element_action(ElementIdParts, Action, Value, Updates, Session) ->
 
 
 %% @doc
-admin_get_data(ElementId, Spec, Session) ->
-    nkdomain_admin_util:get_data(ElementId, Spec, Session).
+admin_get_data(ElementIdParts, Spec, Session) ->
+    nkdomain_admin_util:get_data(ElementIdParts, Spec, Session).
 
 
 %% ===================================================================
