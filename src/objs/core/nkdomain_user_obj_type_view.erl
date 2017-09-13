@@ -26,6 +26,7 @@
 -export([view/1, table_data/2]).
 
 -include("nkdomain.hrl").
+-include("nkdomain_admin.hrl").
 -include_lib("nkadmin/include/nkadmin.hrl").
 
 %% @doc
@@ -46,7 +47,14 @@ view(Session) ->
                 type => text,
                 name => domain_column_domain,
                 sort => true,
-                options => get_domains(Session)
+                options => nkdomain_admin_util:get_agg(<<"domain_id">>, ?DOMAIN_USER, Session)
+            },
+            #{
+                id => service,
+                type => text,
+                name => domain_column_service,
+                sort => true,
+                options => nkdomain_admin_util:get_agg(<<"srv_id">>, ?DOMAIN_USER, Session)
             },
             #{
                 id => obj_name,
@@ -85,7 +93,7 @@ view(Session) ->
                 type => text,
                 name => domain_column_created_by,
                 sort => true,
-                options => get_creators(Session),
+                options => nkdomain_admin_util:get_agg(<<"created_by">>, ?DOMAIN_USER, Session),
                 is_html => true % Will allow us to return HTML inside the column data
             },
             #{
@@ -119,76 +127,16 @@ view(Session) ->
     {Table, Session}.
 
 
-%% @private
-get_domains(#admin_session{domain_id=DomainId}) ->
-    case nkdomain:search_agg_field(DomainId, <<"domain_id">>, #{size=>50}, true) of
-        {ok, _N, Data, #{agg_sum_other:=SumOther}} ->
-            Base = case SumOther of
-                0 ->
-                    [];
-                _ ->
-                    [#{id => <<"...">>, value => <<"...">>}]
-            end,
-            Data2 = lists:foldl(
-                fun({ObjId, _Num}, Acc) ->
-                    case nkdomain:get_name(ObjId) of
-                        {ok, #{name:=Name, obj_name:=ObjName}} ->
-                            Name2 = case Name of
-                                <<>> ->
-                                    case ObjName of
-                                        <<>> -> <<"/">>;
-                                        _ -> ObjName
-                                    end;
-                                _ ->
-                                    Name
-                            end,
-                            [#{ id => ObjId, value => Name2} | Acc];
-                        _ ->
-                            Acc
-                    end
-                end,
-                Base,
-                lists:reverse(Data)),
-            [#{id => <<>>, value => <<>>} | Data2];
-        {error, _Error} ->
-            #{}
-    end.
-
-
-%% @private
-get_creators(#admin_session{domain_id=DomainId}) ->
-    case nkdomain:search_agg_field(DomainId, <<"created_by">>, #{size=>50}, true) of
-        {ok, _N, Data, #{agg_sum_other:=SumOther}} ->
-            Base = case SumOther of
-                0 ->
-                    [];
-                _ ->
-                    [#{id => <<"...">>, value => <<"...">>}]
-            end,
-            Data2 = lists:foldl(
-                fun({ObjId, _Num}, Acc) ->
-                    case nkdomain:get_name(ObjId) of
-                        {ok, #{name:=Name}} ->
-                            [#{ id => ObjId, value => Name} | Acc];
-                        _ ->
-                            Acc
-                    end
-                end,
-                Base,
-                lists:reverse(Data)),
-            [#{id => <<>>, value => <<>>} | Data2];
-        {error, _Error} ->
-            #{}
-    end.
-
 
 %% @doc
 table_data(#{start:=Start, size:=Size, sort:=Sort, filter:=Filter}, #admin_session{domain_id=DomainId}) ->
     SortSpec = case Sort of
         {<<"obj_name">>, Order} ->
-            <<Order/binary, ":path">>;
+            <<Order/binary, ":obj_name">>;
         {<<"domain">>, Order} ->
             <<Order/binary, ":path">>;
+        {<<"service">>, Order} ->
+            <<Order/binary, ":srv_id">>;
         {<<"name">>, Order} ->
             <<Order/binary, ":user.name_sort">>;
         {<<"surname">>, Order} ->
@@ -210,6 +158,7 @@ table_data(#{start:=Start, size:=Size, sort:=Sort, filter:=Filter}, #admin_sessi
                 filters => Filters,
                 fields => [<<"path">>,
                            <<"obj_name">>,
+                           <<"srv_id">>,
                            <<"created_time">>,
                            <<"created_by">>,
                            <<"enabled">>,
@@ -242,11 +191,15 @@ table_filter([], _Info, Acc) ->
 table_filter([{_, <<>>}|Rest], Info, Acc) ->
     table_filter(Rest, Info, Acc);
 
-table_filter([{<<"domain">>, <<"...">>}|Rest], Info, Acc) ->
+table_filter([{_Field, ?ADMIN_REST_OBJS}|Rest], Info, Acc) ->
     table_filter(Rest, Info, Acc);
 
 table_filter([{<<"domain">>, Data}|Rest], Info, Acc) ->
     Acc2 = Acc#{<<"domain_id">> => Data},
+    table_filter(Rest, Info, Acc2);
+
+table_filter([{<<"service">>, Data}|Rest], Info, Acc) ->
+    Acc2 = Acc#{<<"srv_id">> => Data},
     table_filter(Rest, Info, Acc2);
 
 table_filter([{<<"obj_name">>, Data}|Rest], Info, Acc) ->
@@ -260,9 +213,6 @@ table_filter([{<<"email">>, Data}|Rest], Info, Acc) ->
 table_filter([{<<"name">>, Data}|Rest], Info, Acc) ->
     Acc2 = Acc#{<<"user.fullname_norm">> => nkdomain_admin_util:search_spec(Data)},
     table_filter(Rest, Info, Acc2);
-
-table_filter([{<<"created_by">>, <<"...">>}|Rest], Info, Acc) ->
-    table_filter(Rest, Info, Acc);
 
 table_filter([{<<"created_by">>, Data}|Rest], Info, Acc) ->
     Acc2 = Acc#{<<"created_by">> => Data},
@@ -303,6 +253,7 @@ table_iter([Entry|Rest], Pos, Acc) ->
     #{
         <<"obj_id">> := ObjId,
         <<"path">> := Path,
+        <<"srv_id">> := SrvId,
         <<"created_by">> := CreatedBy,
         <<"created_time">> := CreatedTime,
         <<"user">> := #{
@@ -319,10 +270,16 @@ table_iter([Entry|Rest], Pos, Acc) ->
         false ->
             ShortName
     end,
+    Root = nklib_util:to_binary(?NKSRV),
+    SrvId2 = case SrvId of
+        Root -> <<"(nkroot)">>;
+        _ -> SrvId
+    end,
     Data = #{
         checkbox => <<"0">>,
         pos => Pos,
         id => ObjId,
+        service => SrvId2,
         obj_name => ObjName,
         domain => Domain,
         name => Name,

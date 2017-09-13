@@ -39,6 +39,7 @@
 
 -define(ADMIN_TYPE_VIEW,    <<"domain_detail_type_view">>).
 
+-define(ADMIN_REST_OBJS,    <<"__admin_rest">>).
 
 -endif.
 

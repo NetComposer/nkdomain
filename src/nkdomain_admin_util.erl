@@ -114,8 +114,28 @@ get_obj_view_mod(Type, _Session) ->
     end.
 
 
-
 %% @private
+get_agg(<<"srv_id">>, Type, #admin_session{domain_id=DomainId}) ->
+    Spec = #{
+        filters => #{type => Type},
+        size => 50
+    },
+    case nkdomain:search_agg_field(DomainId, <<"srv_id">>, Spec, true) of
+        {ok, _N, Data, #{agg_sum_other:=SumOther}} ->
+            Root = nklib_util:to_binary(?NKSRV),
+            SrvIds1 = [{S, S} || {S, _Num} <- Data, S /= Root],
+            SrvIds2 = [{<<>>, <<>>}, {Root, <<"(root)">>} | lists:sort(SrvIds1)],
+            SrvIds3 =  case SumOther of
+                0 ->
+                    SrvIds2;
+                _ ->
+                    SrvIds2 ++ [{<<"...">>, ?ADMIN_REST_OBJS}]
+            end,
+            [#{id => I, value => V} || {I, V} <- SrvIds3];
+        {error, _Error} ->
+            []
+    end;
+
 get_agg(Field, Type, #admin_session{domain_id=DomainId}) ->
     Spec = #{
         filters => #{type => Type},
@@ -123,24 +143,35 @@ get_agg(Field, Type, #admin_session{domain_id=DomainId}) ->
     },
     case nkdomain:search_agg_field(DomainId, Field, Spec, true) of
         {ok, _N, Data, #{agg_sum_other:=SumOther}} ->
-            Base = case SumOther of
-                0 ->
-                    [];
-                _ ->
-                    [#{id => <<"...">>, value => <<>>}]
-            end,
-            Data2 = lists:foldl(
+            List1 = lists:foldl(
                 fun({ObjId, _Num}, Acc) ->
                     case nkdomain:get_name(ObjId) of
-                        {ok, #{name:=Name}} ->
-                            [#{ id => ObjId, value => Name} | Acc];
+                        {ok, #{name:=Name, path:=Path, obj_name:=ObjName}} ->
+                            Name2 = case Name of
+                                <<>> ->
+                                    case ObjName of
+                                        <<>> when ObjId == <<"root">> -> <<"/">>;
+                                        _ -> ObjName
+                                    end;
+                                _ ->
+                                    Name
+                            end,
+                            [{Path, ObjId, Name2}|Acc];
                         _ ->
                             Acc
                     end
                 end,
-                Base,
-                lists:reverse(Data)),
-            [#{id => <<>>, value => <<>>} | Data2];
+                [],
+                Data),
+            List2 = [{I, N}||{_P, I, N} <- lists:keysort(1, List1)],
+            List3 = [{<<>>, <<>>}|List2],
+            List4 = case SumOther of
+                0 ->
+                    List3;
+                _ ->
+                    List3++[{<<"...">>, ?ADMIN_REST_OBJS}]
+            end,
+            [#{id => I, value => V}||{I, V} <- List4];
         {error, _Error} ->
             #{}
     end.
