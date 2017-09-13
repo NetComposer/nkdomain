@@ -78,6 +78,7 @@ start(_Type, _Args) ->
                                 {ok, _} ->
                                     lager:info("NkDOMAIN root started"),
                                     %% TODO HACK to start C4 provisionally
+                                    application:start(sipstorm_c4),      % Load env
                                     ok = sipstorm_c4_util:start();
                                 {error, Error} ->
                                     lager:error("NkDOMAN root could not start: ~p", [Error]),
