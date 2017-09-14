@@ -278,7 +278,7 @@ get_form(FormId, Obj, Session) ->
             id => <<"user_form">>,
             header => <<"USER DETAILS">>,
             type => <<"clean">>,
-            gravity => 1.0,
+            gravity => 2.0,
             height => <<"100%">>,
             margin => 0,
             borderless => false,
