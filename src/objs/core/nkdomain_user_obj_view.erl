@@ -40,14 +40,14 @@ view(#obj_id_ext{obj_id=ObjId, pid=Pid}, Session) ->
             Data = #{
                 id => <<?ID/binary, "__", ObjId/binary>>,
                 class => webix_ui,
-                value => get_form(Obj, Session)
+                value => get_form(Obj, Session, <<?ID/binary, "__", ObjId/binary>>)
             },
             {Data, Session};
         {error, Error} ->
             {error, Error}
     end.
 
-get_form(Obj, Session) ->
+get_form(Obj, Session, FormId) ->
     % TODO: Binaries VS Atoms
     CreatedBy = maps:get(created_by, Obj, <<>>),
     CreatedTime = maps:get(created_time, Obj, <<>>),
@@ -68,12 +68,21 @@ get_form(Obj, Session) ->
     UserSurname = maps:get(surname, UserObj, <<>>),
     UserPhoneT = maps:get(phone_t, UserObj, <<>>),
     UserAddressT = maps:get(address_t, UserObj, <<>>),
+    Enabled = maps:get(enabled, Obj, <<"true">>),
     DomainUsers = nkdomain_util:class(?DOMAIN_USER),
     IconUrl = case IconId of
         <<>> ->
             <<"img/avatar.png">>;
         _ ->
             nkdomain_admin_util:get_file_url(IconId, Session)
+    end,
+    case Enabled of
+        <<"true">> ->
+            DisableBtnHidden = false,
+            EnableBtnHidden = true;
+        _ ->
+            DisableBtnHidden = true,
+            EnableBtnHidden = false
     end,
     IconImage = <<"<img class='photo' style='width:150px; height:150px;' src='", IconUrl/binary,"'/>">>,
     #{
@@ -96,11 +105,14 @@ get_form(Obj, Session) ->
                     icon => <<"ban">>,
                     css => <<"webix_img_btn__centered">>,
                     align => <<"center">>,
-                    hidden => false,
+                    hidden => DisableBtnHidden,
                     click => #{
                         nkParseFunction => <<"
                             function() {
-                                alert('Disable object');
+                                ncClient.sendMessageAsync(\"objects/admin.session/element_action\", {
+                                    element_id: \"", FormId/binary, "\",
+                                    action: \"disable\"
+                                });
                             }
                         ">>
                     }
@@ -112,11 +124,14 @@ get_form(Obj, Session) ->
                     icon => <<"circle-thin">>,
                     css => <<"webix_img_btn__centered">>,
                     align => <<"center">>,
-                    hidden => true,
+                    hidden => EnableBtnHidden,
                     click => #{
                         nkParseFunction => <<"
                             function() {
-                                alert('Enable object');
+                                ncClient.sendMessageAsync(\"objects/admin.session/element_action\", {
+                                    element_id: \"", FormId/binary, "\",
+                                    action: \"enable\"
+                                });
                             }
                         ">>
                     }
@@ -132,7 +147,10 @@ get_form(Obj, Session) ->
                     click => #{
                         nkParseFunction => <<"
                             function() {
-                                alert('Delete object');
+                                ncClient.sendMessageAsync(\"objects/admin.session/element_action\", {
+                                    element_id: \"", FormId/binary, "\",
+                                    action: \"delete\"
+                                });
                             }
                         ">>
                     }
@@ -144,12 +162,31 @@ get_form(Obj, Session) ->
                     icon => <<"floppy-o">>,
                     css => <<"webix_img_btn__centered">>,
                     align => <<"center">>,
-                    disabled => true,
+                    disabled => false,
                     hidden => false,
                     click => #{
                         nkParseFunction => <<"
                             function() {
-                                alert('Save object');
+                                var username = $$(\"form_username\").getValue();
+                                var email = $$(\"form_email\").getValue();
+                                var password = $$(\"form_password\").getValue();
+                                var name = $$(\"form_name\").getValue();
+                                var surname = $$(\"form_surname\").getValue();
+                                var phone_t = $$(\"form_phone_t\").getValue();
+                                var address_t = $$(\"form_address_t\").getValue();
+                                ncClient.sendMessageAsync(\"objects/admin.session/element_action\", {
+                                    element_id: \"", FormId/binary, "\",
+                                    action: \"save\",
+                                    value: {
+                                        username: username,
+                                        email: email,
+                                        password: password,
+                                        name: name,
+                                        surname: surname,
+                                        phone_t: phone_t,
+                                        address_t: address_t
+                                    }
+                                });
                             }
                         ">>
                     }
@@ -190,6 +227,7 @@ get_form(Obj, Session) ->
                         type => <<"section">>
                     }, #{
                         view => <<"text">>,
+                        id => <<"form_username">>,
                         label => <<"Username">>,
                         placeholder => <<"username...">>,
                         labelWidth => 150,
@@ -198,6 +236,7 @@ get_form(Obj, Session) ->
                         disabled => true
                     }, #{
                         view => <<"text">>,
+                        id => <<"form_email">>,
                         label => <<"E-mail">>,
                         placeholder => <<"e-mail address...">>,
                         labelWidth => 150,
@@ -205,6 +244,7 @@ get_form(Obj, Session) ->
                         value => UserEmail
                     }, #{
                         view => <<"text">>,
+                        id => <<"form_password">>,
                         label => <<"Password">>,
                         placeholder => <<"new password...">>,
                         labelWidth => 150,
@@ -219,6 +259,7 @@ get_form(Obj, Session) ->
                         hidden => false
                     }, #{
                         view => <<"text">>,
+                        id => <<"form_name">>,
                         label => <<"First name">>,
                         placeholder => <<"first name...">>,
                         labelWidth => 150,
@@ -226,6 +267,7 @@ get_form(Obj, Session) ->
                         value => UserName
                     }, #{
                         view => <<"text">>,
+                        id => <<"form_surname">>,
                         label => <<"Last name">>,
                         placeholder => <<"last name...">>,
                         labelWidth => 150,
@@ -233,6 +275,7 @@ get_form(Obj, Session) ->
                         value => UserSurname
                     }, #{
                         view => <<"text">>,
+                        id => <<"form_phone_t">>,
                         label => <<"Phone">>,
                         placeholder => <<"phone...">>,
                         labelWidth => 150,
@@ -240,6 +283,7 @@ get_form(Obj, Session) ->
                         value => UserPhoneT
                     }, #{
                         view => <<"text">>,
+                        id => <<"form_address_t">>,
                         label => <<"Address">>,
                         placeholder => <<"address...">>,
                         labelWidth => 150,
