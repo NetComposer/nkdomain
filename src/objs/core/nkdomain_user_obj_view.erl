@@ -121,11 +121,11 @@ get_form(FormId, Obj, Session) ->
         _ ->
             nkdomain_admin_util:get_file_url(IconId, Session)
     end,
-    case Enabled of
-        <<"true">> ->
+    case Enabled == <<"true">> orelse Enabled == true of
+        true ->
             DisableBtnHidden = false,
             EnableBtnHidden = true;
-        _ ->
+        false ->
             DisableBtnHidden = true,
             EnableBtnHidden = false
     end,
