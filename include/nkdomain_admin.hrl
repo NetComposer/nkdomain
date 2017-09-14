@@ -39,7 +39,9 @@
 
 -define(ADMIN_TYPE_VIEW,    <<"domain_detail_type_view">>).
 
--define(ADMIN_ALL_OBJS,    <<"__admin_all_objs">>).
+-define(ADMIN_OBJ_ID,       <<"__admin_id_obj">>).
+-define(ADMIN_OBJ_TYPE,     <<"__admin_type">>).
+-define(ADMIN_ALL_OBJS,     <<"__admin_all_objs">>).
 
 -endif.
 

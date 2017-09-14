@@ -24,7 +24,7 @@
 -behavior(nkdomain_obj).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([find_configs/2]).
+-export([create/3, find_configs/2]).
 -export([object_info/0, object_es_mapping/0, object_parse/2,
          object_api_syntax/2, object_api_cmd/2]).
 -export([object_admin_info/0]).
@@ -43,35 +43,28 @@
 %% API
 %% ===================================================================
 
-
-
-%% @doc
-find_configs(SubType, Parent) ->
-    case nkdomain_lib:load(Parent) of
-        #obj_id_ext{obj_id=DomainId} ->
-            Search = #{
-                filters => #{
-                    type => ?DOMAIN_CONFIG,
-                    domain_id => DomainId,
-                    subtype => SubType
-                },
-                fields => [created_time, ?DOMAIN_CONFIG],
-                sort => [#{created_time => #{order => desc}}]
-            },
-            case nkdomain:search(Search) of
-                {ok, _N, Data, _Meta} ->
-                    Data2 = lists:map(
-                        fun(#{<<"obj_id">>:=ObjId, <<"created_time">>:=Time, ?DOMAIN_CONFIG:=Config}) ->
-                            {ObjId, Time, Config}
-                        end,
-                        Data),
-                    {ok, Data2};
-                {error, Error} ->
-                    {error, Error}
-            end;
+% Use domain_id, created_by, subtype
+create(SubType, Opts, Data) ->
+    Obj = Opts#{
+        type => ?DOMAIN_CONFIG,
+        domain_id => maps:get(domain_id, Opts, root),
+        created_by => maps:get(created_by, Opts, admin),
+        subtype => SubType,
+        ?DOMAIN_CONFIG => Data
+    },
+    case nkdomain_obj_make:create(Obj) of
+        {ok, #obj_id_ext{obj_id=ObjId}, _} ->
+            {ok, ObjId};
         {error, Error} ->
             {error, Error}
     end.
+
+
+%% @doc
+find_configs(Path, SubType) ->
+    Filters = #{type=>?DOMAIN_CONFIG, subtype=>SubType},
+    nkdomain_domain_obj:search_all_childs(Path, #{filters=>Filters}).
+
 
 
 %% ===================================================================

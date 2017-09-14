@@ -37,6 +37,7 @@
 -include_lib("nkadmin/include/nkadmin.hrl").
 -include_lib("nkevent/include/nkevent.hrl").
 -include("nkdomain.hrl").
+-include("nkdomain_admin.hrl").
 -include("nkdomain_debug.hrl").
 
 
@@ -421,7 +422,7 @@ do_get_data(Parts, Spec, State) ->
 find_url(<<"_id/", ObjId/binary>>, _Session) ->
     case nkdomain_lib:find(ObjId) of
         #obj_id_ext{srv_id=SrvId, type=Type, path=Path} ->
-            {ok, [<<"_obj">>, SrvId, ObjId, Type, Path]};
+            {ok, [?ADMIN_OBJ_ID, SrvId, ObjId, Type, Path]};
         {error, _Error} ->
             {error, url_unknown}
     end;
@@ -433,7 +434,7 @@ find_url(Url, Session) ->
             Url2 = nkdomain_util:append(Base, Url),
             case nkdomain_lib:find(Url2) of
                 #obj_id_ext{srv_id=SrvId, obj_id=ObjId, type=Type, path=Path} ->
-                    {ok, [<<"_path">>, SrvId, ObjId, Type, Path]};
+                    {ok, [?ADMIN_OBJ_ID, SrvId, ObjId, Type, Path]};
                 {error, _} ->
                     find_url_class(Url2)
             end;
@@ -452,7 +453,7 @@ find_url_class(Url) ->
                         <<>> -> <<"/">>;
                         Path0 -> Path0
                     end,
-                    {ok, [<<"_type">>, Path, Type]};
+                    {ok, [?ADMIN_OBJ_TYPE, Path, Type]};
                 error ->
                     {error, url_unknown}
             end;

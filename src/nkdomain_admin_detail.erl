@@ -39,10 +39,10 @@
 %% ===================================================================
 
 %% @doc
-element_action([<<"_type">>, Path, Type], selected, _Value, Updates, Session) ->
+element_action([?ADMIN_OBJ_TYPE, Path, Type], selected, _Value, Updates, Session) ->
     selected_type(Type, Path, Updates, Session);
 
-element_action([<<"_path">>, _SrvId, ObjId, Type, Path], selected, _Value, Updates, Session) ->
+element_action([?ADMIN_OBJ_ID, _SrvId, ObjId, Type, Path], selected, _Value, Updates, Session) ->
     selected_obj(ObjId, Type, Path, Updates, Session);
 
 element_action([?ADMIN_TYPE_VIEW, Type], updated, Value, Updates, Session) ->

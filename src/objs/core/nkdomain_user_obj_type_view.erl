@@ -153,7 +153,6 @@ table_data(#{start:=Start, size:=Size, sort:=Sort, filter:=Filter}, #admin_sessi
     case table_filter(maps:to_list(Filter), #{timezone_offset => Offset}, #{type=>user}) of
         {ok, Filters} -> 
             % lager:warning("NKLOG Filters ~s", [nklib_json:encode_pretty(Filters)]),
-
             FindSpec = #{
                 filters => Filters,
                 fields => [<<"path">>,
@@ -236,6 +235,10 @@ table_iter([Entry|Rest], Pos, Acc) ->
         Root -> <<"(nkroot)">>;
         _ -> SrvId
     end,
+    CreatedName = case nkdomain:get_name(CreatedBy) of
+        {ok, #{obj_name:=CNO}} -> CNO;
+        _ -> <<>>
+    end,
     Data = #{
         checkbox => <<"0">>,
         pos => Pos,
@@ -246,7 +249,7 @@ table_iter([Entry|Rest], Pos, Acc) ->
         name => Name,
         surname => Surname,
         email => Email,
-        created_by => <<"<a href=\"#_id/", CreatedBy/binary, "\">", CreatedBy/binary, "</a>">>,
+        created_by => <<"<a href=\"#_id/", CreatedBy/binary, "\">", CreatedName/binary, "</a>">>,
         created_time => CreatedTime,
         enabled => Enabled
     },
