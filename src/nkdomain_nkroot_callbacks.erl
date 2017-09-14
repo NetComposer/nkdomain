@@ -158,12 +158,7 @@ admin_event(_Event, _Updates, _Session) ->
 
 %% @doc
 admin_element_action(ElementIdParts, Action, Value, Updates, Session) ->
-    case nkdomain_admin_tree:element_action(ElementIdParts, Action, Value, Updates, Session) of
-        {ok, Updates2, Session2} ->
-            nkdomain_admin_detail:element_action(ElementIdParts, Action, Value, Updates2, Session2);
-        {error, Error} ->
-            {error, Error, Session}
-    end.
+    nkdomain_admin_tree:element_action(ElementIdParts, Action, Value, Updates, Session).
 
 
 %% @doc

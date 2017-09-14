@@ -38,6 +38,7 @@
 -define(ADMIN_SERVICES,     <<"domain_tree_services">>).
 
 -define(ADMIN_TYPE_VIEW,    <<"domain_detail_type_view">>).
+-define(ADMIN_VIEW,         <<"domain_detail_view">>).
 
 -define(ADMIN_OBJ_ID,       <<"__admin_id_obj">>).
 -define(ADMIN_OBJ_TYPE,     <<"__admin_type">>).

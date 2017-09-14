@@ -24,7 +24,7 @@
 -export([get_data/3, get_agg/3, table_filter/3, table_filter_time/3, obj_url/2]).
 -export([get_type_info/2, get_type_view_mod/2, get_obj_view_mod/2]).
 -export([search_spec/1, time/2, time2/2, get_file_url/2]).
--export([make_type_view/1, make_type_view_subfilter/1]).
+-export([make_type_view/1, make_type_view_subfilter/1, make_view/2]).
 
 -include("nkdomain.hrl").
 -include("nkdomain_admin.hrl").
@@ -311,6 +311,10 @@ make_type_view(Type) ->
 make_type_view_subfilter(Type) ->
     <<(make_type_view(Type))/binary, "__subdomains">>.
 
+
+%% @doc
+make_view(Type, ObjId) ->
+    <<?ADMIN_VIEW/binary, "__", (to_bin(Type))/binary, "__", (to_bin(ObjId))/binary>>.
 
 
 %% @private

@@ -62,20 +62,38 @@ element_action([?ADMIN_TYPE_VIEW, Type], updated, Value, Updates, Session) ->
             end
     end;
 
-element_action([?ADMIN_TYPE_VIEW|_Type], enable, #{<<"ids">>:=Ids}, Updates, Session) ->
+element_action([?ADMIN_TYPE_VIEW, _Type], enable, #{<<"ids">>:=Ids}, Updates, Session) ->
     {Updates2, Session2} = type_view_enable(true, Ids, Updates, Session),
     {ok, Updates2, Session2};
 
-element_action([?ADMIN_TYPE_VIEW|_Type], disable, #{<<"ids">>:=Ids}, Updates, Session) ->
+element_action([?ADMIN_TYPE_VIEW, _Type], disable, #{<<"ids">>:=Ids}, Updates, Session) ->
     {Updates2, Session2} = type_view_enable(false, Ids, Updates, Session),
     {ok, Updates2, Session2};
 
-element_action([?ADMIN_TYPE_VIEW|_Type], delete, #{<<"ids">>:=Ids}, Updates, Session) ->
+element_action([?ADMIN_TYPE_VIEW, _Type], delete, #{<<"ids">>:=Ids}, Updates, Session) ->
     {Updates2, Session2} = type_view_delete(Ids, Updates, Session),
     {ok, Updates2, Session2};
 
-element_action([?ADMIN_TYPE_VIEW|Type], new, _Value, Updates, Session) ->
+element_action([?ADMIN_TYPE_VIEW, Type], new, _Value, Updates, Session) ->
     {Updates2, Session2} = type_view_new(Type, Updates, Session),
+    {ok, Updates2, Session2};
+
+element_action([?ADMIN_VIEW, _Type, ObjId], enable, _Value, Updates, Session) ->
+    _ = type_view_enable(true, [ObjId], Updates, Session),
+    {ok, Updates2, Session2} = selected_obj(ObjId, Updates, Session),
+    {ok, Updates2, Session2};
+
+element_action([?ADMIN_VIEW, _Type, ObjId], disable, _Value, Updates, Session) ->
+    _ = type_view_enable(false, [ObjId], Updates, Session),
+    {ok, Updates2, Session2} = selected_obj(ObjId, Updates, Session),
+    {ok, Updates2, Session2};
+
+element_action([?ADMIN_VIEW, Type, _ObjId], delete, _Value, Updates, #admin_session{domain_path=Path}=Session) ->
+    {ok, Updates2, Session2} = selected_type(Type, Path, Updates, Session),
+    {ok, Updates2, Session2};
+
+element_action([?ADMIN_VIEW, Type, _ObjId], save, _Value, Updates, #admin_session{domain_path=Path}=Session) ->
+    {ok, Updates2, Session2} = selected_type(Type, Path, Updates, Session),
     {ok, Updates2, Session2};
 
 element_action([<<"domain_detail_form">>, <<"user">>, <<"messages">>], selected, _Value, Updates, Session) ->
@@ -89,6 +107,7 @@ element_action([<<"domain_detail_form">>, <<"user">>, <<"messages">>], selected,
     {ok, [Update|Updates], Session};
 
 element_action(_Elements, _Action, _Value, Updates, Session) ->
+    lager:error("NKLOG Admin Unhandled Element Action ~p", [{_Elements, _Action, _Value}]),
     {ok, Updates, Session}.
 
 
@@ -114,6 +133,18 @@ selected_type(Type, Path, Updates, Session) ->
 
 
 %% @doc
+selected_obj(ObjId, Updates, #admin_session{domain_path=DomPath}=Session) ->
+    case nkdomain_lib:find(ObjId) of
+        #obj_id_ext{type=Type, path=Path} ->
+            selected_obj(ObjId, Type, Path, Updates, Session);
+        {error, Error} ->
+            ?LLOG(notice, "error reading object ~s (~p)", [ObjId, Error], Session),
+            {Updates2, Session2} = nkadmin_util:update_detail(DomPath, #{}, Updates, Session),
+            {ok, Updates2, Session2}
+    end.
+
+
+%% @doc
 selected_obj(ObjId, Type, Path, Updates, Session) ->
     case nkdomain_admin_util:get_obj_view_mod(Type, Session) of
         {ok, Mod} ->
@@ -131,7 +162,6 @@ selected_obj(ObjId, Type, Path, Updates, Session) ->
             {Updates2, Session2} = nkadmin_util:update_detail(Path, #{}, Updates, Session),
             {ok, Updates2, Session2}
     end.
-
 
 
 %% ===================================================================
@@ -155,7 +185,7 @@ type_view_enable(Enable, [Id|Rest], Updates, Session) ->
             ?LLOG(info, "object enabled (~p): ~s", [Enable, Id], Session),
             ok;
         {error, Error} ->
-            ?LLOG(warning, "could not enable ~s: ~p", [Id, Error], Session)
+            ?LLOG(warning, "could not enable ~p: ~p", [Id, Error], Session)
     end,
     type_view_enable(Enable, Rest, Updates, Session).
 
@@ -175,5 +205,13 @@ type_view_delete([Id|Rest], Updates, Session) ->
 
 
 %% @private
-type_view_new(_Type, Updates, Session) ->
-    {Updates, Session}.
+type_view_new(Type, Updates, Session) ->
+    case nkdomain_admin_util:get_obj_view_mod(Type, Session) of
+        {ok, Mod} ->
+            {Path, Detail, Session2} = Mod:new(Session),
+            {Updates3, Session3} = nkadmin_util:update_detail(Path, Detail, Updates, Session2),
+            {ok, Updates3, Session3};
+        not_found ->
+            ?LLOG(notice, "type with no supported view: ~s", [Type], Session),
+            {ok, Updates, Session}
+    end.

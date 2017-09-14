@@ -26,28 +26,41 @@
 -export([view/2]).
 
 -include("nkdomain.hrl").
+-include("nkdomain_admin.hrl").
 -include_lib("nkadmin/include/nkadmin.hrl").
 
--define(ID, <<"domain_detail_form__user">>).
+%-define(ID, <<"domain_detail_form__user">>).
 -define(ID_MESSAGES, <<"domain_detail_form__user__messages">>).
 
 
 
 %% @doc
 view(#obj_id_ext{obj_id=ObjId, pid=Pid}, Session) ->
+    Id = nkdomain_admin_util:make_view(?DOMAIN_USER, ObjId),
     case nkdomain:get_obj(Pid) of
         {ok, Obj} ->
             Data = #{
-                id => <<?ID/binary, "__", ObjId/binary>>,
+                id => Id,
                 class => webix_ui,
-                value => get_form(Obj, Session, <<?ID/binary, "__", ObjId/binary>>)
+                value => get_form(Id, Obj, Session)
             },
             {Data, Session};
         {error, Error} ->
             {error, Error}
     end.
 
-get_form(Obj, Session, FormId) ->
+
+
+
+
+
+
+
+
+
+
+
+get_form(FormId, Obj, Session) ->
     % TODO: Binaries VS Atoms
     CreatedBy = maps:get(created_by, Obj, <<>>),
     CreatedTime = maps:get(created_time, Obj, <<>>),
@@ -348,7 +361,7 @@ get_form(Obj, Session, FormId) ->
 %       TABVIEW WITH RELATED DATATABLES (DELETE IN CASE THERE ISN'T ANY)
         }, #{
             view => <<"tabview">>,
-            id => <<?ID/binary, "__tabview">>,
+            id => <<FormId/binary, "__tabview">>,
           	gravity => 1.0,
             cells => [#{
                 id => <<"user_sessions">>,

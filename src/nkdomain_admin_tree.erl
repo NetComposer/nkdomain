@@ -144,9 +144,8 @@ element_action([?ADMIN_RESOURCES, Type], selected, _Value, Updates, Session) ->
 element_action([?ADMIN_SESSIONS, Type], selected, _Value, Updates, Session) ->
     nkdomain_admin_detail:selected_type(Type, <<"/">>, Updates, Session);
 
-element_action(_Id, _Action, _Value, Updates, Session) ->
-    lager:error("NKLOG Admin Unhandled Element Action ~p", [{_Id, _Action, _Value}]),
-    {ok, Updates, Session}.
+element_action(Id, Action, Value, Updates, Session) ->
+    nkdomain_admin_detail:element_action(Id, Action, Value, Updates, Session).
 
 
 

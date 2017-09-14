@@ -210,7 +210,11 @@ append(PathA, PathB) ->
         <<"/">> -> <<>>;
         P1 -> P1
     end,
-    <<PathA1/binary, $/, (to_bin(PathB))/binary>>.
+    PathB2 = case to_bin(PathB) of
+        <<"/", Rest/binary>> -> Rest;
+        P2 -> P2
+    end,
+    <<PathA1/binary, $/, PathB2/binary>>.
 
 
 %% @doc
