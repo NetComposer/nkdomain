@@ -268,7 +268,7 @@ object_syntax_srv_id(Srv) ->
     case catch nklib_util:to_existing_atom(Srv) of
         {'EXIT', _} ->
             ?LLOG(warning, "loading object for unknown domain '~s'", [Srv]),
-            {ok, ?NKSRV};
+            {ok, ?NKROOT};
         Atom ->
             {ok, Atom}
     end.

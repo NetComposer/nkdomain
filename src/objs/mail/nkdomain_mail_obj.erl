@@ -94,7 +94,7 @@ object_api_syntax(_Cmd, Syntax) ->
 object_api_cmd(<<"send">>, #nkreq{data=Data}) ->
     case get_provider(Data) of
         {ok, _, Provider} ->
-            case nkmail:send(?NKSRV, Provider, Data) of
+            case nkmail:send(?NKROOT, Provider, Data) of
                 {ok, Meta} ->
                     {ok, #{result=>Meta}};
                 {error, Error} ->

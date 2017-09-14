@@ -124,4 +124,4 @@ i18n() -> #{
 
 
 reload() ->
-    ok = nklib_i18n:load(?NKSRV, ?MODULE).
+    ok = nklib_i18n:load(?NKROOT, ?MODULE).

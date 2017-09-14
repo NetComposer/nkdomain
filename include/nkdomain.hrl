@@ -25,13 +25,13 @@
 %% Defines
 %% ===================================================================
 
--define(NKSRV, nkroot).
+-define(NKROOT, nkroot).
 -define(ADD_TO_OBJ(Key, Val, Obj), maps:put(Key, Val, Obj)).
 -define(ADD_TO_OBJ(Update, Obj), maps:merge(Obj, Update)).
 -define(ADD_TO_OBJ_DEEP(Update, Obj), nklib_util:map_merge(Update, Obj)).
 -define(REMOVE_FROM_OBJ(Key, Obj), maps:remove(Key, Obj)).
 
--define(CALL_NKROOT(Fun, Args), apply(?NKSRV, Fun, Args)).
+-define(CALL_NKROOT(Fun, Args), apply(?NKROOT, Fun, Args)).
 
 -define(STATE, nkstate_v1).
 

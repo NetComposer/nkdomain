@@ -151,8 +151,15 @@ object_es_mapping(Type) when is_binary(Type) ->
 -spec object_es_parse(map()) ->
     {ok, nkdomain:obj(), Unknown::[binary()]} | {error, term()}.
 
-object_es_parse(Map) ->
-    ?CALL_NKROOT(object_parse, [load, Map]).
+object_es_parse(#{<<"srv_id">>:=SrvId}=Map) ->
+    Map2 =  case SrvId of
+        <<>> ->
+            % If we read the <<>>, we mean NKROOT
+            Map#{<<"srv_id">> := ?NKROOT};
+        _ ->
+            Map
+    end,
+    ?CALL_NKROOT(object_parse, [load, Map2]).
 
 
 %% @doc Called to serialize an object to ES format
@@ -180,19 +187,26 @@ object_es_unparse(#{type:=Type}=Obj) ->
         _ ->
             BaseMap3
     end,
+    BaseMap5 = case BaseMap4 of
+        #{srv_id:=?NKROOT} ->
+            % Store NKROOT as <<>> for searches
+            BaseMap4#{srv_id=> <<>>};
+        _ ->
+            BaseMap4
+    end,
     case ?CALL_NKROOT(object_es_mapping, [Type]) of
         not_exported ->
-            BaseMap4#{Type => #{}};
+            BaseMap5#{Type => #{}};
         not_indexed ->
             ModData = maps:get(Type, Obj, #{}),
-            BaseMap4#{Type => ModData};
+            BaseMap5#{Type => ModData};
         Map when is_map(Map) ->
-            case ?CALL_NKROOT(object_apply, [Type, object_es_unparse, [Obj, BaseMap4]]) of
+            case ?CALL_NKROOT(object_apply, [Type, object_es_unparse, [Obj, BaseMap5]]) of
                 not_exported ->
                     ModData = maps:get(Type, Obj, #{}),
                     ModKeys = maps:keys(Map),
                     ModMap = maps:with(ModKeys, ModData),
-                    BaseMap4#{Type => ModMap};
+                    BaseMap5#{Type => ModMap};
                 Value when is_map(Value) ->
                     Value
             end
@@ -419,7 +433,7 @@ parse_clusters([#{class:=nkelastic}=Data|Rest], DbStore, Config) ->
             },
             Database = maps:get(database, Data, <<"nkobjects">>),
             EsOpts = #{
-                srv_id => ?NKSRV,
+                srv_id => ?NKROOT,
                 cluster_id => Id,
                 index => Database,
                 type => <<"objs">>,

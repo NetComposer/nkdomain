@@ -198,7 +198,7 @@ get_srv_id(Obj) ->
     case catch nklib_util:to_existing_atom(Srv) of
         {'EXIT', _} ->
             lager:warning("NkDOMAIN: loading object for unknown domain '~s'", [Srv]),
-            ?NKSRV;
+            ?NKROOT;
         SrvId ->
             SrvId
     end.

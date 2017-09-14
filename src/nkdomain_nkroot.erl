@@ -47,12 +47,12 @@ start() ->
             %% {nkdomain_obj, all}
         ]
     },
-    nkservice:start(?NKSRV, Spec).
+    nkservice:start(?NKROOT, Spec).
 
 
 %% @doc
 stop() ->
-    nkservice:stop(?NKSRV).
+    nkservice:stop(?NKROOT).
 
 
 %% @private
@@ -235,7 +235,7 @@ load_file_stores([{Id, Data}|Rest]) ->
     Obj = #{
         obj_name => Id,
         type => ?DOMAIN_FILE_STORE,
-        srv_id => ?NKSRV,
+        srv_id => ?NKROOT,
         domain_id => <<"root">>,
         created_by => <<"admin">>,
         ?DOMAIN_FILE_STORE => Data
@@ -315,7 +315,7 @@ load_mail_providers([{Id, Data}|Rest]) ->
         type => ?DOMAIN_MAIL_PROVIDER,
         domain_id => <<"root">>,
         created_by => <<"admin">>,
-        srv_id => ?NKSRV,
+        srv_id => ?NKROOT,
         ?DOMAIN_MAIL_PROVIDER => Data
     },
     case nkdomain_obj_make:create(Obj) of

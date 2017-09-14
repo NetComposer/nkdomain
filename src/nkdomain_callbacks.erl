@@ -60,10 +60,10 @@ error(Error) ->
 %% @doc 
 i18n(SrvId, Key, Lang) ->
     case nklib_i18n:get(SrvId, Key, Lang) of
-        <<>> when SrvId == ?NKSRV ->
+        <<>> when SrvId == ?NKROOT ->
             <<>>;
         <<>> ->
-            nklib_i18n:get(?NKSRV, Key, Lang);
+            nklib_i18n:get(?NKROOT, Key, Lang);
         Text ->
             Text
     end.

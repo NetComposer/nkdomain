@@ -126,7 +126,7 @@ http_get(FileId, Req) ->
                     CT = maps:get(content_type, File),
                     case get_store(File) of
                         {ok, _StoreObjId, Store} ->
-                            case nkfile:download(?NKSRV, Store, File#{name=>FileObjId}) of
+                            case nkfile:download(?NKROOT, Store, File#{name=>FileObjId}) of
                                 {ok, _, Body} ->
                                     {ok, CT, Body};
                                 {error, Error} ->
@@ -222,7 +222,7 @@ make_file_id() ->
 
 %% @private
 upload(StoreId, Store, FileId, Body) ->
-    case nkfile:upload(?NKSRV, Store, #{store_id=>StoreId, name=>FileId}, Body) of
+    case nkfile:upload(?NKROOT, Store, #{store_id=>StoreId, name=>FileId}, Body) of
         {ok, Meta} ->
             {ok, maps:with([password], Meta)};
         {error, Error} ->
@@ -232,7 +232,7 @@ upload(StoreId, Store, FileId, Body) ->
 
 %% @private
 download(Store, FileId, File) ->
-    case nkfile:download(?NKSRV, Store, File#{name=>FileId}) of
+    case nkfile:download(?NKROOT, Store, File#{name=>FileId}) of
         {ok, _, Body} ->
             {ok, Body};
         {error, Error} ->

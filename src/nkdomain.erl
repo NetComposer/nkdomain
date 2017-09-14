@@ -173,6 +173,8 @@ unload(Id, Reason) ->
     case nkdomain_lib:find(Id) of
         #obj_id_ext{pid=Pid} when is_pid(Pid) ->
             nkdomain_obj:async_op(Pid, {unload, Reason});
+        #obj_id_ext{} ->
+            ok;
         {error, Error} ->
             {error, Error}
     end.

@@ -122,9 +122,8 @@ get_agg(<<"srv_id">>, Type, #admin_session{domain_id=DomainId}) ->
     },
     case nkdomain:search_agg_field(DomainId, <<"srv_id">>, Spec, true) of
         {ok, _N, Data, #{agg_sum_other:=SumOther}} ->
-            Root = nklib_util:to_binary(?NKSRV),
-            SrvIds1 = [{S, S} || {S, _Num} <- Data, S /= Root],
-            SrvIds2 = [{<<>>, <<>>}, {Root, <<"(root)">>} | lists:sort(SrvIds1)],
+            SrvIds1 = [{S, S} || {S, _Num} <- Data, S /= <<>>],
+            SrvIds2 = [{<<>>, <<>>}, {<<>>, <<"(root)">>} | lists:sort(SrvIds1)],
             SrvIds3 =  case SumOther of
                 0 ->
                     SrvIds2;

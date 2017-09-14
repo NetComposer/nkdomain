@@ -59,6 +59,14 @@
 read_obj(ObjId, EsOpts) ->
     case nkelastic:get(ObjId, EsOpts) of
         {ok, Map, Meta} ->
+            case Map of
+                #{<<"srv_id">>:=<<"nkroot">>} ->
+                    %% TODO Temporary hack
+                    lager:warning("NKLOG Restoring empty nkroot on disk: ~s", [ObjId]),
+                    {ok, _} = nkelastic:put(ObjId, Map#{<<"srv_id">>:=<<>>}, EsOpts);
+                _ ->
+                    ok
+            end,
             case ?CALL_NKROOT(object_es_parse, [Map]) of
                 {ok, Obj, []} ->
                     {ok, Obj, Meta};

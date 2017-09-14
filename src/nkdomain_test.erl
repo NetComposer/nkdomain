@@ -485,7 +485,7 @@ login(User, Pass) ->
         password=> nklib_util:to_binary(Pass),
         meta => #{a=>nklib_util:to_binary(User)}
     },
-    case nkapi_client:start(?NKSRV, ?WS, Login, Fun, #{}, <<"objects/user/login">>) of
+    case nkapi_client:start(?NKROOT, ?WS, Login, Fun, #{}, <<"objects/user/login">>) of
         {ok, #{<<"session_id">>:=SessId}, Pid} -> {ok, Pid, SessId};
         {error, Error} -> {error, Error}
     end.

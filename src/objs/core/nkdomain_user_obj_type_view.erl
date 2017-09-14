@@ -270,7 +270,7 @@ table_iter([Entry|Rest], Pos, Acc) ->
         false ->
             ShortName
     end,
-    Root = nklib_util:to_binary(?NKSRV),
+    Root = nklib_util:to_binary(?NKROOT),
     SrvId2 = case SrvId of
         Root -> <<"(nkroot)">>;
         _ -> SrvId
