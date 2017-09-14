@@ -157,6 +157,15 @@ get_form(FormId, Obj, Session) ->
                                 ncClient.sendMessageAsync(\"objects/admin.session/element_action\", {
                                     element_id: \"", FormId/binary, "\",
                                     action: \"disable\"
+                                }).then(function(response) {
+                                    console.log('Disable button clicked OK: ', response);
+                                    if (response.data && response.data.elements) {
+                                        // Update view
+                                        updateView(response.data.elements);
+                                    }
+                                }).catch(function(response) {
+                                    console.log('Error at disable button clicked: ', response);
+                                    webix.message({ 'type': 'error', 'text': response.data.code + ' - ' + response.data.error });
                                 });
                             }
                         ">>
@@ -176,6 +185,15 @@ get_form(FormId, Obj, Session) ->
                                 ncClient.sendMessageAsync(\"objects/admin.session/element_action\", {
                                     element_id: \"", FormId/binary, "\",
                                     action: \"enable\"
+                                }).then(function(response) {
+                                    console.log('Enable button clicked OK: ', response);
+                                    if (response.data && response.data.elements) {
+                                        // Update view
+                                        updateView(response.data.elements);
+                                    }
+                                }).catch(function(response) {
+                                    console.log('Error at enable button clicked: ', response);
+                                    webix.message({ 'type': 'error', 'text': response.data.code + ' - ' + response.data.error });
                                 });
                             }
                         ">>
@@ -195,6 +213,15 @@ get_form(FormId, Obj, Session) ->
                                 ncClient.sendMessageAsync(\"objects/admin.session/element_action\", {
                                     element_id: \"", FormId/binary, "\",
                                     action: \"delete\"
+                                }).then(function(response) {
+                                    console.log('Delete button clicked OK: ', response);
+                                    if (response.data && response.data.elements) {
+                                        // Update view
+                                        updateView(response.data.elements);
+                                    }
+                                }).catch(function(response) {
+                                    console.log('Error at delete button clicked: ', response);
+                                    webix.message({ 'type': 'error', 'text': response.data.code + ' - ' + response.data.error });
                                 });
                             }
                         ">>
@@ -231,6 +258,15 @@ get_form(FormId, Obj, Session) ->
                                         phone_t: phone_t,
                                         address_t: address_t
                                     }
+                                }).then(function(response) {
+                                    console.log('Save button clicked OK: ', response);
+                                    if (response.data && response.data.elements) {
+                                        // Update view
+                                        updateView(response.data.elements);
+                                    }
+                                }).catch(function(response) {
+                                    console.log('Error at save button clicked: ', response);
+                                    webix.message({ 'type': 'error', 'text': response.data.code + ' - ' + response.data.error });
                                 });
                             }
                         ">>
@@ -277,8 +313,7 @@ get_form(FormId, Obj, Session) ->
                         placeholder => <<"username...">>,
                         labelWidth => 150,
                         labelAlign => <<"left">>,
-                        value => ObjName,
-                        disabled => true
+                        value => ObjName
                     }, #{
                         view => <<"text">>,
                         id => <<"form_email">>,
