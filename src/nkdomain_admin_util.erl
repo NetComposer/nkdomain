@@ -21,7 +21,7 @@
 %% @doc NkDomain service callback module
 -module(nkdomain_admin_util).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
--export([get_data/3, get_agg/3, table_filter_time/3, obj_url/2]).
+-export([get_data/3, get_agg/3, table_filter/3, table_filter_time/3, obj_url/2]).
 -export([get_type_info/2, get_type_view_mod/2, get_obj_view_mod/2]).
 -export([search_spec/1, time/2, time2/2, get_file_url/2]).
 -export([make_type_view/1, make_type_view_subfilter/1]).
@@ -123,12 +123,12 @@ get_agg(<<"srv_id">>, Type, #admin_session{domain_id=DomainId}) ->
     case nkdomain:search_agg_field(DomainId, <<"srv_id">>, Spec, true) of
         {ok, _N, Data, #{agg_sum_other:=SumOther}} ->
             SrvIds1 = [{S, S} || {S, _Num} <- Data, S /= <<>>],
-            SrvIds2 = [{<<>>, <<>>}, {<<>>, <<"(root)">>} | lists:sort(SrvIds1)],
+            SrvIds2 = [{?ADMIN_ALL_OBJS, <<>>}, {?NKROOT, <<"(root)">>} | lists:sort(SrvIds1)],
             SrvIds3 =  case SumOther of
                 0 ->
                     SrvIds2;
                 _ ->
-                    SrvIds2 ++ [{<<"...">>, ?ADMIN_REST_OBJS}]
+                    SrvIds2 ++ [{?ADMIN_ALL_OBJS, <<"...">>}]
             end,
             [#{id => I, value => V} || {I, V} <- SrvIds3];
         {error, _Error} ->
@@ -163,18 +163,71 @@ get_agg(Field, Type, #admin_session{domain_id=DomainId}) ->
                 [],
                 Data),
             List2 = [{I, N}||{_P, I, N} <- lists:keysort(1, List1)],
-            List3 = [{<<>>, <<>>}|List2],
+            List3 = [{?ADMIN_ALL_OBJS, <<>>}|List2],
             List4 = case SumOther of
                 0 ->
                     List3;
                 _ ->
-                    List3++[{<<"...">>, ?ADMIN_REST_OBJS}]
+                    List3++[{?ADMIN_ALL_OBJS, <<"...">>}]
             end,
             [#{id => I, value => V}||{I, V} <- List4];
         {error, _Error} ->
             #{}
     end.
 
+
+
+
+%% @private
+table_filter({_Field, <<>>}, _Info, Acc) ->
+    {ok, Acc};
+
+table_filter({_Field, ?ADMIN_ALL_OBJS}, _Info, Acc) ->
+    {ok, Acc};
+
+table_filter({<<"domain">>, Data}, _Info, Acc) ->
+    {ok, Acc#{<<"domain_id">> => Data}};
+
+table_filter({<<"service">>, Data}, _Info, Acc) ->
+    Root = to_bin(?NKROOT),
+    Data2 = case Data of
+        Root -> <<>>;
+        _ -> Data
+    end,
+    {ok, Acc#{<<"srv_id">> => Data2}};
+
+table_filter({<<"obj_name">>, Data}, _Info, Acc) ->
+    {ok, Acc#{<<"obj_name">> => search_spec(Data)}};
+
+table_filter({<<"name">>, Data}, _Info, Acc) ->
+    {ok, Acc#{<<"user.fullname_norm">> => search_spec(Data)}};
+
+table_filter({<<"created_by">>, Data}, _Info, Acc) ->
+    {ok, Acc#{<<"created_by">> => Data}};
+
+table_filter({<<"created_time">>, <<"custom">>}, _Info, _Acc) ->
+    {error, date_needs_more_data};
+
+table_filter({<<"created_time">>, Data}, #{timezone_offset:=Offset}, Acc) ->
+    Secs = Offset * 60,
+    Filter = case Data of
+        <<"today">> ->
+            time(today, Secs);
+        <<"yesterday">> ->
+            time(yesterday, Secs);
+        <<"last_7">> ->
+            time(last7, Secs);
+        <<"last_30">> ->
+            time(last30, Secs);
+        <<"custom">> ->
+            <<"">>;
+        _ ->
+            <<"">>
+    end,
+    {ok, Acc#{<<"created_time">> => Filter}};
+
+table_filter(_, _Info, _Acc) ->
+    unknown.
 
 %% @private
 table_filter_time(<<"custom">>, _Filter, _Acc) ->

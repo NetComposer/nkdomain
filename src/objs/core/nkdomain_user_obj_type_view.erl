@@ -188,60 +188,21 @@ table_data(#{start:=Start, size:=Size, sort:=Sort, filter:=Filter}, #admin_sessi
 table_filter([], _Info, Acc) ->
     {ok, Acc};
 
-table_filter([{_, <<>>}|Rest], Info, Acc) ->
-    table_filter(Rest, Info, Acc);
-
-table_filter([{_Field, ?ADMIN_REST_OBJS}|Rest], Info, Acc) ->
-    table_filter(Rest, Info, Acc);
-
-table_filter([{<<"domain">>, Data}|Rest], Info, Acc) ->
-    Acc2 = Acc#{<<"domain_id">> => Data},
-    table_filter(Rest, Info, Acc2);
-
-table_filter([{<<"service">>, Data}|Rest], Info, Acc) ->
-    Acc2 = Acc#{<<"srv_id">> => Data},
-    table_filter(Rest, Info, Acc2);
-
-table_filter([{<<"obj_name">>, Data}|Rest], Info, Acc) ->
-    Acc2 = Acc#{<<"obj_name">> => nkdomain_admin_util:search_spec(Data)},
-    table_filter(Rest, Info, Acc2);
-
-table_filter([{<<"email">>, Data}|Rest], Info, Acc) ->
-    Acc2 = Acc#{<<"user.email">> => nkdomain_admin_util:search_spec(Data)},
-    table_filter(Rest, Info, Acc2);
-
-table_filter([{<<"name">>, Data}|Rest], Info, Acc) ->
-    Acc2 = Acc#{<<"user.fullname_norm">> => nkdomain_admin_util:search_spec(Data)},
-    table_filter(Rest, Info, Acc2);
-
-table_filter([{<<"created_by">>, Data}|Rest], Info, Acc) ->
-    Acc2 = Acc#{<<"created_by">> => Data},
-    table_filter(Rest, Info, Acc2);
-
-table_filter([{<<"created_time">>, <<"custom">>}|_Rest], _Acc, _Info) ->
-    {error, date_needs_more_data};
-
-table_filter([{<<"created_time">>, Data}|Rest], #{timezone_offset:=Offset} = Info, Acc) ->
-    Secs = Offset * 60,
-    Filter = case Data of
-        <<"today">> ->
-            nkdomain_admin_util:time(today, Secs);
-        <<"yesterday">> ->
-            nkdomain_admin_util:time(yesterday, Secs);
-        <<"last_7">> ->
-            nkdomain_admin_util:time(last7, Secs);
-        <<"last_30">> ->
-            nkdomain_admin_util:time(last30, Secs);
-        <<"custom">> ->
-            <<"">>;
-        _ ->
-            <<"">>
-    end,
-    Acc2 = Acc#{<<"created_time">> => Filter},
-    table_filter(Rest, Info, Acc2);
-
-table_filter([_|Rest], Info, Acc) ->
-    table_filter(Rest, Info, Acc).
+table_filter([Term|Rest], Info, Acc) ->
+    case nkdomain_admin_util:table_filter(Term, Info, Acc) of
+        {ok, Acc2} ->
+            table_filter(Rest, Info, Acc2);
+        {error, Error} ->
+            {error, Error};
+        unknown ->
+            case Term of
+                {<<"email">>, Data} ->
+                    Acc2 = Acc#{<<"user.email">> => nkdomain_admin_util:search_spec(Data)},
+                    table_filter(Rest, Info, Acc2);
+                _ ->
+                    table_filter(Rest, Info, Acc)
+            end
+    end.
 
 
 
