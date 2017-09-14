@@ -44,5 +44,6 @@
 -define(ADMIN_OBJ_TYPE,     <<"__admin_type">>).
 -define(ADMIN_ALL_OBJS,     <<"__admin_all_objs">>).
 
+
 -endif.
 

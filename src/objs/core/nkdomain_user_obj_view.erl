@@ -23,7 +23,7 @@
 -module(nkdomain_user_obj_view).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([view/2]).
+-export([view/2, save/3]).
 
 -include("nkdomain.hrl").
 -include("nkdomain_admin.hrl").
@@ -31,6 +31,9 @@
 
 %-define(ID, <<"domain_detail_form__user">>).
 -define(ID_MESSAGES, <<"domain_detail_form__user__messages">>).
+
+-define(LLOG(Type, Txt, Args),
+    lager:Type("NkDOMAN Admin User " ++ Txt, Args)).
 
 
 
@@ -50,8 +53,37 @@ view(#obj_id_ext{obj_id=ObjId, pid=Pid}, Session) ->
     end.
 
 
-
-
+save(ObjId, Data, _Session) ->
+    #{
+        <<"username">> := _UserName,
+        <<"name">> := Name,
+        <<"surname">> := SurName,
+        <<"email">> := Email,
+        <<"password">> := Pass,
+        <<"address_t">> := Address,
+        <<"phone_t">> := Phone
+    } = Data,
+    UserUpdate1 = #{
+        name => Name,
+        surname => SurName,
+        email => Email,
+        address_t => Address,
+        phone_t => Phone
+    },
+    UserUpdate2 = case Pass of
+        <<>> ->
+            UserUpdate1;
+        _ ->
+            UserUpdate1#{password=>Pass}
+    end,
+    case nkdomain:update(ObjId, #{?DOMAIN_USER => UserUpdate2}) of
+        {ok, _} ->
+            ?LLOG(notice, "user ~s updated", [ObjId]),
+            ok;
+        {error, Error} ->
+            ?LLOG(notice, "could not update user ~s: ~p", [ObjId, Error]),
+            {error, Error}
+    end.
 
 
 

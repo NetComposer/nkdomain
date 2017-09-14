@@ -92,7 +92,8 @@ element_action([?ADMIN_VIEW, Type, _ObjId], delete, _Value, Updates, #admin_sess
     {ok, Updates2, Session2} = selected_type(Type, Path, Updates, Session),
     {ok, Updates2, Session2};
 
-element_action([?ADMIN_VIEW, Type, _ObjId], save, _Value, Updates, #admin_session{domain_path=Path}=Session) ->
+element_action([?ADMIN_VIEW, Type, ObjId], save, Value, Updates, #admin_session{domain_path=Path}=Session) ->
+    view_save(Type, ObjId, Value, Session),
     {ok, Updates2, Session2} = selected_type(Type, Path, Updates, Session),
     {ok, Updates2, Session2};
 
@@ -202,6 +203,12 @@ type_view_delete([Id|Rest], Updates, Session) ->
             ?LLOG(warning, "could not delete ~s: ~p", [Id, Error], Session)
     end,
     type_view_delete( Rest, Updates, Session).
+
+
+%% @private
+view_save(Type, ObjId, Data, Session) ->
+    {ok, Mod} = nkdomain_admin_util:get_obj_view_mod(Type, Session),
+    Mod:save(ObjId, Data, Session).
 
 
 %% @private
