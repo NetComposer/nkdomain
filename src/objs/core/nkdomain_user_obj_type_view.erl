@@ -23,7 +23,7 @@
 -module(nkdomain_user_obj_type_view).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([view/1, table_data/2]).
+-export([view/1, table_data/2, element_updated/3]).
 
 -include("nkdomain.hrl").
 -include("nkdomain_admin.hrl").
@@ -226,18 +226,18 @@ table_iter([Entry|Rest], Pos, Acc) ->
     table_iter(Rest, Pos+1, [Data|Acc]).
 
 
-%%%% @private
-%%element_updated(_ObjId, Value, _Session) ->
-%%    #{
-%%        <<"name">> := Name,
-%%        <<"surname">> := Surname,
-%%        <<"email">> := Email
-%%    } = Value,
-%%    Update = #{
-%%        ?DOMAIN_USER => #{
-%%            name => Name,
-%%            surname => Surname,
-%%            email => Email
-%%        }
-%%    },
-%%    {ok, Update}.
+%% @private
+element_updated(_ObjId, Value, _Session) ->
+    #{
+        <<"name">> := Name,
+        <<"surname">> := Surname,
+        <<"email">> := Email
+    } = Value,
+    Update = #{
+        ?DOMAIN_USER => #{
+            name => Name,
+            surname => Surname,
+            email => Email
+        }
+    },
+    {ok, Update}.

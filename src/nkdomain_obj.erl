@@ -655,6 +655,10 @@ do_sync_op({update, Map}, _From, #?STATE{is_enabled=IsEnabled, object_info=Info}
 do_sync_op({update_name, _ObjName}, _From, #?STATE{id=#obj_id_ext{type=?DOMAIN_DOMAIN}}=State) ->
     reply({error, domains_name_cannot_change}, State);
 
+do_sync_op({update_name, ObjName}, _From, #?STATE{obj=#{obj_name:=ObjName}}=State) ->
+    lager:error("NKLOG NO CHANGE"),
+    reply({ok, ObjName}, do_refresh(State));
+
 do_sync_op({update_name, ObjName}, _From, #?STATE{is_enabled=IsEnabled, object_info=Info}=State) ->
     case {IsEnabled, Info} of
         {false, #{dont_update_on_disabled:=true}} ->

@@ -55,7 +55,7 @@ view(#obj_id_ext{obj_id=ObjId, pid=Pid}, Session) ->
 
 save(ObjId, Data, _Session) ->
     #{
-        <<"username">> := _UserName,
+        <<"username">> := UserName,
         <<"name">> := Name,
         <<"surname">> := SurName,
         <<"email">> := Email,
@@ -78,15 +78,18 @@ save(ObjId, Data, _Session) ->
     end,
     case nkdomain:update(ObjId, #{?DOMAIN_USER => UserUpdate2}) of
         {ok, _} ->
-            ?LLOG(notice, "user ~s updated", [ObjId]),
-            ok;
+            case nkdomain:update_name(ObjId, UserName) of
+                {ok, _} ->
+                    ?LLOG(notice, "user ~s updated", [ObjId]),
+                    ok;
+                {error, Error} ->
+                    ?LLOG(notice, "could not update user ~s: ~p", [ObjId, Error]),
+                    {error, Error}
+            end;
         {error, Error} ->
             ?LLOG(notice, "could not update user ~s: ~p", [ObjId, Error]),
             {error, Error}
     end.
-
-
-
 
 
 

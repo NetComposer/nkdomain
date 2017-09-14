@@ -263,12 +263,6 @@ table_entry(Type, Entry, Pos) ->
     } = Entry,
     {ok, Domain, ShortName} = nkdomain_util:get_parts(Type, Path),
     Enabled = maps:get(<<"enabled">>, Entry, true),
-    ObjName = case Enabled of
-        true ->
-            <<"<a href=\"#_id/", ObjId/binary, "\">", ShortName/binary, "</a>">>;
-        false ->
-            ShortName
-    end,
     Root = nklib_util:to_binary(?NKROOT),
     SrvId2 = case SrvId of
         Root -> <<"(nkroot)">>;
@@ -283,7 +277,7 @@ table_entry(Type, Entry, Pos) ->
         pos => Pos,
         id => ObjId,
         service => SrvId2,
-        obj_name => ObjName,
+        obj_name => <<"<a href=\"#_id/", ObjId/binary, "\">", ShortName/binary, "</a>">>,
         domain => Domain,
         created_by => <<"<a href=\"#_id/", CreatedBy/binary, "\">", CreatedName/binary, "</a>">>,
         created_time => CreatedTime,

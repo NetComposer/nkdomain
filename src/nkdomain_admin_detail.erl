@@ -99,7 +99,8 @@ element_action([?ADMIN_VIEW, _Type, ObjId], disable, _Value, Updates, Session) -
     {ok, Updates2, Session2} = selected_obj(ObjId, Updates, Session),
     {ok, Updates2, Session2};
 
-element_action([?ADMIN_VIEW, Type, _ObjId], delete, _Value, Updates, #admin_session{domain_path=Path}=Session) ->
+element_action([?ADMIN_VIEW, Type, ObjId], delete, _Value, Updates, #admin_session{domain_path=Path}=Session) ->
+    _ = type_view_delete([ObjId], Updates, Session),
     {ok, Updates2, Session2} = selected_type(Type, Path, Updates, Session),
     {ok, Updates2, Session2};
 
