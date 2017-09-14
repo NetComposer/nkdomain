@@ -120,7 +120,8 @@ event(Event, Updates, Session) ->
 %% @doc See nkdomain_admin_detail:element_action/5
 element_action([?ADMIN_DASHBOARD], selected, _Value, Updates, Session) ->
     {Updates2, Session2} = nkadmin_util:update_detail(<<"/dashboard">>, #{}, Updates, Session),
-    {ok, Updates2, Session2};
+    {Updates3, Session3} = nkadmin_util:update_url(Updates2, Session2),
+    {ok, Updates3, Session3};
 
 %% "Domains & Groups"
 element_action([?ADMIN_DOMAINS], selected, _Value, Updates, Session) ->
@@ -136,7 +137,8 @@ element_action([?ADMIN_DOMAINS_ID, ObjId], selected, _Value, Updates, Session) -
 
 element_action([?ADMIN_ALERTS], selected, _Value, Updates, Session) ->
     {Updates2, Session2} = nkadmin_util:update_detail(<<"/alerts">>, #{}, Updates, Session),
-    {ok, Updates2, Session2};
+    {Updates3, Session3} = nkadmin_util:update_url(Updates2, Session2),
+    {ok, Updates3, Session3};
 
 element_action([?ADMIN_RESOURCES, Type], selected, _Value, Updates, Session) ->
     nkdomain_admin_detail:selected_type(Type, <<"/">>, Updates, Session);
@@ -264,7 +266,8 @@ selected_domain(ObjId, Updates, Session) ->
     case nkdomain_lib:load(ObjId) of
         #obj_id_ext{path=Path} ->
             {Updates2, Session2} = nkadmin_util:update_detail(Path, #{}, Updates, Session),
-            {Updates2, Session2};
+            {Updates3, Session3} = nkadmin_util:update_url(Updates2, Session2),
+            {Updates3, Session3};
         {error, Error} ->
             ?LLOG(notice, "could not load domain ~s: ~p", [ObjId, Error], Session),
             {Updates, Session}

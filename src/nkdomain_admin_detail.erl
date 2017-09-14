@@ -42,8 +42,19 @@
 element_action([?ADMIN_OBJ_TYPE, Path, Type], selected, _Value, Updates, Session) ->
     selected_type(Type, Path, Updates, Session);
 
-element_action([?ADMIN_OBJ_ID, _SrvId, ObjId, Type, Path], selected, _Value, Updates, Session) ->
-    selected_obj(ObjId, Type, Path, Updates, Session);
+element_action([?ADMIN_OBJ_ID, _SrvId, ObjId, Type, Path], selected, Value, Updates, Session) ->
+    case selected_obj(ObjId, Type, Path, Updates, Session) of
+        {ok, Updates2, Session2} ->
+            case Value of
+                #{update_url:=true} ->
+                    {Updates3, Session3} = nkadmin_util:update_url(Updates2, Session2),
+                    {ok, Updates3, Session3};
+                _ ->
+                    {ok, Updates2, Session2}
+            end;
+        Other ->
+            Other
+    end;
 
 element_action([?ADMIN_TYPE_VIEW, Type], updated, Value, Updates, Session) ->
     #{
@@ -125,7 +136,8 @@ selected_type(Type, Path, Updates, Session) ->
         {true, #{type_view_mod:=Mod}} ->
             {Detail, Session2} = Mod:view(Session),
             {Updates3, Session3} = nkadmin_util:update_detail(Path2, Detail, Updates, Session2),
-            {ok, Updates3, Session3};
+            {Updates4, Session4} = nkadmin_util:update_url(Updates3, Session3),
+            {ok, Updates4, Session4};
         _ ->
             ?LLOG(notice, "type with no supported view: ~s", [Type], Session),
             {Updates2, Session2} = nkadmin_util:update_detail(Path2, #{}, Updates, Session),
@@ -134,34 +146,32 @@ selected_type(Type, Path, Updates, Session) ->
 
 
 %% @doc
-selected_obj(ObjId, Updates, #admin_session{domain_path=DomPath}=Session) ->
+selected_obj(ObjId, Updates, Session) ->
     case nkdomain_lib:find(ObjId) of
         #obj_id_ext{type=Type, path=Path} ->
             selected_obj(ObjId, Type, Path, Updates, Session);
         {error, Error} ->
             ?LLOG(notice, "error reading object ~s (~p)", [ObjId, Error], Session),
-            {Updates2, Session2} = nkadmin_util:update_detail(DomPath, #{}, Updates, Session),
-            {ok, Updates2, Session2}
+            {ok, Updates, Session}
     end.
 
 
 %% @doc
-selected_obj(ObjId, Type, Path, Updates, Session) ->
+selected_obj(ObjId, Type, ObjPath, Updates, Session) ->
     case nkdomain_admin_util:get_obj_view_mod(Type, Session) of
         {ok, Mod} ->
             case nkdomain_lib:load(ObjId) of
                 #obj_id_ext{}=ObjIdExt ->
                     {Detail, Session2} = Mod:view(ObjIdExt, Session),
-                    {Updates3, Session3} = nkadmin_util:update_detail(Path, Detail, Updates, Session2),
+                    {Updates3, Session3} = nkadmin_util:update_detail(ObjPath, Detail, Updates, Session2),
                     {ok, Updates3, Session3};
                 {error, Error} ->
-                    ?LLOG(notice, "error loading object ~s: ~p", [Path, Error], Session),
+                    ?LLOG(notice, "error loading object ~s: ~p", [ObjPath, Error], Session),
                     {error, object_load_error, Session}
             end;
         not_found ->
             ?LLOG(notice, "type with no supported view: ~s", [Type], Session),
-            {Updates2, Session2} = nkadmin_util:update_detail(Path, #{}, Updates, Session),
-            {ok, Updates2, Session2}
+            {ok, Updates, Session}
     end.
 
 

@@ -222,7 +222,7 @@ object_sync_op({?MODULE, element_action, <<"url">>, updated, Url}, _From, State)
     #?STATE{session=Session} = State,
     case find_url(Url, Session) of
         {ok, Parts} ->
-            case do_element_action(Parts, selected, <<>>, State) of
+            case do_element_action(Parts, selected, #{update_url=>false}, State) of
                 {ok, Reply, State2} ->
                     {reply, {ok, Reply}, State2};
                 {error, Error, State2} ->
@@ -232,8 +232,20 @@ object_sync_op({?MODULE, element_action, <<"url">>, updated, Url}, _From, State)
             {reply, {error, Error}, State}
     end;
 
-object_sync_op({?MODULE, element_action, <<"breadcrumbs">>, selected, Val}, _From, State) ->
-    object_sync_op({?MODULE, element_action, <<"url">>, updated, Val}, _From, State);
+object_sync_op({?MODULE, element_action, <<"breadcrumbs">>, selected, Url}, _From, State) ->
+    #?STATE{session=Session} = State,
+    case find_url(Url, Session) of
+        {ok, Parts} ->
+            case do_element_action(Parts, selected, #{update_url=>true}, State) of
+                {ok, Reply, State2} ->
+                    {reply, {ok, Reply}, State2};
+                {error, Error, State2} ->
+                    {reply, {error, Error}, State2}
+            end;
+        {error, Error} ->
+            {reply, {error, Error}, State}
+    end;
+    % object_sync_op({?MODULE, element_action, <<"url">>, updated, Val}, _From, State);
 
 object_sync_op({?MODULE, element_action, ElementId, Action, Value}, _From, State) ->
     case do_element_action(get_id_parts(ElementId), Action, Value, State) of
@@ -390,8 +402,7 @@ send_event(Event, State) ->
 
 %% @private
 do_element_action(Parts, Action, Value, State) ->
-    #?STATE{session=Session} = State,
-    case handle(admin_element_action, [Parts, Action, Value, []], Session) of
+    case do_element_action_updates(Parts, Action, Value, State) of
         {ok, UpdList, Session2} ->
             State2 = State#?STATE{session=Session2},
             case UpdList of
@@ -403,6 +414,13 @@ do_element_action(Parts, Action, Value, State) ->
         {error, Error, Session2} ->
             {error, Error, State#?STATE{session=Session2}}
     end.
+
+
+%% @private
+do_element_action_updates(Parts, Action, Value, State) ->
+    #?STATE{session=Session} = State,
+    handle(admin_element_action, [Parts, Action, Value, []], Session).
+
 
 
 %% @private
