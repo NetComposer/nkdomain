@@ -398,7 +398,18 @@ get_form(FormId, Obj, Session) ->
                         label => <<"Created time">>,
                         labelWidth => 150,
                         labelAlign => <<"left">>,
-                        value => CreatedTime, %% TODO: Format to client date string
+                        value => CreatedTime,
+                        on => #{
+                            onBeforeRender => #{
+                                nkParseFunction => <<"
+                                    function(data) {   // 'en-US', 'es-ES', etc.
+                                        if (data && data.value) {
+                                            data.value = (new Date(data.value)).toLocaleString();
+                                        }
+                                    }
+                                ">>
+                            }
+                        },
                         disabled => true
                     }, #{
                         cols => [#{
@@ -417,7 +428,18 @@ get_form(FormId, Obj, Session) ->
                         label => <<"Updated time">>,
                         labelWidth => 150,
                         labelAlign => <<"left">>,
-                        value => UpdatedTime, %% TODO: Format to client date string
+                        value => UpdatedTime,
+                        on => #{
+                            onBeforeRender => #{
+                                nkParseFunction => <<"
+                                    function(data) {   // 'en-US', 'es-ES', etc.
+                                        if (data && data.value) {
+                                            data.value = (new Date(data.value)).toLocaleString();
+                                        }
+                                    }
+                                ">>
+                            }
+                        },
                         disabled => true
                     }]
             	}],
