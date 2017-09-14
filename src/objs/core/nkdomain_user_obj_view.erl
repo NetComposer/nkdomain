@@ -97,7 +97,7 @@ get_form(FormId, Obj, Session) ->
     CreatedBy = maps:get(created_by, Obj, <<>>),
     CreatedTime = maps:get(created_time, Obj, <<>>),
     _Description = maps:get(description, Obj, <<>>),
-    _DomainId = maps:get(domain_id, Obj, <<>>),
+    DomainId = maps:get(domain_id, Obj, <<>>),
     _Name = maps:get(name, Obj, <<>>),
     _ObjId = maps:get(obj_id, Obj, <<>>),
     IconId = maps:get(icon_id, Obj, <<>>),
@@ -239,6 +239,7 @@ get_form(FormId, Obj, Session) ->
                     click => #{
                         nkParseFunction => <<"
                             function() {
+                                var domain = $$(\"form_domain\").getValue();
                                 var username = $$(\"form_username\").getValue();
                                 var email = $$(\"form_email\").getValue();
                                 var password = $$(\"form_password\").getValue();
@@ -250,6 +251,7 @@ get_form(FormId, Obj, Session) ->
                                     element_id: \"", FormId/binary, "\",
                                     action: \"save\",
                                     value: {
+                                        domain: domain,
                                         username: username,
                                         email: email,
                                         password: password,
@@ -306,6 +308,20 @@ get_form(FormId, Obj, Session) ->
                     rows => [#{
                         template => <<"Credentials">>,
                         type => <<"section">>
+                    }, #{
+                        view => <<"combo">>,
+                        id => <<"form_domain">>,
+                        label => <<"Domain">>,
+                        placeholder => <<"Domain">>,
+                        labelWidth => 150,
+                        labelAlign => <<"left">>,
+                        value => DomainId,
+                        disabled => false, % true/false
+                        hidden => false, % true/false
+                        options => [ % TODO: Set the correct values
+                            #{ id => <<"root">>, value => <<"/">> },
+                            #{ id => <<"domain-XoAnWfVVVu8B0msXgmDxHXqTMbt">>, value => <<"/SIPSTORM/C4">> }
+                        ]
                     }, #{
                         view => <<"text">>,
                         id => <<"form_username">>,
