@@ -210,48 +210,18 @@ table_iter([], _Pos, Acc) ->
     lists:reverse(Acc);
 
 table_iter([Entry|Rest], Pos, Acc) ->
+    Base = nkdomain_admin_util:table_entry(?DOMAIN_USER, Entry, Pos),
     #{
-        <<"obj_id">> := ObjId,
-        <<"path">> := Path,
-        <<"srv_id">> := SrvId,
-        <<"created_by">> := CreatedBy,
-        <<"created_time">> := CreatedTime,
         <<"user">> := #{
             <<"name">> := Name,
             <<"surname">> := Surname
         } = User
     } = Entry,
     Email = maps:get(<<"email">>, User, <<>>),
-    {ok, Domain, ShortName} = nkdomain_util:get_parts(?DOMAIN_USER, Path),
-    Enabled = maps:get(<<"enabled">>, Entry, true),
-    ObjName = case Enabled of
-        true ->
-            <<"<a href=\"#_id/", ObjId/binary, "\">", ShortName/binary, "</a>">>;
-        false ->
-            ShortName
-    end,
-    Root = nklib_util:to_binary(?NKROOT),
-    SrvId2 = case SrvId of
-        Root -> <<"(nkroot)">>;
-        _ -> SrvId
-    end,
-    CreatedName = case nkdomain:get_name(CreatedBy) of
-        {ok, #{obj_name:=CNO}} -> CNO;
-        _ -> <<>>
-    end,
-    Data = #{
-        checkbox => <<"0">>,
-        pos => Pos,
-        id => ObjId,
-        service => SrvId2,
-        obj_name => ObjName,
-        domain => Domain,
+    Data = Base#{
         name => Name,
         surname => Surname,
-        email => Email,
-        created_by => <<"<a href=\"#_id/", CreatedBy/binary, "\">", CreatedName/binary, "</a>">>,
-        created_time => CreatedTime,
-        enabled => Enabled
+        email => Email
     },
     table_iter(Rest, Pos+1, [Data|Acc]).
 

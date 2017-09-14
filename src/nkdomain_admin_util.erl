@@ -21,7 +21,7 @@
 %% @doc NkDomain service callback module
 -module(nkdomain_admin_util).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
--export([get_data/3, get_agg/3, table_filter/3, table_filter_time/3, obj_url/2]).
+-export([get_data/3, get_agg/3, table_filter/3, table_filter_time/3, obj_url/2, table_entry/3]).
 -export([get_type_info/2, get_type_view_mod/2, get_obj_view_mod/2]).
 -export([search_spec/1, time/2, time2/2, get_file_url/2]).
 -export([make_type_view/1, make_type_view_subfilter/1, make_view/2]).
@@ -250,6 +250,52 @@ table_filter_time(Data, Filter, Acc) ->
             <<"">>
     end,
     {ok, Acc#{<<"created_time">> => TimeFilter}}.
+
+
+%% @private
+table_entry(Type, Entry, Pos) ->
+    #{
+        <<"obj_id">> := ObjId,
+        <<"path">> := Path,
+        <<"srv_id">> := SrvId,
+        <<"created_by">> := CreatedBy,
+        <<"created_time">> := CreatedTime
+    } = Entry,
+    {ok, Domain, ShortName} = nkdomain_util:get_parts(Type, Path),
+    Enabled = maps:get(<<"enabled">>, Entry, true),
+    ObjName = case Enabled of
+        true ->
+            <<"<a href=\"#_id/", ObjId/binary, "\">", ShortName/binary, "</a>">>;
+        false ->
+            ShortName
+    end,
+    Root = nklib_util:to_binary(?NKROOT),
+    SrvId2 = case SrvId of
+        Root -> <<"(nkroot)">>;
+        _ -> SrvId
+    end,
+    CreatedName = case nkdomain:get_name(CreatedBy) of
+        {ok, #{obj_name:=CNO}} -> CNO;
+        _ -> <<>>
+    end,
+    #{
+        checkbox => <<"0">>,
+        pos => Pos,
+        id => ObjId,
+        service => SrvId2,
+        obj_name => ObjName,
+        domain => Domain,
+        created_by => <<"<a href=\"#_id/", CreatedBy/binary, "\">", CreatedName/binary, "</a>">>,
+        created_time => CreatedTime,
+        enabled => Enabled
+    }.
+
+
+
+
+
+
+
 
 
 %% @doc
