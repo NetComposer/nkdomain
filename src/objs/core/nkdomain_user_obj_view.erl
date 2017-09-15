@@ -23,7 +23,7 @@
 -module(nkdomain_user_obj_view).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([view/2, save/3]).
+-export([view/2, save/3, subview/4]).
 
 -include("nkdomain.hrl").
 -include("nkdomain_admin.hrl").
@@ -39,18 +39,32 @@
 
 %% @doc
 view(#obj_id_ext{obj_id=ObjId, pid=Pid}, Session) ->
-    Id = nkdomain_admin_util:make_view(?DOMAIN_USER, ObjId),
+    FormId = nkdomain_admin_util:make_obj_view_id(?DOMAIN_USER, ObjId),
     case nkdomain:get_obj(Pid) of
         {ok, Obj} ->
             Data = #{
-                id => Id,
+                id => FormId,
                 class => webix_ui,
-                value => get_form(Id, Obj, Session)
+                value => get_form(FormId, Obj, Session)
             },
             {Data, Session};
         {error, Error} ->
             {error, Error}
     end.
+
+
+%% @doc
+subview(<<"messages">>, ObjId, Updates, Session) ->
+    Base = nkadmin_util:make_id([?ADMIN_DETAIL_OBJ_VIEW, ?DOMAIN_USER, ObjId, "messages"]),
+    Opts = #{table_id => <<Base/binary, "__table">>, header => <<"MESSAGES">>},
+    {Table, _Session2} = nkchat_message_obj_type_view:subview(Opts, Session),
+    Update = #{
+        id => <<Base/binary, "__table_body">>,
+        class => webix_ui,
+        value => Table
+    },
+    {ok, [Update|Updates], Session}.
+
 
 
 save(ObjId, Data, _Session) ->
@@ -579,4 +593,4 @@ subtables(FormId) ->
 
 
 get_subtable_id(FormId, Key) ->
-    nkadmin_util:append_id(FormId, Key).
+    nkadmin_util:make_id([FormId, Key]).

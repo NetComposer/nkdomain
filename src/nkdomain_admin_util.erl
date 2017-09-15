@@ -24,7 +24,7 @@
 -export([get_data/3, get_agg/3, table_filter/3, table_filter_time/3, obj_url/1, obj_url/2, table_entry/3]).
 -export([get_type_info/2, get_type_view_mod/2, get_obj_view_mod/2]).
 -export([search_spec/1, time/2, time2/2, get_file_url/2]).
--export([make_type_view/1, make_type_view_subfilter/1, make_view/2, make_view_subtable/3]).
+-export([make_type_view_id/1, make_type_view_subfilter_id/1, make_obj_view_id/2, make_view_subview_id/3]).
 
 -include("nkdomain.hrl").
 -include("nkdomain_admin.hrl").
@@ -41,7 +41,7 @@
 
 
 %% @doc
-get_data([?ADMIN_TYPE_VIEW, Type], Spec, Session) ->
+get_data([?ADMIN_DETAIL_TYPE_VIEW, Type], Spec, Session) ->
     case get_type_view_mod(Type, Session) of
         {ok, Mod} ->
             Start = maps:get(start, Spec, 0),
@@ -350,22 +350,22 @@ get_file_url(FileId, #admin_session{http_auth_id=AuthId}) ->
 
 
 %% @doc
-make_type_view(Type) ->
-    nkadmin_util:append_id(?ADMIN_TYPE_VIEW, Type).
+make_type_view_id(Type) ->
+    nkadmin_util:make_id([?ADMIN_DETAIL_TYPE_VIEW, Type]).
 
 
 %% @doc
-make_type_view_subfilter(Type) ->
-    nkadmin_util:append_id(make_type_view(Type), <<"subdomains">>).
+make_type_view_subfilter_id(Type) ->
+    nkadmin_util:make_id([make_type_view_id(Type), <<"subdomains">>]).
 
 
 %% @doc
-make_view(Type, ObjId) ->
-    nkadmin_util:append_id(?ADMIN_VIEW, [Type, ObjId]).
+make_obj_view_id(Type, ObjId) ->
+    nkadmin_util:make_id([?ADMIN_DETAIL_OBJ_VIEW, Type, ObjId]).
 
 %% @doc
-make_view_subtable(Type, ObjId, TableType) ->
-    nkadmin_util:append_id(make_view(Type, ObjId), TableType).
+make_view_subview_id(Type, ObjId, SubView) ->
+    nkadmin_util:make_id([?ADMIN_DETAIL_OBJ_SUBVIEW, Type, ObjId, SubView]).
 
 
 %% @private

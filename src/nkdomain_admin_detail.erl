@@ -56,7 +56,7 @@ element_action([?ADMIN_OBJ_ID, _SrvId, ObjId, Type, Path], selected, Value, Upda
             Other
     end;
 
-element_action([?ADMIN_TYPE_VIEW, Type], updated, Value, Updates, Session) ->
+element_action([?ADMIN_DETAIL_TYPE_VIEW, Type], updated, Value, Updates, Session) ->
     #{
         <<"obj_id">> := ObjId,
         <<"value">> := ObjValue
@@ -73,52 +73,57 @@ element_action([?ADMIN_TYPE_VIEW, Type], updated, Value, Updates, Session) ->
             end
     end;
 
-element_action([?ADMIN_TYPE_VIEW, _Type], enable, #{<<"ids">>:=Ids}, Updates, Session) ->
+element_action([?ADMIN_DETAIL_TYPE_VIEW, _Type], enable, #{<<"ids">>:=Ids}, Updates, Session) ->
     {Updates2, Session2} = type_view_enable(true, Ids, Updates, Session),
     {ok, Updates2, Session2};
 
-element_action([?ADMIN_TYPE_VIEW, _Type], disable, #{<<"ids">>:=Ids}, Updates, Session) ->
+element_action([?ADMIN_DETAIL_TYPE_VIEW, _Type], disable, #{<<"ids">>:=Ids}, Updates, Session) ->
     {Updates2, Session2} = type_view_enable(false, Ids, Updates, Session),
     {ok, Updates2, Session2};
 
-element_action([?ADMIN_TYPE_VIEW, _Type], delete, #{<<"ids">>:=Ids}, Updates, Session) ->
+element_action([?ADMIN_DETAIL_TYPE_VIEW, _Type], delete, #{<<"ids">>:=Ids}, Updates, Session) ->
     {Updates2, Session2} = type_view_delete(Ids, Updates, Session),
     {ok, Updates2, Session2};
 
-element_action([?ADMIN_TYPE_VIEW, Type], new, _Value, Updates, Session) ->
+element_action([?ADMIN_DETAIL_TYPE_VIEW, Type], new, _Value, Updates, Session) ->
     {Updates2, Session2} = type_view_new(Type, Updates, Session),
     {ok, Updates2, Session2};
 
-element_action([?ADMIN_VIEW, _Type, ObjId], enable, _Value, Updates, Session) ->
+element_action([?ADMIN_DETAIL_OBJ_VIEW, _Type, ObjId], enable, _Value, Updates, Session) ->
     _ = type_view_enable(true, [ObjId], Updates, Session),
     {ok, Updates2, Session2} = selected_obj(ObjId, Updates, Session),
     {ok, Updates2, Session2};
 
-element_action([?ADMIN_VIEW, _Type, ObjId], disable, _Value, Updates, Session) ->
+element_action([?ADMIN_DETAIL_OBJ_VIEW, _Type, ObjId], disable, _Value, Updates, Session) ->
     _ = type_view_enable(false, [ObjId], Updates, Session),
     {ok, Updates2, Session2} = selected_obj(ObjId, Updates, Session),
     {ok, Updates2, Session2};
 
-element_action([?ADMIN_VIEW, Type, ObjId], delete, _Value, Updates, #admin_session{domain_path=Path}=Session) ->
+element_action([?ADMIN_DETAIL_OBJ_VIEW, Type, ObjId], delete, _Value, Updates, #admin_session{domain_path=Path} = Session) ->
     _ = type_view_delete([ObjId], Updates, Session),
     {ok, Updates2, Session2} = selected_type(Type, Path, Updates, Session),
     {ok, Updates2, Session2};
 
-element_action([?ADMIN_VIEW, Type, ObjId], save, Value, Updates, #admin_session{domain_path=Path}=Session) ->
-    view_save(Type, ObjId, Value, Session),
+element_action([?ADMIN_DETAIL_OBJ_VIEW, Type, ObjId], save, Value, Updates, #admin_session{domain_path=Path} = Session) ->
+    obj_view_save(Type, ObjId, Value, Session),
     {ok, Updates2, Session2} = selected_type(Type, Path, Updates, Session),
     {ok, Updates2, Session2};
 
-element_action([<<"domain_detail_form">>, <<"user">>, <<"messages">>], selected, _Value, Updates, Session) ->
-    lager:error("NKLOG SELECTEC"),
-    Opts = #{table_id => <<"domain_detail_form__user__messages__table">>, header => <<"MESSAGES">>},
-    {Table, _Session2} = nkchat_message_obj_type_view:subview(Opts, Session),
-    Update = #{
-        id => <<"domain_detail_form__user__messages__table_body">>,
-        class => webix_ui,
-        value => Table
-    },
-    {ok, [Update|Updates], Session};
+element_action([?ADMIN_DETAIL_OBJ_VIEW, Type, ObjId, SubType], selected, _Value, Updates, Session) ->
+    obj_view_subview(Type, ObjId, SubType, Updates, Session);
+
+
+%%element_action([?ADMIN_DETAIL_OBJ_VIEW, <<"user">>, _Id, <<"messages">>]=M, selected, _Value, Updates, Session) ->
+%%    lager:error("NKLOG SELECTEC"),
+%%    M1 = nkadmin_util:make_id(M),
+%%    Opts = #{table_id => <<M1/binary, "__table">>, header => <<"MESSAGES">>},
+%%    {Table, _Session2} = nkchat_message_obj_type_view:subview(Opts, Session),
+%%    Update = #{
+%%        id => <<M1/binary, "__table_body">>,
+%%        class => webix_ui,
+%%        value => Table
+%%    },
+%%    {ok, [Update|Updates], Session};
 
 element_action(_Elements, _Action, _Value, Updates, Session) ->
     lager:error("NKLOG Admin Unhandled Element Action ~p", [{_Elements, _Action, _Value}]),
@@ -218,7 +223,7 @@ type_view_delete([Id|Rest], Updates, Session) ->
 
 
 %% @private
-view_save(Type, ObjId, Data, Session) ->
+obj_view_save(Type, ObjId, Data, Session) ->
     {ok, Mod} = nkdomain_admin_util:get_obj_view_mod(Type, Session),
     Mod:save(ObjId, Data, Session).
 
@@ -234,3 +239,15 @@ type_view_new(Type, Updates, Session) ->
             ?LLOG(notice, "type with no supported view: ~s", [Type], Session),
             {ok, Updates, Session}
     end.
+
+
+obj_view_subview(Type, ObjId, SubType, Updates, Session) ->
+    case nkdomain_admin_util:get_obj_view_mod(Type, Session) of
+        {ok, Mod} ->
+            {ok, Updates2, Session2} = Mod:subview(SubType, ObjId, Updates, Session),
+            {ok, Updates2, Session2};
+        not_found ->
+            ?LLOG(notice, "type ~s with no supported subview: ~s", [Type, SubType], Session),
+            {ok, Updates, Session}
+    end.
+
