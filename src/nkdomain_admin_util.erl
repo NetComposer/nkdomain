@@ -154,8 +154,6 @@ get_agg_name(Field, Type, #admin_session{domain_id=DomainId}) ->
     Spec2 = Spec1#{size => 50},
     case nkdomain:search_agg_field(DomainId, Field, Spec2, true) of
         {ok, _N, Data, #{agg_sum_other:=SumOther}} ->
-            lager:error("NKLOG DD ~p ~p ~p ~p", [Data, DomainId, Field, Spec2]),
-
             List1 = lists:foldl(
                 fun({ObjId, _Num}, Acc) ->
                     case nkdomain:get_name(ObjId) of
@@ -184,10 +182,7 @@ get_agg_name(Field, Type, #admin_session{domain_id=DomainId}) ->
                 _ ->
                     List3++[{?ADMIN_ALL_OBJS, <<"...">>}]
             end,
-            R = [#{id => I, value => V}||{I, V} <- List4],
-            lager:error("NKLOG DD1 ~p", [List1]),
-            lager:error("NKLOG DD2 ~p", [R]),
-            R;
+            [#{id => I, value => V}||{I, V} <- List4];
         {error, _Error} ->
             #{}
     end.

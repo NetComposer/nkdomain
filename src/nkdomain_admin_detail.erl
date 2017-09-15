@@ -22,7 +22,7 @@
 -module(nkdomain_admin_detail).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -export([element_action/5]).
--export([selected_type/4]).
+-export([selected_obj/3, selected_type/4]).
 
 
 -include("nkdomain.hrl").
@@ -141,7 +141,7 @@ selected_type(Type, Path, Updates, Session) ->
     Path2 = nkdomain_util:append(Path, Class),
     case nkdomain_admin_util:get_type_info(Type, Session) of
         {true, #{type_view_mod:=Mod}} ->
-            {Detail, Session2} = Mod:view(Session),
+            {Detail, Session2} = Mod:view(Path, Session),
             {Updates3, Session3} = nkadmin_util:update_detail(Path2, Detail, Updates, Session2),
             {Updates4, Session4} = nkadmin_util:update_url(Updates3, Session3),
             {ok, Updates4, Session4};

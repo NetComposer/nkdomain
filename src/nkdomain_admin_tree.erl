@@ -131,9 +131,8 @@ element_action([?ADMIN_TREE_DOMAINS], selected, _Value, Updates, Session) ->
 element_action([?ADMIN_TREE_DOMAINS_ALL], selected, _Value, Updates, Session) ->
     nkdomain_admin_detail:selected_type(?DOMAIN_DOMAIN, <<"/">>, Updates, Session);
 
-element_action([?ADMIN_TREE_DOMAINS_ID, ObjId], selected, _Value, Updates, Session) ->
-    {Updates2, Session2} = selected_domain(ObjId, Updates, Session),
-    {ok, Updates2, Session2};
+element_action([?ADMIN_TREE_DOMAINS_ID, _ObjId, Path], selected, _Value, Updates, Session) ->
+    nkdomain_admin_detail:selected_type(?DOMAIN_DOMAIN, Path, Updates, Session);
 
 element_action([?ADMIN_TREE_ALERTS], selected, _Value, Updates, Session) ->
     {Updates2, Session2} = nkadmin_util:update_detail(<<"/alerts">>, #{}, Updates, Session),
@@ -213,7 +212,7 @@ get_domain_items([ObjId|Rest], Acc, Session) ->
                 _ ->
                     Value1
             end,
-            Id = <<?ADMIN_TREE_DOMAINS_ID/binary, "__", ObjId/binary>>,
+            Id = nkadmin_util:make_id([?ADMIN_TREE_DOMAINS_ID, ObjId, Path]),
             Item = nkadmin_util:menu_item(Id, menuEntry, Value2, Session),
             % Session2 = nkadmin_util:set_url_key(<<$/, ObjName/binary>>, Id, Session),
             get_domain_items(Rest, [{ObjName, Item}|Acc], Session);
@@ -261,17 +260,17 @@ deleted_domain(ObjId, Updates, Session) ->
     end.
 
 
-%% @private
-selected_domain(ObjId, Updates, Session) ->
-    case nkdomain_lib:load(ObjId) of
-        #obj_id_ext{path=Path} ->
-            {Updates2, Session2} = nkadmin_util:update_detail(Path, #{}, Updates, Session),
-            {Updates3, Session3} = nkadmin_util:update_url(Updates2, Session2),
-            {Updates3, Session3};
-        {error, Error} ->
-            ?LLOG(notice, "could not load domain ~s: ~p", [ObjId, Error], Session),
-            {Updates, Session}
-    end.
+%%%% @private
+%%selected_domain(ObjId, Updates, Session) ->
+%%    case nkdomain_lib:load(ObjId) of
+%%        #obj_id_ext{path=Path} ->
+%%            {Updates2, Session2} = nkadmin_util:update_detail(Path, #{}, Updates, Session),
+%%            {Updates3, Session3} = nkadmin_util:update_url(Updates2, Session2),
+%%            {Updates3, Session3};
+%%        {error, Error} ->
+%%            ?LLOG(notice, "could not load domain ~s: ~p", [ObjId, Error], Session),
+%%            {Updates, Session}
+%%    end.
 
 
 %% ===================================================================

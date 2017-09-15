@@ -56,7 +56,7 @@ view(#obj_id_ext{obj_id=ObjId, pid=Pid}, Session) ->
 subview(?CHAT_MESSAGE, ObjId, Updates, Session) ->
     Base = nkadmin_util:make_id([?ADMIN_DETAIL_OBJ_SUBVIEW, ?DOMAIN_USER, ObjId, ?CHAT_MESSAGE]),
     Opts = #{table_id => <<Base/binary, "__table">>, header => <<"MESSAGES">>},
-    {Table, _Session2} = nkchat_message_obj_type_view:subview(Opts, Session),
+    {Table, _Session2} = nkchat_message_obj_type_view:subview(Opts, <<>>, Session),
     Update = #{
         id => <<Base/binary, "__table_body">>,
         class => webix_ui,

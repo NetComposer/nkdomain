@@ -23,20 +23,21 @@
 -module(nkdomain_user_obj_type_view).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([view/1, table_data/3, element_updated/3]).
+-export([view/2, table_data/3, element_updated/3]).
 
 -include("nkdomain.hrl").
 -include("nkdomain_admin.hrl").
 -include_lib("nkadmin/include/nkadmin.hrl").
 
 %% @doc
-view(Session) ->
+view(Path, Session) ->
     TableId = nkdomain_admin_util:make_type_view_id(?DOMAIN_USER),
     SubDomainsFilterId = nkdomain_admin_util:make_type_view_subfilter_id(?DOMAIN_USER),
     Spec = #{
         table_id => TableId,
         subdomains_id => SubDomainsFilterId,
         filters => [SubDomainsFilterId],
+        base_domain => Path,
         columns => [
             #{
                 id => checkbox,
