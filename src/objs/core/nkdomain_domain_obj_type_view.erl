@@ -20,7 +20,7 @@
 
 %% @doc User Object
 
--module(nkdomain_user_obj_type_view).
+-module(nkdomain_domain_obj_type_view).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([view/1, table_data/3, element_updated/3]).
@@ -31,8 +31,8 @@
 
 %% @doc
 view(Session) ->
-    TableId = nkdomain_admin_util:make_type_view_id(?DOMAIN_USER),
-    SubDomainsFilterId = nkdomain_admin_util:make_type_view_subfilter_id(?DOMAIN_USER),
+    TableId = nkdomain_admin_util:make_type_view_id(?DOMAIN_DOMAIN),
+    SubDomainsFilterId = nkdomain_admin_util:make_type_view_subfilter_id(?DOMAIN_DOMAIN),
     Spec = #{
         table_id => TableId,
         subdomains_id => SubDomainsFilterId,
@@ -44,17 +44,27 @@ view(Session) ->
             },
             #{
                 id => domain,
+                fillspace => <<"1.0">>,
                 type => text,
                 name => domain_column_domain,
                 sort => true,
-                options => nkdomain_admin_util:get_agg_name(<<"domain_id">>, ?DOMAIN_USER, Session)
+                options => nkdomain_admin_util:get_agg_name(<<"domain_id">>, ?DOMAIN_DOMAIN, Session)
             },
             #{
                 id => service,
+                fillspace => <<"0.5">>,
                 type => text,
                 name => domain_column_service,
                 sort => true,
-                options => nkdomain_admin_util:get_agg_srv_id(?DOMAIN_USER, Session)
+                options => nkdomain_admin_util:get_agg_srv_id(?DOMAIN_DOMAIN, Session)
+            },
+            #{
+                id => type,
+                fillspace => <<"0.5">>,
+                type => text,
+                name => domain_column_type,
+                options => nkdomain_admin_util:get_agg(<<"type">>, <<>>, Session),
+                sort => true
             },
             #{
                 id => obj_name,
@@ -67,24 +77,7 @@ view(Session) ->
             #{
                 id => name,
                 type => text,
-                header_colspan => 1,
-                filter_colspan => 2,
-                fillspace => <<"0.5">>,
                 name => domain_column_name,
-                sort => true,
-                editor => text
-            },
-            #{
-                id => surname,
-                type => text,
-                name => domain_column_lastname,
-                sort => true,
-                editor => text
-            },
-            #{
-                id => email,
-                type => text,
-                name => domain_column_email,
                 sort => true,
                 editor => text
             },
@@ -92,8 +85,7 @@ view(Session) ->
                 id => created_by,
                 type => text,
                 name => domain_column_created_by,
-                sort => true,
-                options => nkdomain_admin_util:get_agg_name(<<"created_by">>, ?DOMAIN_USER, Session),
+                options => nkdomain_admin_util:get_agg_name(<<"created_by">>, ?DOMAIN_DOMAIN, Session),
                 is_html => true % Will allow us to return HTML inside the column data
             },
             #{
@@ -125,12 +117,8 @@ table_data(#{start:=Start, size:=Size, sort:=Sort, filter:=Filter}, _Opts, #admi
             <<Order/binary, ":path">>;
         {<<"service">>, Order} ->
             <<Order/binary, ":srv_id">>;
-        {<<"name">>, Order} ->
-            <<Order/binary, ":user.name_sort">>;
-        {<<"surname">>, Order} ->
-            <<Order/binary, ":user.surname_sort">>;
-        {<<"email">>, Order} ->
-            <<Order/binary, ":user.email">>;
+        {<<"type">>, Order} ->
+            <<Order/binary, ":type">>;
         {Field, Order} when Field==<<"created_time">> ->
             <<Order/binary, $:, Field/binary>>;
         _ ->
@@ -138,23 +126,26 @@ table_data(#{start:=Start, size:=Size, sort:=Sort, filter:=Filter}, _Opts, #admi
     end,
     %% Get the timezone_offset from the filter list and pass it to table_filter
     Offset = maps:get(<<"timezone_offset">>, Filter, 0),
-    case table_filter(maps:to_list(Filter), #{timezone_offset => Offset}, #{type=>?DOMAIN_USER}) of
+    case table_filter(maps:to_list(Filter), #{timezone_offset => Offset}, #{}) of
         {ok, Filters} -> 
             % lager:warning("NKLOG Filters ~s", [nklib_json:encode_pretty(Filters)]),
             FindSpec = #{
                 filters => Filters,
-                fields => [<<"path">>,
-                           <<"obj_name">>,
-                           <<"srv_id">>,
-                           <<"created_time">>,
-                           <<"created_by">>,
-                           <<"enabled">>,
-                           <<"user.name">>, <<"user.surname">>, <<"user.email">>],
+                fields => [
+                    <<"path">>,
+                    <<"type">>,
+                    <<"obj_name">>,
+                    <<"srv_id">>,
+                    <<"created_time">>,
+                    <<"created_by">>,
+                    <<"enabled">>,
+                    <<"name">>
+                ],
                 sort => SortSpec,
                 from => Start,
                 size => Size
             },
-            SubDomainsFilterId = nkdomain_admin_util:make_type_view_subfilter_id(?DOMAIN_USER),
+            SubDomainsFilterId = nkdomain_admin_util:make_type_view_subfilter_id(?DOMAIN_DOMAIN),
             Fun = case maps:get(SubDomainsFilterId, Filter, 1) of
                 0 -> search;
                 1 -> search_all
@@ -183,8 +174,8 @@ table_filter([Term|Rest], Info, Acc) ->
             {error, Error};
         unknown ->
             case Term of
-                {<<"email">>, Data} ->
-                    Acc2 = Acc#{<<"user.email">> => nkdomain_admin_util:search_spec(Data)},
+                {<<"type">>, Type} ->
+                    Acc2 = Acc#{<<"type">> => Type},
                     table_filter(Rest, Info, Acc2);
                 _ ->
                     table_filter(Rest, Info, Acc)
@@ -198,18 +189,16 @@ table_iter([], _Pos, Acc) ->
     lists:reverse(Acc);
 
 table_iter([Entry|Rest], Pos, Acc) ->
-    Base = nkdomain_admin_util:table_entry(?DOMAIN_USER, Entry, Pos),
     #{
-        <<"user">> := #{
-            <<"name">> := Name,
-            <<"surname">> := Surname
-        } = User
+        <<"type">> := Type,
+        <<"path">> := Path
     } = Entry,
-    Email = maps:get(<<"email">>, User, <<>>),
+    Base = nkdomain_admin_util:table_entry(?DOMAIN_DOMAIN, Entry, Pos),
+    {ok, Domain, _ShortName} = nkdomain_util:get_parts(Type, Path),
     Data = Base#{
-        name => Name,
-        surname => Surname,
-        email => Email
+        domain => Domain,
+        type => Type,
+        name => maps:get(<<"name">>, Entry, <<>>)
     },
     table_iter(Rest, Pos+1, [Data|Acc]).
 
@@ -222,7 +211,7 @@ element_updated(_ObjId, Value, _Session) ->
         <<"email">> := Email
     } = Value,
     Update = #{
-        ?DOMAIN_USER => #{
+        ?DOMAIN_DOMAIN => #{
             name => Name,
             surname => Surname,
             email => Email

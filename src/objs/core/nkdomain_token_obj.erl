@@ -130,7 +130,7 @@ object_admin_info() ->
     #{
         class => session,
         weight => 5000,
-        tree_id => <<"domain_tree_sessions_tokens">>
+        type_view_mod => nkdomain_token_obj_type_view
     }.
 
 

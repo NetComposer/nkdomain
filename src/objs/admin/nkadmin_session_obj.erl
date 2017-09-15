@@ -139,7 +139,8 @@ object_admin_info() ->
     #{
         class => session,
         weight => 4000,
-        tree_id => <<"domain_tree_sessions_admin.sessions">>
+        type_view_mod => nkadmin_session_obj_type_view
+%        tree_id => <<"domain_tree_sessions_admin.sessions">>
     }.
 
 
