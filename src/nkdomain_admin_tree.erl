@@ -70,6 +70,10 @@ get_category(sessions, Session) ->
     Types = nkdomain_all_types:get_all_types(),
     get_sessions_category(Types, Session);
 
+get_category(services, Session) ->
+    Services = [sipstorm_c4],
+    get_services_category(Services, Session);
+
 get_category(_Category, _Session) ->
     continue.
 
@@ -429,3 +433,27 @@ update_session(Type, Counter, #admin_session{sessions=Sessions}=Session) ->
     end.
 
 
+%% ===================================================================
+%% Services
+%% ===================================================================
+
+%% @private
+get_services_category(Ids, Session) ->
+    {ok, Items, Session2} = get_service_items(Ids, [], Session),
+    Category = nkadmin_util:menu_item(?ADMIN_TREE_SERVICES, menuCategory, #{items=>Items}, Session2),
+    {ok, Category, Session2}.
+
+
+%% @private
+get_service_items([], [{_Weight, Item}], Session) ->
+    {ok, [Item], Session};
+
+get_service_items([], Acc, Session) ->
+    {ok, [Item || {_Weigth, Item} <- lists:keysort(1, Acc)], Session};
+
+get_service_items([Id|Rest], Acc, Session) ->
+    Id2 = nklib_util:to_binary(Id),
+    Key = <<?ADMIN_TREE_SERVICES/binary, "__", Id2/binary>>,
+    Item = nkadmin_util:menu_item(Key, menuEntry, #{label=>Id2}, Session),
+
+    get_service_items(Rest, [{1000, Item}|Acc], Session).

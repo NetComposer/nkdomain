@@ -110,9 +110,7 @@ view(Path, Session) ->
 
 
 %% @doc
-table_data(#{start:=Start, size:=Size, sort:=Sort, filter:=Filter}=F, _Opts, #admin_session{domain_id=DomainId}) ->
-    lager:error("NKLOG F ~p", [F]),
-
+table_data(#{start:=Start, size:=Size, sort:=Sort, filter:=Filter}, _Opts, #admin_session{domain_id=DomainId}) ->
     SortSpec = case Sort of
         {<<"obj_name">>, Order} ->
             <<Order/binary, ":obj_name">>;
@@ -125,7 +123,7 @@ table_data(#{start:=Start, size:=Size, sort:=Sort, filter:=Filter}=F, _Opts, #ad
         {Field, Order} when Field==<<"created_time">> ->
             <<Order/binary, $:, Field/binary>>;
         _ ->
-            <<"desc:path">>
+            <<"asc:path">>
     end,
     %% Get the timezone_offset from the filter list and pass it to table_filter
     Offset = maps:get(<<"timezone_offset">>, Filter, 0),
@@ -209,17 +207,9 @@ table_iter([Entry|Rest], Pos, Acc) ->
 %% @private
 element_updated(_ObjId, Value, _Session) ->
     #{
-        <<"name">> := Name,
-        <<"surname">> := Surname,
-        <<"email">> := Email
+        <<"name">> := Name
     } = Value,
-    Update = #{
-        ?DOMAIN_DOMAIN => #{
-            name => Name,
-            surname => Surname,
-            email => Email
-        }
-    },
+    Update = #{name => Name},
     {ok, Update}.
 
 
