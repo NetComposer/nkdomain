@@ -110,6 +110,7 @@ element_action([?ADMIN_VIEW, Type, ObjId], save, Value, Updates, #admin_session{
     {ok, Updates2, Session2};
 
 element_action([<<"domain_detail_form">>, <<"user">>, <<"messages">>], selected, _Value, Updates, Session) ->
+    lager:error("NKLOG SELECTEC"),
     Opts = #{table_id => <<"domain_detail_form__user__messages__table">>, header => <<"MESSAGES">>},
     {Table, _Session2} = nkchat_message_obj_type_view:subview(Opts, Session),
     Update = #{
