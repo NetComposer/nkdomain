@@ -398,8 +398,8 @@ make_type_view_id(Type) ->
 
 
 %% @doc
-make_type_view_subfilter_id(Type) ->
-    nkadmin_util:make_id([make_type_view_id(Type), <<"subdomains">>]).
+make_type_view_subfilter_id(Id) ->
+    nkadmin_util:make_id([Id, <<"subdomains">>]).
 
 
 %% @doc
