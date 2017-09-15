@@ -21,7 +21,7 @@
 %% @doc NkDomain service callback module
 -module(nkdomain_admin_util).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
--export([get_data/3, get_agg/3, table_filter/3, table_filter_time/3, obj_url/1, obj_url/2, table_entry/3]).
+-export([get_data/3, get_agg_srv_id/2, get_agg_name/3, get_agg/3, table_filter/3, table_filter_time/3, obj_url/1, obj_url/2, table_entry/3]).
 -export([get_type_info/2, get_type_view_mod/2, get_obj_view_mod/2]).
 -export([search_spec/1, time/2, time2/2, get_file_url/2]).
 -export([make_type_view_id/1, make_type_view_subfilter_id/1, make_obj_view_id/2, make_view_subview_id/3]).
@@ -125,7 +125,7 @@ get_obj_view_mod(Type, _Session) ->
 
 
 %% @private
-get_agg(<<"srv_id">>, Type, #admin_session{domain_id=DomainId}) ->
+get_agg_srv_id(Type, #admin_session{domain_id=DomainId}) ->
     Spec = #{
         filters => #{type => Type},
         size => 50
@@ -143,15 +143,19 @@ get_agg(<<"srv_id">>, Type, #admin_session{domain_id=DomainId}) ->
             [#{id => I, value => V} || {I, V} <- SrvIds3];
         {error, _Error} ->
             []
-    end;
+    end.
 
-get_agg(Field, Type, #admin_session{domain_id=DomainId}) ->
-    Spec = #{
-        filters => #{type => Type},
-        size => 50
-    },
-    case nkdomain:search_agg_field(DomainId, Field, Spec, true) of
+%% @doc
+get_agg_name(Field, Type, #admin_session{domain_id=DomainId}) ->
+    Spec1 = case Type of
+        <<>> -> #{};
+        _ -> #{type => Type}
+    end,
+    Spec2 = Spec1#{size => 50},
+    case nkdomain:search_agg_field(DomainId, Field, Spec2, true) of
         {ok, _N, Data, #{agg_sum_other:=SumOther}} ->
+            lager:error("NKLOG DD ~p ~p ~p ~p", [Data, DomainId, Field, Spec2]),
+
             List1 = lists:foldl(
                 fun({ObjId, _Num}, Acc) ->
                     case nkdomain:get_name(ObjId) of
@@ -180,11 +184,36 @@ get_agg(Field, Type, #admin_session{domain_id=DomainId}) ->
                 _ ->
                     List3++[{?ADMIN_ALL_OBJS, <<"...">>}]
             end,
-            [#{id => I, value => V}||{I, V} <- List4];
+            R = [#{id => I, value => V}||{I, V} <- List4],
+            lager:error("NKLOG DD1 ~p", [List1]),
+            lager:error("NKLOG DD2 ~p", [R]),
+            R;
         {error, _Error} ->
             #{}
     end.
 
+
+%% @doc
+get_agg(Field, Type, #admin_session{domain_id=DomainId}) ->
+    Spec1 = case Type of
+        <<>> -> #{};
+        _ -> #{type => Type}
+    end,
+    Spec2 = Spec1#{size => 50},
+    case nkdomain:search_agg_field(DomainId, Field, Spec2, true) of
+        {ok, _N, Data, #{agg_sum_other:=SumOther}} ->
+            List1 = lists:sort([{Name, Name} || {Name, _Num} <- Data]),
+            List2 = [{?ADMIN_ALL_OBJS, <<>>}|List1],
+            List3 = case SumOther of
+                0 ->
+                    List2;
+                _ ->
+                    List2++[{?ADMIN_ALL_OBJS, <<"...">>}]
+            end,
+            [#{id => I, value => V}||{I, V} <- List3];
+        {error, _Error} ->
+            #{}
+    end.
 
 
 

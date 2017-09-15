@@ -26,7 +26,7 @@
 
 -export([search/2, search_all/2, search_type/2, search_all_types/2, search_childs/2, search_all_childs/2]).
 -export([find_path/1, find_path/2, unload_childs/1, get_childs_type/2, get_counter/2]).
--export([object_info/0, object_parse/2, object_es_mapping/0,
+-export([object_info/0, object_admin_info/0, object_parse/2, object_es_mapping/0,
          object_api_syntax/2, object_send_event/2, object_api_cmd/2]).
 -export([object_init/1, object_sync_op/3, object_async_op/2, object_enabled/2, object_link_down/2,
          object_handle_info/2]).
@@ -170,6 +170,15 @@ object_info() ->
     #{
         type => ?DOMAIN_DOMAIN,
         permanent => true
+    }.
+
+
+%% @doc
+object_admin_info() ->
+    #{
+        %class => session,
+        %weight => 2000,
+        type_view_mod => nkdomain_domain_obj_type_view
     }.
 
 

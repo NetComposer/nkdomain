@@ -47,14 +47,14 @@ view(Session) ->
                 type => text,
                 name => domain_column_domain,
                 sort => true,
-                options => nkdomain_admin_util:get_agg(<<"domain_id">>, ?DOMAIN_USER, Session)
+                options => nkdomain_admin_util:get_agg_name(<<"domain_id">>, ?DOMAIN_USER, Session)
             },
             #{
                 id => service,
                 type => text,
                 name => domain_column_service,
                 sort => true,
-                options => nkdomain_admin_util:get_agg(<<"srv_id">>, ?DOMAIN_USER, Session)
+                options => nkdomain_admin_util:get_agg_srv_id(?DOMAIN_USER, Session)
             },
             #{
                 id => obj_name,
@@ -93,7 +93,7 @@ view(Session) ->
                 type => text,
                 name => domain_column_created_by,
                 sort => true,
-                options => nkdomain_admin_util:get_agg(<<"created_by">>, ?DOMAIN_USER, Session),
+                options => nkdomain_admin_util:get_agg_name(<<"created_by">>, ?DOMAIN_USER, Session),
                 is_html => true % Will allow us to return HTML inside the column data
             },
             #{
@@ -118,8 +118,6 @@ view(Session) ->
 
 %% @doc
 table_data(#{start:=Start, size:=Size, sort:=Sort, filter:=Filter}, _Opts, #admin_session{domain_id=DomainId}) ->
-    lager:error("NKLOG F ~p", [Filter]),
-
     SortSpec = case Sort of
         {<<"obj_name">>, Order} ->
             <<Order/binary, ":obj_name">>;
