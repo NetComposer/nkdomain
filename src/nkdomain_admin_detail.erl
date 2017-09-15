@@ -109,7 +109,7 @@ element_action([?ADMIN_DETAIL_OBJ_VIEW, Type, ObjId], save, Value, Updates, #adm
     {ok, Updates2, Session2} = selected_type(Type, Path, Updates, Session),
     {ok, Updates2, Session2};
 
-element_action([?ADMIN_DETAIL_OBJ_VIEW, Type, ObjId, SubType], selected, _Value, Updates, Session) ->
+element_action([?ADMIN_DETAIL_OBJ_SUBVIEW, Type, ObjId, SubType], selected, _Value, Updates, Session) ->
     obj_view_subview(Type, ObjId, SubType, Updates, Session);
 
 

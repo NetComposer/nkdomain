@@ -42,12 +42,25 @@
 
 %% @doc
 get_data([?ADMIN_DETAIL_TYPE_VIEW, Type], Spec, Session) ->
+    do_get_data(Type, #{}, Spec, Session);
+
+get_data([?ADMIN_DETAIL_OBJ_SUBVIEW, Type, ObjId, SubType, <<"table">>], Spec, Session) ->
+    do_get_data(SubType, #{orig_type=>Type, obj_id=>ObjId}, Spec, Session);
+
+get_data(_Parts, _Spec, Session) ->
+    {error, unrecognized_element, Session}.
+
+
+%% @private
+do_get_data(Type, Opts, Spec, Session) ->
     case get_type_view_mod(Type, Session) of
         {ok, Mod} ->
             Start = maps:get(start, Spec, 0),
             Size = case maps:find('end', Spec) of
-                {ok, End} when End > Start -> End-Start;
-                _ -> 100
+                {ok, End} when End>Start ->
+                    End-Start;
+                _ ->
+                    100
             end,
             Filter = maps:get(filter, Spec, #{}),
             Sort = case maps:get(sort, Spec, undefined) of
@@ -65,7 +78,7 @@ get_data([?ADMIN_DETAIL_TYPE_VIEW, Type], Spec, Session) ->
                 filter => Filter,
                 sort => Sort
             },
-            case Mod:table_data(FunSpec, Session) of
+            case Mod:table_data(FunSpec, Opts, Session) of
                 {ok, Total, Data} ->
                     Reply = #{
                         total_count => Total,
@@ -79,10 +92,7 @@ get_data([?ADMIN_DETAIL_TYPE_VIEW, Type], Spec, Session) ->
             end;
         _ ->
             {error, unrecognized_element, Session}
-    end;
-
-get_data(_Parts, _Spec, Session) ->
-    {error, unrecognized_element, Session}.
+    end.
 
 
 %% @private

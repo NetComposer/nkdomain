@@ -23,7 +23,7 @@
 -module(nkdomain_user_obj_type_view).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([view/1, table_data/2, element_updated/3]).
+-export([view/1, table_data/3, element_updated/3]).
 
 -include("nkdomain.hrl").
 -include("nkdomain_admin.hrl").
@@ -129,7 +129,9 @@ view(Session) ->
 
 
 %% @doc
-table_data(#{start:=Start, size:=Size, sort:=Sort, filter:=Filter}, #admin_session{domain_id=DomainId}) ->
+table_data(#{start:=Start, size:=Size, sort:=Sort, filter:=Filter}, _Opts, #admin_session{domain_id=DomainId}) ->
+    lager:error("NKLOG F ~p", [Filter]),
+
     SortSpec = case Sort of
         {<<"obj_name">>, Order} ->
             <<Order/binary, ":obj_name">>;
@@ -167,7 +169,7 @@ table_data(#{start:=Start, size:=Size, sort:=Sort, filter:=Filter}, #admin_sessi
                 size => Size
             },
             SubDomainsFilterId = nkdomain_admin_util:make_type_view_subfilter_id(?DOMAIN_USER),
-            Fun = case maps:get(SubDomainsFilterId, Filter) of
+            Fun = case maps:get(SubDomainsFilterId, Filter, 1) of
                 0 -> search;
                 1 -> search_all
             end,

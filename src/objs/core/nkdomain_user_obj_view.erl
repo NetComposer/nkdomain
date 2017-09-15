@@ -29,12 +29,11 @@
 -include("nkdomain_admin.hrl").
 -include_lib("nkadmin/include/nkadmin.hrl").
 
-%-define(ID, <<"domain_detail_form__user">>).
-%%-define(ID_MESSAGES, <<"domain_detail_form__user__messages">>).
 
 -define(LLOG(Type, Txt, Args),
     lager:Type("NkDOMAN Admin User " ++ Txt, Args)).
 
+-define(CHAT_MESSAGE, <<"message">>).
 
 
 %% @doc
@@ -54,8 +53,8 @@ view(#obj_id_ext{obj_id=ObjId, pid=Pid}, Session) ->
 
 
 %% @doc
-subview(<<"messages">>, ObjId, Updates, Session) ->
-    Base = nkadmin_util:make_id([?ADMIN_DETAIL_OBJ_VIEW, ?DOMAIN_USER, ObjId, "messages"]),
+subview(?CHAT_MESSAGE, ObjId, Updates, Session) ->
+    Base = nkadmin_util:make_id([?ADMIN_DETAIL_OBJ_SUBVIEW, ?DOMAIN_USER, ObjId, ?CHAT_MESSAGE]),
     Opts = #{table_id => <<Base/binary, "__table">>, header => <<"MESSAGES">>},
     {Table, _Session2} = nkchat_message_obj_type_view:subview(Opts, Session),
     Update = #{
@@ -116,7 +115,7 @@ get_form(FormId, Obj, Session) ->
         rows => [
             buttons(FormId, Obj),
             form(FormId, Obj, Session),
-            subtables(FormId)
+            subtables(FormId, Obj)
         ]
     }.
 
@@ -517,7 +516,7 @@ form(_FormId, Obj, Session) ->
 
 
 
-subtables(FormId) ->
+subtables(FormId, #{obj_id:=ObjId}) ->
     #{
         view => <<"tabview">>,
         id => <<FormId/binary, "__tabview">>,
@@ -536,10 +535,10 @@ subtables(FormId) ->
             #{
                 header => <<"MESSAGES">>,
                 body => #{
-                    id => get_subtable_id(FormId, <<"messages">>),
+                    id => get_subtable_id(ObjId, ?CHAT_MESSAGE),
                     rows => [
                         #{
-                            id => get_subtable_id(FormId, <<"messages__table_body">>),
+                            id => get_subtable_id(ObjId, <<?CHAT_MESSAGE/binary, "__table_body">>),
                             template => <<>>
                         }
                     ]
@@ -592,5 +591,10 @@ subtables(FormId) ->
     }.
 
 
-get_subtable_id(FormId, Key) ->
-    nkadmin_util:make_id([FormId, Key]).
+
+get_subtable_id(ObjId, Key) ->
+    nkadmin_util:make_id([?ADMIN_DETAIL_OBJ_SUBVIEW, ?DOMAIN_USER, ObjId, Key]).
+
+
+%%get_subtable_id(FormId, Key) ->
+%%    nkadmin_util:make_id([FormId, Key]).
