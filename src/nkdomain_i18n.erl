@@ -70,10 +70,9 @@ i18n() -> #{
         "domain_column_lastname" => "LASTNAME",
         "domain_column_email" => "EMAIL",
         "domain_column_created_by" => "CREATOR",
-        "domain_column_created_time" => "CREATED"
-
-
-
+        "domain_column_created_time" => "CREATED",
+        "domain_column_local" => "LOCAL",
+        "domain_column_remote" => "REMOTE"
     },
     es => #{
         "real_time" => "Tiempo real",
@@ -118,7 +117,9 @@ i18n() -> #{
         "domain_column_lastname" => "APELLIDOS",
         "domain_column_email" => "EMAIL",
         "domain_column_created_by" => "CREADOR",
-        "domain_column_created_time" => <<"CREACIÓN"/utf8>>
+        "domain_column_created_time" => <<"CREACIÓN"/utf8>>,
+        "domain_column_local" => "LOCAL",
+        "domain_column_remote" => "REMOTO"
         }
 }.
 
