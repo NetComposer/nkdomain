@@ -214,6 +214,7 @@ buttons(FormId, Obj) ->
                 click => #{
                     nkParseFunction => <<"
                             function() {
+                                var domain = $$(\"form_domain\").getValue();
                                 var username = $$(\"form_username\").getValue();
                                 var email = $$(\"form_email\").getValue();
                                 var password = $$(\"form_password\").getValue();
@@ -225,6 +226,7 @@ buttons(FormId, Obj) ->
                                     element_id: \"", FormId/binary, "\",
                                     action: \"save\",
                                     value: {
+                                        domain: domain,
                                         username: username,
                                         email: email,
                                         password: password,
@@ -253,6 +255,7 @@ buttons(FormId, Obj) ->
 
 form(_FormId, Obj, Session) ->
     #{
+        domain_id := DomainId,
         obj_name := ObjName,
         created_by := CreatedBy,
         created_time := CreatedTime,
@@ -316,6 +319,21 @@ form(_FormId, Obj, Session) ->
                                 type => <<"section">>
                             },
                             #{
+                                view => <<"combo">>,
+                                id => <<"form_domain">>,
+                                label => <<"Domain">>,
+                                placeholder => <<"Domain">>,
+                                labelWidth => 150,
+                                labelAlign => <<"left">>,
+                                value => DomainId,
+                                disabled => false, % true/false
+                                hidden => false, % true/false
+                                options => [% TODO: Set the correct values
+                                            #{id => <<"root">>, value => <<"/">>},
+                                            #{id => <<"domain-XoAnWfVVVu8B0msXgmDxHXqTMbt">>, value => <<"/SIPSTORM/C4">>}
+                                ]
+                            },
+                            #{
                                 view => <<"text">>,
                                 id => <<"form_username">>,
                                 label => <<"Username">>,
@@ -323,7 +341,8 @@ form(_FormId, Obj, Session) ->
                                 labelWidth => 150,
                                 labelAlign => <<"left">>,
                                 value => ObjName
-                            }, #{
+                            },
+                            #{
                                 view => <<"text">>,
                                 id => <<"form_email">>,
                                 label => <<"E-mail">>,
@@ -331,7 +350,8 @@ form(_FormId, Obj, Session) ->
                                 labelWidth => 150,
                                 labelAlign => <<"left">>,
                                 value => UserEmail
-                            }, #{
+                            },
+                            #{
                                 view => <<"text">>,
                                 id => <<"form_password">>,
                                 label => <<"Password">>,
@@ -340,7 +360,8 @@ form(_FormId, Obj, Session) ->
                                 labelAlign => <<"left">>,
                                 value => <<"">>,
                                 type => <<"password">>
-                            }]
+                            }
+                        ]
                     },
                     #{
                         rows => [
