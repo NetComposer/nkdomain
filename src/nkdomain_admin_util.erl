@@ -278,10 +278,6 @@ table_entry(Type, Entry, Pos) ->
         Root -> <<"(nkroot)">>;
         _ -> SrvId
     end,
-    CreatedName = case nkdomain:get_name(CreatedBy) of
-        {ok, #{obj_name:=CNO}} -> CNO;
-        _ -> <<>>
-    end,
     #{
         checkbox => <<"0">>,
         pos => Pos,
@@ -289,13 +285,10 @@ table_entry(Type, Entry, Pos) ->
         service => SrvId2,
         obj_name => obj_url(ObjId, ShortName),
         domain => Domain,
-        created_by => obj_url(CreatedBy, CreatedName),
+        created_by => obj_url(CreatedBy),
         created_time => CreatedTime,
         enabled => Enabled
     }.
-
-
-
 
 
 
