@@ -20,7 +20,7 @@
 
 %% @doc User Object
 
--module(nkdomain_session_obj_type_view).
+-module(nkadmin_session_obj_type_view).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([view/1, table_data/3, element_updated/3]).
@@ -31,8 +31,8 @@
 
 %% @doc
 view(Session) ->
-    TableId = nkdomain_admin_util:make_type_view_id(?DOMAIN_SESSION),
-    SubDomainsFilterId = nkdomain_admin_util:make_type_view_subfilter_id(?DOMAIN_SESSION),
+    TableId = nkdomain_admin_util:make_type_view_id(?DOMAIN_ADMIN_SESSION),
+    SubDomainsFilterId = nkdomain_admin_util:make_type_view_subfilter_id(?DOMAIN_ADMIN_SESSION),
     Spec = #{
         table_id => TableId,
         subdomains_id => SubDomainsFilterId,
@@ -48,7 +48,7 @@ view(Session) ->
                 fillspace => <<"0.5">>,
                 name => domain_column_domain,
                 sort => true,
-                options => nkdomain_admin_util:get_agg(<<"domain_id">>, ?DOMAIN_SESSION, Session)
+                options => nkdomain_admin_util:get_agg(<<"domain_id">>, ?DOMAIN_ADMIN_SESSION, Session)
             },
             #{
                 id => service,
@@ -56,7 +56,7 @@ view(Session) ->
                 fillspace => <<"0.5">>,
                 name => domain_column_service,
                 sort => true,
-                options => nkdomain_admin_util:get_agg(<<"srv_id">>, ?DOMAIN_SESSION, Session)
+                options => nkdomain_admin_util:get_agg(<<"srv_id">>, ?DOMAIN_ADMIN_SESSION, Session)
             },
             #{
                 id => obj_name,
@@ -71,7 +71,7 @@ view(Session) ->
                 type => text,
                 name => domain_column_created_by,
                 sort => true,
-                options => nkdomain_admin_util:get_agg(<<"created_by">>, ?DOMAIN_SESSION, Session),
+                options => nkdomain_admin_util:get_agg(<<"created_by">>, ?DOMAIN_ADMIN_SESSION, Session),
                 is_html => true % Will allow us to return HTML inside the column data
             },
             #{
@@ -80,20 +80,6 @@ view(Session) ->
                 type => date,
                 name => domain_column_created_time,
                 sort => true
-            },
-            #{
-                id => local,
-                type => text,
-                fillspace => <<"0.5">>,
-                name => domain_column_local,
-                sort => false
-            },
-            #{
-                id => remote,
-                type => text,
-                fillspace => <<"0.5">>,
-                name => domain_column_remote,
-                sort => false
             }
         ],
         left_split => 1,
@@ -124,7 +110,7 @@ table_data(#{start:=Start, size:=Size, sort:=Sort, filter:=Filter}, _Opts, #admi
     end,
     %% Get the timezone_offset from the filter list and pass it to table_filter
     Offset = maps:get(<<"timezone_offset">>, Filter, 0),
-    case table_filter(maps:to_list(Filter), #{timezone_offset => Offset}, #{type=>?DOMAIN_SESSION}) of
+    case table_filter(maps:to_list(Filter), #{timezone_offset => Offset}, #{type=>?DOMAIN_ADMIN_SESSION}) of
         {ok, Filters} -> 
             % lager:warning("NKLOG Filters ~s", [nklib_json:encode_pretty(Filters)]),
             FindSpec = #{
@@ -135,15 +121,13 @@ table_data(#{start:=Start, size:=Size, sort:=Sort, filter:=Filter}, _Opts, #admi
                     <<"srv_id">>,
                     <<"created_time">>,
                     <<"created_by">>,
-                    <<"enabled">>,
-                    <<?DOMAIN_SESSION/binary, ".local">>,
-                    <<?DOMAIN_SESSION/binary, ".remote">>
+                    <<"enabled">>
                     ],
                 sort => SortSpec,
                 from => Start,
                 size => Size
             },
-            SubDomainsFilterId = nkdomain_admin_util:make_type_view_subfilter_id(?DOMAIN_SESSION),
+            SubDomainsFilterId = nkdomain_admin_util:make_type_view_subfilter_id(?DOMAIN_ADMIN_SESSION),
             Fun = case maps:get(SubDomainsFilterId, Filter, 1) of
                 0 -> search;
                 1 -> search_all
@@ -181,16 +165,8 @@ table_iter([], _Pos, Acc) ->
     lists:reverse(Acc);
 
 table_iter([Entry|Rest], Pos, Acc) ->
-    #{
-        ?DOMAIN_SESSION := #{
-            <<"local">> := Local,
-            <<"remote">> := Remote
-        }
-    } = Entry,
-    Base = nkdomain_admin_util:table_entry(?DOMAIN_SESSION, Entry, Pos),
+    Base = nkdomain_admin_util:table_entry(?DOMAIN_ADMIN_SESSION, Entry, Pos),
     Data = Base#{
-        local => Local,
-        remote => Remote
     },
     table_iter(Rest, Pos+1, [Data|Acc]).
 
