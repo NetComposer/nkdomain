@@ -108,14 +108,28 @@ save(ObjId, Data, _Session) ->
 get_form(FormId, Obj, Session) ->
     #{
         id => <<"body">>,
+        view => <<"accordion">>,
         type => <<"clean">>,
         height => <<"100%">>,
         margin => 0,
         borderless => false,
+        multi => <<"mixed">>,
         rows => [
             buttons(FormId, Obj),
-            form(FormId, Obj, Session),
-            subtables(FormId, Obj)
+            #{
+                header => <<"USER DETAILS">>,
+                body => form(FormId, Obj, Session)                
+            },
+            #{
+                view => <<"resizer">>
+            },
+            #{
+                header => <<"SUBTABLES">>,
+                body => subtables(FormId, Obj)
+            },
+            #{
+                gravity => 0.0
+            }
         ]
     }.
 
@@ -460,7 +474,7 @@ form(_FormId, Obj, Session) ->
                                     onBeforeRender => #{
                                         nkParseFunction => <<"
                                     function(data) {   // 'en-US', 'es-ES', etc.
-                                        if (data && data.value) {
+                                        if (data && data.value && typeof data.value === 'number') {
                                             data.value = (new Date(data.value)).toLocaleString();
                                         }
                                     }
@@ -495,7 +509,7 @@ form(_FormId, Obj, Session) ->
                                     onBeforeRender => #{
                                         nkParseFunction => <<"
                                     function(data) {   // 'en-US', 'es-ES', etc.
-                                        if (data && data.value) {
+                                        if (data && data.value && typeof data.value === 'number') {
                                             data.value = (new Date(data.value)).toLocaleString();
                                         }
                                     }
