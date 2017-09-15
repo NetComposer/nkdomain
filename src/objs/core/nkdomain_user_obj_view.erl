@@ -458,7 +458,7 @@ form(_FormId, Obj, Session) ->
                                     },
                                     #{
                                         view => <<"template">>,
-                                        template => nkdomain_admin_util:obj_url(CreatedBy),
+                                        template => nkdomain_admin_util:obj_id_url(CreatedBy),
                                         borderless => true,
                                         autoheight => true
                                     }
@@ -493,7 +493,7 @@ form(_FormId, Obj, Session) ->
                                     },
                                     #{
                                         view => <<"template">>,
-                                        template => nkdomain_admin_util:obj_url(UpdatedBy),
+                                        template => nkdomain_admin_util:obj_id_url(UpdatedBy),
                                         borderless => true,
                                         autoheight => true
                                     }

@@ -48,7 +48,9 @@ view(Path, Session) ->
                 fillspace => <<"1.0">>,
                 type => text,
                 name => domain_column_domain,
+                is_html => true,
                 sort => true,
+                is_html => true,
                 options => get_agg_name(<<"domain_id">>, Path)
             },
             #{
@@ -197,7 +199,7 @@ table_iter([Entry|Rest], Pos, Acc) ->
     Base = nkdomain_admin_util:table_entry(?DOMAIN_DOMAIN, Entry, Pos),
     {ok, Domain, _ShortName} = nkdomain_util:get_parts(Type, Path),
     Data = Base#{
-        domain => Domain,
+        domain => nkdomain_admin_util:obj_path_url(Domain, Domain),
         type => Type,
         name => maps:get(<<"name">>, Entry, <<>>)
     },

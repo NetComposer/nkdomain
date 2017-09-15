@@ -48,6 +48,7 @@ view(Path, Session) ->
                 type => text,
                 fillspace => <<"0.5">>,
                 name => domain_column_domain,
+                is_html => true,
                 sort => true,
                 options => get_agg_name(<<"domain_id">>, Path)
             },

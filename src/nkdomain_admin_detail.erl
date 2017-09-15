@@ -164,6 +164,9 @@ selected_obj(ObjId, Updates, Session) ->
 
 
 %% @doc
+selected_obj(_ObjId, ?DOMAIN_DOMAIN, ObjPath, Updates, Session) ->
+    selected_type(?DOMAIN_DOMAIN, ObjPath, Updates, Session);
+
 selected_obj(ObjId, Type, ObjPath, Updates, Session) ->
     case nkdomain_admin_util:get_obj_view_mod(Type, Session) of
         {ok, Mod} ->

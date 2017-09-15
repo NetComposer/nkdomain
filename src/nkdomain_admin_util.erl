@@ -21,7 +21,8 @@
 %% @doc NkDomain service callback module
 -module(nkdomain_admin_util).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
--export([get_data/3, get_agg_srv_id/2, get_agg_name/3, get_agg_term/3, table_filter/3, table_filter_time/3, obj_url/1, obj_url/2, table_entry/3]).
+-export([get_data/3, get_agg_srv_id/2, get_agg_name/3, get_agg_term/3, table_filter/3, table_filter_time/3]).
+-export([obj_id_url/1, obj_id_url/2, obj_path_url/2, table_entry/3]).
 -export([get_type_info/2, get_type_view_mod/2, get_obj_view_mod/2]).
 -export([search_spec/1, time/2, time2/2, get_file_url/2]).
 -export([make_type_view_id/1, make_type_view_subfilter_id/1, make_obj_view_id/2, make_view_subview_id/3]).
@@ -323,9 +324,9 @@ table_entry(Type, Entry, Pos) ->
         pos => Pos,
         id => ObjId,
         service => SrvId2,
-        obj_name => obj_url(ObjId, ShortName),
-        domain => Domain,
-        created_by => obj_url(CreatedBy),
+        obj_name => obj_id_url(ObjId, ShortName),
+        domain => obj_path_url(Domain, Domain),
+        created_by => obj_id_url(CreatedBy),
         created_time => CreatedTime,
         enabled => Enabled
     }.
@@ -333,18 +334,26 @@ table_entry(Type, Entry, Pos) ->
 
 
 %% @doc
-obj_url(Id) ->
+obj_id_url(Id) ->
     case nkdomain:get_name(Id) of
         {ok, #{obj_id:=ObjId, name:=Name}} ->
-            obj_url(ObjId, Name);
+            obj_id_url(ObjId, Name);
         _ ->
-            obj_url(Id, <<"(deleted)">>)
+            obj_id_url(Id, <<"(deleted)">>)
     end.
 
 
 %% @doc
-obj_url(ObjId, Name) ->
+obj_id_url(ObjId, Name) ->
     <<"<a href=\"#_id/", ObjId/binary, "\">", Name/binary, "</a>">>.
+
+
+%% @doc
+obj_path_url(Path, Name) ->
+    <<"<a href=\"#", Path/binary, "\">", Name/binary, "</a>">>.
+
+
+
 
 
 %% @private

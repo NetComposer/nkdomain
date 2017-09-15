@@ -48,6 +48,7 @@ view(Path, Session) ->
                 type => text,
                 fillspace => <<"0.5">>,
                 name => domain_column_domain,
+                is_html => true,
                 sort => true,
                 options => get_agg_name(<<"domain_id">>, Path)
             },
@@ -191,7 +192,7 @@ table_iter([Entry|Rest], Pos, Acc) ->
     lager:error("NKLOG SY ~p", [SubType]),
     Base = nkdomain_admin_util:table_entry(?DOMAIN_TOKEN, Entry, Pos),
     Data = Base#{
-        obj_id => nkdomain_admin_util:obj_url(ObjId, ObjId),
+        obj_id => nkdomain_admin_util:obj_id_url(ObjId, ObjId),
         expires => Expires,
         subtype => nklib_util:bjoin(SubType, <<", ">>)
     },
