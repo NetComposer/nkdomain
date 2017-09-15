@@ -48,14 +48,14 @@ view(Path, Session) ->
                 type => text,
                 name => domain_column_domain,
                 sort => true,
-                options => nkdomain_admin_util:get_agg_name(<<"domain_id">>, ?DOMAIN_USER, Session)
+                options => get_agg_name(<<"domain_id">>, Path)
             },
             #{
                 id => service,
                 type => text,
                 name => domain_column_service,
                 sort => true,
-                options => nkdomain_admin_util:get_agg_srv_id(?DOMAIN_USER, Session)
+                options => get_agg_srv_id(Path)
             },
             #{
                 id => obj_name,
@@ -94,7 +94,7 @@ view(Path, Session) ->
                 type => text,
                 name => domain_column_created_by,
                 sort => true,
-                options => nkdomain_admin_util:get_agg_name(<<"created_by">>, ?DOMAIN_USER, Session),
+                options => get_agg_name(<<"created_by">>, Path),
                 is_html => true % Will allow us to return HTML inside the column data
             },
             #{
@@ -230,3 +230,15 @@ element_updated(_ObjId, Value, _Session) ->
         }
     },
     {ok, Update}.
+
+
+%% @private
+get_agg_name(Field, Path) ->
+    nkdomain_admin_util:get_agg_name(Field, ?DOMAIN_USER, Path).
+
+
+%% @private
+get_agg_srv_id(Path) ->
+    nkdomain_admin_util:get_agg_srv_id(?DOMAIN_USER, Path).
+
+

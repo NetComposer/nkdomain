@@ -49,7 +49,7 @@ view(Path, Session) ->
                 fillspace => <<"0.5">>,
                 name => domain_column_domain,
                 sort => true,
-                options => nkdomain_admin_util:get_agg_name(<<"domain_id">>, ?DOMAIN_SESSION, Session)
+                options => get_agg_name(<<"domain_id">>, Path)
             },
             #{
                 id => service,
@@ -57,7 +57,7 @@ view(Path, Session) ->
                 fillspace => <<"0.5">>,
                 name => domain_column_service,
                 sort => true,
-                options => nkdomain_admin_util:get_agg_srv_id(?DOMAIN_SESSION, Session)
+                options => get_agg_srv_id(Path)
             },
             #{
                 id => obj_name,
@@ -72,7 +72,7 @@ view(Path, Session) ->
                 type => text,
                 name => domain_column_created_by,
                 sort => true,
-                options => nkdomain_admin_util:get_agg_name(<<"created_by">>, ?DOMAIN_SESSION, Session),
+                options => get_agg_name(<<"created_by">>, Path),
                 is_html => true % Will allow us to return HTML inside the column data
             },
             #{
@@ -87,14 +87,16 @@ view(Path, Session) ->
                 type => text,
                 fillspace => <<"0.5">>,
                 name => domain_column_local,
-                sort => false
+                options => get_agg_term(<<"session.local">>, Path),
+                sort => true
             },
             #{
                 id => remote,
                 type => text,
                 fillspace => <<"0.5">>,
                 name => domain_column_remote,
-                sort => false
+                options => get_agg_term(<<"session.remote">>, Path),
+                sort => true
             }
         ],
         left_split => 1,
@@ -118,6 +120,10 @@ table_data(#{start:=Start, size:=Size, sort:=Sort, filter:=Filter}, _Opts, #admi
             <<Order/binary, ":path">>;
         {<<"service">>, Order} ->
             <<Order/binary, ":srv_id">>;
+        {<<"local">>, Order} ->
+            <<Order/binary, ":session.local">>;
+        {<<"remote">>, Order} ->
+            <<Order/binary, ":session.remote">>;
         {Field, Order} when Field==<<"created_time">> ->
             <<Order/binary, $:, Field/binary>>;
         _ ->
@@ -172,7 +178,14 @@ table_filter([Term|Rest], Info, Acc) ->
         {error, Error} ->
             {error, Error};
         unknown ->
-            table_filter(Rest, Info, Acc)
+            case Term of
+                {<<"local">>, Data} ->
+                    table_filter(Rest, Info, Acc#{<<"session.local">>=>Data});
+                {<<"remote">>, Data} ->
+                    table_filter(Rest, Info, Acc#{<<"session.remote">>=>Data});
+                _ ->
+                    table_filter(Rest, Info, Acc)
+            end
     end.
 
 
@@ -199,3 +212,18 @@ table_iter([Entry|Rest], Pos, Acc) ->
 %% @private
 element_updated(_ObjId, _Value, _Session) ->
     #{}.
+
+
+%% @private
+get_agg_name(Field, Path) ->
+    nkdomain_admin_util:get_agg_name(Field, ?DOMAIN_SESSION, Path).
+
+
+%% @private
+get_agg_srv_id(Path) ->
+    nkdomain_admin_util:get_agg_srv_id(?DOMAIN_SESSION, Path).
+
+
+%% @private
+get_agg_term(Field, Path) ->
+    nkdomain_admin_util:get_agg_term(Field, ?DOMAIN_SESSION, Path).

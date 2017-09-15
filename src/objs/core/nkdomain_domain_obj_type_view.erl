@@ -49,7 +49,7 @@ view(Path, Session) ->
                 type => text,
                 name => domain_column_domain,
                 sort => true,
-                options => nkdomain_admin_util:get_agg_name(<<"domain_id">>, ?DOMAIN_DOMAIN, Session)
+                options => get_agg_name(<<"domain_id">>, Path)
             },
             #{
                 id => service,
@@ -57,14 +57,14 @@ view(Path, Session) ->
                 type => text,
                 name => domain_column_service,
                 sort => true,
-                options => nkdomain_admin_util:get_agg_srv_id(?DOMAIN_DOMAIN, Session)
+                options => get_agg_srv_id(Path)
             },
             #{
                 id => type,
                 fillspace => <<"0.5">>,
                 type => text,
                 name => domain_column_type,
-                options => nkdomain_admin_util:get_agg(<<"type">>, <<>>, Session),
+                options => get_agg(<<"type">>, Path),
                 sort => true
             },
             #{
@@ -86,7 +86,7 @@ view(Path, Session) ->
                 id => created_by,
                 type => text,
                 name => domain_column_created_by,
-                options => nkdomain_admin_util:get_agg_name(<<"created_by">>, ?DOMAIN_DOMAIN, Session),
+                options => get_agg_name(<<"created_by">>, Path),
                 is_html => true % Will allow us to return HTML inside the column data
             },
             #{
@@ -110,7 +110,9 @@ view(Path, Session) ->
 
 
 %% @doc
-table_data(#{start:=Start, size:=Size, sort:=Sort, filter:=Filter}, _Opts, #admin_session{domain_id=DomainId}) ->
+table_data(#{start:=Start, size:=Size, sort:=Sort, filter:=Filter}=F, _Opts, #admin_session{domain_id=DomainId}) ->
+    lager:error("NKLOG F ~p", [F]),
+
     SortSpec = case Sort of
         {<<"obj_name">>, Order} ->
             <<Order/binary, ":obj_name">>;
@@ -219,3 +221,21 @@ element_updated(_ObjId, Value, _Session) ->
         }
     },
     {ok, Update}.
+
+
+%% @private
+get_agg_name(Field, Path) ->
+    nkdomain_admin_util:get_agg_name(Field, <<>>, Path).
+
+
+%% @private
+get_agg_srv_id(Path) ->
+    nkdomain_admin_util:get_agg_srv_id(<<>>, Path).
+
+
+%% @private
+get_agg(Field, Path) ->
+    nkdomain_admin_util:get_agg_term(Field, <<>>, Path).
+
+
+
