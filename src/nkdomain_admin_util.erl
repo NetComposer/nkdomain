@@ -216,6 +216,8 @@ do_get_agg(Field, Type, Path) ->
         size => 50
     },
     case nkdomain:search_agg_field(Path, Field, Spec, true) of
+        {ok, 0, _, _} ->
+            {ok, [], false};
         {ok, _N, Data, #{agg_sum_other:=SumOther}} ->
             {ok, Data, SumOther>0};
         {error, Error} ->
