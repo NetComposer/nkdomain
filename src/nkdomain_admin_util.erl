@@ -253,7 +253,7 @@ table_filter({<<"obj_name">>, Data}, _Info, Acc) ->
     {ok, Acc#{<<"obj_name">> => search_spec(Data)}};
 
 table_filter({<<"name">>, Data}, _Info, Acc) ->
-    {ok, Acc#{<<"user.fullname_norm">> => search_spec(Data)}};
+    {ok, Acc#{<<"name_norm">> => search_spec(Data)}};
 
 table_filter({<<"created_by">>, Data}, _Info, Acc) ->
     {ok, Acc#{<<"created_by">> => Data}};
