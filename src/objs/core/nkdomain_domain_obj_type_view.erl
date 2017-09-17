@@ -148,7 +148,12 @@ table_data(#{start:=Start, size:=Size, sort:=Sort, filter:=Filter}, _Opts, #admi
                 from => Start,
                 size => Size
             },
+
+
             SubDomainsFilterId = nkdomain_admin_util:make_type_view_subfilter_id(?DOMAIN_DOMAIN),
+
+
+
             Fun = case maps:get(SubDomainsFilterId, Filter, 1) of
                 0 -> search;
                 1 -> search_all
