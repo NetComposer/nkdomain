@@ -112,7 +112,7 @@ view(Path, Session) ->
 
 
 %% @doc
-table_data(#{start:=Start, size:=Size, sort:=Sort, filter:=Filter}, _Opts, #admin_session{domain_id=DomainId}) ->
+table_data(#{start:=Start, size:=Size, sort:=Sort, filter:=Filter}, _Opts, _Session) ->
     SortSpec = case Sort of
         {<<"obj_name">>, Order} ->
             <<Order/binary, ":obj_name">>;
@@ -148,17 +148,13 @@ table_data(#{start:=Start, size:=Size, sort:=Sort, filter:=Filter}, _Opts, #admi
                 from => Start,
                 size => Size
             },
-
-
             SubDomainsFilterId = nkdomain_admin_util:make_type_view_subfilter_id(?DOMAIN_DOMAIN),
-
-
-
             Fun = case maps:get(SubDomainsFilterId, Filter, 1) of
                 0 -> search;
                 1 -> search_all
             end,
-            case nkdomain_domain_obj:Fun(DomainId, FindSpec) of
+            #{<<"nkBaseDomain">>:=Base} = Filter,
+            case nkdomain_domain_obj:Fun(Base, FindSpec) of
                 {ok, Total, List, _Meta} ->
                     Data = table_iter(List, Start+1, []),
                     {ok, Total, Data};
