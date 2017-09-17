@@ -53,12 +53,13 @@ categories(Data, Session) ->
 get_category(overview, Session) ->
     case find_domains(Session) of
         {ok, DomainList} ->
-            {ok, Domains, Session2} = get_domains(DomainList, Session),
-            {ok, Dashboards, Session3} = get_dashboards(Session2),
-            {ok, Alerts, Session4} = get_alerts(Session3),
-            Items = [Dashboards, Domains, Alerts],
-            Category = nkadmin_util:menu_item(?ADMIN_TREE_OVERVIEW, menuCategory, #{items=>Items}, Session4),
-            {ok, Category, Session4};
+            {ok, Dashboards, Session2} = get_dashboards(Session),
+            {ok, Domains, Session3} = get_domains(DomainList, Session2),
+            {ok, Objects, Session4} = get_objects(Session3),
+            {ok, Alerts, Session5} = get_alerts(Session4),
+            Items = [Dashboards, Domains, Objects, Alerts],
+            Category = nkadmin_util:menu_item(?ADMIN_TREE_OVERVIEW, menuCategory, #{items=>Items}, Session5),
+            {ok, Category, Session5};
         {error, Error} ->
             {error, Error, Session}
     end;
@@ -132,7 +133,7 @@ element_action([?ADMIN_TREE_DOMAINS], selected, _Value, Updates, Session) ->
     {ok, Updates, Session};
 
 %% "All Domains" Same as selecting the type "domain"
-element_action([?ADMIN_TREE_DOMAINS_ALL], selected, _Value, Updates, Session) ->
+element_action([?ADMIN_TREE_ALL_OBJS], selected, _Value, Updates, Session) ->
     nkdomain_admin_detail:selected_type(?DOMAIN_DOMAIN, <<"/">>, Updates, Session);
 
 element_action([?ADMIN_TREE_DOMAINS_ID, _ObjId, Path], selected, _Value, Updates, Session) ->
@@ -191,10 +192,8 @@ get_domains(DomainList, Session) ->
     % We will generate a menu entry for each domain
     % Id will be ?DOMAINS_ID __ ObjId
     {ok, Items, Session2} = get_domain_items(DomainList, [], Session),
-    Items2 = Items ++ [nkadmin_util:menu_item(?ADMIN_TREE_DOMAINS_ALL, menuEntry, #{}, Session2)],
-    Element = nkadmin_util:menu_item(?ADMIN_TREE_DOMAINS, menuGroup, #{items=>Items2}, Session2),
-    % Session3 = nkadmin_util:set_key_data(?ADMIN_DOMAINS_ALL, #{domain_ids=>DomainList}, Session2),
-    % Session4 = nkadmin_util:set_special_url(<<"/domains">>, ?ADMIN_DOMAINS_ALL, Session2),
+    %% Items2 = Items ++ [nkadmin_util:menu_item(?ADMIN_TREE_DOMAINS_ALL, menuEntry, #{}, Session2)],
+    Element = nkadmin_util:menu_item(?ADMIN_TREE_DOMAINS, menuGroup, #{items=>Items}, Session2),
     {ok, Element, Session2}.
 
 
@@ -228,9 +227,9 @@ get_domain_items([ObjId|Rest], Acc, Session) ->
 
 %% @private
 created_domain(ObjId, DomainId, Updates, #admin_session{domain_id=DomainId}=Session) ->
-    #{domain_ids:=DomList1} = nkadmin_util:get_key_data(?ADMIN_TREE_DOMAINS_ALL, Session),
+    #{domain_ids:=DomList1} = nkadmin_util:get_key_data(?ADMIN_TREE_ALL_OBJS, Session),
     DomList2 = nklib_util:store_value(ObjId, DomList1),
-    Session2 = nkadmin_util:set_key_data(?ADMIN_TREE_DOMAINS_ALL, #{domain_ids=>DomList2}, Session),
+    Session2 = nkadmin_util:set_key_data(?ADMIN_TREE_ALL_OBJS, #{domain_ids=>DomList2}, Session),
     {ok, Item, Session3} = get_domains(DomList2, Session2),
     {[Item|Updates], Session3};
 
@@ -240,7 +239,7 @@ created_domain(_ObjId, _DomainId, Updates, Session) ->
 
 %% @private
 updated_domain(ObjId, Updates, Session) ->
-    #{domain_ids:=DomList} = nkadmin_util:get_key_data(?ADMIN_TREE_DOMAINS_ALL, Session),
+    #{domain_ids:=DomList} = nkadmin_util:get_key_data(?ADMIN_TREE_ALL_OBJS, Session),
     case lists:member(ObjId, DomList) of
         true ->
             {ok, [Item], Session2} = get_domain_items([ObjId], [], Session),
@@ -252,11 +251,11 @@ updated_domain(ObjId, Updates, Session) ->
 
 %% @private
 deleted_domain(ObjId, Updates, Session) ->
-    #{domain_ids:=DomList} = nkadmin_util:get_key_data(?ADMIN_TREE_DOMAINS_ALL, Session),
+    #{domain_ids:=DomList} = nkadmin_util:get_key_data(?ADMIN_TREE_ALL_OBJS, Session),
     case lists:member(ObjId, DomList) of
         true ->
             DomList2 = DomList -- [ObjId],
-            Session2 = nkadmin_util:set_key_data(?ADMIN_TREE_DOMAINS_ALL, #{domain_ids=>DomList2}, Session),
+            Session2 = nkadmin_util:set_key_data(?ADMIN_TREE_ALL_OBJS, #{domain_ids=>DomList2}, Session),
             {ok, Item, Session3} = get_domains(DomList2, Session2),
             {[Item|Updates], Session3};
         false ->
@@ -275,6 +274,18 @@ deleted_domain(ObjId, Updates, Session) ->
 %%            ?LLOG(notice, "could not load domain ~s: ~p", [ObjId, Error], Session),
 %%            {Updates, Session}
 %%    end.
+
+
+%% ===================================================================
+%% Objects
+%% ===================================================================
+
+%% @private
+get_objects(Session) ->
+    %Session2 = nkadmin_util:set_special_url(<<"/dashboard">>, ?ADMIN_TREE_DASHBOARD, Session),
+    Item = nkadmin_util:menu_item(?ADMIN_TREE_ALL_OBJS, menuEntry, #{}, Session),
+    {ok, Item, Session}.
+
 
 
 %% ===================================================================

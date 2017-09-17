@@ -29,7 +29,7 @@
 -define(ADMIN_TREE_OVERVIEW,        <<"domain_tree_overview">>).
 -define(ADMIN_TREE_DASHBOARD,       <<"domain_tree_overview_dashboard">>).
 -define(ADMIN_TREE_DOMAINS,         <<"domain_tree_overview_domains">>).        % "Domains & Groups"
--define(ADMIN_TREE_DOMAINS_ALL,     <<"domain_tree_overview_domains_all">>).    % "All domains"
+-define(ADMIN_TREE_ALL_OBJS,        <<"domain_tree_overview_all_objs">>).      % "All objects"
 -define(ADMIN_TREE_DOMAINS_ID,      <<"domain_tree_overview_domains_id">>).
 -define(ADMIN_TREE_ALERTS,          <<"domain_tree_overview_alerts">>).
 -define(ADMIN_TREE_RESOURCES,       <<"domain_tree_resources">>).
