@@ -327,6 +327,7 @@ table_entry(Type, Entry, Pos) ->
         id => ObjId,
         service => SrvId2,
         obj_name => obj_id_url(ObjId, ShortName),
+        name => maps:get(name, Entry, <<>>),
         domain => obj_path_url(Domain, Domain),
         created_by => obj_id_url(CreatedBy),
         created_time => CreatedTime,
