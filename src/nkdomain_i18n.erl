@@ -74,8 +74,9 @@ i18n() -> #{
         "domain_column_local" => "LOCAL",
         "domain_column_remote" => "REMOTE",
         "domain_column_expires" => "EXPIRES",
-        "domain_column_type" => "TYPE"
-
+        "domain_column_type" => "TYPE",
+        "domain_column_size" => "SIZE",
+        "domain_column_store_id" => "STORE"
     },
     es => #{
         "real_time" => "Tiempo real",
@@ -124,7 +125,9 @@ i18n() -> #{
         "domain_column_local" => "LOCAL",
         "domain_column_remote" => "REMOTO",
         "domain_column_expires" => "EXPIRA",
-        "domain_column_type" => "TYPE"
+        "domain_column_type" => "TYPE",
+        "domain_column_size" => <<"TAMAÑO"/utf8>>,
+        "domain_column_store_id" => "STORE"
         }
 }.
 
