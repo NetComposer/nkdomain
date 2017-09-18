@@ -188,7 +188,7 @@ object_init(#?STATE{srv_id=SrvId, domain_id=DomainId, id=Id, obj=Obj, meta=Meta}
     },
     ok = nkdomain_user_obj:register_session(UserId, DomainId, ?DOMAIN_ADMIN_SESSION, SessId, #{}),
     State2 = nkdomain_obj_util:link_to_session_server(?MODULE, State),
-    erlang:send_after(1000, self(), update_timer),
+    %erlang:send_after(1000, self(), update_timer),
     State3 = State2#?STATE{meta=#{}, session=Session},
     {ok, State3}.
 
