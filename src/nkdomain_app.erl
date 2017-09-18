@@ -69,6 +69,7 @@ start(_Type, _Args) ->
             lager:info("NkDOMAIN v~s has started.", [Vsn]),
             nkdomain_i18n:reload(),
             register_types(),
+            ok = nkchat_app:register_types(),   %% TODO HACK
             case get(start_nkroot) of
                 true ->
                     spawn_link(
