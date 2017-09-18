@@ -25,7 +25,8 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([search/2, search_all/2, search_type/2, search_all_types/2, search_childs/2, search_all_childs/2]).
--export([find_path/1, find_path/2, unload_childs/1, get_childs_type/2, get_counter/2]).
+-export([find_path/1, find_path/2, unload_childs/1, get_childs_type/2]).
+-export([get_all_counters/1, get_counter/2]).
 -export([object_info/0, object_admin_info/0, object_parse/2, object_es_mapping/0,
          object_api_syntax/2, object_send_event/2, object_api_cmd/2]).
 -export([object_init/1, object_sync_op/3, object_async_op/2, object_enabled/2, object_link_down/2,
@@ -144,6 +145,11 @@ get_childs_type(Id, Type) ->
 %% @doc
 get_counter(Id, Type) ->
     nkdomain_obj:sync_op(Id, {?MODULE, get_counter, nklib_util:to_binary(Type)}).
+
+
+%% @doc
+get_all_counters(Id) ->
+    nkdomain_obj:sync_op(Id, {?MODULE, get_all_counters}).
 
 
 %% @doc
@@ -290,6 +296,10 @@ object_sync_op({?MODULE, get_childs_type, Type}, _From, State) ->
     #?STATE{session=#session{obj_types=ObjTypes}} = State,
     ObjNames = maps:get(Type, ObjTypes, #{}),
     {reply, maps:values(ObjNames), State};
+
+object_sync_op({?MODULE, get_all_counters}, _From, State) ->
+    Value = do_get_all_counters(State),
+    {reply, {ok, Value}, State};
 
 object_sync_op({?MODULE, get_counter, Type}, _From, State) ->
     Value = get_type_counter(Type, State),
@@ -521,6 +531,11 @@ send_counter(Type, State) ->
     ?DEBUG("counter ~s: ~p", [Type, Value], State),
     send_counter_parent(Type, Value, State),
     do_event({type_counter, Type, Value}, State).
+
+
+%% @private
+do_get_all_counters(#?STATE{session=#session{counters=Counters}}=State) ->
+    [{Type, get_type_counter(Type, State)} || Type <- maps:keys(Counters)].
 
 
 %% @private
