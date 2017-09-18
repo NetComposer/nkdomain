@@ -138,16 +138,19 @@ element_action(_Elements, _Action, _Value, Updates, Session) ->
 %% @doc
 selected_type(Type, Path, Updates, Session) ->
     Class = nkdomain_util:class(Type),
-    Path2 = nkdomain_util:append(Path, Class),
+    DetailPath = case Type of
+        ?DOMAIN_DOMAIN -> Path;
+        _ -> nkdomain_util:append(Path, Class)
+    end,
     case nkdomain_admin_util:get_type_info(Type, Session) of
         {true, #{type_view_mod:=Mod}} ->
             {Detail, Session2} = Mod:view(Path, Session),
-            {Updates3, Session3} = nkadmin_util:update_detail(Path2, Detail, Updates, Session2),
+            {Updates3, Session3} = nkadmin_util:update_detail(DetailPath, Detail, Updates, Session2),
             {Updates4, Session4} = nkadmin_util:update_url(Updates3, Session3),
             {ok, Updates4, Session4};
         _ ->
             ?LLOG(notice, "type with no supported view: ~s", [Type], Session),
-            {Updates2, Session2} = nkadmin_util:update_detail(Path2, #{}, Updates, Session),
+            {Updates2, Session2} = nkadmin_util:update_detail(DetailPath, #{}, Updates, Session),
             {ok, Updates2, Session2}
     end.
 
