@@ -162,7 +162,7 @@ element_action(Id, Action, Value, Updates, Session) ->
 %% @private
 get_dashboards(Session) ->
     Session2 = nkadmin_util:set_special_url(<<"/dashboard">>, ?ADMIN_TREE_DASHBOARD, Session),
-    {ok, nkadmin_util:menu_item(?ADMIN_TREE_DASHBOARD, menuEntry, #{}, Session), Session2}.
+    {ok, nkadmin_util:menu_item(?ADMIN_TREE_DASHBOARD, menuEntry, #{icon=><<"img/dashboard.png">>}, Session), Session2}.
 
 
 
@@ -193,7 +193,7 @@ get_domains(DomainList, Session) ->
     % Id will be ?DOMAINS_ID __ ObjId
     {ok, Items, Session2} = get_domain_items(DomainList, [], Session),
     %% Items2 = Items ++ [nkadmin_util:menu_item(?ADMIN_TREE_DOMAINS_ALL, menuEntry, #{}, Session2)],
-    Element = nkadmin_util:menu_item(?ADMIN_TREE_DOMAINS, menuGroup, #{items=>Items}, Session2),
+    Element = nkadmin_util:menu_item(?ADMIN_TREE_DOMAINS, menuGroup, #{icon=><<"img/domains_and_groups.png">>, items=>Items}, Session2),
     {ok, Element, Session2}.
 
 
@@ -283,7 +283,7 @@ deleted_domain(ObjId, Updates, Session) ->
 %% @private
 get_objects(Session) ->
     %Session2 = nkadmin_util:set_special_url(<<"/dashboard">>, ?ADMIN_TREE_DASHBOARD, Session),
-    Item = nkadmin_util:menu_item(?ADMIN_TREE_ALL_OBJS, menuEntry, #{}, Session),
+    Item = nkadmin_util:menu_item(?ADMIN_TREE_ALL_OBJS, menuEntry, #{icon=><<"fa-sitemap">>}, Session),
     {ok, Item, Session}.
 
 
@@ -295,7 +295,7 @@ get_objects(Session) ->
 %% @private
 get_alerts(Session) ->
     Session2 = nkadmin_util:set_special_url(<<"/alerts">>, ?ADMIN_TREE_DASHBOARD, Session),
-    Item = nkadmin_util:menu_item(?ADMIN_TREE_ALERTS, menuEntry, #{badge=>3}, Session),
+    Item = nkadmin_util:menu_item(?ADMIN_TREE_ALERTS, menuEntry, #{icon=><<"img/alerts.png">>, badge=>3}, Session),
     {ok, Item, Session2}.
 
 
@@ -332,7 +332,7 @@ get_resource_items([Type|Rest], Acc, Session) ->
         {true, Info} ->
             Weight = maps:get(weight, Info, 9000),
             Key = <<?ADMIN_TREE_RESOURCES/binary, "__", Type/binary>>,
-            Item = nkadmin_util:menu_item(Key, menuEntry, #{}, Session),
+            Item = nkadmin_util:menu_item(Key, menuEntry, #{icon=><<"img/",Type/binary, "s.png">>}, Session),
             #admin_session{resources=Resources} = Session,
             Session2 = case lists:member(Type, Resources) of
                 true ->
@@ -405,7 +405,7 @@ get_session_items([Type|Rest], Acc, Session) ->
                 {ok, Counter} ->
                     Weight = maps:get(weight, Info, 9000),
                     Key = <<?ADMIN_TREE_SESSIONS/binary, "__", Type/binary>>,
-                    Item = nkadmin_util:menu_item(Key, menuEntry, #{counter=>Counter}, Session),
+                    Item = nkadmin_util:menu_item(Key, menuEntry, #{icon=><<"img/",Type/binary, "s.png">>, counter=>Counter}, Session),
                     #admin_session{sessions=Sessions} = Session,
                     Session2 = Session#admin_session{sessions=Sessions#{Type=>Counter}},
                     % Class = nkdomain_util:class(Type),
