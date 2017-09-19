@@ -465,6 +465,7 @@ get_service_items([], Acc, Session) ->
 get_service_items([Id|Rest], Acc, Session) ->
     Id2 = nklib_util:to_binary(Id),
     Key = <<?ADMIN_TREE_SERVICES/binary, "__", Id2/binary>>,
-    Item = nkadmin_util:menu_item(Key, menuEntry, #{label=>Id2}, Session),
+    % coloured_badge => <<"green">>, <<"red">>, <<"#F49C20;">>, <<"#77C629;">>, etc.
+    Item = nkadmin_util:menu_item(Key, menuEntry, #{coloured_badge=><<"#77C629;">>, label=>Id2}, Session),
 
     get_service_items(Rest, [{1000, Item}|Acc], Session).
