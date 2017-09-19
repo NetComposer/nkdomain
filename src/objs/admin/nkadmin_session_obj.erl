@@ -188,7 +188,6 @@ object_init(#?STATE{srv_id=SrvId, domain_id=DomainId, id=Id, obj=Obj, meta=Meta}
     },
     ok = nkdomain_user_obj:register_session(UserId, DomainId, ?DOMAIN_ADMIN_SESSION, SessId, #{}),
     State2 = nkdomain_obj_util:link_to_session_server(?MODULE, State),
-    %erlang:send_after(1000, self(), update_timer),
     State3 = State2#?STATE{meta=#{}, session=Session},
     {ok, State3}.
 
@@ -282,22 +281,6 @@ object_handle_info({nkevent, #nkevent{type=Type}=Event}, State) ->
         false ->
             {noreply, State}
     end;
-
-object_handle_info(update_timer, #?STATE{session=#admin_session{domain_id=Id}}=State) ->
-    {ok, Counters} = nkdomain_domain_obj:get_all_counters(root),
-    lists:foreach(
-        fun({Type, C}) ->
-            Ev = #nkevent{
-                class = ?DOMAIN_EVENT_CLASS,
-                type = <<"type_counter">>,
-                obj_id = Id,
-                body = #{type=>Type, counter=>C}
-            },
-            self() ! {nkevent, Ev}
-        end,
-        Counters),
-        erlang:send_after(1500, self(), update_timer),
-    {noreply, State};
 
 object_handle_info({'DOWN', _Ref, process, Pid, _Reason}, #?STATE{session=Session}=State) ->
     #admin_session{reg_pids=RegPids} = Session,
@@ -502,6 +485,7 @@ find_url_class(Url) ->
 %% TODO we should subscribe to type_counter only on my base (top) domain, and subscribe to any other object one-by-one
 subscribe_domain(OldPath, #admin_session{srv_id=SrvId, domain_path=NewPath, reg_pids=RegPids}=Session) ->
     Types = [<<"created">>, <<"updated">>, <<"deleted">>, <<"type_counter">>],
+    lager:error("NKLOG SUS ~p", [SrvId]),
     case OldPath of
         <<>> ->
             ok;
@@ -521,6 +505,13 @@ subscribe_domain(OldPath, #admin_session{srv_id=SrvId, domain_path=NewPath, reg_
         domain => NewPath
     },
     {ok, Pids} = nkevent:reg(Reg2),
+    Reg2N = #{
+        srv_id => sipstorm_c4,
+        class => ?DOMAIN_EVENT_CLASS,
+        type => Types,
+        domain => NewPath
+    },
+    {ok, _} = nkevent:reg(Reg2N),
     RegPids2 = lists:foldl(
         fun(Pid, Acc) ->
             Objs = case maps:find(Pid, Acc) of

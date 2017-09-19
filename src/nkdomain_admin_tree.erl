@@ -83,6 +83,7 @@ get_category(_Category, _Session) ->
 %% The counter_updated event is sent multiple times to the domain and all parent domains (in obj_id)
 event(#nkevent{type = <<"type_counter">>, obj_id=ObjId}=Event, Updates, #admin_session{domain_id=ObjId}=Session) ->
     #nkevent{body=#{type:=ObjType, counter:=Counter}}=Event,
+    lager:warning("NKLOG ADMIN EVENT TYPE COUNTER ~p", [ObjType]),
     case update_session(ObjType, Counter, Session) of
         {true, Item, Session2} ->
             {continue, [Event, [Item|Updates], Session2]};
