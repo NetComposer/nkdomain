@@ -55,7 +55,13 @@ view(#obj_id_ext{obj_id=ObjId, pid=Pid}, Session) ->
 %% @doc
 subview(?CHAT_MESSAGE, ObjId, Updates, Session) ->
     Base = nkadmin_util:make_id([?ADMIN_DETAIL_OBJ_SUBVIEW, ?DOMAIN_USER, ObjId, ?CHAT_MESSAGE]),
-    Opts = #{table_id => <<Base/binary, "__table">>, header => <<"MESSAGES">>},
+    BaseId = <<Base/binary, "__table">>,
+    Opts = #{
+        table_id => BaseId,
+        subdomains_id => nkdomain_admin_util:make_type_view_subfilter_id(?CHAT_MESSAGE),
+        deleted_id => nkdomain_admin_util:make_type_view_delfilter_id(?CHAT_MESSAGE),
+        header => <<"MESSAGES">>
+    },
     {Table, _Session2} = nkchat_message_obj_type_view:subview(Opts, <<>>, Session),
     Update = #{
         id => <<Base/binary, "__table_body">>,

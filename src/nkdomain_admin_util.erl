@@ -25,7 +25,7 @@
 -export([obj_id_url/1, obj_id_url/2, obj_path_url/2, table_entry/3]).
 -export([get_type_info/2, get_type_view_mod/2, get_obj_view_mod/2]).
 -export([search_spec/1, time/2, time2/2, get_file_url/2]).
--export([make_type_view_id/1, make_type_view_subfilter_id/1, make_obj_view_id/2, make_view_subview_id/3]).
+-export([make_type_view_id/1, make_type_view_subfilter_id/1, make_type_view_delfilter_id/1, make_obj_view_id/2, make_view_subview_id/3]).
 
 -include("nkdomain.hrl").
 -include("nkdomain_admin.hrl").
@@ -415,6 +415,9 @@ make_type_view_id(Type) ->
 
 make_type_view_subfilter_id(Type) ->
     nkadmin_util:make_id([make_type_view_id(Type), <<"subdomains">>]).
+
+make_type_view_delfilter_id(Type) ->
+    nkadmin_util:make_id([make_type_view_id(Type), <<"deleted">>]).
 
 %% @doc
 make_obj_view_id(Type, ObjId) ->
