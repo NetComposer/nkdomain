@@ -35,6 +35,7 @@ i18n() -> #{
 
         "domain_refresh" => "Refresh",
         "domain_show_subdomains" => "Show subdomains",
+        "domain_show_deleted" => "Show deleted",
         "domain_items_selected" => <<" item/s selected"/utf8>>, % This string is used in nkadmin_webix_datatable
         "domain_delete_button_tooltip" => "Delete items",
         "domain_enable_button_tooltip" => "Enable items",
@@ -87,6 +88,7 @@ i18n() -> #{
 
         "domain_refresh" => "Refrescar",
         "domain_show_subdomains" => "Mostrar subdominios",
+        "domain_show_deleted" => "Mostrar borrados",
         "domain_items_selected" => <<" elemento/s seleccionado/s"/utf8>>, % This string is used in nkadmin_webix_datatable
         "domain_delete_button_tooltip" => "Borrar elementos",
         "domain_enable_button_tooltip" => "Habilitar elementos",
