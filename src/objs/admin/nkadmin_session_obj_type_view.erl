@@ -37,6 +37,7 @@ view(Path, Session) ->
     Spec = #{
         table_id => TableId,
         subdomains_id => SubDomainsFilterId,
+        deleted_id => DeletedFilterId,
         filters => [SubDomainsFilterId, DeletedFilterId],
         base_domain => Path,
         columns => [
