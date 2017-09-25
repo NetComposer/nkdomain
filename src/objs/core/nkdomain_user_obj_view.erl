@@ -288,6 +288,7 @@ buttons(FormId, Obj) ->
 
 form(_FormId, Obj, Session) ->
     #{
+        obj_id := ObjId,
         domain_id := DomainId,
         obj_name := ObjName,
         created_by := CreatedBy,
@@ -304,7 +305,7 @@ form(_FormId, Obj, Session) ->
         _ ->
             nkdomain_admin_util:get_file_url(IconId, Session)
     end,
-    IconImage = <<"<img class='photo' style='width:150px; height:150px;' src='", IconUrl/binary, "'/>">>,
+    IconImage = <<"<img class='photo' style='width:150px; height:150px;' src='", IconUrl/binary, "' onload='$$(\"user_avatar\").hideProgress();'/>">>,
     UserEmail = maps:get(email, UserObj, <<>>),
     UserName = maps:get(name, UserObj, <<>>),
     UserSurname = maps:get(surname, UserObj, <<>>),
@@ -327,11 +328,65 @@ form(_FormId, Obj, Session) ->
                         height => 30
                     },
                     #{
+                        id => <<"user_avatar">>,
                         view => <<"label">>,
                         label => IconImage,
                         width => 200,
                         height => 150,
-                        align => <<"center">>
+                        align => <<"center">>,
+                        click => #{
+                            nkParseFunction => <<"
+                                function() {
+                                    var api = $$('uploadAPI');
+                                    if (api) {
+                                        api.fileDialog({
+                                            id: 'user_avatar',
+                                            types: ['png', 'jpg'],
+                                            progress: {
+                                                type: 'icon'
+                                            },
+                                            callback: {
+                                                success: function(e, xhr) {
+                                                    console.log('SUCCESS', e, xhr);
+                                                    var response = JSON.parse(xhr.responseText);
+                                                    console.log('new file_id: ', response.obj_id, 'user_id: ', '", ObjId/binary, "');
+                                                    ncClient.sendMessageAsync('objects/user/update', {
+                                                        id: '", ObjId/binary, "',
+                                                        icon_id: response.obj_id
+                                                    }).then(function(response) {
+                                                        // Send current URL to update the detail view
+                                                        sendURL();
+                                                    });
+                                                },
+                                                error: function(error, xhr) {
+                                                    console.log('ERROR', error, xhr);
+                                                },
+                                                updateProgress: function(item, progress) {
+                                                    console.log('PROGRESS', item, progress);
+                                                }
+                                            }
+                                        });
+                                    } else {
+                                        console.log('ERROR: (user_avatar onClick) uploadAPI not found');
+                                    }
+                                }
+                            ">>
+                        },
+                        on => #{
+                            <<"onAfterRender">> => #{
+                                nkParseFunction => <<"
+                                    function() {
+                                        var component = $$('user_avatar');
+                                        if (component) {
+                                            webix.extend(component, webix.ProgressBar);
+                                            component.showProgress({
+                                                type: 'icon'
+                                            });
+                                        }
+                                    }
+                                ">>
+                            }
+                        }
                     },
                     #{
                         % SPACER
