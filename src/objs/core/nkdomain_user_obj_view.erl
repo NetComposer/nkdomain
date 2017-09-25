@@ -305,7 +305,7 @@ form(_FormId, Obj, Session) ->
         _ ->
             nkdomain_admin_util:get_file_url(IconId, Session)
     end,
-    IconImage = <<"<img class='photo' style='width:150px; height:150px;' src='", IconUrl/binary, "' onload='$$(\"user_avatar\").hideProgress();'/>">>,
+    IconImage = <<"<img class='photo' style='width:150px; height:150px; margin-left: 30px; margin-top: -5px;' src='", IconUrl/binary, "' onload='$$(\"user_avatar\").hideProgress();'/>">>,
     UserEmail = maps:get(email, UserObj, <<>>),
     UserName = maps:get(name, UserObj, <<>>),
     UserSurname = maps:get(surname, UserObj, <<>>),
