@@ -32,11 +32,13 @@
 %% @doc
 view(Path, Session) ->
     TableId = nkdomain_admin_util:make_type_view_id(?DOMAIN_FILE),
-    SubDomainsFilterId = nkdomain_admin_util:make_type_view_subfilter_id(TableId),
+    SubDomainsFilterId = nkdomain_admin_util:make_type_view_subfilter_id(?DOMAIN_FILE),
+    DeletedFilterId = nkdomain_admin_util:make_type_view_delfilter_id(?DOMAIN_FILE),
     Spec = #{
         table_id => TableId,
         subdomains_id => SubDomainsFilterId,
-        filters => [SubDomainsFilterId],
+        deleted_id => DeletedFilterId,
+        filters => [SubDomainsFilterId, DeletedFilterId],
         base_domain => Path,
         columns => [
             #{
@@ -166,8 +168,7 @@ table_data(#{start:=Start, size:=Size, sort:=Sort, filter:=Filter}, _Opts, #admi
                 from => Start,
                 size => Size
             },
-            TableId = nkdomain_admin_util:make_type_view_id(?DOMAIN_FILE),
-            SubDomainsFilterId = nkdomain_admin_util:make_type_view_subfilter_id(TableId),
+            SubDomainsFilterId = nkdomain_admin_util:make_type_view_subfilter_id(?DOMAIN_FILE),
             Fun = case maps:get(SubDomainsFilterId, Filter, 1) of
                 0 -> search;
                 1 -> search_all

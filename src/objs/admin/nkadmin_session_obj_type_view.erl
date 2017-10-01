@@ -33,10 +33,12 @@
 view(Path, Session) ->
     TableId = nkdomain_admin_util:make_type_view_id(?DOMAIN_ADMIN_SESSION),
     SubDomainsFilterId = nkdomain_admin_util:make_type_view_subfilter_id(?DOMAIN_ADMIN_SESSION),
+    DeletedFilterId = nkdomain_admin_util:make_type_view_delfilter_id(?DOMAIN_ADMIN_SESSION),
     Spec = #{
         table_id => TableId,
         subdomains_id => SubDomainsFilterId,
-        filters => [SubDomainsFilterId],
+        deleted_id => DeletedFilterId,
+        filters => [SubDomainsFilterId, DeletedFilterId],
         base_domain => Path,
         columns => [
             #{
