@@ -15,7 +15,8 @@
         nkmail,
         nkfile,
         nkadmin,
-        p1_pgsql
+        p1_pgsql,
+        graphql
     ]},
     {env, [
     ]}
