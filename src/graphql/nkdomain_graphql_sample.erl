@@ -18,19 +18,10 @@
 %%
 %% -------------------------------------------------------------------
 
--ifndef(NKDOMAIN_VSN_HRL_).
--define(NKDOMAIN_VSN_HRL_, 1).
-
-%% ===================================================================
-%% Defines
-%% ===================================================================
-
--define(HTTP, "http://127.0.0.1:9307/core/v07").
--define(WS, "ws://127.0.0.1:9307/core/v07/_api/ws").
-
-%%-define(HTTP, "https://v1.netc.io/s/v07").
-%%-define(WS, "wss://v1.netc.io/s/v07/_api/ws").
+%% @doc NkDomain main module
+-module(nkdomain_graphql_sample).
+-author('Carlos Gonzalez <carlosj.gf@gmail.com>').
+-compile(export_all).
 
 
--endif.
 

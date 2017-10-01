@@ -68,6 +68,7 @@ syntax() ->
         start_api_server => boolean,
         start_admin => boolean,
         start_rest => boolean,
+        start_graphql => boolean,
         db_clusters => {list, map},
         db_store => binary,
         file_stores => {list, BaseFile#{id=>binary}},
@@ -83,7 +84,8 @@ syntax() ->
             listen_secure => false,
             start_api_server => true,
             start_admin => true,
-            start_rest => true
+            start_rest => true,
+            start_graphql => false
         },
         '__mandatory' => [db_store, default_file_store]
     }.
@@ -99,7 +101,8 @@ config(Env, Base) ->
         listen_secure := Secure,
         start_api_server := ApiServer,
         start_admin := Admin,
-        start_rest := Rest
+        start_rest := Rest,
+        start_graphql := GraphQL
     } = Env,
     BinPort = nklib_util:to_binary(Port),
     Http = case Secure of true -> <<"https">>; false -> <<"http">> end,
@@ -127,24 +130,30 @@ config(Env, Base) ->
         false ->
             Config3
     end,
+    Config5 = case GraphQL of
+        true ->
+            Config4#{graphql_url => <<BaseHttp/binary, "/_graphql">>};
+        false ->
+            Config4
+    end,
     %% Plugin nkdomain_store_es should have inserted already its
     %% configuration
-    DbStore = case Config4 of
+    DbStore = case Config5 of
         #{nkdomain_db_store:=DbStore0} ->
             DbStore0;
         _ ->
             error(missing_nkdomain_db_store)
     end,
-    case parse_file_stores(Env, Config4) of
-        {ok, #{default_file_store:=FileStore}=Config5} ->
-            case parse_mail_providers(Env, Config5) of
-                {ok, #{default_mail_provider:=MailProvider}=Config6} ->
+    case parse_file_stores(Env, Config5) of
+        {ok, #{default_file_store:=FileStore}=Config6} ->
+            case parse_mail_providers(Env, Config6) of
+                {ok, #{default_mail_provider:=MailProvider}=Config7} ->
                     Cache = #nkdomain_config_cache{
                         db_store = DbStore,
                         file_store = FileStore,
                         email_provider = MailProvider
                     },
-                    {ok, Config6, Cache};
+                    {ok, Config7, Cache};
                 {error, Error} ->
                     {error, Error}
             end;

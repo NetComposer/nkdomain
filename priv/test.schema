@@ -1,0 +1,403 @@
+# tag::scalarDateTime[]
+scalar DateTime
+# end::scalarDateTime[]
+
+# tag::nodeInterface[]
++description(text: "Relay Modern Node Interface")
+interface Node {
+  +description(text: "Unique Identity of a Node")
+  id : ID!
+}
+# end::nodeInterface[]
+
+# tag::transportInterface[]
+interface Transport {
+  id : ID!
+  edited : DateTime
+  consumables : String
+  name : String
+  created : DateTime
+  cargoCapacity : Float
+  passengers : String
+  maxAtmospheringSpeed : Int
+  crew : String
+  length : Float
+  model : String
+  costInCredits : Float
+  manufacturers : [String]
+}
+# end::transportInterface[]
+
+type PageInfo {
+  hasNextPage : Boolean!
+  hasPreviousPage : Boolean!
+}
+
+type Vehicle implements Node, Transport {
+  id : ID!
+  name : String
+  model : String
+  vehicleClass : String
+  manufacturers : [String]
+  costInCredits : Float
+  length : Float
+  crew : String
+  passengers : String
+  maxAtmospheringSpeed : Int
+  cargoCapacity : Float
+  consumables : String
+  created: DateTime
+  edited: DateTime
+  pilotConnection(
+    after : String
+    first : Int
+    before : String
+    last : Int) : VehiclePilotsConnection
+  filmConnection(
+    after : String
+    first : Int
+    before: String
+    last: Int) : VehicleFilmsConnection
+}
+
+# tag::starshipObject[]
++description(text: "Representation of Star Ships")
+type Starship implements Node, Transport {
+  id : ID!
+  name : String
+  model : String
+  starshipClass : String
+  manufacturers : [String]
+  costInCredits : Float
+  length : Float
+  crew : String
+  passengers : String
+  maxAtmospheringSpeed : Int
+  hyperdriveRating : Float
+  MGLT : Int
+  cargoCapacity : Float
+  consumables : String
+  created: DateTime
+  edited: DateTime
+# end::starshipObject[]
+  pilotConnection(
+    after : String
+    first : Int
+    before : String
+    last : Int) : StarshipPilotsConnection
+  filmConnection(
+    after : String
+    first : Int
+    before: String
+    last: Int) : StarshipFilmsConnection
+}
+
+# tag::filmObject[]
+type Film implements Node {
+  title : String
+  episodeID : Int
+  openingCrawl : String
+  director : String
+  producers : [String]
+  releaseDate : DateTime
+  speciesConnection(after: String, first: Int,
+                    before: String, last: Int)
+    : FilmSpeciesConnection
+  starshipConnection(after: String, first: Int,
+                     before: String, last: Int)
+    : StarshipConnection
+  vehicleConnection(after: String, first: Int,
+                    before: String, last: Int)
+    : FilmVehicleConnection
+  planetConnection(after: String, first: Int,
+                   before: String, last: Int)
+    : FilmPlanetConnection
+  characterConnection(after: String, first: Int,
+                      before: String, last: Int)
+    : FilmCharactersConnection
+
+  created : DateTime
+  edited : DateTime
+  id : ID!
+}
+# end::filmObject[]
+
+# tag::speciesObject[]
+type Species implements Node {
+  name : String
+  classification : String
+  designation : String
+  averageHeight : String
+  averageLifespan : String
+  eyeColors : [String]
+  hairColors : [String]
+  skinColors : [String]
+  language : String
+  homeworld : Planet
+  personConnection(after: String, first: Int,
+                   before: String, last: Int)
+    : SpeciesPeopleConnection
+  filmConnection(after: String, first: Int,
+                 before: String, last: Int)
+    : SpeciesFilmConnection
+  created : DateTime
+  edited : DateTime
+  id : ID!
+}
+# end::speciesObject[]
+
+# tag::planetObject[]
+type Planet implements Node {
+  name : String
+  diameter : Int
+  rotationPeriod : Int
+  orbitalPeriod : Int
+  gravity : String
+  population : Int
+  climate : String
+  terrains : [String]
+  surfaceWater : Int
+  filmConnection(after: String, first: Int,
+                 before: String, last: Int)
+    : PlanetFilmsConnection
+  residentConnection(after: String, first: Int,
+                     before: String, last: Int)
+    : PlanetResidentsConnection
+  created : DateTime
+  edited : DateTime
+  id : ID!
+}
+# end::planetObject[]
+
+type Person implements Node {
+  name : String
+  birthYear : String
+  eyeColor : String
+  gender : String
+  hairColor : String
+  height : Int
+  mass : Float
+  skinColor : String
+  homeworld : Planet
+  species : Species
+  created : DateTime
+  edited : DateTime
+  id : ID!
+}
+
+# tag::queryObject[]
+type Query {
+  +description(text: "Relay Modern specification Node fetcher")
+  node(id : ID!) : Node
+  +description(text: "Fetch a starship with a given Id")
+  starship(id : ID!) : Starship
+  allStarships : [Starship]
+  allPlanets : [Planet]
+  allPeople : [Person]
+  allVehicles : [Vehicle]
+  allSpecies : [Species]
+  allFilms : [Film]
+}
+# end::queryObject[]
+
+type Faction implements Node {
+  id : ID!
+  name : String
+  ships(first: Int, after: String,
+        last: Int, before: String)
+    : StarshipConnection
+}
+
+# tag::mutationObject[]
+type Mutation {
+  introduceFaction(input: IntroduceFactionInput!)
+    : IntroduceFactionPayload
+  introduceStarship(input: IntroduceStarshipInput!)
+    : IntroduceStarshipPayload
+}
+# end::mutationObject[]
+
+## -- MUTATION OBJECTS ----------
+
+input IntroduceFactionInput {
+  clientMutationId : String
+  name : String!
+}
+
+type IntroduceFactionPayload {
+  clientMutationId : String
+  faction : Faction
+}
+
+# tag::introduceStarshipInput[]
+input IntroduceStarshipInput {
+  clientMutationId : String
+
+  name : String
+  model : String
+  starshipClass : String!
+  manufacturers : [String] = [] # <1>
+  costInCredits : Float!
+  length : Float!
+  crew : String!
+
+  faction : ID!
+}
+# end::introduceStarshipInput[]
+
+# tag::introduceStarshipPayload[]
+type IntroduceStarshipPayload {
+  clientMutationId : String
+  faction : Faction
+  starship : Starship
+}
+# end::introduceStarshipPayload[]
+
+## -- CONNECTION OBJECTS --------
+##
+## This section implements connection objects according to the relay modern conventions
+
+type PlanetFilmsConnection {
+  pageInfo : PageInfo!
+  edges : [PlanetFilmsEdge]
+  totalCount : Int
+}
+
+type PlanetFilmsEdge {
+  node : Film
+  cursor : String!
+}
+
+type PlanetResidentsConnection {
+  pageInfo : PageInfo!
+  edges : [PlanetResidentsEdge]
+  totalCount : Int
+}
+
+type PlanetResidentsEdge {
+  node : Person
+  cursor : String!
+}
+
+type FilmSpeciesConnection {
+  pageInfo : PageInfo!
+  edges : [FilmSpeciesEdge]
+  totalCount : Int
+  species : [Species]
+}
+
+type FilmSpeciesEdge {
+  node : Species
+  cursor : String!
+}
+
+type SpeciesFilmConnection {
+  pageInfo : PageInfo!
+  edges : [SpeciesFilmEdge]
+  totalCount : Int
+}
+
+type SpeciesFilmEdge {
+  node : Film
+  cursor : String!
+}
+
+type SpeciesPeopleConnection {
+  pageInfo : PageInfo!
+  edges : [SpeciesPeopleEdge]
+  totalCount : Int
+}
+
+type SpeciesPeopleEdge {
+  node : Person
+  cursor : String!
+}
+
+type FilmPlanetConnection {
+  pageInfo : PageInfo!
+  edges : [FilmPlanetEdge]
+  totalCount : Int
+}
+
+type FilmPlanetEdge {
+  node : Planet
+  cursor : String!
+}
+
+type VehiclePilotsConnection {
+  pageInfo : PageInfo!
+  edges : [VehiclePilotsEdge]
+  totalCount : Int
+}
+
+type VehiclePilotsEdge {
+  node : Person
+  cursor : String!
+}
+
+type VehicleFilmsConnection {
+  pageInfo : PageInfo!
+  edges : [VehicleFilmsEdge]
+  totalCount : Int
+}
+
+type VehicleFilmsEdge {
+  node : Film
+  cursor : String!
+}
+
+type StarshipConnection {
+  pageInfo : PageInfo!
+  edges : [StarshipEdge]
+  totalCount : Int
+}
+
+type StarshipEdge {
+  node : Starship
+  cursor : String!
+}
+
+type FilmVehicleConnection {
+  pageInfo : PageInfo!
+  edges : [FilmVehicleEdge]
+  totalCount : Int
+}
+
+type FilmVehicleEdge {
+  node : Vehicle
+  cursor : String!
+}
+
+type FilmCharactersConnection {
+  pageInfo : PageInfo!
+  edges : [FilmCharactersEdge]
+  totalCount : Int
+}
+
+type FilmCharactersEdge {
+  node : Person
+  cursor : String!
+}
+
+type StarshipPilotsConnection {
+  pageInfo : PageInfo
+  edges : [StarshipPilotsEdge]
+  totalCount : Int
+}
+
+type StarshipPilotsEdge {
+  node : Person
+  cursor : String!
+}
+
+type StarshipFilmsConnection {
+  pageInfo : PageInfo
+  edges : [StarshipFilmsEdge]
+  totalCount : Int
+}
+
+type StarshipFilmsEdge {
+  node : Film
+  cursor : String!
+}
+

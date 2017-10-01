@@ -39,7 +39,7 @@
          object_db_search_types/2, object_db_search_all_types/2,
          object_db_search_childs/2, object_db_search_all_childs/2, object_db_search_agg_field/4,
          object_db_delete_all_childs/2, object_db_clean/0]).
--export([plugin_deps/0, plugin_syntax/0, plugin_config/2]).
+-export([plugin_deps/0, plugin_syntax/0, plugin_config/2, plugin_listen/2]).
 -export([service_api_syntax/2, service_api_allow/1, service_api_cmd/1]).
 -export([api_server_http_auth/2, api_server_reg_down/3]).
 -export([service_init/2, service_handle_cast/2, service_handle_info/2]).
@@ -908,6 +908,47 @@ plugin_config(#{nkdomain:=DomCfg}=Config, _Service) ->
 
 plugin_config(Config, _Service) ->
     {ok, Config}.
+
+
+%% @private
+plugin_listen(Config, #{id:=SrvId}) ->
+    case Config of
+        #{graphql_url:=Url} ->
+            Opts = #{valid_schemes=>[http, https], resolve_type=>listen},
+            {ok, List} = nkpacket:multi_resolve(Url, Opts),
+            NetOpts = nkpacket_util:get_plugin_net_opts(Config),
+            PacketDebug = case Config of
+                #{debug:=DebugList} when is_list(DebugList) ->
+                    lists:member(nkpacket, DebugList);
+                _ ->
+                    false
+            end,
+            Priv = list_to_binary(code:priv_dir(nkdomain)),
+            DirPath = <<Priv/binary, "/graphql">>,
+            DirPath2 = nklib_parse:fullpath(filename:absname(DirPath)),
+            RestOpts = #{dir_path=>DirPath2},
+            L = lists:map(
+                fun({Conns, ConnOpts}) ->
+                    UrlPath = maps:get(path, ConnOpts, <<>>),
+                    lager:error("NKLOG URL ~p", [UrlPath]),
+                    Route = {<<UrlPath/binary, "/[...]">>, nkdomain_graphql_rest_handler, RestOpts},
+                    ConnOpts2 = maps:merge(ConnOpts, NetOpts),
+                    ConnOpts3 = ConnOpts2#{
+                        class => {nkdomain_graphql, SrvId},
+                        http_proto => {custom, #{
+                            env => [{dispatch, cowboy_router:compile([{'_', [Route]}])}],
+                            middlewares => [cowboy_router, cowboy_handler]
+                        }},
+                        debug => PacketDebug
+                    },
+                    {Conns, ConnOpts3}
+                end,
+                List),
+            lager:error("GRAOHL: ~p", [L]),
+            L;
+        _ ->
+            []
+    end.
 
 
 %% @private

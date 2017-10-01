@@ -1,0 +1,191 @@
+
+## ------ SCALARS --------
+
+
+## tag::scalarDateTime[]
+#scalar DateTime
+## end::scalarDateTime[]
+
+# tag::scalarUnixTime[]
+scalar UnixTime
+# end::scalarUnixTime[]
+
+
+## ------ INTERFACES --------
+
+
+# tag::nodeInterface[]
++description(text: "Relay Modern Node Interface")
+interface Node {
+  +description(text: "Unique Identity of a Node")
+  id : ID!
+}
+# end::nodeInterface[]
+
+
+
+
+## ------ TYPES --------
+
+type Object {
+  type : String
+  path : String
+  objName : String
+  domainId : String
+  parentId : String
+  srvId : String
+  subtype : [String]
+  createdBy : String
+  createdTime : UnixTime
+  updatedBy : String
+  updatedTime : UnixTime
+  enabled : Boolean
+  active : Boolean
+  expiresTime : UnixTime
+  destroyed : Boolean
+  destroyedTime : UnixTime
+  destroyedCode : String
+  destroyedReason : String
+  name : String
+  description : String
+  tags : [String]
+  aliases : [String]
+  iconId : [String]
+  schemaVsn : String
+  storeVsn : String
+}
+
+
+
+type PageInfo {
+  hasNextPage : Boolean!
+  hasPreviousPage : Boolean!
+}
+
+type User implements Node {
+  id : ID!
+  object : Object
+  userName : String
+  userSurname : String
+  Password : String
+  Email : String
+  pushConnection(
+    after : String
+    first : Int
+    before : String
+    last : Int) : UserPushConnection
+  statusConnection(
+    after : String
+    first : Int
+    before: String
+    last: Int) : UserStatusConnection
+}
+
+
+
+type UserPush implements Node {
+  id : ID!
+  domainPath : String
+  appId : String
+  deviceId : String
+  pushData : String
+  updatedTime : UnixTime
+}
+
+type UserStatus implements Node {
+  id : ID!
+  domainPath : String
+  userStatus : String
+  updatedTime : UnixTime
+}
+
+
+
+## ------ QUERIES --------
+
+
+# tag::queryObject[]
+type Query {
+  +description(text: "Relay Modern specification Node fetcher")
+  node(id : ID!) : Node
+  +description(text: "Fetch a starship with a given Id")
+  user(id : ID!) : User
+  allUsers : [User]
+}
+# end::queryObject[]
+
+# tag::mutationObject[]
+type Mutation {
+  introduceUser(input: IntroduceUserInput!)
+    : IntroduceUserPayload
+  updateUser(input: UpdateUserInput!)
+    : UpdateUserPayload
+}
+# end::mutationObject[]
+
+
+
+## -- MUTATION OBJECTS ----------
+
+input IntroduceUserInput {
+  clientMutationId : String
+  domainId : String!
+  name : String!
+  surname : String!
+  password : String
+  email : String
+}
+
+type IntroduceUserPayload {
+  clientMutationId : String
+  user : User
+}
+
+
+# tag::updateUserInput[]
+input UpdateUserInput {
+  clientMutationId : String
+  name : String
+  surname : String
+  password : String
+  email : String
+  model : String
+}
+# end::updateUserInput[]
+
+
+# tag::updateUserPayload[]
+type UpdateUserPayload {
+  clientMutationId : String
+  user : User
+}
+# end::updateUserPayload[]
+
+
+
+## -- CONNECTION OBJECTS --------
+
+
+type UserPushConnection {
+  pageInfo : PageInfo!
+  edges : [UserPushEdge]
+  totalCount : Int
+}
+
+type UserPushEdge {
+  node : UserPush
+  cursor : String!
+}
+
+
+type UserStatusConnection {
+  pageInfo : PageInfo!
+  edges : [UserStatusEdge]
+  totalCount : Int
+}
+
+type UserStatusEdge {
+  node : UserStatus
+  cursor : String!
+}
+

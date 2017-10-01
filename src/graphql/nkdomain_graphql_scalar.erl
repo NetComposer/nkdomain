@@ -18,19 +18,24 @@
 %%
 %% -------------------------------------------------------------------
 
--ifndef(NKDOMAIN_VSN_HRL_).
--define(NKDOMAIN_VSN_HRL_, 1).
+%% @doc NkDomain main module
+-module(nkdomain_graphql_scalar).
+-author('Carlos Gonzalez <carlosj.gf@gmail.com>').
+-export([input/2, output/2]).
 
-%% ===================================================================
-%% Defines
-%% ===================================================================
+%% @doc
+input(<<"UnixTime">>, Input) ->
+    case is_integer(Input) andalso Input > 0 of
+        true ->
+            {ok, Input};
+        false ->
+            {error, bad_unixtime}
+    end;
 
--define(HTTP, "http://127.0.0.1:9307/core/v07").
--define(WS, "ws://127.0.0.1:9307/core/v07/_api/ws").
-
-%%-define(HTTP, "https://v1.netc.io/s/v07").
-%%-define(WS, "wss://v1.netc.io/s/v07/_api/ws").
+input(_Type, Val) ->
+    {ok, Val}.
 
 
--endif.
-
+%% @doc
+output(_Type, Val) ->
+    {ok, Val}.

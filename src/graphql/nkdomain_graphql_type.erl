@@ -18,19 +18,13 @@
 %%
 %% -------------------------------------------------------------------
 
--ifndef(NKDOMAIN_VSN_HRL_).
--define(NKDOMAIN_VSN_HRL_, 1).
+%% @doc NkDomain main module
+-module(nkdomain_graphql_type).
+-author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
-%% ===================================================================
-%% Defines
-%% ===================================================================
+-export([execute/1]).
 
--define(HTTP, "http://127.0.0.1:9307/core/v07").
--define(WS, "ws://127.0.0.1:9307/core/v07/_api/ws").
-
-%%-define(HTTP, "https://v1.netc.io/s/v07").
-%%-define(WS, "wss://v1.netc.io/s/v07/_api/ws").
-
-
--endif.
+execute(#{ starship := _, transport := _ }) -> {ok, 'Starship'};
+execute(#{ vehicle := _, transport := _ }) -> {ok, 'Vehicle'};
+execute(_Otherwise) -> {error, unknown_type}.
 

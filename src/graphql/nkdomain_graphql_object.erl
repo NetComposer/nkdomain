@@ -18,19 +18,13 @@
 %%
 %% -------------------------------------------------------------------
 
--ifndef(NKDOMAIN_VSN_HRL_).
--define(NKDOMAIN_VSN_HRL_, 1).
+%% @doc NkDomain main module
+-module(nkdomain_graphql_object).
+-author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
-%% ===================================================================
-%% Defines
-%% ===================================================================
+-export([execute/4]).
 
--define(HTTP, "http://127.0.0.1:9307/core/v07").
--define(WS, "ws://127.0.0.1:9307/core/v07/_api/ws").
-
-%%-define(HTTP, "https://v1.netc.io/s/v07").
-%%-define(WS, "wss://v1.netc.io/s/v07/_api/ws").
-
-
--endif.
-
+%% Assume we are given a map(). Look up the field in the map. If not
+%% present, return the value null.
+execute(_Ctx, Obj, Field, _Args) ->
+    {ok, maps:get(Field, Obj, null)}.

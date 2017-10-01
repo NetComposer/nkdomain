@@ -25,7 +25,7 @@
 
 -export([start/0, start/1, start/2, stop/1]).
 -export([get/1, put/2, del/1]).
--export([register_types/0]).
+-export([register_types/0, load_schema/0]).
 
 -include("nkdomain.hrl").
 
@@ -119,6 +119,7 @@ register_types() ->
 
 
 
+
 %% @doc gets a configuration value
 get(Key) ->
     get(Key, undefined).
@@ -137,5 +138,49 @@ put(Key, Value) ->
 %% @doc updates a configuration value
 del(Key) ->
     nklib_config:del(?APP, Key).
+
+
+
+%%====================================================================
+%% GraphQL
+%%====================================================================
+
+load_schema() ->
+    PrivDir = code:priv_dir(?APP),
+    {ok, SchemaData} = file:read_file(filename:join(PrivDir, "graphql.schema")),
+    Mapping = mapping_rules(),
+    ok = graphql:load_schema(Mapping, SchemaData),
+    ok = setup_root(),
+    ok = graphql:validate_schema(),
+    ok.
+
+
+mapping_rules() ->
+    #{
+        scalars => #{
+            default => nkdomain_graphql_scalar
+        },
+        interfaces => #{
+            default => nkdomain_graphql_type
+        },
+        unions => #{
+            default => nkdomain_graphql_type
+        },
+        objects => #{
+            'User' => nkdomain_user_obj,
+            'Query' => nkdomain_graphql_query,
+            'Mutation' => nkdomain_graphql_mutation,
+            default => nkdomain_graphql_object
+        }
+    }.
+
+setup_root() ->
+    Root = {root,
+            #{ query => 'Query',
+               mutation => 'Mutation',
+               interfaces => ['Node']
+            }},
+    ok = graphql:insert_schema_definition(Root),
+    ok.
 
 
