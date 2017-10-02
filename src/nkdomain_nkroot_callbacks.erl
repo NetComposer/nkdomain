@@ -190,6 +190,7 @@ nkservice_rest_http(post, [<<"_file">>], Req) ->
     end;
 
 nkservice_rest_http(_Method, _Path, _Req) ->
+    % lager:warning("NkLOG HTTP Path: ~s", [_Path]),
     continue.
 
 
@@ -911,44 +912,14 @@ plugin_config(Config, _Service) ->
 
 
 %% @private
-plugin_listen(Config, #{id:=SrvId}) ->
-    case Config of
-        #{graphql_url:=Url} ->
-            Opts = #{valid_schemes=>[http, https], resolve_type=>listen},
-            {ok, List} = nkpacket:multi_resolve(Url, Opts),
-            NetOpts = nkpacket_util:get_plugin_net_opts(Config),
-            PacketDebug = case Config of
-                #{debug:=DebugList} when is_list(DebugList) ->
-                    lists:member(nkpacket, DebugList);
-                _ ->
-                    false
-            end,
-            Priv = list_to_binary(code:priv_dir(nkdomain)),
-            DirPath = <<Priv/binary, "/graphql">>,
-            DirPath2 = nklib_parse:fullpath(filename:absname(DirPath)),
-            RestOpts = #{dir_path=>DirPath2},
-            L = lists:map(
-                fun({Conns, ConnOpts}) ->
-                    UrlPath = maps:get(path, ConnOpts, <<>>),
-                    lager:error("NKLOG URL ~p", [UrlPath]),
-                    Route = {<<UrlPath/binary, "/[...]">>, nkdomain_graphql_rest_handler, RestOpts},
-                    ConnOpts2 = maps:merge(ConnOpts, NetOpts),
-                    ConnOpts3 = ConnOpts2#{
-                        class => {nkdomain_graphql, SrvId},
-                        http_proto => {custom, #{
-                            env => [{dispatch, cowboy_router:compile([{'_', [Route]}])}],
-                            middlewares => [cowboy_router, cowboy_handler]
-                        }},
-                        debug => PacketDebug
-                    },
-                    {Conns, ConnOpts3}
-                end,
-                List),
-            lager:error("GRAOHL: ~p", [L]),
-            L;
-        _ ->
-            []
-    end.
+plugin_listen(_Config, #{id:=_SrvId}) ->
+    [].
+%%    case Config of
+%%        #{graphql_url:=Url} ->
+%%            nkdomain_graphql:get_listen(SrvId, Url, Config);
+%%        _ ->
+%%            []
+%%    end.
 
 
 %% @private

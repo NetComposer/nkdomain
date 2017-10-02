@@ -68,7 +68,6 @@ syntax() ->
         start_api_server => boolean,
         start_admin => boolean,
         start_rest => boolean,
-        start_graphql => boolean,
         db_clusters => {list, map},
         db_store => binary,
         file_stores => {list, BaseFile#{id=>binary}},
@@ -84,8 +83,7 @@ syntax() ->
             listen_secure => false,
             start_api_server => true,
             start_admin => true,
-            start_rest => true,
-            start_graphql => false
+            start_rest => true
         },
         '__mandatory' => [db_store, default_file_store]
     }.
@@ -101,8 +99,7 @@ config(Env, Base) ->
         listen_secure := Secure,
         start_api_server := ApiServer,
         start_admin := Admin,
-        start_rest := Rest,
-        start_graphql := GraphQL
+        start_rest := Rest
     } = Env,
     BinPort = nklib_util:to_binary(Port),
     Http = case Secure of true -> <<"https">>; false -> <<"http">> end,
@@ -124,36 +121,36 @@ config(Env, Base) ->
         false ->
             Config2
     end,
-    Config4 = case Rest of
+    Rest1 = case Rest of
         true ->
-            Config3#{rest_url => BaseHttp};
-        false ->
-            Config3
+            [BaseHttp];
+        _ ->
+            []
     end,
-    Config5 = case GraphQL of
-        true ->
-            Config4#{graphql_url => <<BaseHttp/binary, "/_graphql">>};
-        false ->
-            Config4
+    Config4 = case nklib_util:bjoin(Rest1, <<", ">>) of
+        <<>> ->
+            Config3;
+        RestUrl ->
+            Config3#{rest_url => RestUrl}
     end,
     %% Plugin nkdomain_store_es should have inserted already its
     %% configuration
-    DbStore = case Config5 of
+    DbStore = case Config4 of
         #{nkdomain_db_store:=DbStore0} ->
             DbStore0;
         _ ->
             error(missing_nkdomain_db_store)
     end,
-    case parse_file_stores(Env, Config5) of
-        {ok, #{default_file_store:=FileStore}=Config6} ->
-            case parse_mail_providers(Env, Config6) of
-                {ok, #{default_mail_provider:=MailProvider}=Config7} ->
+    case parse_file_stores(Env, Config4) of
+        {ok, #{default_file_store:=FileStore}=Config5} ->
+            case parse_mail_providers(Env, Config5) of
+                {ok, #{default_mail_provider:=MailProvider}=Config6} ->
                     Cache = #nkdomain_config_cache{
                         db_store = DbStore,
                         file_store = FileStore,
                         email_provider = MailProvider
                     },
-                    {ok, Config7, Cache};
+                    {ok, Config6, Cache};
                 {error, Error} ->
                     {error, Error}
             end;

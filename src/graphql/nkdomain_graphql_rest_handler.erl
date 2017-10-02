@@ -23,7 +23,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 %% Cowboy Handler Interface
--export([init/3]).
+-export([init/2]).
 
 %% REST callbacks
 -export([
@@ -41,63 +41,63 @@
     to_json/2,
     to_html/2
 ]).
-%% end::exports[]
+
 
 %% -- API ---------------------------------------------------
-%% tag::init[]
-init(_Transport, _Req, _Options) ->
-    {upgrade, protocol, cowboy_rest}.
-%% end::init[]
 
-%% tag::rest_init[]
+init(_Req, _Options) ->
+    {upgrade, protocol, cowboy_rest}.
+
+
+
 rest_init(Req, {priv_file, _, _} = PrivFile) ->
     {Method, Req2} = cowboy_req:method(Req),
     {ok, Req2,
      #{ method => Method,
         index_location => PrivFile }}.
-%% end::rest_init[]
 
-%% tag::allowed_methods[]
+
+
 allowed_methods(Req, State) ->
     {[<<"GET">>, <<"POST">>], Req, State}.
-%% end::allowed_methods[]
 
-%% tag::content_types_accepted[]
+
+
 content_types_accepted(Req, State) ->
     {[
          {{<<"application">>, <<"json">>, []}, from_json}
      ], Req, State}.
-%% end::content_types_accepted[]
 
-%% tag::content_types_provided[]
+
+
 content_types_provided(Req, State) ->
     {[
          {{<<"application">>, <<"json">>, []}, to_json},
          {{<<"text">>, <<"html">>, []}, to_html}
      ], Req, State}.
-%% end::content_types_provided[]
 
-%% tag::charsets_provided[]
+
+
 charsets_provided(Req, State) ->
     {[<<"utf-8">>], Req, State}.
-%% end::charsets_provided[]
 
-%% tag::resource_exists[]
+
+
 resource_exists(Req, #{ method := <<"GET">> } = State) ->
     {true, Req, State};
 resource_exists(Req, #{ method := <<"POST">> } = State) ->
     {false, Req, State}.
-%% end::resource_exists[]
 
-%% tag::to_html[]
+
+
 to_html(Req, #{ index_location :=
                 {priv_file, App, FileLocation}} = State) ->
     Filename = filename:join(code:priv_dir(App), FileLocation),
     {ok, Data} = file:read_file(Filename),
     {Data, Req, State}.
-%% end::to_html[]
 
-%% tag::json_processing[]
+
+
 json_request(Req, State) ->
     case gather(Req) of
         {error, Reason} ->
@@ -108,11 +108,11 @@ json_request(Req, State) ->
 
 from_json(Req, State) -> json_request(Req, State).
 to_json(Req, State) -> json_request(Req, State).
-%% end::json_processing[]
+
 
 %% -- INTERNAL FUNCTIONS ---------------------------------------
 
-%% tag::run_request[]
+
 run_request(#{ document := undefined }, Req, State) ->
     err(400, no_query_supplied, Req, State);
 run_request(#{ document := Doc} = ReqCtx, Req, State) ->
@@ -122,9 +122,9 @@ run_request(#{ document := Doc} = ReqCtx, Req, State) ->
         {error, Reason} ->
             err(400, Reason, Req, State)
     end.
-%% end::run_request[]
 
-%% tag::run_preprocess[]
+
+
 run_preprocess(#{ document := AST } = ReqCtx, Req, State) ->
     try
         Elaborated = graphql:elaborate(AST), % <1>
@@ -137,9 +137,9 @@ run_preprocess(#{ document := AST } = ReqCtx, Req, State) ->
         throw:Err ->
             err(400, Err, Req, State)
     end.
-%% end::run_preprocess[]
 
-%% tag::run_execute[]
+
+
 run_execute(#{ document := AST,
                fun_env := FunEnv,
                vars := Vars,
@@ -153,9 +153,9 @@ run_execute(#{ document := AST,
     Req2 = cowboy_req:set_resp_body(ResponseBody, Req), % <4>
     {ok, Reply} = cowboy_req:reply(200, Req2),
     {halt, Reply, State}.
-%% end::run_execute[]
 
-%% tag::gather[]
+
+
 gather(Req) ->
     {ok, Body, Req2} = cowboy_req:body(Req),
     {Bindings, Req3} = cowboy_req:bindings(Req2),
@@ -179,15 +179,15 @@ gather(Req, Body, Params) ->
         {error, Reason} ->
             {error, Reason}
     end.
-%% end::gather[]
 
-%% tag::document[]
+
+
 document([#{ <<"query">> := Q }|_]) -> Q;
 document([_|Next]) -> document(Next);
 document([]) -> undefined.
-%% end::document[]
 
-%% tag::variables[]
+
+
 variables([#{ <<"variables">> := Vars} | _]) ->
     if
         is_binary(Vars) ->
@@ -208,19 +208,19 @@ variables([_ | Next]) ->
     variables(Next);
 variables([]) ->
     {ok, #{}}.
-%% end::variables[]
 
-%% tag::operation_name[]
+
+
 operation_name([#{ <<"operationName">> := OpName } | _]) ->
     OpName;
 operation_name([_ | Next]) ->
     operation_name(Next);
 operation_name([]) ->
     undefined.
-%% tag::operation_name[]
 
 
-%% tag::errors[]
+
+
 err(Code, Msg, Req, State) ->
     Formatted = iolist_to_binary(io_lib:format("~p", [Msg])),
     Err = #{ type => error,
@@ -229,7 +229,7 @@ err(Code, Msg, Req, State) ->
     Req2 = cowboy_req:set_resp_body(Body, Req),
     {ok, Reply} = cowboy_req:reply(Code, Req2),
     {halt, Reply, State}.
-%% end::errors[]
+
 
 
 
