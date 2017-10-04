@@ -33,7 +33,7 @@
 
 -define(CALL_NKROOT(Fun, Args), apply(?NKROOT, Fun, Args)).
 
--define(STATE, nkstate_v1).
+-define(STATE, obj_state).
 
 -record(obj_id_ext, {
     srv_id :: nkservice:id(),
@@ -45,10 +45,10 @@
 }).
 
 
--record(nkstate_v1, {
-    srv_id :: nkservice:id(),
+-record(obj_state, {
     id :: #obj_id_ext{},
     module :: module(),
+    callback_srv_id :: module(),
     domain_id :: nkdomain:obj_id(),
     parent_id :: nkdomain:obj_id(),
     object_info :: nkdomain_obj:object_info(),
@@ -59,7 +59,6 @@
     childs :: #{nkdomain:obj_id() => {nkdomain:type(), pid()}},
     usage_links :: nklib_links:link(),
     event_links :: nklib_links:link(),
-    status :: nkdomain_obj:status(),
     session_events :: [binary()],
     session_link :: nklib_links:link(),
     meta :: map(),                      % Object load metadata
@@ -67,7 +66,6 @@
     stop_reason = false :: false | nkservice:error(),
     unload_policy :: permanent | {expires, nklib_util:m_timestamp()} | {ttl, integer()},
     timer :: reference(),
-    timelog = [] :: [map()],
     domain_pid :: pid(),
     domain_enabled :: boolean(),
     parent_pid :: pid(),

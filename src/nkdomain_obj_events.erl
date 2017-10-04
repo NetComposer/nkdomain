@@ -50,7 +50,7 @@ event({status, Status}, State) when is_atom(Status); is_binary(Status) ->
     {event, {updated_status, #{status=>Status}}, State};
 
 event({status, {Status, Reason}}, State) when is_atom(Status); is_binary(Status) ->
-    #?STATE{srv_id=SrvId} = State,
+    #?STATE{callback_srv_id=SrvId} = State,
     {Code, Txt} = nkservice_util:error(SrvId, Reason),
     {event, {updated_status, #{status=>Code, reason=>Txt}}, State};
 
@@ -82,7 +82,7 @@ event({child_unloaded, Type, ObjId}, State) ->
     {event, {child_unloaded, #{type=>Type, obj_id=>ObjId}}, State};
 
 event({unloaded, Reason}, State) ->
-    #?STATE{srv_id=SrvId} = State,
+    #?STATE{callback_srv_id=SrvId} = State,
     {Code, Txt} = nkservice_util:error(SrvId, Reason),
     {event, {unloaded, #{code=>Code, reason=>Txt}}, State};
 

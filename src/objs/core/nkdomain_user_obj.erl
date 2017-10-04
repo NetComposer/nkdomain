@@ -652,7 +652,7 @@ object_sync_op({?MODULE, get_sessions, Type}, _From, #?STATE{session=Session}=St
     {reply, {ok, Reply}, State};
 
 object_sync_op({?MODULE, add_notification_op, SessType, Opts, Base}, _From, State) ->
-    #?STATE{srv_id=SrvId, id=#obj_id_ext{obj_id=UserId}} = State,
+    #?STATE{id=#obj_id_ext{srv_id=SrvId, obj_id=UserId}} = State,
     UserData1 = maps:get(?DOMAIN_USER, Base, #{}),
     UserNot1 = #{
         <<"user_id">> => UserId,
@@ -1132,7 +1132,7 @@ do_remove_push_devices(State) ->
 
 
 %% @doc
-do_send_push(AppId, Push, #?STATE{srv_id=SrvId}=State) ->
+do_send_push(AppId, Push, #?STATE{callback_srv_id=SrvId}=State) ->
     Devices = find_push_devices(AppId, State),
     lists:foreach(
         fun(#push_device{device_id=DeviceId, push_data=PushDevice}) ->

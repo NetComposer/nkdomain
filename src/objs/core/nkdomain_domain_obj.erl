@@ -439,7 +439,7 @@ do_rm_obj(ObjId, #?STATE{session=Session}=State) ->
 
 
 %% @private
-register_service(#?STATE{srv_id=SrvId, session=Session}=State) ->
+register_service(#?STATE{callback_srv_id=SrvId, session=Session}=State) ->
     case whereis(SrvId) of
         Pid when is_pid(Pid) ->
             monitor(process, Pid),

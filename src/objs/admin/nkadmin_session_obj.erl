@@ -175,7 +175,7 @@ object_send_event(Event, State) ->
 
 
 %% @private
-object_init(#?STATE{srv_id=SrvId, domain_id=DomainId, id=Id, obj=Obj, meta=Meta}=State) ->
+object_init(#?STATE{callback_srv_id=SrvId, domain_id=DomainId, id=Id, obj=Obj, meta=Meta}=State) ->
     #obj_id_ext{obj_id=SessId} = Id,
     #{created_by:=UserId} = Obj,
     Session = #admin_session{

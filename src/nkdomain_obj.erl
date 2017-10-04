@@ -129,6 +129,7 @@
         enabled => boolean(),
         session_events => [binary()],       % See bellow
         session_link => nklib_links:link(), %
+        callback_srv_id => nkservice:id(),
         meta => map()
     }.
 
@@ -298,10 +299,12 @@ init({Op, Obj, Meta}) when Op==loaded; Op==created ->
             maps:get(enabled, Obj, true)
     end,
     Info = Module:object_info(),
+    % This srv_id is the one from the object (the one that created the object)
+    % You can use the option 'callback_srv_id' to use a different one for most callbacks
     ObjIdExt = #obj_id_ext{srv_id=SrvId, obj_id=ObjId, type=Type, path=Path, obj_name=ObjName, pid=self()},
     State1 = #?STATE{
-        srv_id = SrvId,
         id = ObjIdExt,
+        callback_srv_id = maps:get(callback_srv_id, Meta, ?NKROOT),
         module = Module,
         domain_id = DomainId,
         parent_id = ParentId,
@@ -313,7 +316,6 @@ init({Op, Obj, Meta}) when Op==loaded; Op==created ->
         childs = #{},
         usage_links = nklib_links:new(),
         event_links = nklib_links:new(),
-        status = init,
         session_events = maps:get(session_events, Meta, []),
         session_link = maps:get(session_link, Meta, undefined),
         meta = maps:get(meta, Meta, #{}),
@@ -539,7 +541,7 @@ handle_info(Msg, State) ->
 -spec code_change(term(), state(), term()) ->
     {ok, state()}.
 
-code_change(OldVsn, #?STATE{srv_id=SrvId}=State, Extra) ->
+code_change(OldVsn, #?STATE{callback_srv_id=SrvId}=State, Extra) ->
     apply(SrvId, object_code_change, [OldVsn, State, Extra]).
 
 
@@ -572,14 +574,12 @@ do_sync_op(get_obj_name, _From, State) ->
 do_sync_op(get_obj, _From, State) ->
     #?STATE{
         module = Module,
-        status = Status,
         started = Started,
         is_enabled = Enabled,
         obj = Obj
     } = State,
     Obj2 = Obj#{
         '_module' => Module,
-        '_status' => Status,
         '_started' => Started,
         '_is_enabled' => Enabled
     },
@@ -886,7 +886,7 @@ do_stop(Reason, State) ->
 
 
 %% @private
-do_stop2(Reason, #?STATE{srv_id=SrvId, stop_reason=false, object_info=Info}=State) ->
+do_stop2(Reason, #?STATE{callback_srv_id=SrvId, stop_reason=false, object_info=Info}=State) ->
     {ok, State2} = handle(object_stop, [Reason], State#?STATE{stop_reason=Reason}),
     {Code, Txt} = nkservice_util:error(SrvId, Reason),
     State3 = do_event({stopped, Code, Txt}, State2),
@@ -1083,7 +1083,7 @@ noreply(#?STATE{}=State) ->
 
 %% @private
 %% Will call the service's functions
-handle(Fun, Args, #?STATE{srv_id=SrvId}=State) ->
+handle(Fun, Args, #?STATE{callback_srv_id=SrvId}=State) ->
     apply(SrvId, Fun, Args++[State]).
 
 

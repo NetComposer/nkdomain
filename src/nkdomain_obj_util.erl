@@ -22,7 +22,7 @@
 %% @doc Basic Obj utilities
 -module(nkdomain_obj_util).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
--export([event/2, status/2, search_syntax/1, get_obj_info/1, get_obj_name/1]).
+-export([event/2, search_syntax/1, get_obj_info/1, get_obj_name/1]).
 -export([send_event/1, send_event/3, send_event/4, send_event/5]).
 -export([call_type/3]).
 -export([link_to_session_server/2, unlink_from_session_server/2]).
@@ -43,7 +43,7 @@
 %% Calls SrvId:object_event() and SrvId:object_reg_event(), that
 %% normally call send_event/N here
 
-event(Event, #?STATE{srv_id=SrvId, event_links=Links}=State) ->
+event(Event, #?STATE{callback_srv_id=SrvId, event_links=Links}=State) ->
     Fun = fun(Link, Data, Acc) ->
         {ok, Acc2} = apply(SrvId, object_reg_event, [Link, Data, Event, Acc]),
         Acc2
@@ -110,7 +110,7 @@ send_event(EvType, ObjId, ObjPath, Body, #?STATE{id=#obj_id_ext{srv_id=SrvId, ty
 
 %% @private
 send_session_event(#nkevent{type=Type}=Event, State) ->
-    #?STATE{srv_id=SrvId, session_events=Events, session_link=Link} = State,
+    #?STATE{callback_srv_id=SrvId, session_events=Events, session_link=Link} = State,
     case lists:member(Type, Events) of
         true ->
             lager:notice("NKLOG ESS ~p ~p", [Type, Link]),
@@ -119,15 +119,6 @@ send_session_event(#nkevent{type=Type}=Event, State) ->
         false ->
             ok
     end.
-
-
-%% @doc
-status(Status, #?STATE{status=Status}=State) ->
-    State;
-
-status(Status, State) ->
-    State2 = State#?STATE{status=Status},
-    event({status, Status}, State2).
 
 
 %% @doc
