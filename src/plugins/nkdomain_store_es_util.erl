@@ -22,8 +22,8 @@
 -module(nkdomain_store_es_util).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([get_opts/0, get_index_opts/0, db_init/2, normalize/1, normalize_multi/1]).
--export([reload_index/1, delete_index/0]).
+-export([get_opts/0, get_index_opts/0, reload_index/0, clean/0, delete_index/0]).
+-export([db_init/2, normalize/1, normalize_multi/1]).
 
 -define(LLOG(Type, Txt, Args),
     lager:Type("NkDOMAIN Store ES "++Txt, Args)).
@@ -50,10 +50,35 @@ get_opts() ->
 get_index_opts() ->
     case ?CALL_NKROOT(config_nkdomain_nkroot, []) of
         #nkdomain_config_cache{db_store={elastic, IndexOpts, EsOpts}} ->
-            {ok, IndexOpts, EsOpts};
+            IndexOpts2 = IndexOpts#{
+                'mapper.dynamic' => false
+            },
+            {ok, IndexOpts2, EsOpts};
         _ ->
             not_found
     end.
+
+
+reload_index() ->
+    {ok, _} = ?CALL_NKROOT(object_db_init, [#{id=>?NKROOT}]),
+    ok.
+
+
+clean() ->
+    ?CALL_NKROOT(object_db_clean, []).
+
+
+%% @doc CAUTION! CAUTION!
+delete_index() ->
+    {ok, EsOpts} = get_opts(),
+    nkelastic:delete_index(EsOpts).
+
+
+
+
+%% ===================================================================
+%% Internal
+%% ===================================================================
 
 
 %% @doc
@@ -198,17 +223,6 @@ norm_multi([], Chars, Words) ->
             lists:reverse([Word|Words])
     end.
 
-
-%% @doc
-reload_index(SrvId) ->
-    {ok, _} = SrvId:object_db_init(#{id=>SrvId}),
-    ok.
-
-
-%% @doc CAUTION!
-delete_index() ->
-    {ok, EsOpts} = nkdomain_store_es_util:get_opts(),
-    nkelastic:delete_index(EsOpts).
 
 
 
