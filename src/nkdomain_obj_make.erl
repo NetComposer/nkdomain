@@ -41,6 +41,8 @@
         domain_id => binary(),                          % Mandatory
         created_by => binary(),                         % Mandatory
         srv_id => atom(),                               % Will take domain's if not present
+        obj_id => binary(),                             % NOT TO BE USED by normal objects
+        obj_name => binary(),
         name => binary(),
         expires_time => nklib_util:m_timestamp(),
         parent_id => nkdomain:obj_id(),
@@ -50,8 +52,6 @@
         nkdomain:type() => map(),
 
         % Pseudo-field:
-        obj_id => binary(),
-        obj_name => binary(),
         ttl => integer()                                % secs
 }.
 

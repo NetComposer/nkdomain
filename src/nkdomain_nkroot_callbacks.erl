@@ -255,8 +255,10 @@ object_syntax(update) ->
     {Syntax, #{}};
 
 object_syntax(create) ->
+    % For creation of objects, no mandatory is checked, since the creation function
+    % will check all mandatory fields
     {Base, Opts} = object_syntax(load),
-    {Base#{obj_name => binary, '__mandatory':=[]}, Opts}.
+    {Base#{'__mandatory':=[]}, Opts}.
 
 
 %% @private
