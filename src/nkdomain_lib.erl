@@ -79,6 +79,7 @@ find_in_db(Id) ->
             {ok, _, ObjName} = nkdomain_util:get_parts(Type, Path),
             case catch binary_to_existing_atom(Srv, latin1) of
                 {'EXIT', _} ->
+                    lager:notice("NkDOMAIN: unknown service ~p", [Srv]),
                     {error, unknown_service};
                 SrvId ->
                     #obj_id_ext{srv_id=SrvId, type=Type, obj_id=ObjId, path=Path, obj_name=ObjName}
@@ -97,6 +98,7 @@ find_in_db(Id) ->
                     {ok, _, ObjName} = nkdomain_util:get_parts(Type, Path),
                     case catch binary_to_existing_atom(Srv, latin1) of
                         {'EXIT', _} ->
+                            lager:notice("NkDOMAIN: unknown service2 ~p", [Srv]),
                             {error, unknown_service};
                         SrvId ->
                             Alias = #obj_id_ext{srv_id=SrvId, type=Type, obj_id=ObjId, path=Path, obj_name=ObjName},

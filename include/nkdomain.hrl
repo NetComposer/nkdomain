@@ -92,6 +92,7 @@
 -define(DOMAIN_TASK, <<"task">>).
 -define(DOMAIN_ALERT, <<"alert">>).
 -define(DOMAIN_DEVICE, <<"device">>).
+-define(DOMAIN_NODE, <<"node">>).
 
 
 
