@@ -126,10 +126,10 @@ find_obj(Id, EsOpts) ->
         {ok, 0, []} ->
             {error, object_not_found};
         {ok, 1, [{Srv, Type, ObjId, ObjPath}]} ->
-            {ok, Srv, Type, ObjId, ObjPath};
+            {ok, nkdomain_store_es_util:stored_srv(Srv), Type, ObjId, ObjPath};
         {ok, _, [{Srv, Type, ObjId, ObjPath}|_]} ->
             ?LLOG(warning, "Multiple objects for path ~s", [ObjPath]),
-            {ok, Srv, Type, ObjId, ObjPath}
+            {ok, nkdomain_store_es_util:stored_srv(Srv), Type, ObjId, ObjPath}
     end.
 
 
@@ -383,7 +383,7 @@ do_search_objs(Spec, EsOpts) ->
         {ok, N, Data, _Aggs, _Meta} ->
             Data2 = lists:map(
                 fun(#{<<"obj_id">>:=ObjId, <<"srv_id">>:=SrvId, <<"type">>:=Type, <<"path">>:=Path}) ->
-                    {SrvId, Type, ObjId, Path}
+                    {nkdomain_store_es_util:stored_srv(SrvId), Type, ObjId, Path}
                 end,
                 Data),
             {ok, N, Data2};

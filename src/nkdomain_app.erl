@@ -23,7 +23,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -behaviour(application).
 
--export([start/0, start/1, start/2, stop/1]).
+-export([start/0, start/1, start/2, stop/1, maybe_start_nkroot/0]).
 -export([get/1, put/2, del/1]).
 -export([register_types/0]).
 
@@ -60,6 +60,7 @@ start(Type) ->
 
 
 %% @private OTP standard start callback
+%% Last application must call maybe_start_nkroot
 start(_Type, _Args) ->
     Syntax = nkdomain_nkroot:syntax(),
     case nklib_config:load_env(?APP, Syntax) of
@@ -70,24 +71,6 @@ start(_Type, _Args) ->
             nkdomain_i18n:reload(),
             register_types(),
             ok = nkchat_app:register_types(),   %% TODO HACK
-            case get(start_nkroot) of
-                true ->
-                    spawn_link(
-                        fun() ->
-                            timer:sleep(5000),
-                            case nkdomain_nkroot:start() of
-                                {ok, _} ->
-                                    lager:info("NkDOMAIN root started"),
-                                    %% TODO HACK to start C4 provisionally
-                                    ok = sipstorm_c4_util:start();
-                                {error, Error} ->
-                                    lager:error("NkDOMAN root could not start: ~p", [Error]),
-                                    error(service_start_error)
-                            end
-                        end);
-                false ->
-                    lager:warning("NkDOMAIN root domain not started")
-            end,
             {ok, Pid};
         {error, Error} ->
             lager:error("Error parsing config: ~p", [Error]),
@@ -101,6 +84,22 @@ stop(_) ->
     ok.
 
 
+%% @doc
+maybe_start_nkroot() ->
+    case get(start_nkroot) of
+        true ->
+            case nkdomain_nkroot:start() of
+                {ok, _} ->
+                    lager:info("NkDOMAIN root started");
+                {error, Error} ->
+                    lager:error("NkDOMAN root could not start: ~p", [Error]),
+                    error(service_start_error)
+            end;
+        false ->
+            lager:warning("NkDOMAIN root domain not started")
+    end.
+
+
 %% @doc Register our types
 register_types() ->
     ok = nkdomain_all_types:register(nkdomain_domain_obj),
@@ -112,6 +111,7 @@ register_types() ->
     ok = nkdomain_all_types:register(nkdomain_task_obj),
     ok = nkdomain_all_types:register(nkdomain_alert_obj),
     ok = nkdomain_all_types:register(nkdomain_device_obj),
+    ok = nkdomain_all_types:register(nkdomain_node_obj),
 
     ok = nkdomain_all_types:register(nkdomain_mail_obj),
     ok = nkdomain_all_types:register(nkdomain_mail_provider_obj),

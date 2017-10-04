@@ -23,7 +23,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([get_opts/0, get_index_opts/0, reload_index/0, clean/0, delete_index/0]).
--export([db_init/2, normalize/1, normalize_multi/1]).
+-export([db_init/2, normalize/1, normalize_multi/1, stored_srv/1]).
 
 -define(LLOG(Type, Txt, Args),
     lager:Type("NkDOMAIN Store ES "++Txt, Args)).
@@ -224,6 +224,9 @@ norm_multi([], Chars, Words) ->
     end.
 
 
+%% @doc
+stored_srv(<<>>) -> atom_to_binary(?NKROOT, latin1);
+stored_srv(Srv) -> Srv.
 
 
 %% ===================================================================

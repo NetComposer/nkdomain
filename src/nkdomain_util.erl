@@ -186,7 +186,7 @@ type(Class) ->
 
 %% @private
 name(Name) ->
-    nklib_parse:normalize(Name, #{space=>$_, allowed=>[$-, $., $_]}).
+    nklib_parse:normalize(Name, #{space=>$_, allowed=>[$+, $-, $., $_]}).
 
 
 %% @private

@@ -166,6 +166,7 @@ init(State) ->
         {ok, State2} ->
             ok = load_file_stores(),
             ok = load_mail_providers(),
+            nkdomain_node:nkroot_started(),
             {ok, State2};
         {error, Error} ->
             lager:error("NkDOMAIN: could not start db store: ~p", [Error]),

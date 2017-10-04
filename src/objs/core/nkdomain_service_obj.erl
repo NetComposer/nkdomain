@@ -26,7 +26,8 @@
 
 -include("nkdomain.hrl").
 
--export([object_info/0, object_admin_info/0, object_api_syntax/2, object_api_cmd/2, object_send_event/2]).
+-export([object_info/0, object_admin_info/0, object_es_mapping/0, object_parse/2]).
+-export([object_api_syntax/2, object_api_cmd/2, object_send_event/2]).
 -export_type([events/0]).
 
 -define(LLOG(Type, Txt, Args),
@@ -65,6 +66,23 @@ object_admin_info() ->
     #{
         class => service,
         weight => 100
+    }.
+
+
+%% @private
+object_es_mapping() ->
+    #{
+        vsn => #{type => keyword},
+        spec => #{enabled => false}
+    }.
+
+
+%% @private
+object_parse(_Mode, _Obj) ->
+    #{
+        vsn => binary,
+        spec => map,
+        '__defaults' => #{vsn => 1, spec => #{}}
     }.
 
 
