@@ -91,6 +91,7 @@
 -define(DOMAIN_SERVICE, <<"service">>).
 -define(DOMAIN_TASK, <<"task">>).
 -define(DOMAIN_ALERT, <<"alert">>).
+-define(DOMAIN_DEVICE, <<"device">>).
 
 
 

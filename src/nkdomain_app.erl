@@ -111,6 +111,7 @@ register_types() ->
     ok = nkdomain_all_types:register(nkdomain_service_obj),
     ok = nkdomain_all_types:register(nkdomain_task_obj),
     ok = nkdomain_all_types:register(nkdomain_alert_obj),
+    ok = nkdomain_all_types:register(nkdomain_device_obj),
 
     ok = nkdomain_all_types:register(nkdomain_mail_obj),
     ok = nkdomain_all_types:register(nkdomain_mail_provider_obj),
