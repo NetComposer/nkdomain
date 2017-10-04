@@ -88,6 +88,12 @@
 -define(DOMAIN_SESSION, <<"session">>).
 -define(DOMAIN_TOKEN, <<"token">>).
 -define(DOMAIN_CONFIG, <<"config">>).
+-define(DOMAIN_SERVICE, <<"service">>).
+-define(DOMAIN_TASK, <<"task">>).
+-define(DOMAIN_ALERT, <<"alert">>).
+
+
+
 
 -define(DOMAIN_MAIL, <<"mail">>).
 -define(DOMAIN_MAIL_PROVIDER, <<"mail.provider">>).
