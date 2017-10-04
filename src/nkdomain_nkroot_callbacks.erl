@@ -62,7 +62,7 @@
 -type path() :: nkdomain:path().
 %-type srv_id() :: nkservice:id().
 -type continue() :: continue | {continue, list()}.
--type state() :: #?STATE{}.
+-type state() :: #obj_state{}.
 
 
 %% ===================================================================
@@ -524,7 +524,7 @@ object_async_op(Op, State) ->
 
 object_save(State) ->
     case call_module(object_save, [], State) of
-        {ok, #?STATE{obj=Obj2}=State2} ->
+        {ok, #obj_state{obj=Obj2}=State2} ->
             Obj3 = Obj2#{<<"vsn">> => <<"1">>},
             case ?CALL_NKROOT(object_db_save, [Obj3]) of
                 {ok, Meta} ->
@@ -541,7 +541,7 @@ object_save(State) ->
 -spec object_delete(state()) ->
     {ok, state(), Meta::map()} | {error, term(), state()}.
 
-object_delete(#?STATE{id=#obj_id_ext{obj_id=ObjId}}=State) ->
+object_delete(#obj_state{id=#obj_id_ext{obj_id=ObjId}}=State) ->
     case call_module(object_delete, [], State) of
         {ok, State2} ->
             case ?CALL_NKROOT(object_db_delete, [ObjId]) of
@@ -973,7 +973,7 @@ service_handle_info(_Msg, _State) ->
 
 
 %% @private
-call_module(Fun, Args, #?STATE{module=Module}=State) ->
+call_module(Fun, Args, #obj_state{module=Module}=State) ->
     case erlang:function_exported(Module, Fun, length(Args)+1) of
         true ->
             case apply(Module, Fun, Args++[State]) of

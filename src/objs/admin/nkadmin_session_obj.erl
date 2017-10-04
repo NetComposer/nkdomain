@@ -175,7 +175,7 @@ object_send_event(Event, State) ->
 
 
 %% @private
-object_init(#?STATE{callback_srv_id=SrvId, domain_id=DomainId, id=Id, obj=Obj, meta=Meta}=State) ->
+object_init(#obj_state{callback_srv_id=SrvId, domain_id=DomainId, id=Id, obj=Obj, meta=Meta}=State) ->
     #obj_id_ext{obj_id=SessId} = Id,
     #{created_by:=UserId} = Obj,
     Session = #admin_session{
@@ -188,7 +188,7 @@ object_init(#?STATE{callback_srv_id=SrvId, domain_id=DomainId, id=Id, obj=Obj, m
     },
     ok = nkdomain_user_obj:register_session(UserId, DomainId, ?DOMAIN_ADMIN_SESSION, SessId, #{}),
     State2 = nkdomain_obj_util:link_to_session_server(?MODULE, State),
-    State3 = State2#?STATE{meta=#{}, session=Session},
+    State3 = State2#obj_state{meta=#{}, session=Session},
     {ok, State3}.
 
 
@@ -199,7 +199,7 @@ object_init(#?STATE{callback_srv_id=SrvId, domain_id=DomainId, id=Id, obj=Obj, m
 %%    {ok, nkdomain_obj_util:unlink_from_session_server(?MODULE, State)}.
 
 %% @private
-object_stop(_Reason, #?STATE{session_link={Mod, Pid}}=State) ->
+object_stop(_Reason, #obj_state{session_link={Mod, Pid}}=State) ->
     % When the session stops, we stop the WS
     Mod:stop_session(Pid, nkdomain_session_stop),
     {ok, State}.
@@ -220,7 +220,7 @@ object_sync_op({?MODULE, switch_domain, Domain, Url}, _From, State) ->
     end;
 
 object_sync_op({?MODULE, element_action, <<"url">>, updated, Url}, _From, State) ->
-    #?STATE{session=Session} = State,
+    #obj_state{session=Session} = State,
     case find_url(Url, Session) of
         {ok, Parts} ->
             case do_element_action(Parts, selected, #{update_url=>false}, State) of
@@ -234,7 +234,7 @@ object_sync_op({?MODULE, element_action, <<"url">>, updated, Url}, _From, State)
     end;
 
 object_sync_op({?MODULE, element_action, <<"breadcrumbs">>, selected, Url}, _From, State) ->
-    #?STATE{session=Session} = State,
+    #obj_state{session=Session} = State,
     case find_url(Url, Session) of
         {ok, Parts} ->
             case do_element_action(Parts, selected, #{update_url=>true}, State) of
@@ -282,14 +282,14 @@ object_handle_info({nkevent, #nkevent{type=Type}=Event}, State) ->
             {noreply, State}
     end;
 
-object_handle_info({'DOWN', _Ref, process, Pid, _Reason}, #?STATE{session=Session}=State) ->
+object_handle_info({'DOWN', _Ref, process, Pid, _Reason}, #obj_state{session=Session}=State) ->
     #admin_session{reg_pids=RegPids} = Session,
     case maps:find(Pid, RegPids) of
         {ok, [domain]} ->
             RegPids2 = maps:remove(Pid, RegPids),
             Session2 = Session#admin_session{reg_pids=RegPids2},
             Session3 = subscribe_domain(<<>>, Session2),
-            {noreply, State#?STATE{session=Session3}};
+            {noreply, State#obj_state{session=Session3}};
         error ->
             continue
     end;
@@ -303,7 +303,7 @@ object_handle_info(_Info, _State) ->
 %% ===================================================================
 
 %% @private
-do_switch_domain(DomainId, Path, Url, #?STATE{session=Session}=State) ->
+do_switch_domain(DomainId, Path, Url, #obj_state{session=Session}=State) ->
     case nkdomain_domain_obj:search_all_types(DomainId, #{}) of
         {ok, _, TypeList, _Meta} ->
             Url2 = case Url of
@@ -327,11 +327,11 @@ do_switch_domain(DomainId, Path, Url, #?STATE{session=Session}=State) ->
                 {ok, Updates, #admin_session{}=Session3} ->
                     #admin_session{domain_path=OldPath} = Session,
                     Session4 = subscribe_domain(OldPath, Session3),
-                    State4 = State#?STATE{session=Session4},
+                    State4 = State#obj_state{session=Session4},
                     % io:format("UPDATES:\n\n~p\n", [Updates]),
                     {ok, #{elements=>lists:reverse(Updates)}, State4};
                 {error, Error, #admin_session{}=Session3} ->
-                    State3 = State#?STATE{session=Session3},
+                    State3 = State#obj_state{session=Session3},
                     {error, Error, State3}
             end;
         {error, Error} ->
@@ -385,9 +385,9 @@ do_get_domain_detail(Updates, Session, State) ->
 
 
 %% @private Event from subscribed object
-do_event(Event, #?STATE{session=Session}=State) ->
+do_event(Event, #obj_state{session=Session}=State) ->
     {ok, UpdList, Session2} = handle(admin_event, [Event, []], Session),
-    State2 = State#?STATE{session=Session2},
+    State2 = State#obj_state{session=Session2},
     case UpdList of
         [] ->
             State2;
@@ -405,7 +405,7 @@ send_event(Event, State) ->
 do_element_action(Parts, Action, Value, State) ->
     case do_element_action_updates(Parts, Action, Value, State) of
         {ok, UpdList, Session2} ->
-            State2 = State#?STATE{session=Session2},
+            State2 = State#obj_state{session=Session2},
             case UpdList of
                 [] ->
                     {ok, #{}, State2};
@@ -413,26 +413,26 @@ do_element_action(Parts, Action, Value, State) ->
                     {ok, #{elements=>UpdList}, State2}
             end;
         {error, Error, Session2} ->
-            {error, Error, State#?STATE{session=Session2}}
+            {error, Error, State#obj_state{session=Session2}}
     end.
 
 
 %% @private
 do_element_action_updates(Parts, Action, Value, State) ->
-    #?STATE{session=Session} = State,
+    #obj_state{session=Session} = State,
     handle(admin_element_action, [Parts, Action, Value, []], Session).
 
 
 
 %% @private
 do_get_data(Parts, Spec, State) ->
-    #?STATE{session=Session} = State,
+    #obj_state{session=Session} = State,
     case handle(admin_get_data, [Parts, Spec], Session) of
         {ok, Reply, Session2} ->
-            State2 = State#?STATE{session=Session2},
+            State2 = State#obj_state{session=Session2},
             {ok, Reply, State2};
         {error, Error, Session2} ->
-            State2 = State#?STATE{session=Session2},
+            State2 = State#obj_state{session=Session2},
             {error, Error, State2}
     end.
 

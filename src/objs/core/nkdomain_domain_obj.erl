@@ -221,7 +221,7 @@ object_api_cmd(Cmd, Req) ->
 
 
 %% @private
-object_init(#?STATE{id=ObjIdExt}=State) ->
+object_init(#obj_state{id=ObjIdExt}=State) ->
     Ref = nkdomain_proc:monitor(),
     case ObjIdExt of
         #obj_id_ext{obj_id = <<"root">>} ->
@@ -229,7 +229,7 @@ object_init(#?STATE{id=ObjIdExt}=State) ->
         _ ->
             ok
     end,
-    State2 = State#?STATE{session=#session{master_mon=Ref}},
+    State2 = State#obj_state{session=#session{master_mon=Ref}},
     case register_service(State2) of
         {ok, State3} ->
             {ok, State3};
@@ -239,7 +239,7 @@ object_init(#?STATE{id=ObjIdExt}=State) ->
 
 
 %% @private
-object_sync_op({nkdomain_reg_obj, ObjIdExt}, _From, #?STATE{id=Id} = State) ->
+object_sync_op({nkdomain_reg_obj, ObjIdExt}, _From, #obj_state{id=Id} = State) ->
     #obj_id_ext{path=DomainPath} = Id,
     #obj_id_ext{obj_id=ObjId, type=Type, path=Path, pid=Pid, obj_name=ObjName} = ObjIdExt,
     case nkdomain_util:get_parts(Type, Path) of
@@ -250,7 +250,7 @@ object_sync_op({nkdomain_reg_obj, ObjIdExt}, _From, #?STATE{id=Id} = State) ->
                     State2 = do_rm_obj(ObjId, State),
                     State3 = do_add_obj(ObjIdExt, State2),
                     State4 = do_event({obj_loaded, Type, ObjId, ObjName, Pid}, State3),
-                    #?STATE{is_enabled=Enabled} = State,
+                    #obj_state{is_enabled=Enabled} = State,
                     {reply, {ok, Enabled, self()}, State4};
                 {error, Error} ->
                     {reply, {error, Error}, State}
@@ -260,7 +260,7 @@ object_sync_op({nkdomain_reg_obj, ObjIdExt}, _From, #?STATE{id=Id} = State) ->
     end;
 
 object_sync_op({?MODULE, find_path, <<>>, ?DOMAIN_DOMAIN, <<>>}, _From,
-                #?STATE{id=#obj_id_ext{obj_id = <<"root">>, type = ?DOMAIN_DOMAIN}}=State) ->
+                #obj_state{id=#obj_id_ext{obj_id = <<"root">>, type = ?DOMAIN_DOMAIN}}=State) ->
     {reply, {ok, ?DOMAIN_DOMAIN, <<"root">>, self()}, State};
 
 object_sync_op({?MODULE, find_path, Base, Type, ObjName}, From, State) ->
@@ -275,7 +275,7 @@ object_sync_op({?MODULE, find_path, Base, Type, ObjName}, From, State) ->
     end;
 
 object_sync_op({?MODULE, unload_childs}, _From, State) ->
-    #?STATE{id=#obj_id_ext{path=Path}, session=#session{obj_ids=Objs}} = State,
+    #obj_state{id=#obj_id_ext{path=Path}, session=#session{obj_ids=Objs}} = State,
     ?LLOG(notice, "unloading childs at ~s", [Path], State),
     lists:foreach(
         fun({_ObjId, #obj_id_ext{type=Type, path=ObjPath, pid=Pid}}) ->
@@ -293,7 +293,7 @@ object_sync_op({?MODULE, unload_childs}, _From, State) ->
     {reply, ok, State};
 
 object_sync_op({?MODULE, get_childs_type, Type}, _From, State) ->
-    #?STATE{session=#session{obj_types=ObjTypes}} = State,
+    #obj_state{session=#session{obj_types=ObjTypes}} = State,
     ObjNames = maps:get(Type, ObjTypes, #{}),
     {reply, maps:values(ObjNames), State};
 
@@ -322,13 +322,13 @@ object_async_op({?MODULE, find_path, Base, Type, ObjName, From}, State) ->
     {noreply, State};
 
 object_async_op({?MODULE, child_counter, ChildDomain, Type, Counter}, State) ->
-    #?STATE{session=Session} = State,
+    #obj_state{session=Session} = State,
     #session{counters=Counters} = Session,
     TypeCounters1 = maps:get(Type, Counters, #{}),
     TypeCounters2 = TypeCounters1#{ChildDomain => Counter},
     Counters2 = Counters#{Type => TypeCounters2},
     Session2 = Session#session{counters=Counters2},
-    State2 = State#?STATE{session=Session2},
+    State2 = State#obj_state{session=Session2},
     State3 = send_counter(Type, State2),
     {noreply, State3};
 
@@ -344,7 +344,7 @@ object_enabled(Enabled, State) ->
 
 %% @private
 object_link_down({usage, {?MODULE, obj, ObjId, Type, _Pid}}, State) ->
-    #?STATE{session=#session{counters=Counters}=Session} = State,
+    #obj_state{session=#session{counters=Counters}=Session} = State,
     State2 = do_rm_obj(ObjId, State),
     State3 = case Type of
         ?DOMAIN_DOMAIN ->
@@ -352,7 +352,7 @@ object_link_down({usage, {?MODULE, obj, ObjId, Type, _Pid}}, State) ->
             TypeCounters2 = maps:remove(ObjId, TypeCounters1),
             Counters2 = Counters#{Type => TypeCounters2},
             Session2 = Session#session{counters=Counters2},
-            State2P = State2#?STATE{session=Session2},
+            State2P = State2#obj_state{session=Session2},
             send_counter(Type, State2P);
         _ ->
             State2
@@ -364,16 +364,16 @@ object_link_down(_Link, State) ->
 
 
 %% @private
-object_handle_info({'DOWN', _Ref, process, Pid, _Reason}, #?STATE{session=#session{service_pid=Pid}}=State) ->
+object_handle_info({'DOWN', _Ref, process, Pid, _Reason}, #obj_state{session=#session{service_pid=Pid}}=State) ->
     ?LLOG(warning, "service stopped", [], State),
     send_objs(nkdomain_service_stopped, State),
     nkdomain_obj:do_stop(service_down, State);
 
-object_handle_info({'DOWN', Ref, process, _Pid, _Reason}, #?STATE{session=#session{master_mon=Ref}}=State) ->
+object_handle_info({'DOWN', Ref, process, _Pid, _Reason}, #obj_state{session=#session{master_mon=Ref}}=State) ->
     ?LLOG(warning, "master stopped", [], State),
     Ref2 = nkdomain_proc:monitor(),
-    #?STATE{session=Session} = State,
-    State2 = State#?STATE{session=Session#session{master_mon=Ref2}},
+    #obj_state{session=Session} = State,
+    State2 = State#obj_state{session=Session#session{master_mon=Ref2}},
     #session{obj_ids=ObjIds} = Session,
     State3 = do_reg_all(maps:values(ObjIds), State2),
     {noreply, State3};
@@ -388,7 +388,7 @@ object_handle_info(_Info, _State) ->
 %% ===================================================================
 
 %% @private
-do_add_obj(ObjIdExt, #?STATE{session=Session}=State) ->
+do_add_obj(ObjIdExt, #obj_state{session=Session}=State) ->
     #obj_id_ext{obj_id=ObjId, obj_name=ObjName, type=Type, pid=Pid} = ObjIdExt,
     #session{obj_ids=ObjIds, obj_types=ObjTypes, counters=Counters} = Session,
     ObjIds2 = ObjIds#{ObjId => ObjIdExt},
@@ -405,13 +405,13 @@ do_add_obj(ObjIdExt, #?STATE{session=Session}=State) ->
             Counters#{Type => TypeCounters2}
     end,
     Session2 = Session#session{obj_ids=ObjIds2, obj_types=ObjTypes2, counters=Counters2},
-    State2 = State#?STATE{session=Session2},
+    State2 = State#obj_state{session=Session2},
     State3 = send_counter(Type, State2),
     nkdomain_obj:links_add(usage, {?MODULE, obj, ObjId, Type, Pid}, State3).
 
 
 %% @private
-do_rm_obj(ObjId, #?STATE{session=Session}=State) ->
+do_rm_obj(ObjId, #obj_state{session=Session}=State) ->
     #session{obj_ids=ObjIds, obj_types=ObjTypes, counters=Counters} = Session,
     case maps:find(ObjId, ObjIds) of
         {ok, #obj_id_ext{type=Type, obj_name=ObjName, pid=Pid}} ->
@@ -429,7 +429,7 @@ do_rm_obj(ObjId, #?STATE{session=Session}=State) ->
             TypeCounters2 = TypeCounters1#{<<>> => OldCounter-1},
             Counters2 = Counters#{Type => TypeCounters2},
             Session2 = Session#session{obj_ids=ObjIds2, obj_types=ObjTypes2, counters=Counters2},
-            State2 = State#?STATE{session=Session2},
+            State2 = State#obj_state{session=Session2},
             State3 = do_event({obj_unloaded, Type, ObjId}, State2),
             State4 = send_counter(Type, State3),
             nkdomain_obj:links_remove(usage, {?MODULE, obj, ObjId, Type, Pid}, State4);
@@ -439,19 +439,19 @@ do_rm_obj(ObjId, #?STATE{session=Session}=State) ->
 
 
 %% @private
-register_service(#?STATE{callback_srv_id=SrvId, session=Session}=State) ->
+register_service(#obj_state{callback_srv_id=SrvId, session=Session}=State) ->
     case whereis(SrvId) of
         Pid when is_pid(Pid) ->
             monitor(process, Pid),
             Session2 = Session#session{service_pid=Pid},
-            {ok, State#?STATE{session=Session2}};
+            {ok, State#obj_state{session=Session2}};
         _ ->
             error
     end.
 
 
 %% @doc
-find_obj(Base, Type, ObjName, #?STATE{id=Id, session=Session}=State) ->
+find_obj(Base, Type, ObjName, #obj_state{id=Id, session=Session}=State) ->
     #obj_id_ext{path=DomainPath} = Id,
     #session{obj_ids=ObjIds, obj_types=ObjTypes} = Session,
     case Base of
@@ -485,7 +485,7 @@ find_obj(Base, Type, ObjName, #?STATE{id=Id, session=Session}=State) ->
 
 
 %% @private
-send_objs(Msg, #?STATE{session=#session{obj_ids=ObjIds}}=State) ->
+send_objs(Msg, #obj_state{session=#session{obj_ids=ObjIds}}=State) ->
     lists:foreach(
         fun(#obj_id_ext{path=Path, pid=Pid}) ->
             ?LLOG(notice, "sending ~p to obj ~s", [Msg, Path], State),
@@ -534,21 +534,21 @@ send_counter(Type, State) ->
 
 
 %% @private
-do_get_all_counters(#?STATE{session=#session{counters=Counters}}=State) ->
+do_get_all_counters(#obj_state{session=#session{counters=Counters}}=State) ->
     [{Type, get_type_counter(Type, State)} || Type <- maps:keys(Counters)].
 
 
 %% @private
-get_type_counter(Type, #?STATE{session=#session{counters=Counters}}) ->
+get_type_counter(Type, #obj_state{session=#session{counters=Counters}}) ->
     TypeCounters = maps:get(Type, Counters, #{}),
     lists:foldl(fun(Counter, Acc) -> Acc+Counter end, 0, maps:values(TypeCounters)).
 
 
 %% @private
-send_counter_parent(_Type, _Counter, #?STATE{id=#obj_id_ext{obj_id = <<"root">>}}) ->
+send_counter_parent(_Type, _Counter, #obj_state{id=#obj_id_ext{obj_id = <<"root">>}}) ->
     ok;
 
-send_counter_parent(Type, Counter, #?STATE{id=#obj_id_ext{obj_id=DomainId}, domain_pid=Pid}) when is_pid(Pid) ->
+send_counter_parent(Type, Counter, #obj_state{id=#obj_id_ext{obj_id=DomainId}, domain_pid=Pid}) when is_pid(Pid) ->
     nkdomain_obj:async_op(Pid, {?MODULE, child_counter, DomainId, Type, Counter});
 
 send_counter_parent(_Type, _Counter, _State) ->

@@ -32,14 +32,14 @@
 -define(LLOG(Type, Txt, Args, State),
     lager:Type(
         [
-            {obj_id, State#?STATE.id#obj_id_ext.obj_id},
-            {type, State#?STATE.id#obj_id_ext.type},
-            {path, State#?STATE.id#obj_id_ext.path}
+            {obj_id, State#obj_state.id#obj_id_ext.obj_id},
+            {type, State#obj_state.id#obj_id_ext.type},
+            {path, State#obj_state.id#obj_id_ext.path}
         ],
         "NkDOMAIN Obj ~s (~s) " ++ Txt,
         [
-            State#?STATE.id#obj_id_ext.path,
-            State#?STATE.id#obj_id_ext.obj_id | Args
+            State#obj_state.id#obj_id_ext.path,
+            State#obj_state.id#obj_id_ext.obj_id | Args
         ]
     )).
 

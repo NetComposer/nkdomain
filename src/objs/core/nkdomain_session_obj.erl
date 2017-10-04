@@ -129,7 +129,7 @@ object_parse(_Mode, _Obj) ->
 
 
 %% @private
-object_init(#?STATE{domain_id=DomainId, id=Id, obj=Obj}=State) ->
+object_init(#obj_state{domain_id=DomainId, id=Id, obj=Obj}=State) ->
     %% TODO Link again if moved process
     #obj_id_ext{obj_id=SessId} = Id,
     #{created_by:=UserId} = Obj,
@@ -139,7 +139,7 @@ object_init(#?STATE{domain_id=DomainId, id=Id, obj=Obj}=State) ->
 
 
 %% @private
-object_stop(_Reason, #?STATE{session_link={Mod, Pid}}=State) ->
+object_stop(_Reason, #obj_state{session_link={Mod, Pid}}=State) ->
     % When the session stops, we stop the WS
     Mod:stop_session(Pid, nkdomain_session_stop),
     {ok, State};

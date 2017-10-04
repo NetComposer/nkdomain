@@ -522,25 +522,25 @@ object_api_cmd(Cmd, Req) ->
 
 %% @private
 %% We initialize soon in case of early terminate
-object_init(#?STATE{obj=#{?DOMAIN_USER:=User}}=State) ->
+object_init(#obj_state{obj=#{?DOMAIN_USER:=User}}=State) ->
     Push = maps:get(push, User, []),
     PushDevices = do_load_push(Push, []),
     Status = maps:get(status, User, []),
     Statuses = do_load_status(Status, []),
     Session = #session{push_devices=PushDevices, statuses=Statuses},
-    {ok, State#?STATE{session=Session}}.
+    {ok, State#obj_state{session=Session}}.
 
 
 
 %% @private Prepare the object for saving
-object_save(#?STATE{obj=Obj, session=Session}=State) ->
+object_save(#obj_state{obj=Obj, session=Session}=State) ->
     #session{push_devices=Devices, statuses=Statuses} = Session,
     Push = do_save_push(Devices, []),
     Status = do_save_status(Statuses, []),
     #{?DOMAIN_USER:=User} = Obj,
     User2 = User#{push=>Push, status=>Status},
     Obj2 = ?ADD_TO_OBJ(?DOMAIN_USER, User2, Obj),
-    {ok, State#?STATE{obj = Obj2}}.
+    {ok, State#obj_state{obj = Obj2}}.
 
 
 %% @private
@@ -558,10 +558,10 @@ object_event(Event, State) ->
 
 
 % @private
-object_sync_op({?MODULE, check_pass, _Pass}, _From, #?STATE{is_enabled=false}=State) ->
+object_sync_op({?MODULE, check_pass, _Pass}, _From, #obj_state{is_enabled=false}=State) ->
     {reply, {error, object_is_disabled}, State};
 
-object_sync_op({?MODULE, check_pass, Pass}, _From, #?STATE{id=Id, obj=Obj}=State) ->
+object_sync_op({?MODULE, check_pass, Pass}, _From, #obj_state{id=Id, obj=Obj}=State) ->
     case Obj of
         #{domain_id:=DomainId, ?DOMAIN_USER:=#{password:=Pass}} ->
             #obj_id_ext{obj_id=ObjId} = Id,
@@ -570,7 +570,7 @@ object_sync_op({?MODULE, check_pass, Pass}, _From, #?STATE{id=Id, obj=Obj}=State
             {reply, {ok, false}, State}
     end;
 
-object_sync_op({?MODULE, get_name, Opts}, _From, #?STATE{obj=Obj}=State) ->
+object_sync_op({?MODULE, get_name, Opts}, _From, #obj_state{obj=Obj}=State) ->
     Base = nkdomain_obj_util:get_obj_name(State),
     #{name:=UserName, surname:=UserSurName} = User = maps:get(?DOMAIN_USER, Obj),
     Data = Base#{
@@ -636,14 +636,14 @@ object_sync_op({?MODULE, register_session, DomainPath, Type, SessId, Opts, Pid},
             {reply, ok, State2}
     end;
 
-object_sync_op({?MODULE, get_sessions}, _From, #?STATE{session=Session}=State) ->
+object_sync_op({?MODULE, get_sessions}, _From, #obj_state{session=Session}=State) ->
     #session{user_sessions=UserSessions} = Session,
     Reply = lists:map(
         fun(UserSession) -> export_session(UserSession) end,
         UserSessions),
     {reply, {ok, Reply}, State};
 
-object_sync_op({?MODULE, get_sessions, Type}, _From, #?STATE{session=Session}=State) ->
+object_sync_op({?MODULE, get_sessions, Type}, _From, #obj_state{session=Session}=State) ->
     #session{user_sessions=UserSessions1} = Session,
     UserSessions2 = [US || #user_session{type=T}=US <- UserSessions1, T==Type],
     Reply = lists:map(
@@ -652,7 +652,7 @@ object_sync_op({?MODULE, get_sessions, Type}, _From, #?STATE{session=Session}=St
     {reply, {ok, Reply}, State};
 
 object_sync_op({?MODULE, add_notification_op, SessType, Opts, Base}, _From, State) ->
-    #?STATE{id=#obj_id_ext{srv_id=SrvId, obj_id=UserId}} = State,
+    #obj_state{id=#obj_id_ext{srv_id=SrvId, obj_id=UserId}} = State,
     UserData1 = maps:get(?DOMAIN_USER, Base, #{}),
     UserNot1 = #{
         <<"user_id">> => UserId,
@@ -702,7 +702,7 @@ object_async_op({?MODULE, update_presence, SessId, Presence}, State) ->
             {noreply, State}
     end;
 
-object_async_op({?MODULE, launch_session_notifications, SessId}, #?STATE{session=Session}=State) ->
+object_async_op({?MODULE, launch_session_notifications, SessId}, #obj_state{session=Session}=State) ->
     #session{user_sessions=UserSessions} = Session,
     State2 = case lists:keyfind(SessId, #user_session.id, UserSessions) of
         #user_session{} = UserSession ->
@@ -733,11 +733,11 @@ object_async_op({?MODULE, loaded_token, TokenId, Pid}, State) ->
                                 session_type = SessType,
                                 data = Data
                             },
-                            #?STATE{session=Session1} = State,
+                            #obj_state{session=Session1} = State,
                             #session{notify_tokens=Msgs} = Session1,
                             Session2 = Session1#session{notify_tokens=[Notify|Msgs]},
                             % Add usage so that the object is not unloaded
-                            State2 = State#?STATE{session=Session2},
+                            State2 = State#obj_state{session=Session2},
                             notify_token_sessions(Notify, created, State2),
                             {noreply, State2};
                         {error, _} ->
@@ -867,7 +867,7 @@ do_update_presence(DomainPath, Type, State) ->
 
 %% @private
 do_get_presence(DomainPath, Type, State) ->
-    #?STATE{id=Id, session=Session} = State,
+    #obj_state{id=Id, session=Session} = State,
     #obj_id_ext{obj_id=UserId} =Id,
     #session{user_sessions=UserSessions, user_session_presence=PresFuns} = Session,
     case maps:find(Type, PresFuns) of
@@ -884,7 +884,7 @@ do_get_presence(DomainPath, Type, State) ->
 
 
 %% @private
-find_session(SessId, #?STATE{session=Session}) ->
+find_session(SessId, #obj_state{session=Session}) ->
     #session{user_sessions=UserSessions} = Session,
     case lists:keyfind(SessId, #user_session.id, UserSessions) of
         #user_session{} = UserSession ->
@@ -911,20 +911,20 @@ add_session(DomainPath, Type, SessId, Opts, Pid, State) ->
 
 
 %% @private
-rm_session(SessId, #?STATE{session=Session}=State) ->
+rm_session(SessId, #obj_state{session=Session}=State) ->
     #session{user_sessions=UserSessions} = Session,
     case lists:keytake(SessId, #user_session.id, UserSessions) of
         {value, #user_session{pid=Pid}, UserSessions2} ->
             State2 = nkdomain_obj:links_remove(usage, {?MODULE, session, SessId, Pid}, State),
             Session2 = Session#session{user_sessions=UserSessions2},
-            State2#?STATE{session=Session2};
+            State2#obj_state{session=Session2};
         false ->
             State
     end.
 
 
 %% @private
-store_session(#user_session{id=SessId, type=Type}=UserSession, Opts, #?STATE{session=Session}=State) ->
+store_session(#user_session{id=SessId, type=Type}=UserSession, Opts, #obj_state{session=Session}=State) ->
     #session{
         user_sessions = UserSessions,
         user_session_notify = Notify,
@@ -948,7 +948,7 @@ store_session(#user_session{id=SessId, type=Type}=UserSession, Opts, #?STATE{ses
             user_session_notify = Notify2,
             user_session_presence = Presence2
     },
-    State#?STATE{session=Session2}.
+    State#obj_state{session=Session2}.
 
 
 %% @private
@@ -962,13 +962,13 @@ export_session(#user_session{id=Id, type=Type, opts=Opts, pid=Pid}) ->
 
 
 %% @doc
-do_remove_notification(TokenId, Reason, #?STATE{session=Session}=State) ->
+do_remove_notification(TokenId, Reason, #obj_state{session=Session}=State) ->
     #session{notify_tokens=Msgs1} = Session,
     case lists:keytake(TokenId, #notify_token.token_id, Msgs1) of
         {value, #notify_token{}=Notify, Msgs2} ->
             notify_token_sessions(Notify, {removed, Reason}, State),
             Session2 = Session#session{notify_tokens=Msgs2},
-            State#?STATE{session=Session2};
+            State#obj_state{session=Session2};
         false ->
             State
     end.
@@ -976,7 +976,7 @@ do_remove_notification(TokenId, Reason, #?STATE{session=Session}=State) ->
 
 %% @private
 notify_token_sessions(#notify_token{domain_path=DomainPath, session_type=Type, token_id=TokenId, data=Data}, Op, State) ->
-    #?STATE{session=#session{user_sessions=UserSessions, user_session_notify=NotFuns}} = State,
+    #obj_state{session=#session{user_sessions=UserSessions, user_session_notify=NotFuns}} = State,
     case maps:find(Type, NotFuns) of
         {ok, Fun} ->
             ?DEBUG("notify sessions ~s ~s", [DomainPath, Type], State),
@@ -1026,10 +1026,10 @@ notify_token_sessions(#notify_token{domain_path=DomainPath, session_type=Type, t
 
 %% @private
 do_launch_session_tokens(#user_session{domain_path=DomainPath, type=Type, pid=Pid}, State) ->
-    #?STATE{session=#session{user_session_notify=NotFuns}} = State,
+    #obj_state{session=#session{user_session_notify=NotFuns}} = State,
     case maps:find(Type, NotFuns) of
         {ok, Fun} ->
-            #?STATE{session=#session{notify_tokens=Msgs}} = State,
+            #obj_state{session=#session{notify_tokens=Msgs}} = State,
             lists:foreach(
                 fun(#notify_token{token_id=Id, data=Data, session_type=T, domain_path=D}) ->
                     case T==Type andalso D==DomainPath of
@@ -1093,7 +1093,7 @@ do_save_push([PushDevice|Rest], Acc) ->
 
 %% @private
 add_push(DomainPath, AppId, DeviceId, PushData, State) ->
-    #?STATE{session=Session} = State,
+    #obj_state{session=Session} = State,
     #session{push_devices=PushDevices1} = Session,
     Now =nkdomain_util:timestamp(),
     PushDevice = case lists:keyfind(DeviceId, #push_device.device_id, PushDevices1) of
@@ -1112,27 +1112,27 @@ add_push(DomainPath, AppId, DeviceId, PushData, State) ->
     end,
     PushDevices2 = lists:keystore(DeviceId, #push_device.device_id, PushDevices1, PushDevice),
     Session2 = Session#session{push_devices = PushDevices2},
-    State#?STATE{session=Session2, is_dirty=true}.
+    State#obj_state{session=Session2, is_dirty=true}.
 
 
 %% @private
 remove_push(DeviceId, State) ->
-    #?STATE{session=Session} = State,
+    #obj_state{session=Session} = State,
     #session{push_devices=PushDevices1} = Session,
     PushDevices2 = lists:keydelete(DeviceId, #push_device.device_id, PushDevices1),
     Session2 = Session#session{push_devices = PushDevices2},
-    State#?STATE{session=Session2, is_dirty=true}.
+    State#obj_state{session=Session2, is_dirty=true}.
 
 
 %% @private
 do_remove_push_devices(State) ->
-    #?STATE{session=Session} = State,
+    #obj_state{session=Session} = State,
     Session2 = Session#session{push_devices=[]},
-    State#?STATE{session=Session2, is_dirty=true}.
+    State#obj_state{session=Session2, is_dirty=true}.
 
 
 %% @doc
-do_send_push(AppId, Push, #?STATE{callback_srv_id=SrvId}=State) ->
+do_send_push(AppId, Push, #obj_state{callback_srv_id=SrvId}=State) ->
     Devices = find_push_devices(AppId, State),
     lists:foreach(
         fun(#push_device{device_id=DeviceId, push_data=PushDevice}) ->
@@ -1145,14 +1145,14 @@ do_send_push(AppId, Push, #?STATE{callback_srv_id=SrvId}=State) ->
 
 %% @private
 find_push_devices(AppId, State) ->
-    #?STATE{session=Session} = State,
+    #obj_state{session=Session} = State,
     #session{push_devices=Devices} = Session,
     [Device || #push_device{app_id=A}=Device <- Devices, A==AppId].
 
 
 %% @private
 do_get_status(DomainPath, AppId, State) ->
-    #?STATE{session=#session{statuses=Statuses}} = State,
+    #obj_state{session=#session{statuses=Statuses}} = State,
     case lists:keyfind(AppId, #status.app_id, Statuses) of
         #status{domain_path=DomainPath, user_status=UserStatus} ->
             {ok, UserStatus};
@@ -1205,7 +1205,7 @@ do_save_status([Status|Rest], Acc) ->
 
 
 %% @private
-do_set_status(DomainPath, AppId, UserStatus, #?STATE{session=Session}=State) ->
+do_set_status(DomainPath, AppId, UserStatus, #obj_state{session=Session}=State) ->
     #session{statuses=Statuses} = Session,
     Now = nkdomain_util:timestamp(),
     Status = #status{
@@ -1217,7 +1217,7 @@ do_set_status(DomainPath, AppId, UserStatus, #?STATE{session=Session}=State) ->
     Statuses2 = lists:keystore(AppId, #status.app_id, Statuses, Status),
     Session2 = Session#session{statuses=Statuses2},
     State2 = do_event({status_updated, DomainPath, AppId, UserStatus}, State),
-    State2#?STATE{session=Session2, is_dirty=true}.
+    State2#obj_state{session=Session2, is_dirty=true}.
 
 
 %% @private

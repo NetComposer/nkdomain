@@ -33,7 +33,7 @@
 
 -define(CALL_NKROOT(Fun, Args), apply(?NKROOT, Fun, Args)).
 
--define(STATE, obj_state).
+%-define(STATE, obj_state).
 
 -record(obj_id_ext, {
     srv_id :: nkservice:id(),

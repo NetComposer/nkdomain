@@ -158,7 +158,7 @@ object_send_event(_Event, State) ->
 
 %% @private
 object_sync_op({?MODULE, get_token_data}, _From, State) ->
-    #?STATE{domain_id=DomainId, obj=Obj} = State,
+    #obj_state{domain_id=DomainId, obj=Obj} = State,
     #{?DOMAIN_TOKEN:=#{data:=TokenData}} = Obj,
     Reply = #{
         domain_id => DomainId,
@@ -168,7 +168,7 @@ object_sync_op({?MODULE, get_token_data}, _From, State) ->
 
 %% @private
 object_sync_op({?MODULE, consume, Reason}, From, State) ->
-    #?STATE{domain_id=DomainId, obj=Obj} = State,
+    #obj_state{domain_id=DomainId, obj=Obj} = State,
     #{?DOMAIN_TOKEN:=#{data:=TokenData}} = Obj,
     Reply = #{
         domain_id => DomainId,

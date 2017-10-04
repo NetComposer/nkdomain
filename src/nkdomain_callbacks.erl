@@ -44,7 +44,7 @@
 %% ===================================================================
 
 -type continue() :: continue | {continue, list()}.
--type state() :: #?STATE{}.
+-type state() :: #obj_state{}.
 
 
 

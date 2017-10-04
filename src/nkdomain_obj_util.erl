@@ -43,7 +43,7 @@
 %% Calls SrvId:object_event() and SrvId:object_reg_event(), that
 %% normally call send_event/N here
 
-event(Event, #?STATE{callback_srv_id=SrvId, event_links=Links}=State) ->
+event(Event, #obj_state{callback_srv_id=SrvId, event_links=Links}=State) ->
     Fun = fun(Link, Data, Acc) ->
         {ok, Acc2} = apply(SrvId, object_reg_event, [Link, Data, Event, Acc]),
         Acc2
@@ -82,17 +82,17 @@ send_event({ignore, State3}) ->
 
 %% @doc Sends events inside an object process directly to the event server
 %% If the obj has session_events, they are sent directly to the session also
-send_event(EvType, Body, #?STATE{id=#obj_id_ext{obj_id=ObjId, path=Path}}=State) ->
+send_event(EvType, Body, #obj_state{id=#obj_id_ext{obj_id=ObjId, path=Path}}=State) ->
     send_event(EvType, ObjId, Path, Body, State).
 
 
 %% @private
-send_event(EvType, ObjId, Body, #?STATE{id=#obj_id_ext{path=Path}}=State) ->
+send_event(EvType, ObjId, Body, #obj_state{id=#obj_id_ext{path=Path}}=State) ->
     send_event(EvType, ObjId, Path, Body, State).
 
 
 %% @private
-send_event(EvType, ObjId, ObjPath, Body, #?STATE{id=#obj_id_ext{srv_id=SrvId, type=Type}}=State) ->
+send_event(EvType, ObjId, ObjPath, Body, #obj_state{id=#obj_id_ext{srv_id=SrvId, type=Type}}=State) ->
     Event = #nkevent{
         srv_id = SrvId,
         class = ?DOMAIN_EVENT_CLASS,
@@ -110,7 +110,7 @@ send_event(EvType, ObjId, ObjPath, Body, #?STATE{id=#obj_id_ext{srv_id=SrvId, ty
 
 %% @private
 send_session_event(#nkevent{type=Type}=Event, State) ->
-    #?STATE{callback_srv_id=SrvId, session_events=Events, session_link=Link} = State,
+    #obj_state{callback_srv_id=SrvId, session_events=Events, session_link=Link} = State,
     case lists:member(Type, Events) of
         true ->
             lager:notice("NKLOG ESS ~p ~p", [Type, Link]),
@@ -139,7 +139,7 @@ search_syntax(Base) ->
 
 
 %% @doc
-get_obj_info(#?STATE{id=#obj_id_ext{obj_id=ObjId, path=Path}, obj=Obj}) ->
+get_obj_info(#obj_state{id=#obj_id_ext{obj_id=ObjId, path=Path}, obj=Obj}) ->
     #{
         domain_id := DomainId,
         parent_id := ParentId,
@@ -181,7 +181,7 @@ get_obj_info(#?STATE{id=#obj_id_ext{obj_id=ObjId, path=Path}, obj=Obj}) ->
 
 
 %% @doc
-get_obj_name(#?STATE{id=#obj_id_ext{obj_id=ObjId, path=Path}, obj=Obj}) ->
+get_obj_name(#obj_state{id=#obj_id_ext{obj_id=ObjId, path=Path}, obj=Obj}) ->
     #{
         obj_name := ObjName
     } = Obj,
@@ -224,7 +224,7 @@ call_type(Type, Fun, Args) ->
 
 
 %% @doc
-link_to_session_server(Module, #?STATE{session_link={Mod, Pid}} = State) when is_atom(Mod), is_pid(Pid) ->
+link_to_session_server(Module, #obj_state{session_link={Mod, Pid}} = State) when is_atom(Mod), is_pid(Pid) ->
     % Stop the API Server if we fail abruptly
     ok = Mod:register(Pid, {nkdomain_stop, Module, self()}),
     % Monitor the API server, reduce usage count if it fails
@@ -232,7 +232,7 @@ link_to_session_server(Module, #?STATE{session_link={Mod, Pid}} = State) when is
 
 
 %% @doc
-unlink_from_session_server(Module, #?STATE{session_link={Mod, _Pid}} = State) when is_atom(Mod) ->
+unlink_from_session_server(Module, #obj_state{session_link={Mod, _Pid}} = State) when is_atom(Mod) ->
     nkdomain_obj:links_iter(
         usage,
         fun
@@ -247,13 +247,13 @@ unlink_from_session_server(Module, #?STATE{session_link={Mod, _Pid}} = State) wh
 
 
 %% @doc
-get_obj_session(#?STATE{session=Session}) ->
+get_obj_session(#obj_state{session=Session}) ->
     Session.
 
 
 %% @doc
 set_obj_session(Session, State) ->
-    State#?STATE{session=Session}.
+    State#obj_state{session=Session}.
 
 
 

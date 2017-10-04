@@ -43,10 +43,10 @@ event({session_started, Type, SessId}, State) ->
 event({session_stopped, Type, SessId}, State) ->
     {event, {session_stopped, #{session_type=>Type, session_id=>SessId}}, State};
 
-event({status_updated, DomainId, AppId, Status}, #?STATE{id=#obj_id_ext{obj_id=UserId}}=State) ->
+event({status_updated, DomainId, AppId, Status}, #obj_state{id=#obj_id_ext{obj_id=UserId}}=State) ->
     {event, {status_updated, UserId, DomainId, #{app_id=>AppId, status=>Status}}, State};
 
-event({presence_updated, DomainId, Type, Presence}, #?STATE{id=#obj_id_ext{obj_id=UserId}}=State) ->
+event({presence_updated, DomainId, Type, Presence}, #obj_state{id=#obj_id_ext{obj_id=UserId}}=State) ->
     {event, {presence_updated, UserId, DomainId, #{type=>Type, presence=>Presence}}, State};
 
 event(_Event, State) ->
