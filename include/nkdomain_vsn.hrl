@@ -25,11 +25,11 @@
 %% Defines
 %% ===================================================================
 
--define(HTTP, "http://127.0.0.1:9307/core/v07").
--define(WS, "ws://127.0.0.1:9307/core/v07/_api/ws").
+-define(HTTP, "http://127.0.0.1:9307/core/v08").
+-define(WS, "ws://127.0.0.1:9307/core/v08/_api/ws").
 
-%%-define(HTTP, "https://v1.netc.io/s/v07").
-%%-define(WS, "wss://v1.netc.io/s/v07/_api/ws").
+%%-define(HTTP, "https://v1.netc.io/s/v08").
+%%-define(WS, "wss://v1.netc.io/s/v08/_api/ws").
 
 
 -endif.
