@@ -61,13 +61,18 @@ make_objs([]) ->
 make_objs([#{path:=Path} = Obj|Rest]) ->
     case nkdomain_obj_make:create(Obj) of
         {error, object_already_exists} ->
-            lager:info("Object ~s not created (already exists)", [Path]),
+            case nkdomain:update(Path, Obj) of
+                {ok, _} ->
+                    lager:info("Object ~s updated", [Path]);
+                Other ->
+                    lager:warning("Object ~s NOT updated: ~p", [Path, Other])
+            end,
             make_objs(Rest);
         {error, Error} ->
-            lager:warning("Could not create ~s: ~p", [Path, Error]),
+            lager:warning("Object ~s NOT created ~s: ~p", [Path, Error]),
             error;
         {ok, _, _} ->
-            lager:notice("Created ~s", [Path]),
+            lager:notice("Object ~s created", [Path]),
             make_objs(Rest)
     end.
 
