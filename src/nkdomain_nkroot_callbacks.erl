@@ -354,6 +354,7 @@ object_update(#{type:=Type}=Obj) ->
     {ok, nkdomain:obj(), Unknown::[binary()]} | {error, term()}.
 
 object_parse(Mode, Map) ->
+
     Type = case Map of
         #{<<"type">>:=Type0} -> Type0;
         #{type:=Type0} -> Type0;
@@ -388,8 +389,7 @@ object_parse(Mode, Map) ->
                     {BaseSyn, Opts} = ?CALL_NKROOT(object_syntax, [Mode]),
                     nklib_syntax:parse(Map, BaseSyn#{Type=>Syntax2}, Opts);
                 any ->
-                    lager:error("NKLOG TYPE ~p", [Type]),
-                    error(any)
+                    erlang:error(any)
             end
     end.
 
