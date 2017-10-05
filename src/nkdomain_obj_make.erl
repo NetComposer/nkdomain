@@ -39,7 +39,7 @@
     #{
         type => nkdomain:type(),                        % Mandatory
         domain_id => binary(),                          % Mandatory
-        created_by => binary(),                         % Mandatory
+        created_by => binary(),                         % Will use admin if not defined
         srv_id => atom(),                               % Will take domain's if not present
         obj_id => binary(),                             % NOT TO BE USED by normal objects
         obj_name => binary(),
@@ -52,6 +52,7 @@
         nkdomain:type() => map(),
 
         % Pseudo-field:
+        path => binary(),                               % if provided, will take domain, type and obj_name
         ttl => integer()                                % secs
 }.
 
@@ -66,12 +67,21 @@
 -spec make(make_opts()) ->
     {ok, nkdomain:obj()} | {error, term()}.
 
+make(#{path:=Path}=Opts) ->
+    case nkdomain_util:get_parts(Path) of
+        {ok, Base, Type, Name} ->
+            Opts2 = maps:remove(path, Opts),
+            make(Opts2#{domain_id=>Base, type=>Type, obj_name=>Name});
+        {error, Error} ->
+            {error, Error}
+    end;
+
 make(Opts) ->
     #{
         type := Type,
-        domain_id := Domain,
-        created_by := User
+        domain_id := Domain
     } = Opts,
+    User = maps:get(created_by, Opts, <<"admin">>),
     Parent = maps:get(parent_id, Opts, Domain),
     try
         {DomainId, DomainPath, DomSrvId} = case nkdomain_lib:find(Domain) of

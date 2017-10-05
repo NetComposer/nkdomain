@@ -77,13 +77,8 @@ find_in_db(Id) ->
     case ?CALL_NKROOT(object_db_find_obj, [Id]) of
         {ok, Srv, Type, ObjId, Path} ->
             {ok, _, ObjName} = nkdomain_util:get_parts(Type, Path),
-            case catch binary_to_existing_atom(Srv, latin1) of
-                {'EXIT', _} ->
-                    lager:notice("NkDOMAIN: unknown service ~p", [Srv]),
-                    {error, unknown_service};
-                SrvId ->
-                    #obj_id_ext{srv_id=SrvId, type=Type, obj_id=ObjId, path=Path, obj_name=ObjName}
-            end;
+            SrvId = load_srv(Srv),
+            #obj_id_ext{srv_id=SrvId, type=Type, obj_id=ObjId, path=Path, obj_name=ObjName};
         {error, object_not_found} ->
             case ?CALL_NKROOT(object_db_search_alias, [Id]) of
                 {ok, 0, []} ->
@@ -96,14 +91,9 @@ find_in_db(Id) ->
                             ok
                     end,
                     {ok, _, ObjName} = nkdomain_util:get_parts(Type, Path),
-                    case catch binary_to_existing_atom(Srv, latin1) of
-                        {'EXIT', _} ->
-                            lager:notice("NkDOMAIN: unknown service2 ~p", [Srv]),
-                            {error, unknown_service};
-                        SrvId ->
-                            Alias = #obj_id_ext{srv_id=SrvId, type=Type, obj_id=ObjId, path=Path, obj_name=ObjName},
-                            {alias, Alias}
-                    end;
+                    SrvId = load_srv(Srv),
+                    Alias = #obj_id_ext{srv_id=SrvId, type=Type, obj_id=ObjId, path=Path, obj_name=ObjName},
+                    {alias, Alias};
                 {error, Error} ->
                     {error, Error}
             end;
@@ -135,6 +125,18 @@ load(Id) ->
         {error, Error} ->
             {error, Error}
     end.
+
+
+%% @private
+load_srv(Srv) ->
+    case catch binary_to_existing_atom(Srv, latin1) of
+        {'EXIT', _} ->
+            lager:warning("NkDOMAIN: loading object with unknown service ~p", [Srv]),
+            binary_to_atom(Srv, latin1);
+        SrvId ->
+            SrvId
+    end.
+
 
 
 %% @doc Creates a new object

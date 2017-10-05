@@ -58,16 +58,16 @@ register_startup_fun(Fun) ->
 make_objs([]) ->
     ok;
 
-make_objs([#{type:=Type, obj_name:=Name} = Obj|Rest]) ->
+make_objs([#{path:=Path} = Obj|Rest]) ->
     case nkdomain_obj_make:create(Obj) of
         {error, object_already_exists} ->
-            lager:info("Could not create ~s '~s': already exists", [Type, Name]),
+            lager:info("Object ~s not created (already exists)", [Path]),
             make_objs(Rest);
         {error, Error} ->
-            lager:warning("Could not create ~s '~s': ~p", [Type, Name, Error]),
+            lager:warning("Could not create ~s: ~p", [Path, Error]),
             error;
         {ok, _, _} ->
-            lager:notice("Created ~s '~s'", [Type, Name]),
+            lager:notice("Created ~s", [Path]),
             make_objs(Rest)
     end.
 
