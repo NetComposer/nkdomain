@@ -86,7 +86,13 @@ session_login(#nkreq{srv_id=SrvId, data=Data, session_meta=SessMeta}=Req) ->
                     Req3 = add_id(?DOMAIN_DOMAIN, DomainId, Req2),
                     Req4 = add_id(?DOMAIN_USER, UserId, Req3),
                     Req5 = add_id(?DOMAIN_SESSION, SessId, Req4),
-                    {ok, DomainId, UserId, SessId, Pid, Req5#nkreq{user_id=UserId}};
+                    Req6 =  case Data of
+                        #{role:=Role, role_id:=RoleId} ->
+                            add_meta(role, {Role, RoleId}, Req5);
+                        _ ->
+                            Req5
+                    end,
+                    {ok, DomainId, UserId, SessId, Pid, Req6#nkreq{user_id=UserId}};
                 {error, Error} ->
                     {error, Error}
             end;

@@ -40,6 +40,8 @@ syntax(<<"start">>, Syntax) ->
         %push_id => binary,
         %platform_id => binary,
         %platform_version => binary,
+        role => binary,
+        role_id => binary,
         meta => map,
         '__mandatory' => [id]
     };
