@@ -179,7 +179,6 @@ object_admin_info() ->
 %% @private
 object_es_mapping() ->
     #{
-        vsn => #{type => keyword},
         content_type => #{type => keyword},
         store_id => #{type => keyword},
         size => #{type => long},

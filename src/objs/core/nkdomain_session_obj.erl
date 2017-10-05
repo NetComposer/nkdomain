@@ -120,11 +120,9 @@ object_es_mapping() ->
 %% @private
 object_parse(_Mode, _Obj) ->
     #{
-        vsn => binary,
         local => binary,
         remote => binary,
-        login_meta => any,
-        '__defaults' => #{vsn => <<"1">>}
+        login_meta => any
     }.
 
 

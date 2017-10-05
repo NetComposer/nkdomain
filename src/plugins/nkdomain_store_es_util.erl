@@ -119,7 +119,9 @@ do_get_mappings([Module|Rest], Acc) ->
             #{
                 type => object,
                 dynamic => false,
-                properties => Map
+                properties => Map#{
+                    vsn => #{type => keyword}
+                }
             }
     end,
     #{type:=Type} = Module:object_info(),

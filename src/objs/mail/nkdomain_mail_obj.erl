@@ -69,15 +69,12 @@ object_admin_info() ->
 %% @private
 object_es_mapping() ->
     #{
-        vsn => #{type => keyword}
     }.
 
 
 %% @private
 object_parse(_Mode, _Obj) ->
     #{
-        vsn => binary,
-        '__defaults' => #{vsn => <<"1">>}
     }.
 
 

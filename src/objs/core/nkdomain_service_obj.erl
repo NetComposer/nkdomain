@@ -72,7 +72,6 @@ object_admin_info() ->
 %% @private
 object_es_mapping() ->
     #{
-        vsn => #{type => keyword},
         spec => #{enabled => false}
     }.
 
@@ -80,9 +79,8 @@ object_es_mapping() ->
 %% @private
 object_parse(_Mode, _Obj) ->
     #{
-        vsn => binary,
         spec => map,
-        '__defaults' => #{vsn => 1, spec => #{}}
+        '__defaults' => #{spec => #{}}
     }.
 
 
