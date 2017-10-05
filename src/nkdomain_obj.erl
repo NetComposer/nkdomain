@@ -976,15 +976,20 @@ do_update(Update, #obj_state{id=Id, obj=Obj}=State) ->
                 Obj3 ->
                     case ?CALL_NKROOT(object_parse, [load, Obj3]) of
                         {ok, Obj4, _} ->
-                            Time = nkdomain_util:timestamp(),
-                            Obj5 = ?ADD_TO_OBJ(updated_time, Time, Obj4),
-                            Obj6 = maps:merge(#{updated_by => <<>>}, Obj5),
-                            State2 = State#obj_state{obj=Obj6, is_dirty=true},
-                            case do_save(object_updated, State2) of
-                                {ok, State3} ->
-                                    {ok, UnknownFields, do_event({updated, Update3}, State3)};
-                                {{error, Error}, State3} ->
-                                    {error, Error, State3}
+                            case ?CALL_NKROOT(object_update, [Obj4]) of
+                                {ok, Obj5} ->
+                                    Time = nkdomain_util:timestamp(),
+                                    Obj6 = ?ADD_TO_OBJ(updated_time, Time, Obj5),
+                                    Obj7 = maps:merge(#{updated_by => <<>>}, Obj6),
+                                    State2 = State#obj_state{obj=Obj7, is_dirty=true},
+                                    case do_save(object_updated, State2) of
+                                        {ok, State3} ->
+                                            {ok, UnknownFields, do_event({updated, Update3}, State3)};
+                                        {{error, Error}, State3} ->
+                                            {error, Error, State3}
+                                    end;
+                                {error, Error} ->
+                                    {error, Error, State}
                             end;
                         {error, Error} ->
                             {error, Error, State}

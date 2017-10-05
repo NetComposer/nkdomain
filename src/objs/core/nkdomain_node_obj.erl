@@ -91,7 +91,7 @@ object_admin_info() ->
 
 % @private
 object_parse(_Mode, _Map) ->
-    any.
+    #{}.
 
 
 % @private

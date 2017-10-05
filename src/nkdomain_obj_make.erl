@@ -204,9 +204,14 @@ create(MakeOpts, Opts) ->
         {ok, Obj2} ->
             case ?CALL_NKROOT(object_parse, [create, Obj2]) of
                 {ok, Obj3, Unknown} ->
-                    case nkdomain_lib:create(Obj3, Opts) of
-                        #obj_id_ext{}=ObjIdExt ->
-                            {ok, ObjIdExt, Unknown};
+                    case ?CALL_NKROOT(object_update, [Obj3]) of
+                        {ok, Obj4} ->
+                            case create2(Obj4, Opts) of
+                                #obj_id_ext{}=ObjIdExt ->
+                                    {ok, ObjIdExt, Unknown};
+                                {error, Error} ->
+                                    {error, Error}
+                            end;
                         {error, Error} ->
                             {error, Error}
                     end;
@@ -216,6 +221,28 @@ create(MakeOpts, Opts) ->
         {error, Error} ->
             {error, Error}
     end.
+
+
+%% @private
+-spec create2(nkdomain:obj(), nkdomain:start_opts()) ->
+    #obj_id_ext{} | {error, term()}.
+
+create2(#{srv_id:=SrvId, type:=Type, obj_id:=ObjId, path:=Path}=Obj, Meta) ->
+    case ?CALL_NKROOT(object_db_find_obj, [Path]) of
+        {error, object_not_found} ->
+            case nkdomain_obj:start(Obj, created, Meta) of
+                {ok, Pid} ->
+                    #obj_id_ext{srv_id=SrvId, type=Type, obj_id=ObjId, path=Path, pid=Pid};
+                {error, Error} ->
+                    {error, Error}
+            end;
+        {ok, _, _, _, _} ->
+            {error, object_already_exists};
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
 
 
 %% @private

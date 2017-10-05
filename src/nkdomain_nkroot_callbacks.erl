@@ -28,7 +28,7 @@
          admin_element_action/5, admin_get_data/3]).
 -export([object_admin_info/1]).
 -export([object_create/5, object_check_active/2, object_do_expired/1]).
--export([object_syntax/1, object_syntax_srv_id/1, object_parse/2]).
+-export([object_syntax/1, object_syntax_srv_id/1, object_parse/2, object_update/1]).
 -export([object_init/1, object_terminate/2, object_stop/2,
          object_event/2, object_reg_event/4, object_session_event/3, object_sync_op/3, object_async_op/2,
          object_save/1, object_delete/1, object_link_down/2, object_enabled/2,
@@ -327,6 +327,23 @@ object_create(SrvId, DomainId, Type, UserId, Obj) ->
     end.
 
 
+%% @doc
+%% Called after creation or modification of object to add fields, etc.
+-spec object_update(nkdomain:obj()) ->
+    ok | continue | {ok, nkdomain:obj()} | {error, term()}.
+
+object_update(#{type:=Type}=Obj) ->
+    case call_type(Type, object_update, [Obj]) of
+        ok ->
+            {ok, Obj};
+        {ok, Obj2} ->
+            {ok, Obj2};
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
+
 %% @doc Called to parse an object's syntax from a map
 %% create: called when creating an object, all fields are allowed but no mandatory,
 %%         since the creation functions will fill in all mandatory fields
@@ -359,11 +376,23 @@ object_parse(Mode, Map) ->
                         {error, Error} ->
                             {error, Error}
                     end;
-                Syntax when Syntax==any; is_map(Syntax) ->
+                Syntax when is_map(Syntax) ->
+                    Syntax2 = case Mode==create orelse Mode==load of
+                        true ->
+                            Defaults1 = maps:get('_defaults', Syntax, #{}),
+                            Defaults2 = Defaults1#{vsn => <<"1">>},
+                            Syntax#{vsn => binary, '_defaults' => Defaults2};
+                        false ->
+                            Syntax
+                    end,
                     {BaseSyn, Opts} = ?CALL_NKROOT(object_syntax, [Mode]),
-                    nklib_syntax:parse(Map, BaseSyn#{Type=>Syntax}, Opts)
+                    nklib_syntax:parse(Map, BaseSyn#{Type=>Syntax2}, Opts);
+                any ->
+                    lager:error("NKLOG TYPE ~p", [Type]),
+                    error(any)
             end
     end.
+
 
 
 %% @doc Called if an active object is detected on storage
@@ -985,6 +1014,27 @@ call_module(Fun, Args, #obj_state{module=Module}=State) ->
         false ->
             {ok, State}
     end.
+
+
+%% @private
+call_type(Type, Fun, Args) ->
+    Module = nkdomain_all_types:get_module(Type),
+    case erlang:function_exported(Module, Fun, length(Args)) of
+        true ->
+            case apply(Module, Fun, Args) of
+                continue ->
+                    ok;
+                Other ->
+                    Other
+            end;
+        false ->
+            ok
+    end.
+
+
+
+
+
 
 
 %%%% @private

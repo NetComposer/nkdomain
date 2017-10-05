@@ -26,7 +26,7 @@
 
 -export([create/1, auth/2, make_token/4, get_name/1, get_name/2]).
 -export([find_childs/1]).
--export([object_info/0, object_admin_info/0, object_create/1, object_es_mapping/0, object_es_unparse/2,
+-export([object_info/0, object_admin_info/0, object_create/1, object_update/1, object_es_mapping/0, object_es_unparse/2,
          object_parse/2, object_api_syntax/2, object_api_cmd/2, object_send_event/2]).
 -export([object_init/1, object_save/1, object_event/2,
          object_sync_op/3, object_async_op/2, object_link_down/2, object_handle_info/2]).
@@ -387,18 +387,12 @@ object_admin_info() ->
 
 %% @doc
 object_create(Obj) ->
-    case check_email(Obj) of
-        {ok, Obj2} ->
-            nkdomain_obj_make:create(Obj2#{type=>?DOMAIN_USER});
-        {error, Error} ->
-            {error, Error}
-    end.
+    nkdomain_obj_make:create(Obj#{type=>?DOMAIN_USER}).
 
 
 %% @private
 object_es_mapping() ->
     #{
-        vsn => #{type => keyword},
         name => #{type => text},
         surname => #{type => text},
         name_sort => #{type => keyword},
@@ -454,7 +448,6 @@ object_es_unparse(Obj, Base) ->
 %% @private
 object_parse(update, _Obj) ->
     #{
-        vsn => binary,
         name => binary,
         surname => binary,
         password => fun ?MODULE:fun_user_pass/1,
@@ -485,23 +478,20 @@ object_parse(update, _Obj) ->
                  % add domain_path when all objects are updated
                  % '__mandatory' => [domain_path, app_id, user_status, updated_time]
              }
-        },
-        '__defaults' => #{vsn => <<"1">>}
+        }
     };
 
-object_parse(Mode, Obj) ->
-    {BaseSyn, Opts} = ?CALL_NKROOT(object_syntax, [Mode]),
-    Syntax1 = object_parse(update, Obj),
-    Syntax2 = Syntax1#{'__mandatory' => [name, surname]},
-    case nklib_syntax:parse(Obj, BaseSyn#{?DOMAIN_USER=>Syntax2}, Opts) of
-        {ok, Obj2, Unknown} ->
-            #{?DOMAIN_USER:=#{name:=Name, surname:=SurName}} = Obj2,
-            FullName = <<Name/binary, " ", SurName/binary>>,
-            Obj3 = Obj2#{name=>FullName},
-            {ok, Obj3, Unknown};
-        {error, Error} ->
-            {error, Error}
-    end.
+object_parse(_Mode, Obj) ->
+    Base = object_parse(update, Obj),
+    Base#{'__mandatory' => [name, surname]}.
+
+
+%% @doc
+object_update(Obj) ->
+    #{?DOMAIN_USER:=#{name:=Name, surname:=SurName}} = Obj,
+    FullName = <<Name/binary, " ", SurName/binary>>,
+    Obj2 = Obj#{name=>FullName},
+    check_email(Obj2).
 
 
 % @private
@@ -838,17 +828,23 @@ user_pass(Pass) ->
 %% @private
 check_email(#{?DOMAIN_USER:=#{email:=Email}}=Obj) ->
     Email2 = nklib_util:to_lower(Email),
-    Spec = #{
-        size => 0,
-        filters => #{type=>?DOMAIN_USER, << ?DOMAIN_USER/binary, ".email">> => Email2}
-    },
-    case nkdomain:search(Spec) of
-        {ok, 0, _, _} ->
-            {ok, Obj#{aliases=>Email2}};
-        {ok, _, _, _} ->
-            {error, {email_duplicated, Email2}};
-        {error, Error} ->
-            {error, Error}
+    Aliases = maps:get(aliases, Obj, []),
+    case lists:member(Email2, Aliases) of
+        true ->
+            {ok, Obj};
+        false ->
+            Spec = #{
+                size => 0,
+                filters => #{type=>?DOMAIN_USER, << ?DOMAIN_USER/binary, ".email">> => Email2}
+            },
+            case nkdomain:search(Spec) of
+                {ok, 0, _, _} ->
+                    {ok, Obj#{aliases=>Email2}};
+                {ok, _, _, _} ->
+                    {error, {email_duplicated, Email2}};
+                {error, Error} ->
+                    {error, Error}
+            end
     end;
 
 check_email(Obj) ->

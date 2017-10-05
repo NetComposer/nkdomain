@@ -22,7 +22,7 @@
 -module(nkdomain_lib).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([find/1, find_loaded/1, load/1, create/1, create/2]).
+-export([find/1, find_loaded/1, load/1]).
 
 -include("nkdomain.hrl").
 -include_lib("nkevent/include/nkevent.hrl").
@@ -137,34 +137,6 @@ load_srv(Srv) ->
             SrvId
     end.
 
-
-
-%% @doc Creates a new object
--spec create(nkdomain:obj()) ->
-    #obj_id_ext{} | {error, term()}.
-
-create(Obj) ->
-    create(Obj, #{}).
-
-
-%% @doc Creates a new object
--spec create(nkdomain:obj(), nkdomain:start_opts()) ->
-    #obj_id_ext{} | {error, term()}.
-
-create(#{srv_id:=SrvId, type:=Type, obj_id:=ObjId, path:=Path}=Obj, Meta) ->
-    case ?CALL_NKROOT(object_db_find_obj, [Path]) of
-        {error, object_not_found} ->
-            case nkdomain_obj:start(Obj, created, Meta) of
-                {ok, Pid} ->
-                    #obj_id_ext{srv_id=SrvId, type=Type, obj_id=ObjId, path=Path, pid=Pid};
-                {error, Error} ->
-                    {error, Error}
-            end;
-        {ok, _, _, _, _} ->
-            {error, object_already_exists};
-        {error, Error} ->
-            {error, Error}
-    end.
 
 
 

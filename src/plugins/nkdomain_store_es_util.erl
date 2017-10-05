@@ -22,7 +22,7 @@
 -module(nkdomain_store_es_util).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([get_opts/0, get_index_opts/0, reload_index/0, clean/0, delete_index/0]).
+-export([get_opts/0, get_index_opts/0, reload_index/0, clean/0, delete_index/0, get_obj/1]).
 -export([db_init/2, normalize/1, normalize_multi/1, stored_srv/1]).
 
 -define(LLOG(Type, Txt, Args),
@@ -72,6 +72,12 @@ clean() ->
 delete_index() ->
     {ok, EsOpts} = get_opts(),
     nkelastic:delete_index(EsOpts).
+
+
+%% @doc
+get_obj(Id) ->
+    {ok, E} = get_opts(),
+    nkelastic:get(to_bin(Id), E).
 
 
 
@@ -236,6 +242,6 @@ stored_srv(Srv) -> Srv.
 %% ===================================================================
 
 
-%%%% @private
-%%to_bin(T) when is_binary(T)-> T;
-%%to_bin(T) -> nklib_util:to_binary(T).
+%% @private
+to_bin(T) when is_binary(T)-> T;
+to_bin(T) -> nklib_util:to_binary(T).
