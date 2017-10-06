@@ -31,7 +31,7 @@
 -export([object_syntax/1, object_syntax_srv_id/1, object_parse/2, object_update/1]).
 -export([object_init/1, object_terminate/2, object_stop/2,
          object_event/2, object_reg_event/4, object_session_event/3, object_sync_op/3, object_async_op/2,
-         object_save/1, object_delete/1, object_link_down/2, object_enabled/2,
+         object_save/1, object_delete/1, object_link_down/2, object_enabled/2, object_next_status_timer/1,
          object_handle_call/3, object_handle_cast/2, object_handle_info/2, object_conflict_detected/4]).
 -export([object_send_push/5]).
 -export([object_db_init/1, object_db_read/1, object_db_save/1, object_db_delete/1]).
@@ -231,6 +231,7 @@ object_syntax(load) ->
         tags => {list, binary},
         aliases => {list, binary},
         icon_id => binary,
+        next_status_time => integer,
         '_schema_vsn' => any,
         '_store_vsn' => any,
         '__mandatory' => [type, obj_id, domain_id, path, srv_id, created_time]
@@ -403,9 +404,46 @@ object_parse(Mode, Map) ->
 
 object_check_active(Type, ObjId) ->
     case nkdomain_obj_util:call_type(Type, object_check_active, [ObjId]) of
-        ok -> true;
-        true -> true;
-        false -> false
+        ok ->
+            true;
+        true ->
+            true;
+        false ->
+            false;
+        force_load ->
+            case nkdomain_lib:find_loaded(ObjId) of
+                #obj_id_ext{} ->
+                    true;
+                _ ->
+                    spawn_link(
+                        fun() ->
+                            case nkdomain_lib:load(ObjId) of
+                                #obj_id_ext{} ->
+                                    ok;
+                                {error, Error} ->
+                                    lager:notice("could not load stalle active object ~s (~s): ~p",
+                                                 [ObjId, Type, Error])
+                            end
+                        end),
+                    false
+            end;
+        delete_if_not_loaded ->
+            case nkdomain_lib:find_loaded(ObjId) of
+                #obj_id_ext{} ->
+                    true;
+                _ ->
+                    spawn_link(
+                        fun() ->
+                            case ?CALL_NKROOT(object_db_delete, [ObjId]) of
+                                ok ->
+                                    ?LLOG(notice, "removed stalle active object ~s (~s)", [ObjId, Type]);
+                                {error, Error} ->
+                                    ?LLOG(warning, "could not remove stalle active object ~s (~s): ~p",
+                                          [ObjId, Type, Error])
+                            end
+                        end),
+                    false
+            end
     end.
 
 
@@ -598,6 +636,14 @@ object_link_down(Link, State) ->
 
 object_enabled(Enabled, State) ->
     call_module(object_enabled, [Enabled], State).
+
+
+%% @doc Called when the timer in next_status_time is fired
+-spec object_next_status_timer(state()) ->
+    {ok, state()}.
+
+object_next_status_timer(State) ->
+    call_module(object_next_status_timer, [], State).
 
 
 %% @doc

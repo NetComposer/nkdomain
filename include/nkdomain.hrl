@@ -69,7 +69,9 @@
     domain_pid :: pid(),
     domain_enabled :: boolean(),
     parent_pid :: pid(),
-    parent_enabled :: boolean()
+    parent_enabled :: boolean(),
+    save_timer :: reference(),
+    next_status_timer :: reference()
 }).
 
 

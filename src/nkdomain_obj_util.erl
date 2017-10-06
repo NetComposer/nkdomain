@@ -26,7 +26,8 @@
 -export([send_event/1, send_event/3, send_event/4, send_event/5]).
 -export([call_type/3]).
 -export([link_to_session_server/2, unlink_from_session_server/2]).
--export([get_obj_session/1, set_obj_session/2, head_type_fields/2]).
+-export([set_next_status_timer/2]).
+-export([get_obj_session/1, set_obj_session/2]).
 
 -include("nkdomain.hrl").
 -include("nkdomain_debug.hrl").
@@ -256,19 +257,17 @@ set_obj_session(Session, State) ->
     State#obj_state{session=Session}.
 
 
-%% @doc Pre-pends the type to fields in a map or list
-head_type_fields(Type, Map) when is_map(Map) ->
-    head_type_fields(Type, maps:to_list(Map));
+%% @doc
+set_next_status_timer(Time, #obj_state{obj=Obj, next_status_timer=Timer}=State) ->
+    nklib_util:cancel_timer(Timer),
+    case Time of
+        0 ->
+            Obj2 = ?REMOVE_FROM_OBJ(next_status_time, Obj),
+            State#obj_state{obj=Obj2, is_dirty=true, next_status_timer=undefined};
+        _ ->
+            Now = nkdomain_util:timestamp(),
+            Obj2 = ?ADD_TO_OBJ(next_status_time, Obj, Now+Time),
+            Timer2 = erlang:send_after(Time, self(), nkdomain_obj_next_status_timer),
+            State#obj_state{obj=Obj2, is_dirty=true, next_status_timer=Timer2}
+    end.
 
-head_type_fields(Type, List) when is_list(List) ->
-    Fields = [
-        {list_to_binary([Type, ".", to_bin(Key)]), Val}
-        || {Key, Val} <- List
-    ],
-    maps:from_list(Fields).
-
-
-
-%% @private
-to_bin(T) when is_binary(T)-> T;
-to_bin(T) -> nklib_util:to_binary(T).

@@ -62,7 +62,7 @@
 -define(RELOAD_PARENT_TIME, 1000).
 -define(MOVE_WAIT_TIME, 30000).
 -define(DEF_SYNC_CALL, 5000).
-
+-define(DEFAULT_SAVE_TIME, 5000).
 
 -compile({no_auto_import, [register/2]}).
 
@@ -88,7 +88,8 @@
     #{
         type => nkdomain:type(),                        %% Mandatory!
         permanent => boolean(),
-        default_ttl => integer(),                    %% msecs
+        save_time => integer(),                         %% secs
+        default_ttl => integer(),                       %% msecs
         stop_after_disabled => boolean(),               %% Default false
         remove_after_stop => boolean(),
         dont_create_childs_on_disabled => boolean(),    %% Default false
@@ -141,6 +142,7 @@
     get_state |
     get_childs|
     get_domain_id |
+    get_parent_id |
     get_time |
     is_enabled |
     {enable, boolean()} |
@@ -302,6 +304,19 @@ init({Op, Obj, Meta}) when Op==loaded; Op==created ->
     % This srv_id is the one from the object (the one that created the object)
     % You can use the option 'callback_srv_id' to use a different one for most callbacks
     ObjIdExt = #obj_id_ext{srv_id=SrvId, obj_id=ObjId, type=Type, path=Path, obj_name=ObjName, pid=self()},
+    Now = nkdomain_util:timestamp(),
+    NextStatusTimer = case Obj of
+        #{next_status_time:=NextStatusTime} ->
+            case NextStatusTime - Now of
+                Step when Step =< 0 ->
+                    self() ! nkdomain_obj_next_status,
+                    undefined;
+                Step ->
+                    erlang:send_after(Step, self(), nkdomain_obj_next_status)
+            end;
+        _ ->
+            undefined
+    end,
     State1 = #obj_state{
         id = ObjIdExt,
         callback_srv_id = maps:get(callback_srv_id, Meta, ?NKROOT),
@@ -312,7 +327,7 @@ init({Op, Obj, Meta}) when Op==loaded; Op==created ->
         obj = Obj,
         is_dirty = (Op == created),
         is_enabled = Enabled,
-        started = nkdomain_util:timestamp(),
+        started = Now,
         childs = #{},
         usage_links = nklib_links:new(),
         event_links = nklib_links:new(),
@@ -322,7 +337,8 @@ init({Op, Obj, Meta}) when Op==loaded; Op==created ->
         unload_policy = set_unload_policy(Obj, Info),
         domain_enabled = true,
         parent_enabled = true,
-        session = #{}
+        session = #{},
+        next_status_timer = NextStatusTimer
     },
     ?DEBUG("started (~p)", [self()], State1),
     State2 = do_init_common(State1),
@@ -372,20 +388,15 @@ init({Op, Obj, Meta}) when Op==loaded; Op==created ->
     {noreply, state()} | {reply, term(), state()} |
     {stop, Reason::term(), state()} | {stop, Reason::term(), Reply::term(), state()}.
 
-%%handle_call(Msg, _From, #obj_state{moved_to=Pid}=State) when is_pid(Pid) ->
-%%    ?DEBUG("forwarding call to new process", [], State),
-%%    Reply = gen_server:call(Pid, Msg, infinity),
-%%    reply(Reply, State);
-
 handle_call({nkdomain_sync_op, Op}, From, State) ->
     case handle(object_sync_op, [Op, From], State) of
         {reply, Reply, #obj_state{}=State2} ->
-            reply(Reply, do_refresh(State2));
+            reply(Reply, do_save_timer(do_refresh(State2)));
         {reply_and_save, Reply, #obj_state{}=State2} ->
             {_, State3} = do_save(user_op, State2),
             reply(Reply, do_refresh(State3));
         {noreply, #obj_state{}=State2} ->
-            noreply(do_refresh(State2));
+            noreply(do_save_timer(do_refresh(State2)));
         {noreply_and_save, #obj_state{}=State2} ->
             {_, State3} = do_save(user_op, State2),
             noreply(do_refresh(State3));
@@ -415,7 +426,7 @@ handle_call(Msg, From, State) ->
 handle_cast({nkdomain_async_op, Op}, State) ->
     case handle(object_async_op, [Op], State) of
         {noreply, #obj_state{}=State2} ->
-            noreply(do_refresh(State2));
+            noreply(do_save_timer(do_refresh(State2)));
         {noreply_and_save, #obj_state{}=State2} ->
             {_, State3} = do_save(user_op, State2),
             noreply(do_refresh(State3));
@@ -504,6 +515,15 @@ handle_info(nkdomain_find_domain, State) ->
 
 %%handle_info({nkdist, Msg}, State) ->
 %%    do_nkdist(Msg, State);
+
+handle_info(nkdomain_obj_next_status, State) ->
+    State2 = State#obj_state{next_status_timer=undefined},
+    {ok, State3} = handle(object_next_status_timer, [], State2),
+    {noreply, State3};
+
+handle_info(nkdomain_obj_save_timer, State) ->
+    {_, State2} = do_save(timer, State),
+    {noreply, State2};
 
 handle_info({'DOWN', _Ref, process, Pid, _Reason}, #obj_state{parent_pid=Pid}=State) ->
     ?LLOG(notice, "parent has failed", [], State),
@@ -596,6 +616,9 @@ do_sync_op(get_time, _From, State) ->
 
 do_sync_op(get_domain_id, _From, #obj_state{domain_id=DomainId}=State) ->
     reply({ok, DomainId}, State);
+
+do_sync_op(get_parent_id, _From, #obj_state{parent_id=ParentId}=State) ->
+    reply({ok, ParentId}, State);
 
 do_sync_op(get_path, _From, #obj_state{id=#obj_id_ext{path=Path}}=State) ->
     reply({ok, Path}, State);
@@ -829,7 +852,9 @@ do_save(Reason, State) ->
     ?DEBUG("save object (~p)", [Reason], State),
     case handle(object_save, [], State) of
         {ok, State2, _Meta} ->
-            {ok, do_event(saved, State2#obj_state{is_dirty=false})};
+            #obj_state{save_timer=Timer} = State,
+            nklib_util:cancel_timer(Timer),
+            {ok, do_event(saved, State2#obj_state{is_dirty=false, save_timer=undefined})};
         {error, Error, State2} ->
             ?LLOG(warning, "object save error: ~p", [Error], State),
             {{error, Error}, State2}
@@ -861,6 +886,16 @@ do_refresh(#obj_state{unload_policy={ttl, Time}, timer=Timer}=State) when is_int
     State#obj_state{timer=Ref};
 
 do_refresh(State) ->
+    State.
+
+
+%% @private
+do_save_timer(#obj_state{is_dirty=true, object_info=Info, save_timer=undefined}=State) ->
+    Time = 1000 * maps:get(save_time, Info, ?DEFAULT_SAVE_TIME),
+    Ref = erlang:send_after(Time, self(), nkdomain_obj_save_timer),
+    State#obj_state{timer=Ref};
+
+do_save_timer(State) ->
     State.
 
 
@@ -1041,34 +1076,11 @@ do_check_timeout(#obj_state{unload_policy=permanent}=State) ->
 do_check_timeout(#obj_state{unload_policy={expires, _}}=State) ->
     noreply(State);
 
-do_check_timeout(#obj_state{usage_links=[]}=State) ->
+do_check_timeout(#obj_state{usage_links=[], next_status_timer=undefined}=State) ->
     do_stop(no_usages, State);
 
 do_check_timeout(State) ->
     noreply(do_refresh(State)).
-
-%%do_nkdist({must_move, Node}, #obj_state{timer=Timer}=State) ->
-%%    nklib_util:cancel_timer(Timer),
-%%    case rpc:call(Node, gen_server, start, [?MODULE, {moved, State, self()}, []]) of
-%%        {ok, NewPid} ->
-%%            ?LLOG(info, "starting move to ~p (~p -> ~p)", [Node, self(), NewPid], State),
-%%            erlang:send_after(?MOVE_WAIT_TIME, self(), nkdomain_move_completed),
-%%            noreply(State#obj_state{moved_to=NewPid, obj=#{}});
-%%        {error, Error} ->
-%%            ?LLOG(warning, "could not move process to ~p: ~p", [Node, Error], State),
-%%            noreply(State)
-%%    end;
-%%
-%%do_nkdist({vnode_pid, _Pid}, State) ->
-%%    noreply(State);
-%%
-%%do_nkdist({updated_reg_pid, _Class, ObjId, Pid}, State) ->
-%%    lager:error("NKLOG UPDATED REG ~s, ~p (I am ~p)", [ObjId, Pid, self()]),
-%%    noreply(State);
-%%
-%%do_nkdist(Msg, State) ->
-%%    ?LLOG(notice, "unexpected NkDIST event: ~p", [Msg], State),
-%%    noreply(State).
 
 
 %% ===================================================================

@@ -132,7 +132,8 @@ object_es_mapping() ->
         description_norm => #{type=>text},
         tags => #{type => keyword},
         aliases => #{type => keyword},
-        icon_id => #{type => keyword}
+        icon_id => #{type => keyword},
+        next_status_time => #{type => date}
     }.
 
 
