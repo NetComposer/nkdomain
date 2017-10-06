@@ -132,6 +132,7 @@ handle_call(Msg, _From, State) ->
     {noreply, #state{}} | {stop, term(), #state{}}.
 
 handle_cast(nkroot_started, State) ->
+    start_services(),
     State2 = call_startup_funs(State),
     do_check(),
     {noreply, State2};
@@ -238,6 +239,30 @@ check_node_obj(#state{node_path=Path}=State) ->
         {error, Error} ->
             ?LLOG(error, "could not load Node object ~s: ~p", [Path, Error]),
             false
+    end.
+
+
+%% @private
+start_services() ->
+    case ?CALL_NKROOT(config, []) of
+        #{start_services:=Services} ->
+            spawn_link(
+                fun() ->
+                    lists:foreach(
+                        fun(Srv) ->
+                            {BinMod, Data} = case binary:split(Srv, <<":">>) of
+                                [M] ->
+                                    {M, <<>>};
+                                [M, D] ->
+                                    {M, D}
+                            end,
+                            Mod = binary_to_atom(BinMod, latin1),
+                            Mod:start_services(Data)
+                        end,
+                        Services)
+                end);
+        _ ->
+            ok
     end.
 
 

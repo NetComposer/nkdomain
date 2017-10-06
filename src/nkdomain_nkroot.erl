@@ -75,6 +75,7 @@ syntax() ->
         default_store_id => binary,
         mail_providers => {list, mail_syntax()},
         default_mail_provider => binary,
+        start_services => {list, binary},
         '__defaults' => #{
             start_nkroot => false,
             listen_ip => <<"127.0.0.1">>,
@@ -106,11 +107,13 @@ config(Env, Base) ->
     Ws = case Secure of true -> <<"wss">>; false -> <<"ws">> end,
     BaseHttp = <<Http/binary, "://", Host/binary, ":", BinPort/binary, Path/binary>>,
     BaseWs = <<Ws/binary, "://", Host/binary, ":", BinPort/binary, Path/binary>>,
+    Services = maps:get(start_services, Env, []),
+    Config1 = Base#{start_services => Services},
     Config2 = case ApiServer of
         true ->
-            Base#{api_server => <<BaseHttp/binary, "/_api, ", BaseWs/binary, "/_api/ws">>};
+            Config1#{api_server => <<BaseHttp/binary, "/_api, ", BaseWs/binary, "/_api/ws">>};
         false ->
-            Base
+            Config1
     end,
     Config3 = case Admin of
         true ->
