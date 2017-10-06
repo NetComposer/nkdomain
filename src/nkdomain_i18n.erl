@@ -55,6 +55,7 @@ i18n() -> #{
         "domain_tree_resources__file.store" => <<"File Stores">>,
 
         "domain_tree_sessions" => "Sessions",
+        "domain_tree_sessions__node" => "Nodes",
         "domain_tree_sessions__session" => "Login",
         "domain_tree_sessions__token" => "Tokens",
         "domain_tree_sessions__admin.session" => "Admin",
@@ -108,6 +109,7 @@ i18n() -> #{
         "domain_tree_resources__file.store" => <<"Stores de Ficheros">>,
 
         "domain_tree_sessions" => "Sesiones",
+        "domain_tree_sessions__node" => "Nodos",
         "domain_tree_sessions__session" => "Login",
         "domain_tree_sessions__token" => "Tokens",
         "domain_tree_sessions__admin.session" => "Admin",
