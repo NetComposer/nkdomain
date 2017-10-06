@@ -91,6 +91,7 @@
 -define(DOMAIN_ALERT, <<"alert">>).
 -define(DOMAIN_DEVICE, <<"device">>).
 -define(DOMAIN_NODE, <<"node">>).
+-define(DOMAIN_LOCATION, <<"location">>).
 
 
 
