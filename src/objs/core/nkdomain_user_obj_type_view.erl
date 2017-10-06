@@ -122,7 +122,7 @@ view(Path, Session) ->
 
 %% @doc
 table_data(#{start:=Start, size:=Size, sort:=Sort, filter:=Filter}, _Opts, #admin_session{domain_id=DomainId}) ->
-    lager:error("NKLOG FF ~p", [Filter]),
+    %% lager:error("NKLOG FF ~p", [Filter]),
     SortSpec = case Sort of
         {<<"obj_name">>, Order} ->
             <<Order/binary, ":obj_name">>;
@@ -159,7 +159,7 @@ table_data(#{start:=Start, size:=Size, sort:=Sort, filter:=Filter}, _Opts, #admi
                 from => Start,
                 size => Size
             },
-            TableId = nkdomain_admin_util:make_type_view_id(?DOMAIN_USER),
+            _TableId = nkdomain_admin_util:make_type_view_id(?DOMAIN_USER),
             SubDomainsFilterId = nkdomain_admin_util:make_type_view_subfilter_id(?DOMAIN_USER),
             Fun = case maps:get(SubDomainsFilterId, Filter, 1) of
                 0 -> search;

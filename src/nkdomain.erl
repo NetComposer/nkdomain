@@ -25,7 +25,7 @@
 
 -export([find/1, load/1, unload/1, unload/2, get_obj/1, get_info/1, get_name/1, get_domain_id/1]).
 -export([enable/2, update/2, update_name/2, delete/1, send_info/3]).
--export([search/1, search_type/1, delete_all_childs/1, delete_all_childs_type/2, search_agg_field/4]).
+-export([search/1, search/2, search/3, delete_all_childs/1, delete_all_childs_type/2, search_agg_field/4]).
 -export([clean/0]).
 -export_type([obj_id/0, obj_name/0, obj/0, path/0, id/0, type/0]).
 -export_type([timestamp/0]).
@@ -185,6 +185,7 @@ unload(Id, Reason) ->
     {ok, integer(), Data::[map()], Meta::map()} | {error, term()}.
 
 search(Spec) ->
+    lager:notice("NKLOG Searc Spec ~p", [Spec]),
     case ?CALL_NKROOT(object_db_search, [Spec]) of
         {ok, Total, List, _Aggs, Meta} ->
             {ok, Total, List, Meta};
@@ -192,13 +193,30 @@ search(Spec) ->
             {error, Error}
     end.
 
+
 %% @doc
--spec search_type(type()) ->
+-spec search(nkdomain:id(), search_spec()) ->
     {ok, integer(), Data::[map()], Meta::map()} | {error, term()}.
 
-search_type(Type) ->
-    search(#{filters=>#{type=>Type}}).
+search(Domain, Spec) ->
+    case nkdomain_lib:find(Domain) of
+        #obj_id_ext{path=Path} ->
+            Filters1 = maps:get(filters, Spec, #{}),
+            Filters2 = Filters1#{path=><<"childs_of:", Path/binary>>},
+            search(Spec#{filters=>Filters2});
+        {error, Error} ->
+            {error, Error}
+    end.
 
+
+%% @doc
+-spec search(nkdomain:id(), nkdomain:type(), search_spec()) ->
+    {ok, integer(), Data::[map()], Meta::map()} | {error, term()}.
+
+search(Domain, Type, Spec) ->
+    Filters1 = maps:get(filters, Spec, #{}),
+    Filters2 = Filters1#{type=>Type},
+    search(Domain, Spec#{filters=>Filters2}).
 
 
 %% @doc Finds types

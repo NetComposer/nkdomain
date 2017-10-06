@@ -22,7 +22,7 @@
 -module(nkdomain_store_es_util).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([get_opts/0, get_index_opts/0, reload_index/0, clean/0, delete_index/0, get_obj/1]).
+-export([get_opts/0, get_index_opts/0, reload_index/0, clean/0, delete_index/0, read_obj/1]).
 -export([db_init/2, normalize/1, normalize_multi/1, stored_srv/1]).
 
 -define(LLOG(Type, Txt, Args),
@@ -75,7 +75,7 @@ delete_index() ->
 
 
 %% @doc
-get_obj(Id) ->
+read_obj(Id) ->
     {ok, E} = get_opts(),
     nkelastic:get(to_bin(Id), E).
 
