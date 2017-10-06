@@ -22,7 +22,8 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([session_login/1, token_login/1, check_token/2, check_raw_token/1]).
--export([search/1, get_id/3, get_id/4, add_id/3, add_meta/3, remove_meta/2]).
+-export([search/1, get_id/3, get_id/4, add_id/3, add_meta/3, get_meta/2, remove_meta/2]).
+-export([head_type_fields/2]).
 -export_type([login_data/0, session_meta/0]).
 
 -include("nkdomain.hrl").
@@ -240,21 +241,22 @@ get_id(Type, Field, Data, #nkreq{user_state=UserState}) ->
     end.
 
 
-
-
-
-
-%% @doc Adds 'logged in' information to the state
+%% @doc Adds information in the session associated to a type
 add_id(Type, Id, #nkreq{user_state=UserState}=Req) ->
     ObjIds = maps:get(nkdomain_obj_ids, UserState, #{}),
     UserState2 = UserState#{nkdomain_obj_ids=>ObjIds#{Type => Id}},
     Req#nkreq{user_state=UserState2}.
 
 
-%% @doc Adds 'logged in' information to the state
-add_meta(Type, Id, #nkreq{user_state=UserState}=Req) ->
-    UserState2 = UserState#{Type => Id},
+%% @doc Adds information in the session associated to a key
+add_meta(Key, Id, #nkreq{user_state=UserState}=Req) ->
+    UserState2 = UserState#{Key => Id},
     Req#nkreq{user_state=UserState2}.
+
+
+%% @doc Adds 'logged in' information to the state
+get_meta(Key, #nkreq{user_state=UserState}) ->
+    maps:get(Key, UserState, <<>>).
 
 
 %% @doc Adds 'logged in' information to the state
@@ -263,3 +265,20 @@ remove_meta(Type, #nkreq{user_state=UserState}=Req) ->
     Req#nkreq{user_state=UserState2}.
 
 
+
+%% @doc Pre-pends the type to fields in a map or list
+head_type_fields(Type, Map) when is_map(Map) ->
+    head_type_fields(Type, maps:to_list(Map));
+
+head_type_fields(Type, List) when is_list(List) ->
+    Fields = [
+        {list_to_binary([Type, ".", to_bin(Key)]), Val}
+        || {Key, Val} <- List
+    ],
+    maps:from_list(Fields).
+
+
+
+%% @private
+to_bin(T) when is_binary(T)-> T;
+to_bin(T) -> nklib_util:to_binary(T).

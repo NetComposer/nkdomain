@@ -180,16 +180,8 @@ object_event(_Event, State) ->
 %% ===================================================================
 
 %% @private
-%% It will not find aliases
-object_check_active(Id) ->
-    case nkdomain_lib:find_loaded(Id) of
-        #obj_id_ext{} ->
-            true;
-        _ ->
-            lager:notice("NkDOMAIN: removing stalle active object ~s", [Id]),
-            ?CALL_NKROOT(object_db_delete, [Id]),
-            false
-    end.
+object_check_active(_Id) ->
+    delete_if_not_loaded.
 
 
 

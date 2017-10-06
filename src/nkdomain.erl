@@ -185,7 +185,6 @@ unload(Id, Reason) ->
     {ok, integer(), Data::[map()], Meta::map()} | {error, term()}.
 
 search(Spec) ->
-    lager:notice("NKLOG Searc Spec ~p", [Spec]),
     case ?CALL_NKROOT(object_db_search, [Spec]) of
         {ok, Total, List, _Aggs, Meta} ->
             {ok, Total, List, Meta};
