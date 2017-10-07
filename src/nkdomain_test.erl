@@ -229,6 +229,7 @@ test_session2(Pid) ->
     % If we force a clean of the database, the stale object is deleted and archived
     {ok, #{inactive:=N}} = nkdomain:clean(),
     true = N >= 1,
+    timer:sleep(200),   % Deletion operation is async now
     {error, object_not_found} = nkdomain:find(SessId),
     % Archive has a 1-second refresh time
 %%    timer:sleep(1100),
