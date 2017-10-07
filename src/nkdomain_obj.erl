@@ -59,7 +59,7 @@
 -include("nkdomain_debug.hrl").
 
 -define(DEFAULT_TTL, 10000).
--define(RELOAD_PARENT_TIME, 1000).
+-define(RELOAD_PARENT_TIME, 5000).
 -define(MOVE_WAIT_TIME, 30000).
 -define(DEF_SYNC_CALL, 5000).
 -define(DEFAULT_SAVE_TIME, 5000).
