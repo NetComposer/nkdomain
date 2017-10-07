@@ -702,7 +702,7 @@ do_sync_op(Op, _From, State) ->
 %% @private
 do_async_op({nkdomain_reg_child, ObjIdExt}, State) ->
     #obj_id_ext{obj_id=ObjId, type=Type, path=Path, pid=Pid} = ObjIdExt,
-    #obj_state{is_enabled=IsEnabled, object_info=Info} = State,
+    #obj_state{is_enabled=IsEnabled} = State,
     ?DEBUG("registering child ~s", [Path], State),
     State2 = do_rm_child(ObjId, State),
     State3 = do_add_child(ObjId, Type, Pid, State2),
