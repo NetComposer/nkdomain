@@ -435,7 +435,7 @@ object_check_active(Type, ObjId) ->
                     spawn_link(
                         fun() ->
                             case ?CALL_NKROOT(object_db_delete, [ObjId]) of
-                                ok ->
+                                {ok, _Meta} ->
                                     ?LLOG(notice, "removed stalle active object ~s (~s)", [ObjId, Type]);
                                 {error, Error} ->
                                     ?LLOG(warning, "could not remove stalle active object ~s (~s): ~p",

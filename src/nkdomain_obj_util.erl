@@ -26,7 +26,7 @@
 -export([send_event/1, send_event/3, send_event/4, send_event/5]).
 -export([call_type/3]).
 -export([link_to_session_server/2, unlink_from_session_server/2]).
--export([set_next_status_timer/2]).
+-export([set_active/2, set_next_status_timer/2]).
 -export([get_obj_session/1, set_obj_session/2]).
 
 -include("nkdomain.hrl").
@@ -258,6 +258,16 @@ set_obj_session(Session, State) ->
 
 
 %% @doc
+set_active(true, #obj_state{obj=Obj}=State) ->
+    Obj2 = ?ADD_TO_OBJ(active, true, Obj),
+    State#obj_state{obj=Obj2, is_dirty=true};
+
+set_active(false, #obj_state{obj=Obj}=State) ->
+    Obj2 = ?REMOVE_FROM_OBJ(active, Obj),
+    State#obj_state{obj=Obj2, is_dirty=true}.
+
+
+%% @doc
 set_next_status_timer(Time, #obj_state{obj=Obj, next_status_timer=Timer}=State) ->
     nklib_util:cancel_timer(Timer),
     case Time of
@@ -266,7 +276,7 @@ set_next_status_timer(Time, #obj_state{obj=Obj, next_status_timer=Timer}=State) 
             State#obj_state{obj=Obj2, is_dirty=true, next_status_timer=undefined};
         _ ->
             Now = nkdomain_util:timestamp(),
-            Obj2 = ?ADD_TO_OBJ(next_status_time, Obj, Now+Time),
+            Obj2 = ?ADD_TO_OBJ(next_status_time, Now+Time, Obj),
             Timer2 = erlang:send_after(Time, self(), nkdomain_obj_next_status_timer),
             State#obj_state{obj=Obj2, is_dirty=true, next_status_timer=Timer2}
     end.

@@ -309,10 +309,10 @@ init({Op, Obj, Meta}) when Op==loaded; Op==created ->
         #{next_status_time:=NextStatusTime} ->
             case NextStatusTime - Now of
                 Step when Step =< 0 ->
-                    self() ! nkdomain_obj_next_status,
+                    self() ! nkdomain_obj_next_status_timer,
                     undefined;
                 Step ->
-                    erlang:send_after(Step, self(), nkdomain_obj_next_status)
+                    erlang:send_after(Step, self(), nkdomain_obj_next_status_timer)
             end;
         _ ->
             undefined
@@ -463,12 +463,8 @@ handle_cast(Msg, State) ->
 -spec handle_info(term(), state()) ->
     {noreply, state()} | {stop, term(), state()}.
 
-%%handle_info(nkdomain_move_completed, State) ->
-%%    ?DEBUG("move completed", [], State),
-%%    {stop, normal, State};
-
-handle_info({nkservice_updated, _SrvId}, #obj_state{id=#obj_id_ext{srv_id=SrvId, type=Type}}=State) ->
-    set_log(SrvId, Type),
+handle_info({nkservice_updated, _SrvId}, #obj_state{id=#obj_id_ext{type=Type}}=State) ->
+    set_log(Type),
     noreply(State);
 
 handle_info(nkdomain_check_expire, State) ->
@@ -516,7 +512,7 @@ handle_info(nkdomain_find_domain, State) ->
 %%handle_info({nkdist, Msg}, State) ->
 %%    do_nkdist(Msg, State);
 
-handle_info(nkdomain_obj_next_status, State) ->
+handle_info(nkdomain_obj_next_status_timer, State) ->
     State2 = State#obj_state{next_status_timer=undefined},
     {ok, State3} = handle(object_next_status_timer, [], State2),
     {noreply, State3};
@@ -748,7 +744,7 @@ do_async_op(Op, State) ->
 %% @private
 do_init_common(State) ->
     #obj_state{
-        id = #obj_id_ext{srv_id=SrvId, type=Type},
+        id = #obj_id_ext{type=Type},
         unload_policy = Policy
     }= State,
     % If expired, do proper delete
@@ -758,18 +754,17 @@ do_init_common(State) ->
         _ ->
             ok
     end,
-    set_log(SrvId, Type),
-    nkservice_util:register_for_changes(SrvId),
+    set_log(Type),
+    nkservice_util:register_for_changes(?NKROOT),
     State.
 
 
 %% @private
-set_log(SrvId, Type) ->
+set_log(Type) ->
     Debug =
-        case nkservice_util:get_debug_info(SrvId, ?MODULE) of
-            {true, all} -> true;
+        case nkservice_util:get_debug_info(?NKROOT, ?MODULE) of
+            {true, #{types:=all}} -> true;
             {true, #{types:=Types}} -> lists:member(Type, Types);
-            {true, _} -> true;
             _ -> false
         end,
     % lager:notice("DEBUG: ~p", [Debug]),
