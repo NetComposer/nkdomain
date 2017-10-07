@@ -160,6 +160,7 @@
     {send_event, event()} |
     save |
     {unload, Reason::nkservice:error()} |
+    {nkdomain_reg_child, #obj_id_ext{}} |
     term().
 
 
@@ -693,27 +694,27 @@ do_sync_op({update_name, ObjName}, _From, #obj_state{is_enabled=IsEnabled, objec
             end
     end;
 
-do_sync_op({nkdomain_reg_child, ObjIdExt}, _From, State) ->
-    #obj_id_ext{obj_id=ObjId, type=Type, path=Path, pid=Pid} = ObjIdExt,
-    #obj_state{is_enabled=IsEnabled, object_info=Info} = State,
-    case {IsEnabled, Info} of
-        {false, #{dont_create_childs_on_disabled:=true}} ->
-            reply({error, parent_is_disabled}, State);
-        _ ->
-            ?DEBUG("registering child ~s", [Path], State),
-            %% Check do_check_child(ObjIdExt, State)
-            State2 = do_rm_child(ObjId, State),
-            State3 = do_add_child(ObjId, Type, Pid, State2),
-            State4 = do_event({child_loaded, Type, ObjId, Pid}, State3),
-            {reply, {ok, IsEnabled, self()}, State4}
-    end;
-
 do_sync_op(Op, _From, State) ->
     ?LLOG(notice, "unknown sync op: ~p", [Op], State),
     reply({error, unknown_op}, State).
 
 
 %% @private
+do_async_op({nkdomain_reg_child, ObjIdExt}, State) ->
+    #obj_id_ext{obj_id=ObjId, type=Type, path=Path, pid=Pid} = ObjIdExt,
+    #obj_state{is_enabled=IsEnabled, object_info=Info} = State,
+    ?DEBUG("registering child ~s", [Path], State),
+    State2 = do_rm_child(ObjId, State),
+    State3 = do_add_child(ObjId, Type, Pid, State2),
+    State4 = do_event({child_loaded, Type, ObjId, Pid}, State3),
+    case IsEnabled of
+        false ->
+            gen_server:cast(Pid, {nkdomain_parent_enabled, false});
+        true ->
+            ok
+    end,
+    noreply(State4);
+
 do_async_op({unregister, Type, Link}, State) ->
     {ok, links_remove(Type, Link, State)};
 
@@ -793,6 +794,7 @@ register_domain(#obj_state{id=#obj_id_ext{obj_id = <<"root">>, type = ?DOMAIN_DO
     {ok, State};
 
 register_domain(#obj_state{id=ObjIdExt, domain_id=DomainId}=State) ->
+    % Sync operation, domain can deny our loading
     case sync_op(DomainId, {nkdomain_reg_obj, ObjIdExt}) of
         {ok, Enabled, Pid} ->
             ?DEBUG("registered with domain (enabled:~p)", [Enabled], State),
@@ -811,11 +813,14 @@ register_parent(#obj_state{id=#obj_id_ext{obj_id = <<"root">>, type = ?DOMAIN_DO
     {ok, State};
 
 register_parent(#obj_state{id=ObjIdExt, parent_id=ParentId}=State) ->
-    case sync_op(ParentId, {nkdomain_reg_child, ObjIdExt}) of
-        {ok, Enabled, Pid} ->
-            ?DEBUG("registered with parent (enabled:~p)", [Enabled], State),
-            monitor(process, Pid),
-            State2 = do_enabled(State#obj_state{parent_pid=Pid, parent_enabled=Enabled}),
+    case nkdomain_lib:load(ParentId) of
+        #obj_id_ext{pid=ParentPid} ->
+            % Async operation, in case the parent is who is starting us
+            async_op(ParentPid, {nkdomain_reg_child, ObjIdExt}),
+            ?DEBUG("registered with parent ~s", [ParentId], State),
+            monitor(process, ParentPid),
+            % We will receive the parent enabled event
+            State2 = State#obj_state{parent_pid=ParentPid, parent_enabled=true},
             {ok, State2};
         {error, object_not_found} ->
             {error, {could_not_load_parent, ParentId}};
