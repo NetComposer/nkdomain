@@ -33,7 +33,7 @@
 -export([search_agg_field/5]).
 -export([search_types/3, search_all_types/3, search_childs/3, search_all_childs/3, search/2, search_obj_alias/2]).
 -export([delete_all_childs/3]).
--export([clean/1]).
+-export([clean/1, import_objects/2]).
 
 -define(ES_ITER_SIZE, 100).
 
@@ -363,6 +363,45 @@ do_clean_expired(EsOpts) ->
         {error, Error} -> {error, Error}
     end.
 
+
+%% @doc
+import_objects(FromIndex, UserFun) ->
+    {ok, To} = nkdomain_store_es_util:get_opts(),
+    From = To#{index:=FromIndex},
+    Spec = #{
+        size => ?ES_ITER_SIZE
+    },
+    Fun = fun(#{<<"obj_id">>:=ObjId, <<"path">>:=Path}=Data, Acc) ->
+        case UserFun(Data) of
+            continue ->
+                lager:info("Import skipping ~s (~s)", [Path, ObjId]),
+                {ok, Acc};
+            {upgrade, Data2} ->
+                case nkelastic:get(ObjId, To) of
+                    {ok, Data2, _} ->
+                        lager:info("Import already imported ~s (~s)", [Path, ObjId]),
+                        {ok, Acc};
+                    _ ->
+                        case nkelastic:put(ObjId, Data2, To) of
+                            {ok, _} ->
+                                lager:notice("Import upgraded ~s (~s)", [Path, ObjId]),
+                                timer:sleep(10),
+                                print("Old", Data),
+                                print("New", Data2),
+                                {ok, Acc+1};
+                            {error, Error} ->
+                                lager:warning("Import COULD NOT upgrade ~s (~s): ~p", [Path, ObjId, Error]),
+                                {ok, Acc}
+                        end
+                end
+        end
+    end,
+    iterate(Spec, Fun, 0, From).
+
+
+%% @private
+print(Txt, Obj) ->
+    io:format("~s:\n~s\n\n", [Txt, nklib_json:encode_pretty(Obj)]).
 
 
 
