@@ -33,7 +33,6 @@
          object_event/2, object_reg_event/4, object_session_event/3, object_sync_op/3, object_async_op/2,
          object_save/1, object_delete/1, object_link_down/2, object_enabled/2, object_next_status_timer/1,
          object_handle_call/3, object_handle_cast/2, object_handle_info/2, object_conflict_detected/4]).
--export([object_send_push/5]).
 -export([object_db_init/1, object_db_read/1, object_db_save/1, object_db_delete/1]).
 -export([object_db_find_obj/1, object_db_search/1, object_db_search_alias/1,
          object_db_search_types/2, object_db_search_all_types/2,
@@ -468,20 +467,6 @@ object_admin_info(Type) ->
         false ->
             #{}
     end.
-
-
-%% @doc
--spec object_send_push(
-        nkservice:id(),
-        nkdomain_user_obj:push_app_id(),
-        nkdomain_user_obj:push_device_id(),
-        nkdomain_user_obj:push_device(),
-        nkdomain_user_obj:push_msg()) ->
-    ok | {error, term()}.
-
-object_send_push(_SrvId, _PushAppId, _PushDeviceId, _PushDevice, _PushMsg) ->
-    lager:notice("NkDOMAIN unimplemented push: ~p", [_PushMsg]),
-    {error, not_implemented}.
 
 
 %% ===================================================================

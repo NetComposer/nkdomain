@@ -40,8 +40,17 @@ cmd(<<"login">>, Req) ->
 cmd(<<"get_name">>, #nkreq{data=Data}=Req) ->
     case nkdomain_api_util:get_id(?DOMAIN_USER, Data, Req) of
         {ok, Id} ->
-            Opts = maps:with([domain, app_id, session_types], Data),
-            nkdomain_user_obj:get_name(Id, Opts);
+            nkdomain_user_obj:get_name(Id);
+        {error, Error} ->
+            {error, Error}
+    end;
+
+cmd(<<"get_info">>, #nkreq{srv_id=SrvId, data=Data}=Req) ->
+    case nkdomain_api_util:get_id(?DOMAIN_USER, Data, Req) of
+        {ok, Id} ->
+            SrvId2 = maps:get(srv_id, Data, SrvId),
+            Opts = maps:with([domain, session_types], Data),
+            nkdomain_user_obj:get_info(Id, Opts#{srv_id=>SrvId2});
         {error, Error} ->
             {error, Error}
     end;
@@ -61,13 +70,14 @@ cmd(<<"get_token">>, Req) ->
             {error, Error}
     end;
 
-cmd(<<"add_push_device">>, #nkreq{data=Data}=Req) ->
+cmd(<<"add_push_device">>, #nkreq{srv_id=SrvId, data=Data}=Req) ->
     case nkdomain_api_util:get_id(?DOMAIN_USER, Data, Req) of
         {ok, Id} ->
             case nkdomain_api_util:get_id(?DOMAIN_DOMAIN, domain_id, Data, Req) of
                 {ok, DomainId} ->
-                    #{app_id:=AppId, device_id:=DeviceId, push_data:=PushData} = Data,
-                    nkdomain_user_obj:add_push_device(Id, DomainId, AppId, DeviceId, PushData);
+                    #{device_id:=DeviceId, push_data:=PushData} = Data,
+                    SrvId2 = maps:get(srv_id, Data, SrvId),
+                    nkdomain_user_obj:add_push_device(Id, DomainId, SrvId2, DeviceId, PushData);
                 {error, Error} ->
                     {error, Error}
             end;
@@ -84,13 +94,13 @@ cmd(<<"remove_push_device">>, #nkreq{data=Data}=Req) ->
             {error, Error}
     end;
 
-cmd(<<"get_status">>, #nkreq{data=Data}=Req) ->
+cmd(<<"get_status">>, #nkreq{srv_id=SrvId, data=Data}=Req) ->
     case nkdomain_api_util:get_id(?DOMAIN_USER, Data, Req) of
         {ok, Id} ->
             case nkdomain_api_util:get_id(?DOMAIN_DOMAIN, domain_id, Data, Req) of
                 {ok, DomainId} ->
-                    #{app_id:=AppId} = Data,
-                    nkdomain_user_obj:get_status(Id, DomainId, AppId);
+                    SrvId2 = maps:get(srv_id, Data, SrvId),
+                    nkdomain_user_obj:get_status(Id, SrvId2, DomainId);
                 {error, Error} ->
                     {error, Error}
             end;
@@ -98,13 +108,14 @@ cmd(<<"get_status">>, #nkreq{data=Data}=Req) ->
             {error, Error}
     end;
 
-cmd(<<"set_status">>, #nkreq{data=Data}=Req) ->
+cmd(<<"set_status">>, #nkreq{srv_id=SrvId, data=Data}=Req) ->
     case nkdomain_api_util:get_id(?DOMAIN_USER, Data, Req) of
         {ok, Id} ->
             case nkdomain_api_util:get_id(?DOMAIN_DOMAIN, domain_id, Data, Req) of
                 {ok, DomainId} ->
-                    #{app_id:=AppId, status:=Status} = Data,
-                    nkdomain_user_obj:set_status(Id, DomainId, AppId, Status);
+                    #{status:=Status} = Data,
+                    SrvId2 = maps:get(srv_id, Data, SrvId),
+                    nkdomain_user_obj:set_status(Id, SrvId2, DomainId, Status);
                 {error, Error} ->
                     {error, Error}
             end;

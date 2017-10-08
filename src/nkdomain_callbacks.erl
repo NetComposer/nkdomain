@@ -25,6 +25,7 @@
 -export([error/1, i18n/3]).
 -export([admin_tree_categories/2, admin_tree_get_category/2, admin_event/3,
          admin_element_action/5, admin_get_data/3]).
+-export([object_send_push/3]).
 -export([object_init/1, object_terminate/2, object_stop/2,
          object_event/2, object_reg_event/4, object_session_event/3, object_sync_op/3, object_async_op/2,
          object_save/1, object_delete/1, object_link_down/2, object_enabled/2,
@@ -95,6 +96,21 @@ admin_element_action(ElementIdParts, Action, Value, Updates, Session) ->
 %% @doc
 admin_get_data(ElementId, Spec, Session) ->
     ?CALL_NKROOT(admin_get_data, [ElementId, Spec, Session]).
+
+
+%% ===================================================================
+%% Push
+%% ===================================================================
+
+
+%% @doc
+-spec object_send_push(nkdomain_user_obj:push_device_id(),
+                       nkdomain_user_obj:push_device(), nkdomain_user_obj:push_msg()) ->
+    ok | {error, term()}.
+
+object_send_push(_PushDeviceId, _PushDevice, _PushMsg) ->
+    lager:notice("NkDOMAIN unimplemented push: ~p", [_PushMsg]),
+    {error, not_implemented}.
 
 
 

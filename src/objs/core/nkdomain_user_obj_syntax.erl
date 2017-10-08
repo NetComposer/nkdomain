@@ -50,9 +50,14 @@ syntax(<<"get_token">>, Syntax) ->
 
 syntax(<<"get_name">>, Syntax) ->
     Syntax#{
+        id => binary
+    };
+
+syntax(<<"get_info">>, Syntax) ->
+    Syntax#{
         id => binary,
-        domain => binary,                       % Necessary for both
-        app_id => binary,                       % Get status
+        domain_id => binary,                    % Necessary for both
+        srv_id => binary,                       % Get status
         session_types => {list, binary}         % Get presence
     };
 
@@ -60,8 +65,8 @@ syntax(<<"add_push_device">>, Syntax) ->
     Syntax#{
         id => binary,
         domain_id => binary,
-        app_id => binary,
         device_id => binary,
+        srv_id => binary,
         push_data => #{
             push_id => binary,
             voip_push_id => binary,
@@ -73,7 +78,7 @@ syntax(<<"add_push_device">>, Syntax) ->
             device_os => binary,
             user_agent => binary
         },
-        '__mandatory' => [app_id, device_id, push_data]
+        '__mandatory' => [device_id, push_data]
     };
 
 syntax(<<"remove_push_device">>, Syntax) ->
@@ -86,18 +91,16 @@ syntax(<<"remove_push_device">>, Syntax) ->
 syntax(<<"get_status">>, Syntax) ->
     Syntax#{
         id => binary,
-        domain_id => binary,
-        app_id => binary,
-        '__mandatory' => [app_id]
+        srv_id => binary,
+        domain_id => binary
     };
 
 syntax(<<"set_status">>, Syntax) ->
     Syntax#{
         id => binary,
+        srv_id => binary,
         domain_id => binary,
-        app_id => binary,
-        status => map,
-        '__mandatory' => [app_id, status]
+        status => map
     };
 
 syntax(Cmd, Syntax) ->

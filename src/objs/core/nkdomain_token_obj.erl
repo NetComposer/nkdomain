@@ -24,7 +24,7 @@
 -behavior(nkdomain_obj).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([create/2]).
+-export([create/3]).
 -export([object_info/0, object_es_mapping/0, object_parse/2, object_send_event/2,
          object_sync_op/3, object_async_op/2]).
 -export([object_admin_info/0]).
@@ -41,9 +41,8 @@
 %% Types
 %% ===================================================================
 
--type create_token() ::
+-type create_opts() ::
     #{
-        domain_id => nkdomain:id(),     % Mandatory
         parent_id => nkdomain:id(),     % Mandatory
         created_by => nkdomain:id(),    % Mandatory
         subtype => nkdomain:subtype(),
@@ -51,29 +50,33 @@
         ttl => integer()
     }.
 
+-type token_data() :: map().
+
+
 
 %% ===================================================================
 %% API
 %% ===================================================================
 
 %% @doc
--spec create(create_token(), map()) ->
-    {ok, TokenId::nkdomain:obj_id(), pid(), integer(), [Unknown::binary()]} | {error, term()}.
+-spec create(nkdomain:obj_id(), create_opts(), token_data()) ->
+    {ok, TokenId::nkdomain:obj_id(), pid(), integer()} | {error, term()}.
 
-create(TokenOpts, Data) ->
-    case check_ttl(TokenOpts) of
+create(DomainId, Opts, Data) ->
+    Base = maps:with([parent_id, created_by, subtype, srv_id], Opts),
+    case check_ttl(Opts) of
         {ok, TTL} ->
-            Obj = TokenOpts#{
+            Obj = Base#{
+                domain_id => DomainId,
                 type => ?DOMAIN_TOKEN,
                 ttl => TTL,
                 ?DOMAIN_TOKEN => #{
-                    vsn => <<"1">>,
                     data => Data
                 }
             },
             case nkdomain_obj_make:create(Obj) of
-                {ok, #obj_id_ext{obj_id=TokenId, pid=Pid}, Unknown} ->
-                    {ok, TokenId, Pid, TTL, Unknown};
+                {ok, #obj_id_ext{obj_id=TokenId, pid=Pid}, _Unknown} ->
+                    {ok, TokenId, Pid, TTL};
                 {error, Error} ->
                     {error, Error}
             end;
