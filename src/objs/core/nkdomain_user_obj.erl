@@ -236,7 +236,7 @@ get_name(Id) ->
 -type get_name_opts() ::
     #{
         domain_id => nkdomain:id(),
-        srv_id => nksevice:id(),
+        srv_id => nksevice:id() | binary(),
         session_types => [nkdomain:type()]
     }.
 
@@ -304,10 +304,11 @@ update_presence(Id, SessId, Presence) ->
 
 
 %% @doc See above
--spec set_status(nkdomain:id(), nkservice:id(), nkdomain:id(), user_status()) ->
+-spec set_status(nkdomain:id(), nkservice:id()|binary(), nkdomain:id(), user_status()) ->
     ok | {error, term()}.
 
-set_status(Id, SrvId, Domain, Status) when is_map(Status) ->
+set_status(Id, Srv, Domain, Status) when is_map(Status) ->
+    SrvId = nkdomain_obj_util:get_srv_id(Srv),
     case nkdomain_lib:find(Domain) of
         #obj_id_ext{path=DomainPath} ->
             nkdomain_obj:async_op(Id, {?MODULE, set_status, SrvId, DomainPath, Status});
@@ -317,10 +318,11 @@ set_status(Id, SrvId, Domain, Status) when is_map(Status) ->
 
 
 %% @doc
--spec get_status(nkdomain:id(), nkservice:id(), nkdomain:id()) ->
+-spec get_status(nkdomain:id(), nkservice:id()|binary(), nkdomain:id()) ->
     {ok, user_status()} | {error, term()}.
 
-get_status(Id, SrvId, Domain) ->
+get_status(Id, Srv, Domain) ->
+    SrvId = nkdomain_obj_util:get_srv_id(Srv),
     case nkdomain_lib:find(Domain) of
         #obj_id_ext{path=DomainPath} ->
             nkdomain_obj:sync_op(Id, {?MODULE, get_status, SrvId, DomainPath});
@@ -333,8 +335,8 @@ get_status(Id, SrvId, Domain) ->
 -spec add_token_notification(nkdomain:id(), nkdomain:type(), notification_opts(), nkdomain_token_obj:token_data()) ->
     {ok, UserId::nkdomain:obj_id(), nkdomain_token_obj:token_data()} | {error, term()}.
 
-add_token_notification(Id, SessType, Opts, Token) ->
-    nkdomain_obj:sync_op(Id, {?MODULE, add_notification_op, SessType, Opts, Token}).
+add_token_notification(Id, Type, Opts, Token) ->
+    nkdomain_obj:sync_op(Id, {?MODULE, add_notification_op, Type, Opts, Token}).
 
 
 %% @doc
@@ -351,10 +353,11 @@ launch_session_notifications(Id, SessId) ->
 
 
 %% @doc Registers a push device
--spec add_push_device(nkdomain:id(), nkdomain:id(), nkservice:id(), push_device_id(), push_device_data()) ->
+-spec add_push_device(nkdomain:id(), nkdomain:id(), nkservice:id()|binary(), push_device_id(), push_device_data()) ->
     ok | {error, term()}.
 
-add_push_device(Id, Domain, SrvId, DeviceId, PushData) ->
+add_push_device(Id, Domain, Srv, DeviceId, PushData) ->
+    SrvId = nkdomain_obj_util:get_srv_id(Srv),
     case nkdomain_lib:find(Domain) of
         #obj_id_ext{path=DomainPath} ->
             nkdomain_obj:async_op(Id, {?MODULE, add_push_device, DomainPath, SrvId, DeviceId, PushData});
@@ -669,7 +672,8 @@ object_sync_op({?MODULE, get_info, Opts}, _From, #obj_state{obj=Obj}=State) ->
     end,
     Data2 = case Path /= undefined andalso Opts of
         #{srv_id:=SrvId} ->
-            case do_get_status(SrvId, Path, State) of
+            SrvId2 = nkdomain_obj_util:get_srv_id(SrvId),
+            case do_get_status(SrvId2, Path, State) of
                 {ok, Status} ->
                     Data#{status=>Status};
                 {error, _} ->
@@ -1131,14 +1135,14 @@ do_load_push([], Acc) ->
 do_load_push([Push|Rest], Acc) ->
     #{
         domain_path := DomainPath,
-        srv_id := SrvId,
+        srv_id := Srv,
         device_id := DeviceId,
         push_data := Data,
         updated_time := Time
     } = Push,
     PushDevice = #push_device{
         domain_path = DomainPath,
-        srv_id = SrvId,
+        srv_id = nkdomain_obj_util:get_srv_id(Srv),
         device_id = DeviceId,
         push_data = Data,
         updated_time = Time
@@ -1247,10 +1251,11 @@ do_load_status([], Acc) ->
 do_load_status([Status|Rest], Acc) ->
     #{
         domain_path := DomainPath,
-        srv_id := SrvId,
+        srv_id := Srv,
         user_status := UserStatus,
         updated_time := Time
     } = Status,
+    SrvId = nkdomain_obj_util:get_srv_id(Srv),
     Status2 = #status{
         id = {SrvId, DomainPath},
         user_status = UserStatus,
