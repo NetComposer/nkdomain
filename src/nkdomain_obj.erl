@@ -802,7 +802,8 @@ register_domain(#obj_state{id=ObjIdExt, domain_id=DomainId}=State) ->
             State2 = do_enabled(State#obj_state{domain_pid=Pid, domain_enabled=Enabled}),
             {ok, State2};
         {error, object_not_found} ->
-            {error, {could_not_load_domain2, DomainId}};
+            ?LLOG(warning, "cannot load domain ~s: not found", [DomainId], State),
+            {error, {could_not_load_domain, DomainId}};
         {error, Error} ->
             {error, Error}
     end.

@@ -115,8 +115,7 @@ send_session_event(#nkevent{type=Type}=Event, State) ->
     #obj_state{callback_srv_id=SrvId, session_events=Events, session_link=Link} = State,
     case lists:member(Type, Events) of
         true ->
-            lager:notice("NKLOG ESS ~p ~p", [Type, Link]),
-
+            %lager:notice("NKLOG ESS ~p ~p", [Type, Link]),
             apply(SrvId, object_session_event, [Link, Event, State]);
         false ->
             ok

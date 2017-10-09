@@ -33,7 +33,7 @@
 -export([search_agg_field/5]).
 -export([search_types/3, search_all_types/3, search_childs/3, search_all_childs/3, search/2, search_obj_alias/2]).
 -export([delete_all_childs/3]).
--export([clean/1, import_objects/2]).
+-export([clean/1, import_objects/3, print/2]).
 
 -define(ES_ITER_SIZE, 100).
 
@@ -365,11 +365,13 @@ do_clean_expired(EsOpts) ->
 
 
 %% @doc
-import_objects(FromIndex, UserFun) ->
+import_objects(FromIndex, StartPath, UserFun) ->
     {ok, To} = nkdomain_store_es_util:get_opts(),
     From = To#{index:=FromIndex},
     Spec = #{
-        size => ?ES_ITER_SIZE
+        size => ?ES_ITER_SIZE,
+        sort => <<"path">>,
+        filters => #{path => <<"prefix:", (to_bin(StartPath))/binary>>}
     },
     Fun = fun(#{<<"obj_id">>:=ObjId, <<"path">>:=Path}=Data, Acc) ->
         case UserFun(Data) of
@@ -382,16 +384,25 @@ import_objects(FromIndex, UserFun) ->
                         lager:info("Import already imported ~s (~s)", [Path, ObjId]),
                         {ok, Acc};
                     _ ->
-                        case nkelastic:put(ObjId, Data2, To) of
-                            {ok, _} ->
-                                lager:notice("Import upgraded ~s (~s)", [Path, ObjId]),
-                                timer:sleep(10),
-                                print("Old", Data),
-                                print("New", Data2),
-                                {ok, Acc+1};
-                            {error, Error} ->
-                                lager:warning("Import COULD NOT upgrade ~s (~s): ~p", [Path, ObjId, Error]),
-                                {ok, Acc}
+                        case do_search_objs(#{filters=>#{path=>Path}}, To) of
+                            {ok, 1, _List} ->
+                              lager:warning("Import COULD NOT upgrade ~s (~s): path is present", [Path, ObjId]),
+                                {ok, Acc};
+                            {ok, 2, _List} ->
+                                lager:warning("Import COULD NOT upgrade ~s (~s): path is DUPLICATED", [Path, ObjId]),
+                                {ok, Acc};
+                            {ok, 0, []} ->
+                                case nkelastic:put(ObjId, Data2, To) of
+                                    {ok, _} ->
+                                        lager:notice("Import upgraded ~s (~s)", [Path, ObjId]),
+                                        timer:sleep(10),
+                                        %print("Old", Data),
+                                        %print("New", Data2),
+                                        {ok, Acc+1};
+                                    {error, Error} ->
+                                        lager:warning("Import COULD NOT upgrade ~s (~s): ~p", [Path, ObjId, Error]),
+                                        {ok, Acc}
+                                end
                         end
                 end
         end

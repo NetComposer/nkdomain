@@ -23,7 +23,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 
--export([import_7_to_8/0, print/1]).
+-export([import_7_to_8/1, print/1]).
 -include("nkdomain.hrl").
 
 
@@ -33,7 +33,7 @@
 
 
 %% @doc
-import_7_to_8() ->
+import_7_to_8(Path) ->
     Fun = fun(Obj) ->
         case Obj of
             #{?DOMAIN_USER := User} ->
@@ -46,7 +46,7 @@ import_7_to_8() ->
                 {upgrade, Obj}
         end
     end,
-    nkdomain_store_es:import_objects(<<"nkobjects_v7">>, Fun).
+    nkdomain_store_es:import_objects(<<"nkobjects_v7">>, Path, Fun).
 
 
 %% @private
@@ -76,15 +76,6 @@ import_7_to_8_user(User) ->
         end,
         maps:get(<<"status">>, User, [])),
     User#{<<"push">>=>Push, <<"status">>:=Status}.
-
-
-
-
-
-
-
-
-
 
 
 
