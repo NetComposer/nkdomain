@@ -49,7 +49,7 @@ cmd(<<"get_info">>, #nkreq{srv_id=SrvId, data=Data}=Req) ->
     case nkdomain_api_util:get_id(?DOMAIN_USER, Data, Req) of
         {ok, Id} ->
             SrvId2 = maps:get(srv_id, Data, SrvId),
-            Opts = maps:with([domain, session_types], Data),
+            Opts = maps:with([domain_id, session_types], Data),
             nkdomain_user_obj:get_info(Id, Opts#{srv_id=>SrvId2});
         {error, Error} ->
             {error, Error}

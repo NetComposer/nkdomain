@@ -28,7 +28,7 @@
 -export([link_to_session_server/2, unlink_from_session_server/2]).
 -export([set_active/2, set_next_status_timer/2]).
 -export([get_obj_session/1, set_obj_session/2]).
--export([get_srv_id/1]).
+-export([get_existing_srv_id/1, get_srv_id/1]).
 
 -include("nkdomain.hrl").
 -include("nkdomain_debug.hrl").
@@ -283,13 +283,19 @@ set_next_status_timer(Time, #obj_state{obj=Obj, next_status_timer=Timer}=State) 
 
 
 %% @doc
-get_srv_id(Mod) when is_atom(Mod) ->
+get_existing_srv_id(Mod) when is_atom(Mod) ->
     Mod;
-get_srv_id(<<>>) ->
+get_existing_srv_id(<<>>) ->
     undefined;
-get_srv_id(Bin) when is_binary(Bin) ->
+get_existing_srv_id(Bin) when is_binary(Bin) ->
     case catch binary_to_existing_atom(Bin, latin1) of
         {'EXIT', _} -> undefined;
         Mod -> Mod
     end.
 
+
+%% @doc DANGEROUS!
+get_srv_id(Mod) when is_atom(Mod) ->
+    Mod;
+get_srv_id(Bin) when is_binary(Bin) ->
+    binary_to_atom(Bin, latin1).

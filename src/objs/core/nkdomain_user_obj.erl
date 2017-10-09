@@ -308,12 +308,16 @@ update_presence(Id, SessId, Presence) ->
     ok | {error, term()}.
 
 set_status(Id, Srv, Domain, Status) when is_map(Status) ->
-    SrvId = nkdomain_obj_util:get_srv_id(Srv),
-    case nkdomain_lib:find(Domain) of
-        #obj_id_ext{path=DomainPath} ->
-            nkdomain_obj:async_op(Id, {?MODULE, set_status, SrvId, DomainPath, Status});
-        {error, Error} ->
-            {error, Error}
+    case nkdomain_obj_util:get_existing_srv_id(Srv) of
+        undefined ->
+            {error, invalid_service};
+        SrvId ->
+            case nkdomain_lib:find(Domain) of
+                #obj_id_ext{path=DomainPath} ->
+                    nkdomain_obj:async_op(Id, {?MODULE, set_status, SrvId, DomainPath, Status});
+                {error, Error} ->
+                    {error, Error}
+            end
     end.
 
 
@@ -322,12 +326,16 @@ set_status(Id, Srv, Domain, Status) when is_map(Status) ->
     {ok, user_status()} | {error, term()}.
 
 get_status(Id, Srv, Domain) ->
-    SrvId = nkdomain_obj_util:get_srv_id(Srv),
-    case nkdomain_lib:find(Domain) of
-        #obj_id_ext{path=DomainPath} ->
-            nkdomain_obj:sync_op(Id, {?MODULE, get_status, SrvId, DomainPath});
-        {error, Error} ->
-            {error, Error}
+    case nkdomain_obj_util:get_existing_srv_id(Srv) of
+        undefined ->
+            {error, invalid_service};
+        SrvId ->
+            case nkdomain_lib:find(Domain) of
+                #obj_id_ext{path=DomainPath} ->
+                    nkdomain_obj:sync_op(Id, {?MODULE, get_status, SrvId, DomainPath});
+                {error, Error} ->
+                    {error, Error}
+            end
     end.
 
 
@@ -357,12 +365,16 @@ launch_session_notifications(Id, SessId) ->
     ok | {error, term()}.
 
 add_push_device(Id, Domain, Srv, DeviceId, PushData) ->
-    SrvId = nkdomain_obj_util:get_srv_id(Srv),
-    case nkdomain_lib:find(Domain) of
-        #obj_id_ext{path=DomainPath} ->
-            nkdomain_obj:async_op(Id, {?MODULE, add_push_device, DomainPath, SrvId, DeviceId, PushData});
-        {error, Error} ->
-            {error, Error}
+    case nkdomain_obj_util:get_existing_srv_id(Srv) of
+        undefined ->
+            {error, invalid_service};
+        SrvId ->
+            case nkdomain_lib:find(Domain) of
+                #obj_id_ext{path=DomainPath} ->
+                    nkdomain_obj:async_op(Id, {?MODULE, add_push_device, DomainPath, SrvId, DeviceId, PushData});
+                {error, Error} ->
+                    {error, Error}
+            end
     end.
 
 
@@ -381,7 +393,7 @@ remove_all_push_devices(Id) ->
     ok | {error, term()}.
 
 send_push(Id, Srv, Push) ->
-    case nkdomain_obj_util:get_srv_id(Srv) of
+    case nkdomain_obj_util:get_existing_srv_id(Srv) of
         undefined ->
             ok;
         SrvId ->
@@ -672,7 +684,7 @@ object_sync_op({?MODULE, get_info, Opts}, _From, #obj_state{obj=Obj}=State) ->
     end,
     Data2 = case Path /= undefined andalso Opts of
         #{srv_id:=SrvId} ->
-            SrvId2 = nkdomain_obj_util:get_srv_id(SrvId),
+            SrvId2 = nkdomain_obj_util:get_existing_srv_id(SrvId),
             case do_get_status(SrvId2, Path, State) of
                 {ok, Status} ->
                     Data#{status=>Status};
@@ -1152,7 +1164,8 @@ do_load_push([Push|Rest], Acc) ->
         push_data = Data,
         updated_time = Time
     },
-    do_load_push(Rest, [PushDevice|Acc]).
+    Acc2 = lists:keystore(DeviceId, #push_device.device_id, Acc, PushDevice),
+    do_load_push(Rest, Acc2).
 
 
 %% @private
@@ -1261,12 +1274,14 @@ do_load_status([Status|Rest], Acc) ->
         updated_time := Time
     } = Status,
     SrvId = nkdomain_obj_util:get_srv_id(Srv),
+    Id = {SrvId, DomainPath},
     Status2 = #status{
-        id = {SrvId, DomainPath},
+        id = Id,
         user_status = UserStatus,
         updated_time= Time
     },
-    do_load_status(Rest, [Status2|Acc]).
+    Acc2 = lists:keystore(Id, #status.id, Acc, Status2),
+    do_load_status(Rest, Acc2).
 
 
 %% @private
@@ -1289,9 +1304,9 @@ do_save_status([Status|Rest], Acc) ->
 
 
 %% @private
-do_set_status(DomainPath, SrvId, UserStatus, #obj_state{session=Session}=State) ->
+do_set_status(SrvId, Path, UserStatus, #obj_state{session=Session}=State) ->
     #session{statuses=Statuses} = Session,
-    Id = {SrvId, DomainPath},
+    Id = {SrvId, Path},
     Now = nkdomain_util:timestamp(),
     Status = #status{
         id = Id,
@@ -1300,7 +1315,7 @@ do_set_status(DomainPath, SrvId, UserStatus, #obj_state{session=Session}=State) 
     },
     Statuses2 = lists:keystore(Id, #status.id, Statuses, Status),
     Session2 = Session#session{statuses=Statuses2},
-    State2 = do_event({status_updated, SrvId, DomainPath, UserStatus}, State),
+    State2 = do_event({status_updated, SrvId, Path, UserStatus}, State),
     State2#obj_state{session=Session2, is_dirty=true}.
 
 
