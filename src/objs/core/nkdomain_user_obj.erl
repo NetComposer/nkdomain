@@ -953,18 +953,18 @@ check_email(Obj) ->
 
 
 %% @private
-do_update_presence(Type, DomainPath, State) ->
-    case do_get_presence(Type, DomainPath, State) of
+do_update_presence(Type, Path, State) ->
+    case do_get_presence(Type, Path, State) of
         {ok, UserPresence} ->
-            do_event({presence_updated, Type, DomainPath, UserPresence}, State);
-        {error, _} ->
+            do_event({presence_updated, Type, Path, UserPresence}, State);
+        {error, _Error} ->
             State
     end.
 
 
 %% @private Gets presence status from all sessions with Domain and Type and call presence_fun() to get current
 %% presence status
-do_get_presence(DomainPath, Type, State) ->
+do_get_presence(Type, Path, State) ->
     #obj_state{id=Id, session=Session} = State,
     #obj_id_ext{obj_id=UserId} =Id,
     #session{user_sessions=UserSessions, user_session_presence=PresFuns} = Session,
@@ -972,7 +972,7 @@ do_get_presence(DomainPath, Type, State) ->
         {ok, Fun} ->
             PresenceList = [
                 P || #user_session{type=T, domain_path=D, presence=P}
-                     <- UserSessions, T==Type andalso D==DomainPath
+                     <- UserSessions, T==Type andalso D==Path
             ],
             {ok, Presence} = Fun(UserId, PresenceList),
             {ok, Presence};
