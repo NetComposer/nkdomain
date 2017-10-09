@@ -23,7 +23,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 
--export([import_7_8/0, print/1]).
+-export([import_7_to_8/0, print/1]).
 -include("nkdomain.hrl").
 
 
@@ -33,11 +33,11 @@
 
 
 %% @doc
-import_7_8() ->
+import_7_to_8() ->
     Fun = fun(Obj) ->
         case Obj of
             #{?DOMAIN_USER := User} ->
-                User2 = import_7_8_user(User),
+                User2 = import_7_to_8_user(User),
                 {upgrade, Obj#{?DOMAIN_USER:=User2}};
             #{<<"conversation">> := #{<<"push_app_id">>:=AppId}=Conv} ->
                 Conv2 = maps:remove(<<"push_app_id">>, Conv),
@@ -50,7 +50,7 @@ import_7_8() ->
 
 
 %% @private
-import_7_8_user(User) ->
+import_7_to_8_user(User) ->
     Push = lists:map(
         fun(P) ->
             case maps:take(<<"app_id">>, P) of
