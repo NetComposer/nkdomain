@@ -650,7 +650,7 @@ object_sync_op({?MODULE, get_info, Opts}, _From, #obj_state{obj=Obj}=State) ->
     Data = Base#{
         name => UserName,
         surname => UserSurName,
-        fullname => maps:get(name, Obj, <<>>),
+        fullname => maps:get(name, Obj, UserName),
         email => maps:get(email, User, <<>>),
         phone_t => maps:get(phone_t, User, <<>>),
         address_t => maps:get(address_t, User, <<>>),
@@ -777,15 +777,10 @@ object_async_op({?MODULE, update_presence, SessId, Presence}, State) ->
             {noreply, State}
     end;
 
-object_async_op({?MODULE, launch_session_notifications, SessId}, #obj_state{session=Session}=State) ->
-    #session{user_sessions=UserSessions} = Session,
-    State2 = case lists:keyfind(SessId, #user_session.id, UserSessions) of
-        #user_session{} = UserSession ->
-            do_launch_session_tokens(UserSession, State);
-        false ->
-            State
-    end,
-    {noreply, State2};
+object_async_op({?MODULE, launch_session_notifications, _SessId}=Msg, State) ->
+    % Reply to client first
+    erlang:send_after(1000, self(), Msg),
+    {noreply, State};
 
 object_async_op({?MODULE, set_status, SrvId, DomainPath, UserStatus}, State) ->
     State2 = do_set_status(SrvId, DomainPath, UserStatus, State),
@@ -858,6 +853,16 @@ object_async_op(_Op, _State) ->
 object_handle_info({?MODULE, expired_notify, NotifyId}, State) ->
     lager:warning("NKLOG Expired ~p", [NotifyId]),
     State2 = do_remove_notification(NotifyId, timeout, State),
+    {noreply, State2};
+
+object_handle_info({?MODULE, launch_session_notifications, SessId}, #obj_state{session=Session}=State) ->
+    #session{user_sessions=UserSessions} = Session,
+    State2 = case lists:keyfind(SessId, #user_session.id, UserSessions) of
+        #user_session{} = UserSession ->
+            do_launch_session_tokens(UserSession, State);
+        false ->
+            State
+    end,
     {noreply, State2};
 
 object_handle_info(_Info, _State) ->
@@ -1214,7 +1219,7 @@ do_remove_all_push_devices(State) ->
 
 
 %% @doc
-do_send_push(SrvId, Push, #obj_state{callback_srv_id=SrvId}=State) ->
+do_send_push(SrvId, Push, State) ->
     Devices = find_push_devices(SrvId, State),
     lists:foreach(
         fun(#push_device{device_id=DeviceId, push_data=PushDevice}) ->
