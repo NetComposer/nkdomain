@@ -615,7 +615,7 @@ object_sync_op({?MODULE, get_name, Opts}, _From, #?STATE{obj=Obj}=State) ->
                         {ok, UserPres} ->
                             Acc#{Type => UserPres};
                         {error, _} ->
-                            Acc
+                            Acc#{Type => #{status => <<"offline">>}}
                     end
                 end,
                 #{},
