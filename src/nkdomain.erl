@@ -144,7 +144,7 @@ update_name(Id, ObjName) ->
 
 %% @doc Remove an object
 -spec delete(id()|pid()) ->
-    {ok, binary()} | {error, term()}.
+    ok | {error, term()}.
 
 delete(Id) ->
     nkdomain_obj:sync_op(Id, delete).

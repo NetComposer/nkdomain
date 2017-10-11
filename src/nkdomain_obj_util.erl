@@ -94,9 +94,9 @@ send_event(EvType, ObjId, Body, #obj_state{id=#obj_id_ext{path=Path}}=State) ->
 
 
 %% @private
-send_event(EvType, ObjId, ObjPath, Body, #obj_state{id=#obj_id_ext{srv_id=SrvId, type=Type}}=State) ->
+send_event(EvType, ObjId, ObjPath, Body, #obj_state{id=#obj_id_ext{type=Type}}=State) ->
     Event = #nkevent{
-        srv_id = SrvId,
+        srv_id = ?NKROOT,
         class = ?DOMAIN_EVENT_CLASS,
         subclass = Type,
         type = nklib_util:to_binary(EvType),
