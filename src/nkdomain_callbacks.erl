@@ -27,7 +27,7 @@
          admin_element_action/5, admin_get_data/3]).
 -export([object_send_push/3]).
 -export([object_init/1, object_terminate/2, object_stop/2,
-         object_event/2, object_reg_event/4, object_session_event/3, object_sync_op/3, object_async_op/2,
+         object_event/2, object_reg_event/4, object_sync_op/3, object_async_op/2,
          object_save/1, object_delete/1, object_link_down/2, object_enabled/2,
          object_handle_call/3, object_handle_cast/2, object_handle_info/2, object_conflict_detected/4]).
 -export([plugin_deps/0]).
@@ -158,15 +158,6 @@ object_event(Event, State) ->
 
 object_reg_event(Link, Data, Event, State) ->
     ?CALL_NKROOT(object_reg_event, [Link, Data, Event, State]).
-
-
-%% @doc If the object was started with session_events and session_link parameters,
-%% this function will be called when the object sends a matching event
--spec object_session_event(term(), #nkevent{}, state()) ->
-    ok.
-
-object_session_event(SessId, Event, State) ->
-    ?CALL_NKROOT(object_session_event, [SessId, Event, State]).
 
 
 %% @doc

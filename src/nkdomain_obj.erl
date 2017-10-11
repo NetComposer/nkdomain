@@ -122,7 +122,7 @@
 
 
 %% If an object has a session_link and session_events, events will be sent directly to
-%% that the session (using object_session_event/3 in nkdomain_obj_util:send_session_event/2).
+%% that the session (using nkdomain_obj_util:send_session_event/2).
 %% session_link is also used by some session objects to link to api server
 %% (see link_to_session_server and unlink_from_session_server in nkdomain_obj_util)
 -type start_opts() ::

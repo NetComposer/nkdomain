@@ -112,11 +112,15 @@ send_event(EvType, ObjId, ObjPath, Body, #obj_state{id=#obj_id_ext{type=Type}}=S
 
 %% @private
 send_session_event(#nkevent{type=Type}=Event, State) ->
-    #obj_state{callback_srv_id=SrvId, session_events=Events, session_link=Link} = State,
+    #obj_state{session_events=Events, session_link=Link} = State,
     case lists:member(Type, Events) of
         true ->
-            %lager:notice("NKLOG ESS ~p ~p", [Type, Link]),
-            apply(SrvId, object_session_event, [Link, Event, State]);
+            case Link of
+                {Mod, Pid} ->
+                    Mod:send_event(Pid, Event);
+                _ ->
+                    ok
+            end;
         false ->
             ok
     end.

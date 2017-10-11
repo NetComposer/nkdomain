@@ -30,7 +30,7 @@
 -export([object_create/5, object_check_active/2, object_do_expired/1]).
 -export([object_syntax/1, object_syntax_srv_id/1, object_parse/2, object_update/1]).
 -export([object_init/1, object_terminate/2, object_stop/2,
-         object_event/2, object_reg_event/4, object_session_event/3, object_sync_op/3, object_async_op/2,
+         object_event/2, object_reg_event/4, object_sync_op/3, object_async_op/2,
          object_save/1, object_delete/1, object_link_down/2, object_enabled/2, object_next_status_timer/1,
          object_handle_call/3, object_handle_cast/2, object_handle_info/2, object_conflict_detected/4]).
 -export([object_db_init/1, object_db_read/1, object_db_save/1, object_db_delete/1]).
@@ -522,18 +522,6 @@ object_event(Event, State) ->
 
 object_reg_event(Link, Data, Event, State) ->
     call_module(object_reg_event, [Link, Data, Event], State).
-
-
-%% @doc If the object was started with session_events and session_link parameters,
-%% this function will be called when the object sends a matching event
--spec object_session_event(term(), #nkevent{}, state()) ->
-    ok.
-
-object_session_event({Mod, Pid}, Event, _State) when is_atom(Mod), is_pid(Pid)->
-    Mod:send_event(Pid, Event);
-
-object_session_event(_SessId, _Event, _State) ->
-    ok.
 
 
 %% @doc
