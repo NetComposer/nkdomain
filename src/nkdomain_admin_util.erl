@@ -310,10 +310,10 @@ table_entry(Type, Entry, Pos) ->
     #{
         <<"obj_id">> := ObjId,
         <<"path">> := Path,
-        <<"srv_id">> := SrvId,
         <<"created_by">> := CreatedBy,
         <<"created_time">> := CreatedTime
     } = Entry,
+    SrvId = maps:get(<<"srv_id">>, Entry, nkroot),
     {ok, Domain, ShortName} = nkdomain_util:get_parts(Type, Path),
     Enabled = maps:get(<<"enabled">>, Entry, true),
     Root = nklib_util:to_binary(?NKROOT),

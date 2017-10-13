@@ -86,9 +86,11 @@ object_info() ->
 object_admin_info() ->
     #{
         class => session,
-        weight => 100
+        weight => 100,
+        type_view_mod => nkdomain_node_obj_type_view 
+%%        tree_id => <<"domain_tree_sessions_node">>
     }.
-
+ 
 % @private
 object_parse(_Mode, _Map) ->
     #{}.
