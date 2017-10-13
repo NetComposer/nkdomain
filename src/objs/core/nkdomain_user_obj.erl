@@ -166,7 +166,8 @@
 
 -type notification_opts() ::
     #{
-        wakeup_push => term()
+        srv_id => nkservice:id(),   % For push sending
+        wakeup_push => push_msg()
     }.
 
 
@@ -739,16 +740,15 @@ object_sync_op({?MODULE, get_sessions, Type}, _From, #obj_state{session=Session}
     {reply, {ok, Reply}, State};
 
 object_sync_op({?MODULE, add_notification_op, SessType, Opts, Token}, _From, State) ->
-    #obj_state{id=#obj_id_ext{srv_id=SrvId, obj_id=UserId}} = State,
+    #obj_state{id=#obj_id_ext{obj_id=UserId}} = State,
     UserData1 = maps:get(?DOMAIN_USER, Token, #{}),
     UserNotification1 = #{
         <<"user_id">> => UserId,
-        <<"srv_id">> => SrvId,
         <<"session_type">> => SessType
     },
     UserNotification2 = case Opts of
-        #{wakeup_push:=Push} ->
-            UserNotification1#{<<"wakeup_push">> => Push};
+        #{srv_id:=SrvId, wakeup_push:=Push} ->
+            UserNotification1#{<<"srv_id">> => SrvId, <<"wakeup_push">> => Push};
         _ ->
             UserNotification1
     end,
@@ -1101,26 +1101,30 @@ notify_token_sessions(Notify, Op, State) ->
                 _ when Num > 0 ->
                     ok;
                 created ->
-                    ?LLOG(notice, "no ~p session found: send wakeup", [Data], State),
-                    ok;
-%%                    Push = #{
-%%                        type => simple,
-%%                        title => <<"New user notification">>,
-%%                        body => <<"Wake up">>
-%%                    },
-%%                    AppId = <<"user_notifications">>,
-%%                    send_push(any, self(), AppId, Push);
+                    notify_wakeup_push(Data, State);
                 {removed, Reason} ->
-                    ?LLOG(notice, "~s session notification removed: ~p", [Type, Reason]),
-                    Push = #{
-                        type => remove
-                    },
-                    AppId = <<"user_notifications">>,
-                    send_push(self(), AppId, Push)
+                    ?LLOG(notice, "~s session notification removed: ~p", [Type, Reason])
             end;
+        error when Op==created ->
+            notify_wakeup_push(Data, State);
         error ->
             ok
     end.
+
+%% @private
+notify_wakeup_push(#{?DOMAIN_USER:=#{<<"notification">>:=#{<<"srv_id">>:=Srv, <<"wakeup_push">>:=Push}}}, State) ->
+    ?LLOG(notice, "no session found: send wakeup (~p)", [Push], State),
+    case nkdomain_obj_util:get_existing_srv_id(Srv) of
+        undefined ->
+            ?LLOG(notice, "could not send push: unknown service '~s'", [Srv], State);
+        SrvId ->
+            do_send_push(SrvId, Push, State)
+    end;
+
+notify_wakeup_push(S, State) ->
+    lager:error("NKLOG NO WAKE ~p", [S]),
+    ?LLOG(notice, "no session found (and no wakeup)", [], State).
+
 
 
 %% @private
