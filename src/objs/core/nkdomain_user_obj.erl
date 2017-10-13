@@ -1236,8 +1236,7 @@ do_send_push(SrvId, Push, State) ->
     Devices = find_push_devices(SrvId, State),
     lists:foreach(
         fun(#push_device{device_id=DeviceId, push_data=PushDevice}) ->
-            ?LLOG(notice, "sending PUSH to device ~s (~s): ~p (~p)",
-                          [DeviceId, SrvId, Push, PushDevice], State),
+            ?LLOG(info, "sending PUSH (~s): ~p", [SrvId, Push]),
             SrvId:object_send_push(DeviceId, PushDevice, Push)
         end,
         Devices).
