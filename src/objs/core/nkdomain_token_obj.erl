@@ -101,7 +101,7 @@ check_ttl(TokenOpts) ->
         TTL when TTL>=0, TTL < MaxTTL ->
             {ok, TTL};
         _ ->
-            {error, invalid_token_ttl}
+            {error, token_invalid_ttl}
     end.
 
 

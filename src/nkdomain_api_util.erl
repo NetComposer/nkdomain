@@ -158,7 +158,7 @@ check_raw_token(Token) ->
                     LoginMeta = maps:get(login_meta, Data, #{}),
                     {ok, UserId, DomainId, LoginMeta, <<>>};
                 _ ->
-                    {error, invalid_token}
+                    {error, token_invalid}
             end;
         _ ->
             case catch base64:decode(Token) of
@@ -172,10 +172,10 @@ check_raw_token(Token) ->
                                     {error, Error}
                             end;
                         _ ->
-                            {error, invalid_token}
+                            {error, token_invalid}
                     end;
                 _ ->
-                    {error, invalid_token}
+                    {error, token_invalid}
             end
     end.
 
