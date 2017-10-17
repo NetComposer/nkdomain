@@ -41,7 +41,7 @@ start() ->
         nkdomain => nklib_config:get_env(nkdomain),
         debug => [
             %% {nkapi_client, #{nkpacket=>true}},
-            nkapi_server,
+            %% nkapi_server,
             %% nkelastic
             %% {nkelastic, [full]},
             %% {nkdomain_obj, all}
