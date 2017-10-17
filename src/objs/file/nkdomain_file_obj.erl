@@ -56,9 +56,8 @@ http_post(Req) ->
         {ok, #obj_id_ext{obj_id=ObjId, path=Path}, _Unknown} ->
             {ok, ObjId, Path};
         {error, Error} ->
-            {erorr, Error}
+            {error, Error}
     end.
-
 
 
 %% @doc Creates a file over HTTP
