@@ -93,7 +93,8 @@ syntax() ->
 
 %% @private
 %% Called from nkdomain_nkroot_callbacks:plugin_config/2
-config(Env, Base) ->
+config(Config, _Service) ->
+    #{nkdomain:=Env} = Config,
     #{
         listen_ip := Host,
         listen_port := Port,
@@ -109,18 +110,21 @@ config(Env, Base) ->
     BaseHttp = <<Http/binary, "://", Host/binary, ":", BinPort/binary, Path/binary>>,
     BaseWs = <<Ws/binary, "://", Host/binary, ":", BinPort/binary, Path/binary>>,
     Services = maps:get(start_services, Env, []),
-    Config1 = Base#{start_services => Services},
+    Config1 = Config#{start_services => Services},
     Config2 = case ApiServer of
         true ->
-            Config1#{api_server => <<BaseHttp/binary, "/_api, ", BaseWs/binary, "/_api/ws">>};
+            ApiObj = #{id=><<"nkroot">>, url=><<BaseHttp/binary, "/_api, ", BaseWs/binary, "/_api/ws">>},
+            nkservice_util:add_config_obj(nkapi_server, ApiObj, Config1);
         false ->
             Config1
     end,
     Config3 = case Admin of
         true ->
             Config2#{
-                admin_url_web => <<BaseHttp/binary, "/_admin">>,
-                admin_url_ws => <<BaseWs/binary, "/_admin/_ws">>
+                nkadmin => #{
+                    webserver_url => <<BaseHttp/binary, "/_admin">>,
+                    api_url => <<BaseWs/binary, "/_admin/_ws">>
+                }
             };
         false ->
             Config2
@@ -135,7 +139,7 @@ config(Env, Base) ->
         <<>> ->
             Config3;
         RestUrl ->
-            Config3#{rest_url => RestUrl}
+            nkservice_util:add_config_obj(nkservice_rest, #{id=><<"nkroot">>, url=>RestUrl}, Config3)
     end,
     %% Plugin nkdomain_store_es should have inserted already its
     %% configuration

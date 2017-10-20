@@ -39,8 +39,8 @@
          object_db_search_childs/2, object_db_search_all_childs/2, object_db_search_agg_field/4,
          object_db_delete_all_childs/2, object_db_clean/0]).
 -export([plugin_deps/0, plugin_syntax/0, plugin_config/2, plugin_listen/2]).
--export([service_api_syntax/2, service_api_allow/1, service_api_cmd/1]).
--export([api_server_http_auth/2, api_server_reg_down/3]).
+-export([service_api_syntax/3, service_api_allow/2, service_api_cmd/2]).
+-export([api_server_http_auth/3, api_server_reg_down/4]).
 -export([service_init/2, service_handle_cast/2, service_handle_info/2]).
 
 
@@ -809,7 +809,7 @@ object_db_clean() ->
 
 
 %% @doc
-service_api_syntax(Syntax, #nkreq{cmd = <<"objects/", Rest/binary>>}=Req) ->
+service_api_syntax(_Id, Syntax, #nkreq{cmd = <<"objects/", Rest/binary>>}=Req) ->
     case binary:split(Rest, <<"/">>) of
         [] ->
             continue;
@@ -828,25 +828,25 @@ service_api_syntax(Syntax, #nkreq{cmd = <<"objects/", Rest/binary>>}=Req) ->
             end
     end;
 
-service_api_syntax(_Syntax, _Req) ->
+service_api_syntax(_Id, _Syntax, _Req) ->
     continue.
 
 
 %% @doc
 %% TODO to remove (after admin)
-service_api_allow(#nkreq{cmd = <<"objects/user/login">>, user_id = <<>>}) ->
+service_api_allow(_Id, #nkreq{cmd = <<"objects/user/login">>, user_id = <<>>}) ->
     true;
 
-service_api_allow(#nkreq{cmd = <<"objects/session/start">>, user_id = <<>>}) ->
+service_api_allow(_Id, #nkreq{cmd = <<"objects/session/start">>, user_id = <<>>}) ->
     true;
 
-service_api_allow(#nkreq{cmd = <<"objects/user/get_token">>, user_id = <<>>}) ->
+service_api_allow(_Id, #nkreq{cmd = <<"objects/user/get_token">>, user_id = <<>>}) ->
     true;
 
-service_api_allow(#nkreq{cmd = <<"objects/", _/binary>>, user_id = <<>>}) ->
+service_api_allow(_Id, #nkreq{cmd = <<"objects/", _/binary>>, user_id = <<>>}) ->
     false;
 
-service_api_allow(#nkreq{cmd = <<"objects/", _/binary>>, req_state={_Type, Module, Cmd}}=Req) ->
+service_api_allow(_Id, #nkreq{cmd = <<"objects/", _/binary>>, req_state={_Type, Module, Cmd}}=Req) ->
     case nklib_util:apply(Module, object_api_allow, [Cmd, Req]) of
         not_exported ->
             true;
@@ -854,21 +854,21 @@ service_api_allow(#nkreq{cmd = <<"objects/", _/binary>>, req_state={_Type, Modul
             Other
     end;
 
-%%service_api_allow(#nkreq{cmd = <<"session", _/binary>>}) ->
+%%service_api_allow(_Id, #nkreq{cmd = <<"session", _/binary>>}) ->
 %%    true;
 %%
-service_api_allow(#nkreq{cmd = <<"event", _/binary>>}) ->
+service_api_allow(_Id, #nkreq{cmd = <<"event", _/binary>>}) ->
     true;
 
-%%service_api_allow(#nkreq{cmd = <<"nkadmin", _/binary>>}) ->
+%%service_api_allow(_Id, #nkreq{cmd = <<"nkadmin", _/binary>>}) ->
 %%    true;
 
-service_api_allow(_Req) ->
+service_api_allow(_Id, _Req) ->
     continue.
 
 
 %% @doc
-service_api_cmd(#nkreq{cmd = <<"objects/", _/binary>>, req_state={Type, Module, Cmd}}=Req) ->
+service_api_cmd(_Id, #nkreq{cmd = <<"objects/", _/binary>>, req_state={Type, Module, Cmd}}=Req) ->
     #nkreq{timeout_pending=Pending} = Req,
     case Pending of
         true ->
@@ -903,22 +903,22 @@ service_api_cmd(#nkreq{cmd = <<"objects/", _/binary>>, req_state={Type, Module, 
             end
     end;
 
-service_api_cmd(_Req) ->
+service_api_cmd(_Id, _Req) ->
     continue.
 
 
 %% @private
-api_server_reg_down({nkdomain_stop, Module, _Pid}, _Reason, State) ->
+api_server_reg_down(_Id, {nkdomain_stop, Module, _Pid}, _Reason, State) ->
     {stop, {module_failed, Module}, State};
 
-api_server_reg_down(_Link, _Reason, _State) ->
+api_server_reg_down(_Id, _Link, _Reason, _State) ->
     continue.
 
 %% @doc
-api_server_http_auth(#nkreq{cmd = <<"objects/user/get_token">>}=NkReq, _HttpReq) ->
+api_server_http_auth(_Id, _HttpReq, #nkreq{cmd = <<"objects/user/get_token">>}=NkReq) ->
     {true, <<>>, NkReq};
 
-api_server_http_auth(#nkreq{}=Req, HttpReq) ->
+api_server_http_auth(_Id, HttpReq, #nkreq{}=Req) ->
     Headers = nkapi_server_http:get_headers(HttpReq),
     Token = nklib_util:get_value(<<"x-netcomposer-auth">>, Headers, <<>>),
     case nkdomain_api_util:check_token(Token, Req) of
@@ -928,13 +928,6 @@ api_server_http_auth(#nkreq{}=Req, HttpReq) ->
             false
     end.
 
-%%%% @doc
-%%api_server_handle_info({nkdist, {sent_link_down, Link}}, State) ->
-%%    nkapi_server:stop(self(), {sent_link_down, Link}),
-%%    {ok, State};
-%%
-%%api_server_handle_info(_Info, _State) ->
-%%    continue.
 
 
 %% ===================================================================
@@ -954,8 +947,8 @@ plugin_syntax() ->
 
 
 %% @private
-plugin_config(#{nkdomain:=DomCfg}=Config, _Service) ->
-    nkdomain_nkroot:config(DomCfg, Config);
+plugin_config(#{nkdomain:=_}=Config, Service) ->
+    nkdomain_nkroot:config(Config, Service);
 
 plugin_config(Config, _Service) ->
     {ok, Config}.
