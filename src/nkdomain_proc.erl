@@ -316,18 +316,18 @@ do_call(Op, Timeout, Tries) ->
         Pid when is_pid(Pid) ->
             case nkservice_util:call(Pid, Op, Timeout) of
                 {error, Error} when Error==timeout; Error==process_not_found ->
-                    do_call_retry(Op, Timeout, Tries);
+                    do_call_retry(Op, Error, Timeout, Tries);
                 Other ->
                     Other
             end;
-        unefined ->
-            do_call_retry(Op, Timeout, Tries)
+        undefined ->
+            do_call_retry(Op, undefined, Timeout, Tries)
     end.
 
 
 %% @private
-do_call_retry(Op, Timeout, Tries) ->
-    ?LLOG(notice, "SyncOP failed, retrying...", []),
+do_call_retry(Op, Error, Timeout, Tries) ->
+    ?LLOG(notice, "SyncOP failed (~p, ~p), retrying...", [Error, Op]),
     timer:sleep(1000),
     do_call(Op, Timeout, Tries-1).
 
