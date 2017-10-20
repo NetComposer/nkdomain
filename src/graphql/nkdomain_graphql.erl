@@ -131,7 +131,7 @@ rest_serve(File) ->
 
 
 get_listen(SrvId, Url, Config) ->
-    Opts = #{valid_schemes=>[http, https], resolve_type=>listen},
+    Opts = #{resolve_type=>listen},
     {ok, List} = nkpacket:multi_resolve(Url, Opts),
     NetOpts = nkpacket_util:get_plugin_net_opts(Config),
     PacketDebug = case Config of
