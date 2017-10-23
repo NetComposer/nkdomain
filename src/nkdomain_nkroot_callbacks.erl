@@ -125,6 +125,7 @@ error(session_type_unsupported)         -> "Session type not supported";
 error(status_not_defined)               -> "Status is not defined";
 error(store_id_invalid)                 -> "Invalid Store Id";
 error(store_id_missing)                 -> "Missing Store Id";
+error(token_down)                       -> "Token process is down";
 error(url_unknown)      		        -> "Unknown url";
 error(user_is_disabled) 		        -> "User is disabled";
 error(user_unknown)                     -> "Unknown user";

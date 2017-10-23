@@ -803,7 +803,7 @@ object_async_op({?MODULE, loaded_token, TokenId, Pid}, State) ->
         {ok, #{domain_id:=DomainId, data:=Data}} ->
             case Data of
                 #{?DOMAIN_USER:=#{<<"notification">>:=Notification}} ->
-                    ?LLOG(notice, "detected notification token ~s", [TokenId], State),
+                    ?LLOG(info, "detected notification token ~s", [TokenId], State),
                     #{
                         <<"session_type">> := SessType
                     } = Notification,
@@ -833,7 +833,7 @@ object_async_op({?MODULE, loaded_token, TokenId, Pid}, State) ->
     end;
 
 object_async_op({?MODULE, unloaded_token, TokenId}, State) ->
-    ?LLOG(notice, "unloaded notification token ~s", [TokenId], State),
+    ?LLOG(info, "unloaded notification token ~s", [TokenId], State),
     State2 = do_remove_notification(TokenId, timeout, State),
     {noreply, State2};
 
