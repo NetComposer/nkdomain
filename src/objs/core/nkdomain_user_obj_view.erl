@@ -288,6 +288,7 @@ buttons(FormId, Obj) ->
 
 form(_FormId, Obj, Session) ->
     #{
+        obj_id := ObjId,
         domain_id := DomainId,
         obj_name := ObjName,
         created_by := CreatedBy,
@@ -304,12 +305,14 @@ form(_FormId, Obj, Session) ->
         _ ->
             nkdomain_admin_util:get_file_url(IconId, Session)
     end,
-    IconImage = <<"<img class='photo' style='width:150px; height:150px;' src='", IconUrl/binary, "'/>">>,
+    IconImage = <<"<img class='photo' style='width:150px; height:150px; margin-left: 30px; margin-top: -5px;' src='", IconUrl/binary, "' onload='$$(\"user_avatar\").hideProgress();'/>">>,
     UserEmail = maps:get(email, UserObj, <<>>),
     UserName = maps:get(name, UserObj, <<>>),
     UserSurname = maps:get(surname, UserObj, <<>>),
     UserPhoneT = maps:get(phone_t, UserObj, <<>>),
     UserAddressT = maps:get(address_t, UserObj, <<>>),
+    MyUploadAPI = <<"user_avatar_uploadAPI">>,
+    DropFileHereTxt = <<"Drop file here">>,
     #{
         id => <<"user_form">>,
         header => <<"USER DETAILS">>,
@@ -320,6 +323,7 @@ form(_FormId, Obj, Session) ->
         borderless => false,
         cols => [
             #{
+                id => <<"user_avatar_container">>,
                 view => <<"layout">>,
                 height => <<"100%">>,
                 rows => [
@@ -327,11 +331,82 @@ form(_FormId, Obj, Session) ->
                         height => 30
                     },
                     #{
+                        id => <<"user_avatar">>,
                         view => <<"label">>,
                         label => IconImage,
                         width => 200,
                         height => 150,
-                        align => <<"center">>
+                        align => <<"center">>,
+                        click => #{
+                            nkParseFunction => <<"
+                                function() {
+                                    var api = $$('", MyUploadAPI/binary, "');
+                                    if (api) {
+                                        api.fileDialog();
+                                    } else {
+                                        console.log('ERROR: (user_avatar onClick) uploadAPI not found');
+                                    }
+                                }
+                            ">>
+                        },
+                        on => #{
+                            <<"onAfterRender">> => #{
+                                nkParseFunction => <<"
+                                    function() {
+                                        var component = $$('user_avatar');
+                                        if (component) {
+                                            webix.extend(component, webix.ProgressBar);
+                                            component.showProgress({
+                                                type: 'icon'
+                                            });
+                                            // Add the avatar component as a drop zone
+                                            var myUploadAPIJSON = logic.createUploadAPI('", MyUploadAPI/binary, "', {
+                                                id: 'user_avatar',
+                                                types: ['png', 'jpg'],
+                                                progress: {
+                                                    type: 'icon'
+                                                },
+                                                callback: {
+                                                    success: function(e, xhr) {
+                                                        console.log('SUCCESS', e, xhr);
+                                                        var response = JSON.parse(xhr.responseText);
+                                                        console.log('new file_id: ', response.obj_id, 'user_id: ', '", ObjId/binary, "');
+                                                        ncClient.sendMessageAsync('objects/user/update', {
+                                                            id: '", ObjId/binary, "',
+                                                            icon_id: response.obj_id
+                                                        }).then(function(response) {
+                                                            // Send current URL to update the detail view
+                                                            sendURL();
+                                                        });
+                                                    },
+                                                    error: function(error, xhr) {
+                                                        console.log('ERROR', error, xhr);
+                                                    },
+                                                    updateProgress: function(item, progress) {
+                                                        console.log('PROGRESS', item, progress);
+                                                    }
+                                                }
+                                            });
+                                            var myUploadAPI = webix.ui(myUploadAPIJSON);
+                                            if (myUploadAPI) {
+                                                myUploadAPI.addDropZone($$('user_avatar_container').$view, '", DropFileHereTxt/binary, "');
+                                            }
+                                        }
+                                    }
+                                ">>
+                            },
+                            <<"onDestruct">> => #{
+                                nkParseFunction => <<"
+                                    function() {
+                                        var myUploadAPI = $$('", MyUploadAPI/binary, "');
+                                        if (myUploadAPI && this === $$('user_avatar')) {
+                                            // Only destroy our API when this component hasn't been destroyed because of an update
+                                            myUploadAPI.destructor();
+                                        }
+                                    }
+                                ">>
+                            }
+                        }
                     },
                     #{
                         % SPACER
