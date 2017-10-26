@@ -78,6 +78,7 @@ i18n() -> #{
         "domain_column_expires" => "EXPIRES",
         "domain_column_type" => "TYPE",
         "domain_column_size" => "SIZE",
+        "domain_column_status" => "STATUS",
         "domain_column_store_id" => "STORE"
     },
     es => #{
@@ -131,6 +132,7 @@ i18n() -> #{
         "domain_column_expires" => "EXPIRA",
         "domain_column_type" => "TYPE",
         "domain_column_size" => <<"TAMAÑO"/utf8>>,
+        "domain_column_status" => "ESTADO",
         "domain_column_store_id" => "STORE"
         }
 }.
