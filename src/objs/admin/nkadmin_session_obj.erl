@@ -482,7 +482,6 @@ find_url_class(Url) ->
 %% TODO we should subscribe to type_counter only on my base (top) domain, and subscribe to any other object one-by-one
 subscribe_domain(OldPath, #admin_session{srv_id=SrvId, domain_path=NewPath, reg_pids=RegPids}=Session) ->
     Types = [<<"created">>, <<"updated">>, <<"deleted">>, <<"type_counter">>],
-    lager:error("NKLOG SUS ~p", [SrvId]),
     case OldPath of
         <<>> ->
             ok;
