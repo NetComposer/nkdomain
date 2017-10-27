@@ -19,7 +19,7 @@
 %% -------------------------------------------------------------------
 
 %% @doc Elasticsearch plugin
--module(nkdomain_store_pgsql_callbacks).
+-module(nkdomain_store_pgsql_plugin).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([plugin_deps/0, plugin_syntax/0, plugin_config/2]).

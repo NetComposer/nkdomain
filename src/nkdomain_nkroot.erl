@@ -113,7 +113,10 @@ config(Config, _Service) ->
     Config1 = Config#{start_services => Services},
     Config2 = case ApiServer of
         true ->
-            ApiObj = #{id=><<"nkroot">>, url=><<BaseHttp/binary, "/_api, ", BaseWs/binary, "/_api/ws">>},
+            ApiObj = #{
+                id => <<"nkroot">>,
+                url => <<BaseHttp/binary, "/_api, ", BaseWs/binary, "/_api/ws">>
+            },
             nkservice_util:add_config_obj(nkapi_server, ApiObj, Config1);
         false ->
             Config1
@@ -139,7 +142,11 @@ config(Config, _Service) ->
         <<>> ->
             Config3;
         RestUrl ->
-            nkservice_util:add_config_obj(nkservice_rest, #{id=><<"nkroot">>, url=>RestUrl}, Config3)
+            RestObj = #{
+                id => <<"nkroot">>,
+                url => RestUrl
+            },
+            nkservice_util:add_config_obj(nkservice_rest, RestObj, Config3)
     end,
     %% Plugin nkdomain_store_es should have inserted already its
     %% configuration

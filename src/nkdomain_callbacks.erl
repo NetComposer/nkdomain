@@ -30,7 +30,6 @@
          object_event/2, object_reg_event/4, object_sync_op/3, object_async_op/2,
          object_save/1, object_delete/1, object_link_down/2, object_enabled/2,
          object_handle_call/3, object_handle_cast/2, object_handle_info/2, object_conflict_detected/4]).
--export([plugin_deps/0]).
 
 -define(LLOG(Type, Txt, Args), lager:Type("NkDOMAIN SRV Callbacks: "++Txt, Args)).
 
@@ -248,14 +247,6 @@ object_conflict_detected(SrvId, Type, Pid, State) ->
 
 
 
-
-%% ===================================================================
-%% Plugin callbacks
-%% ===================================================================
-
-%% @private
-plugin_deps() ->
-    [].
 
 
 
