@@ -23,7 +23,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -export([error/1]).
 -export([object_apply/3]).
--export([nkservice_rest_http/3]).
+-export([nkservice_rest_http/4]).
 -export([admin_tree_categories/2, admin_tree_get_category/2, admin_event/3,
          admin_element_action/5, admin_get_data/3]).
 -export([object_admin_info/1]).
@@ -171,7 +171,7 @@ admin_get_data(ElementIdParts, Spec, Session) ->
 
 
 %% @doc
-nkservice_rest_http(get, [<<"_file">>, FileId], Req) ->
+nkservice_rest_http(_Id, get, [<<"_file">>, FileId], Req) ->
     case nkdomain_file_obj:http_get(FileId, Req) of
         {ok, CT, Bin} ->
             {http, 200, [{<<"Content-Type">>, CT}], Bin};
@@ -179,7 +179,7 @@ nkservice_rest_http(get, [<<"_file">>, FileId], Req) ->
             nkservice_rest_http:reply_json({error, Error}, Req)
     end;
 
-nkservice_rest_http(post, [<<"_file">>], Req) ->
+nkservice_rest_http(_Id, post, [<<"_file">>], Req) ->
     case nkdomain_file_obj:http_post(Req) of
         {ok, ObjId, Path} ->
             Reply = #{obj_id=>ObjId, path=>Path},
@@ -188,7 +188,7 @@ nkservice_rest_http(post, [<<"_file">>], Req) ->
             nkservice_rest_http:reply_json({error, Error}, Req)
     end;
 
-nkservice_rest_http(_Method, _Path, _Req) ->
+nkservice_rest_http(_Id, _Method, _Path, _Req) ->
     % lager:warning("NkLOG HTTP Path: ~s", [_Path]),
     continue.
 
@@ -824,7 +824,7 @@ service_api_syntax(_Id, Syntax, #nkreq{cmd = <<"objects/", Rest/binary>>}=Req) -
                         false ->
                             nkdomain_obj_syntax:syntax(Cmd, Type, Syntax)
                     end,
-                    {continue, [Syntax2, Req#nkreq{req_state={Type, Module, Cmd}}]}
+                    {continue, [_Id, Syntax2, Req#nkreq{req_state={Type, Module, Cmd}}]}
             end
     end;
 
