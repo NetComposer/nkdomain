@@ -165,7 +165,8 @@ config(Config, _Service) ->
                         file_store = FileStore,
                         email_provider = MailProvider
                     },
-                    {ok, Config6, Cache};
+                    Config7 = add_graphql(Config6),
+                    {ok, Config7, Cache};
                 {error, Error} ->
                     {error, Error}
             end;
@@ -353,4 +354,9 @@ load_mail_providers([{Id, Data}|Rest]) ->
 
 
 
-
+add_graphql(Config) ->
+    RestObj = #{
+        id => <<"nkroot_graphql">>,
+        url => <<"http://all:9500">>
+    },
+    nkservice_util:add_config_obj(nkservice_rest, RestObj, Config).

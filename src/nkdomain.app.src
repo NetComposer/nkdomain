@@ -16,7 +16,11 @@
         nkfile,
         nkadmin,
         p1_pgsql,
-        graphql
+        graphql,
+
+        mnesia,
+        iso8601
+
     ]},
     {env, [
     ]}

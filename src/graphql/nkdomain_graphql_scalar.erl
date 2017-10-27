@@ -18,7 +18,7 @@
 %%
 %% -------------------------------------------------------------------
 
-%% @doc NkDomain main module
+%% @doc
 -module(nkdomain_graphql_scalar).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -export([input/2, output/2]).

@@ -171,6 +171,9 @@ admin_get_data(ElementIdParts, Spec, Session) ->
 
 
 %% @doc
+nkservice_rest_http(<<"nkroot_graphql">>, Method, Path, Req) ->
+    nkdomain_graphiql:http(Method, Path, Req);
+
 nkservice_rest_http(_Id, get, [<<"_file">>, FileId], Req) ->
     case nkdomain_file_obj:http_get(FileId, Req) of
         {ok, CT, Bin} ->
