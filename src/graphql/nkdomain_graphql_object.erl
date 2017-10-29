@@ -26,5 +26,56 @@
 
 %% Assume we are given a map(). Look up the field in the map. If not
 %% present, return the value null.
-execute(_Ctx, Obj, Field, _Args) ->
-    {ok, maps:get(Field, Obj, null)}.
+execute(Ctx, #{type:=Type}=Obj, Field, Args) ->
+    case common_field(Field, Obj) of
+        {ok, Res} ->
+            {ok, Res};
+        unknown ->
+            case nkdomain_all_types:get_module(Type) of
+                undefined ->
+                    {error, unknown_type};
+                Module ->
+                    Module:execute(Ctx, Obj, Field, Args)
+            end
+    end.
+
+
+%% @%% @private GraphQL execute
+common_field(Field, Obj) ->
+    case Field of
+        <<"id">> -> {ok, maps:get(obj_id, Obj)};
+        <<"vsn">> -> {ok, maps:get(vsn, Obj, null)};
+        <<"type">> -> {ok, maps:get(type, Obj)};
+        <<"path">> -> {ok, maps:get(path, Obj)};
+        <<"objName">> -> {ok, maps:get(obj_name, Obj)};
+        <<"domainId">> -> {ok, maps:get(domain_id, Obj)};
+        <<"domain">> -> get_obj(maps:get(domain_id, Obj));
+        <<"parentId">> -> {ok, maps:get(parent_id, Obj)};
+        <<"parent">> -> get_obj(maps:get(parent_id, Obj));
+        <<"srvId">> -> {ok, maps:get(srv_id, Obj, null)};
+        <<"subtype">> -> {ok, maps:get(subtype, Obj, [])};
+        <<"createdBy">> -> get_obj(maps:get(created_by, Obj));
+        <<"createdTime">> -> {ok, maps:get(created_time, Obj, null)};
+        <<"updatedBy">> -> get_obj(maps:get(updated_by, Obj, null));
+        <<"updatedTime">> -> {ok, maps:get(updated_time, Obj, null)};
+        <<"enabled">> -> {ok, maps:get(enabled, Obj, true)};
+        <<"active">> -> {ok, maps:get(active, Obj, null)};
+        <<"expiresTime">> -> {ok, maps:get(expires_time, Obj, null)};
+        <<"destroyed">> -> {ok, maps:get(destroyed, Obj, false)};
+        <<"destroyedTime">> -> {ok, maps:get(destroyed_time, Obj, null)};
+        <<"destroyedCode">> -> {ok, maps:get(destroyed_code, Obj, null)};
+        <<"destroyedReason">> -> {ok, maps:get(destroyed_reason, Obj, null)};
+        <<"name">> -> {ok, maps:get(name, Obj, null)};
+        <<"description">> -> {ok, maps:get(description, Obj, null)};
+        <<"tags">> -> {ok, maps:get(tags, Obj, [])};
+        <<"aliases">> -> {ok, maps:get(aliases, Obj, [])};
+        <<"iconId">> -> get_obj(maps:get(icon_id, Obj, null));
+        <<"nextStatusTime">> -> {ok, maps:get(next_status_time, Obj, null)};
+        _ -> unknown
+    end.
+
+
+get_obj(null) ->
+    {ok, null};
+get_obj(DomainId) ->
+    nkdomain:get_obj(DomainId).

@@ -90,6 +90,7 @@
 -behavior(nkdomain_obj).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
+-export([execute/4]).
 -export([create/1, auth/2, make_token/4, get_name/1, get_info/2]).
 -export([find_childs/1]).
 -export([object_info/0, object_admin_info/0, object_create/1, object_update/1, object_es_mapping/0, object_es_unparse/2,
@@ -181,6 +182,23 @@
 %% ===================================================================
 %% API
 %% ===================================================================
+
+
+
+%% @%% @private GraphQL execute
+execute(_Ctx, #{?DOMAIN_USER:=User}, Field, _Args) ->
+    case Field of
+        <<"userName">> -> {ok, maps:get(name, User, null)};
+        <<"userSurname">> -> {ok, maps:get(surname, User, null)};
+        <<"email">> -> {ok, maps:get(email, User, null)};
+        <<"phone">> -> {ok, maps:get(phone_t, User, null)};
+        <<"address">> -> {ok, maps:get(address_t, User, null)}
+    end.
+
+
+
+
+
 
 %% @doc
 -spec create(map()) ->
@@ -416,6 +434,7 @@ find_childs(User) ->
         {error, Error} ->
             {error, Error}
     end.
+
 
 
 %% ===================================================================

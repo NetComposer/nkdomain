@@ -22,9 +22,11 @@
 -module(nkdomain_graphql_type).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
+-include("nkdomain.hrl").
+
 -export([execute/1]).
 
-execute(#{ starship := _, transport := _ }) -> {ok, 'Starship'};
-execute(#{ vehicle := _, transport := _ }) -> {ok, 'Vehicle'};
+execute(#{type:=?DOMAIN_USER}) -> {ok, 'User'};
+execute(#{type:=?DOMAIN_DOMAIN}) -> {ok, 'Domain'};
 execute(_Otherwise) -> {error, unknown_type}.
 

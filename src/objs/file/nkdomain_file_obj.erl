@@ -24,7 +24,7 @@
 -behavior(nkdomain_obj).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([http_post/1, http_post/4, http_get/2]).
+-export([execute/4, http_post/1, http_post/4, http_get/2]).
 -export([find/0, delete_all/0]).
 -export([object_info/0, object_es_mapping/0, object_parse/2, object_api_syntax/2, object_api_cmd/2]).
 -export([object_admin_info/0]).
@@ -44,6 +44,15 @@
 %% ===================================================================
 %% API
 %% ===================================================================
+
+
+
+%% @%% @private GraphQL execute
+execute(_Ctx, #{?DOMAIN_FILE:=File}, Field, _Args) ->
+    case Field of
+        <<"contentType">> -> {ok, maps:get(content_type, File, null)};
+        <<"size">> -> {ok, maps:get(size, File, null)}
+    end.
 
 
 %% @doc Creates a file from a nkservice_rest request

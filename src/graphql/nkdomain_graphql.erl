@@ -19,6 +19,20 @@
 %% -------------------------------------------------------------------
 
 %% @doc NkDomain GraphQL main module
+
+%% When a query is received, it first go to nkdomain_graphql_object_query
+%% If it is an abstract type (interface or union) it will go to find the type,
+%% and the to the type manager object (nkdomain_graphql_object manages all of them
+
+
+
+
+
+
+
+
+
+
 -module(nkdomain_graphql).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -export([load_schema/0]).
@@ -31,7 +45,6 @@ mapping_rules() ->
         interfaces => #{ default => nkdomain_graphql_type },
         unions => #{ default => nkdomain_graphql_type },
         objects => #{
-            'User' => nkdomain_graphql_user,
             'Query' => nkdomain_graphql_query,
             'Mutation' => nkdomain_graphql_mutation,
             default => nkdomain_graphql_object }
@@ -39,6 +52,7 @@ mapping_rules() ->
 
 
 load_schema() ->
+    ok = graphql_schema:reset(),
     Mapping = mapping_rules(),
     ok = graphql:load_schema(Mapping, schema()),
     ok = setup_root(),
@@ -79,34 +93,9 @@ interface Node {
 }
 
 
-interface Object {
-  id : ID!
-  vsn : String
-  type : String!
-  path : String!
-  objName : String!
-  domain_id : String!
-  parent_id : String!
-  srv_id : String
-  subtype : [String]
-  created_by : User
-  created_time : UnixTime
-  updated_by : User
-  updated_time : UnixTime
-  enabled : Boolean!
-  active : boolean!
-  expires_time : UnixTime
-  destroyed : Boolean
-  destroyed_time : UnixTime,
-  destroyed_code : String
-  destroyed_reason : String
-  name : String
-  description : String
-  tags : [String]
-  aliases : [String]
-  icon_id : File
-  next_status_time : UnixTime
-}
+interface Object {",
+(object())/binary,
+"}
 
 
 type PageInfo {
@@ -114,95 +103,49 @@ type PageInfo {
   hasPreviousPage : Boolean!
 }
 
-+description(text: \"Representation of Users\")
-type User implements Node, Object {
-  id : ID!
-  vsn : String
-  type : String!
-  path : String!
-  objName : String!
-  domain_id : String!
-  parent_id : String!
-  srv_id : String
-  subtype : [String]
-  created_by : User
-  created_time : UnixTime
-  updated_by : User
-  updated_time : UnixTime
-  enabled : Boolean!
-  active : boolean!
-  expires_time : UnixTime
-  destroyed : Boolean
-  destroyed_time : UnixTime
-  destroyed_code : String
-  destroyed_reason : String
-  name : String
-  description : String
-  tags : [String]
-  aliases : [String]
-  icon_id : File
-  next_status_time : UnixTime
++description(text: \"Representation of Domains\")
+type Domain implements Node, Object {",
+(object())/binary, "
+}
 
+
++description(text: \"Representation of Users\")
+type User implements Node, Object {",
+(object())/binary, "
   userName : String,
   userSurname : String
   email : String
-  password : String
+  #password : String
   phone : String,
   address : String
-  statusConnection(
+  statusConnection(         # connections to 'UserStatus' objects
     after : String
     first : Int
     before : String
-    last : Int) : UserStatusConnection      # VehiclePilotsConnection
+    last : Int) : UserStatusConnection
 }
 
 
-type UserStatusConnection {
-    pageInfo : PageInfo!
-    edges : [UserStatusEdge]
-    totalCount : Int
+type UserStatusConnection {                 # This is an 'abstract' concept but UserStatusEdge is not
+    pageInfo : PageInfo!                    # it is the 'line' connecting Users and UserStatus objects
+    edges : [UserStatusEdge]                # an 'edge' is the 'relation' between among two objects
+    totalCount : Int                        # in this case, between 'User' and 'UserStatus' objects
 }
 
-type UserStatusEdge {
-    node : Status
+type UserStatusEdge {                       # The real relation between the User and the UserStatus
+    node : UserStatus                       # it could have more metadata, but it is not common
     cursor : String!
 }
 
-type Status {
+type UserStatus {
     domainPath : String!
     userStatus : String
     updatedTime : UnixTime
 }
 
 
-type File implements Node, Object {
-  id : ID!
-  vsn : String
-  type : String!
-  path : String!
-  objName : String!
-  domain_id : String!
-  parent_id : String!
-  srv_id : String
-  subtype : [String]
-  created_by : User
-  created_time : UnixTime
-  updated_by : User
-  updated_time : UnixTime
-  enabled : Boolean!
-  active : boolean!
-  expires_time : UnixTime
-  destroyed : Boolean
-  destroyed_time : UnixTime,
-  destroyed_code : String
-  destroyed_reason : String
-  name : String
-  description : String
-  tags : [String]
-  aliases : [String]
-  icon_id : File
-  next_status_time : UnixTime
-
+type File implements Node, Object {",
+(object())/binary, "
   contentType : String
   size : Int
 }
@@ -211,7 +154,7 @@ type File implements Node, Object {
 ## -- MUTATION OBJECTS ----------
 
 type Mutation {
-    introduceFaction(input: IntroduceUserInput!) : IntroduceUserPayload
+    introduceUser(input: IntroduceUserInput!) : IntroduceUserPayload
 }
 
 
@@ -225,4 +168,37 @@ type IntroduceUserPayload {
     clientMutationId : String
 }
 
+">>.
+
+
+
+object() -> <<"
+    id : ID!
+    vsn : String
+    type : String!
+    path : String!
+    objName : String!
+    domainId : String!
+    domain : Domain
+    parentId : String!
+    parent : Object
+    srvId : String
+    subtype : [String]
+    createdBy : User
+    createdTime : UnixTime
+    updatedBy : User
+    updatedTime : UnixTime
+    enabled : Boolean!
+    active : boolean!
+    expiresTime : UnixTime
+    destroyed : Boolean
+    destroyedTime : UnixTime,
+    destroyedCode : String
+    destroyedReason : String
+    name : String
+    description : String
+    tags : [String]
+    aliases : [String]
+    iconId : File
+    nextStatusTime : UnixTime
 ">>.

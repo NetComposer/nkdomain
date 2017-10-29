@@ -46,12 +46,13 @@ http(get, [<<"assets">>, Name], _Req) ->
     {http, 200, content_type(Path), File};
 
 http(post, [], Req) ->
+    Start = nklib_util:l_timestamp(),
     case gather(nkservice_rest_http:get_cowboy_req(Req)) of
         {error, Reason} ->
             err(400, Reason);
         {ok, Decoded} ->
-            io:format("DECODED ~p\n", [Decoded]),
-            run_request(Decoded)
+            %io:format("DECODED ~p\n", [Decoded]),
+            run_request(Decoded#{nkmeta=>#{start=>Start}})
     end;
 
 http(Method, Path, _Req) ->
@@ -71,24 +72,24 @@ content_type(Path) ->
 run_request(#{ document := undefined }) ->
     err(400, no_query_supplied);
 
-run_request(#{ document := Doc} = ReqCtx) ->
+run_request(#{document:=Doc} = ReqCtx) ->
     case graphql:parse(Doc) of
         {ok, AST} ->
-            run_preprocess(ReqCtx#{ document := AST });
+            run_preprocess(ReqCtx#{ document := AST});
         {error, Reason} ->
             err(400, Reason)
     end.
 
 
 %% @private
-run_preprocess(#{ document := AST } = ReqCtx) ->
+run_preprocess(#{document:=AST}=ReqCtx) ->
     try
         Elaborated = graphql:elaborate(AST), % <1>
         {ok, #{
             fun_env := FunEnv,
             ast := AST2 }} = graphql:type_check(Elaborated), % <2>
         ok = graphql:validate(AST2), % <3>
-        run_execute(ReqCtx#{ document := AST2, fun_env => FunEnv })
+        run_execute(ReqCtx#{document := AST2, fun_env => FunEnv})
     catch
         throw:Err ->
             err(400, Err)
@@ -96,17 +97,21 @@ run_preprocess(#{ document := AST } = ReqCtx) ->
 
 
 %% @private
-run_execute(#{ document := AST,
-               fun_env := FunEnv,
-               vars := Vars,
-               operation_name := OpName }) ->
+run_execute(ReqCtx) ->
+    #{
+        document := AST,
+        fun_env := FunEnv,
+        vars := Vars,
+        operation_name := OpName,
+        nkmeta :=NkMeta
+    } = ReqCtx,
     Coerced = graphql:type_check_params(FunEnv, OpName, Vars), % <1>
     Ctx = #{
         params => Coerced,
-        operation_name => OpName },
+        operation_name => OpName,
+        nkmeta => NkMeta
+    },
     Response = graphql:execute(Ctx, AST), % <2>
-    lager:error("NKLOG E4: ~p", [Response]),
-
     ResponseBody = jsx:encode(fixup(Response)), % <3>
     {http, 200, [], ResponseBody}.
 

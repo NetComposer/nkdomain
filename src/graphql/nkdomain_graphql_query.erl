@@ -25,8 +25,17 @@
 -export([execute/4]).
 
 %% tag::execute[]
-execute(_Ctx, _DummyObj, <<"node">>, #{ <<"id">> := ID }) ->
-    load_node(any, ID).
+execute(Ctx, _DummyObj, <<"node">>, #{ <<"id">> := Id }) ->
+    #{nkmeta:=#{start:=Start}} = Ctx,
+    lager:notice("NKLOG T1 ~p", [nklib_util:l_timestamp()-Start]),
+    case nkdomain:get_obj(Id) of
+        {ok, Obj} ->
+            lager:notice("NKLOG T2 ~p", [nklib_util:l_timestamp()-Start]),
+            {ok, Obj};
+        {error, Error} ->
+            {error, Error}
+    end.
+
 
 %%execute(_Ctx, _DummyObj, <<"starship">>, #{ <<"id">> := ID }) ->
 %%    load_node(['Starship'], ID);
@@ -73,23 +82,3 @@ execute(_Ctx, _DummyObj, <<"node">>, #{ <<"id">> := ID }) ->
 %%    end.
 
 
-
-%% tag::loadNode[]
-load_node(Types, ID) when is_binary(ID) ->
-    case sw_core_id:decode(ID) of
-        {ok, Decoded} ->
-            load_node_(Types, Decoded);
-        {error, Reason} ->
-            {error, Reason}
-    end.
-
-load_node_(any, {Type, MID}) ->
-    sw_core_db:load(Type, MID);
-load_node_(TypeList, {Type, MID}) ->
-    case lists:member(Type, TypeList) of
-        true ->
-            sw_core_db:load(Type, MID);
-        false ->
-            {error, wrong_type}
-    end.
-%% end::loadNode[]
