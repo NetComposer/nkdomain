@@ -79,13 +79,20 @@ create(Domain, Opts) ->
 %% The device will be loaded as long as the session is
 %% You can use get_users/1 to get all registered users
 %% You can use find_sso/1 to find if any of my sso_device_ids have any registered user currently.
--spec attach_session(nkdomain:id(), nkdomain:obj_id(), nkdomain:obj_id()) ->
+-spec attach_session(nkdomain:id(), nkdomain:id(), nkdomain:obj_id()) ->
     ok | {error, term()}.
 
-attach_session(DeviceId, UserId, SessId) ->
+attach_session(DeviceId, User, SessId) ->
     case nkdomain_lib:load(SessId) of
         #obj_id_ext{pid=Pid} ->
-            nkdomain_obj:sync_op(DeviceId, {?MODULE, attach_session, UserId, SessId, Pid});
+            case nkdomain_lib:find(User) of
+                #obj_id_ext{obj_id=UserId, type=?DOMAIN_USER} ->
+                    nkdomain_obj:sync_op(DeviceId, {?MODULE, attach_session, UserId, SessId, Pid});
+                {error, object_not_found} ->
+                    {error, user_not_found};
+                {error, Error} ->
+                    {error, Error}
+            end;
         {error, object_not_found} ->
             {error, invalid_session};
         {error, Error} ->
@@ -196,8 +203,6 @@ object_sync_op({?MODULE, get_users}, _From, #obj_state{session=#session{user_ses
 object_sync_op({?MODULE, find_sso}, _From, #obj_state{obj=Obj}=State) ->
     #{?DOMAIN_DEVICE:=DeviceObj} = Obj,
     SsoDevices = maps:get(sso_device_ids, DeviceObj, []),
-    lager:error("NKLOG SSO1 ~p", [SsoDevices]),
-    lager:error("NKLOG SSO1 ~p", [DeviceObj]),
     UserIds = lists:foldl(
         fun(DeviceId, Acc) ->
             case get_users(DeviceId) of

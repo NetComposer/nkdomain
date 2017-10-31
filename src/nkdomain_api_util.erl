@@ -66,8 +66,7 @@
 
 session_login(#nkreq{srv_id=SrvId, data=Data, session_meta=SessMeta}=Req) ->
     #{id:=User} = Data,
-    Auth = #{password => maps:get(password, Data, <<>>)},
-    case nkdomain_user_obj:auth(User, Auth) of
+    case nkdomain_user_obj:auth(User, Data) of
         {ok, UserId, UserDomainId} ->
             DomainId = case Data of
                 #{domain_id:=DomainId0} ->
@@ -108,10 +107,9 @@ session_login(#nkreq{srv_id=SrvId, data=Data, session_meta=SessMeta}=Req) ->
 
 token_login(#nkreq{srv_id=SrvId, data=Data, session_meta=SessMeta}) ->
     #{id:=User} = Data,
-    Auth = #{password => maps:get(password, Data, <<>>)},
     case get_domain(Data) of
         {ok, DomainId} ->
-            case nkdomain_user_obj:auth(User, Auth) of
+            case nkdomain_user_obj:auth(User, Data) of
                 {ok, UserId, _UserDomainId} ->
                     LoginMeta = maps:get(meta, Data, #{}),
                     TokenData1 = maps:with([session_id, local, remote], SessMeta),

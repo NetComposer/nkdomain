@@ -195,17 +195,32 @@ create(Obj) ->
     {ok, UserId::nkdomain:obj_id(), DomainId::nkdomain:obj_id()} |
     {error, user_not_found|term()}.
 
-auth(UserId, #{password:=Pass}) ->
+auth(User, #{password:=Pass}) ->
     Pass2 = user_pass(Pass),
-    case nkdomain_obj:sync_op(UserId, {?MODULE, check_pass, Pass2}) of
-        {ok, {true, ObjId, DomainId}} ->
-            {ok, ObjId, DomainId};
+    case nkdomain_obj:sync_op(User, {?MODULE, check_pass, Pass2}) of
+        {ok, {true, UserId, DomainId}} ->
+            {ok, UserId, DomainId};
         {ok, false} ->
             timer:sleep(?INVALID_PASSWORD_TIME),
             {error, invalid_password};
         {error, Error} ->
             {error, Error}
-    end.
+    end;
+
+auth(User, #{sso_device_id:=DeviceId}) ->
+    case nkdomain_obj:sync_op(User, {?MODULE, check_device, DeviceId}) of
+        {ok, {true, UserId, DomainId}} ->
+            {ok, UserId, DomainId};
+        {ok, false} ->
+            timer:sleep(?INVALID_PASSWORD_TIME),
+            {error, invalid_password};
+        {error, Error} ->
+            {error, Error}
+    end;
+
+auth(_User, _Data) ->
+    {error, no_password}.
+
 
 %% @doc
 -spec make_token(nkdomain:id(), nkdomain:id(), #{ttl=>integer()}, map()) ->
@@ -651,8 +666,29 @@ object_sync_op({?MODULE, check_pass, _Pass}, _From, #obj_state{is_enabled=false}
 object_sync_op({?MODULE, check_pass, Pass}, _From, #obj_state{id=Id, obj=Obj}=State) ->
     case Obj of
         #{domain_id:=DomainId, ?DOMAIN_USER:=#{password:=Pass}} ->
-            #obj_id_ext{obj_id=ObjId} = Id,
-            {reply, {ok, {true, ObjId, DomainId}}, State};
+            #obj_id_ext{obj_id=UserId} = Id,
+            {reply, {ok, {true, UserId, DomainId}}, State};
+        _ ->
+            {reply, {ok, false}, State}
+    end;
+
+object_sync_op({?MODULE, check_device, _Pass}, _From, #obj_state{is_enabled=false}=State) ->
+    {reply, {error, object_is_disabled}, State};
+
+object_sync_op({?MODULE, check_device, DeviceId}, _From, #obj_state{id=Id, obj=Obj}=State) ->
+    #obj_id_ext{obj_id=UserId} = Id,
+    case nkdomain_device_obj:find_sso(DeviceId) of
+        {ok, Users} ->
+            case lists:member(UserId, Users) of
+                true ->
+                    #{domain_id:=DomainId} = Obj,
+                    {reply, {ok, {true, UserId, DomainId}}, State};
+                false ->
+                    lager:error("NKLOG USER ~p USers ~p", [UserId, Users]),
+
+
+                    {reply, {ok, false}, State}
+            end;
         _ ->
             {reply, {ok, false}, State}
     end;
