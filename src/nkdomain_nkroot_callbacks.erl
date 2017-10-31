@@ -121,6 +121,7 @@ error(session_already_present)          -> "Session is already present";
 error(session_not_found)                -> "Session not found";
 error(session_is_disabled)              -> "Session is disabled";
 error(session_type_unsupported)         -> "Session type not supported";
+error(sso_not_available)                -> "SSO is not available";
 error(status_not_defined)               -> "Status is not defined";
 error(store_id_invalid)                 -> "Invalid Store Id";
 error(store_id_missing)                 -> "Missing Store Id";
