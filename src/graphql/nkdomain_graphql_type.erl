@@ -28,5 +28,6 @@
 
 execute(#{type:=?DOMAIN_USER}) -> {ok, 'User'};
 execute(#{type:=?DOMAIN_DOMAIN}) -> {ok, 'Domain'};
+execute(#{type:=?DOMAIN_FILE}) -> {ok, 'File'};
 execute(_Otherwise) -> {error, unknown_type}.
 

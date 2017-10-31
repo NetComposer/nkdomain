@@ -42,6 +42,7 @@
 mapping_rules() ->
     #{
         scalars => #{ default => nkdomain_graphql_scalar },
+        enums => #{default => graphql_enum_coerce },
         interfaces => #{ default => nkdomain_graphql_type },
         unions => #{ default => nkdomain_graphql_type },
         objects => #{
@@ -74,13 +75,19 @@ setup_root() ->
 
 
 schema() -> <<"
++descripton(text: \"Standard miliseconds unix time\")
 scalar UnixTime
 
+enum Mood {
+     TRANQUIL
+     DODGY
+     AGGRESSIVE
+}
 
 type Query {
   +description(text: \"Relay Modern specification Node fetcher\")
   node(id : ID!) : Node
-  +description(text: \"Fetch a starship with a given Id\")
+  +description(text: \"Get all users\")
   allUsers : [User]
 }
 

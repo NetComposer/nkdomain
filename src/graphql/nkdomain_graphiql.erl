@@ -62,7 +62,7 @@ http(Method, Path, _Req) ->
 
 content_type(Path) ->
     {A, B, _C} = cow_mimetypes:all(nklib_util:to_binary(Path)),
-    [{<<"content-type">>, <<A/binary, $/, B/binary>>}].
+    [{<<"content-type">>, <<A/binary, $/, B/binary, ";charset=utf-8">>}].
 
 
 
