@@ -26,7 +26,7 @@
 
 -export([search/2, search_all/2, search_type/2, search_all_types/2, search_childs/2, search_all_childs/2]).
 -export([find_path/1, find_path/2, unload_childs/1, get_childs_type/2]).
--export([get_all_counters/1, get_counter/2]).
+-export([get_all_counters/1, get_counter/2, make_path/3]).
 -export([object_info/0, object_admin_info/0, object_parse/2, object_es_mapping/0,
          object_api_syntax/2, object_send_event/2, object_api_cmd/2]).
 -export([object_init/1, object_sync_op/3, object_async_op/2, object_enabled/2, object_link_down/2,
@@ -155,6 +155,28 @@ get_all_counters(Id) ->
 %% @doc
 unload_childs(Id) ->
     nkdomain_obj:sync_op(Id, {?MODULE, unload_childs}).
+
+
+
+%% @doc Makes a full path form a domain and a obj_name
+-spec make_path(nkdomain:id(), nkdomain:type(), binary()) ->
+    {ok, nkdomain:path()} | {error, term()}.
+
+make_path(Id, Type, Name) ->
+    case nkdomain_lib:find(Id) of
+        #obj_id_ext{type=?DOMAIN_DOMAIN, path=Path} ->
+            Class = nkdomain_util:class(Type),
+            Path2 = nkdomain_util:append(Path, Class),
+            Name2 = nkdomain_util:name(Name),
+            Path3 = nkdomain_util:append(Path2, Name2),
+            {ok, Path3};
+        {error, object_not_found} ->
+            {error, domain_not_found};
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
 
 
 

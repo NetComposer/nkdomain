@@ -83,7 +83,14 @@ create(Domain, Opts) ->
     ok | {error, term()}.
 
 attach_session(DeviceId, UserId, SessId) ->
-    nkdomain_obj:sync_op(DeviceId, {?MODULE, attach_session, UserId, SessId, self()}).
+    case nkdomain_lib:load(SessId) of
+        #obj_id_ext{pid=Pid} ->
+            nkdomain_obj:sync_op(DeviceId, {?MODULE, attach_session, UserId, SessId, Pid});
+        {error, object_not_found} ->
+            {error, invalid_session};
+        {error, Error} ->
+            {error, Error}
+    end.
 
 %% @private
 -spec find_sso(nkdomain:id()) ->
