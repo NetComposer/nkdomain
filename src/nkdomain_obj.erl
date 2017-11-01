@@ -394,12 +394,12 @@ handle_call({nkdomain_sync_op, Op}, From, State) ->
         {reply, Reply, #obj_state{}=State2} ->
             reply(Reply, do_save_timer(do_refresh(State2)));
         {reply_and_save, Reply, #obj_state{}=State2} ->
-            {_, State3} = do_save(user_op, State2),
+            {_, State3} = do_save(user_op, State2#obj_state{is_dirty=true}),
             reply(Reply, do_refresh(State3));
         {noreply, #obj_state{}=State2} ->
             noreply(do_save_timer(do_refresh(State2)));
         {noreply_and_save, #obj_state{}=State2} ->
-            {_, State3} = do_save(user_op, State2),
+            {_, State3} = do_save(user_op, State2#obj_state{is_dirty=true}),
             noreply(do_refresh(State3));
         {stop, Reason, Reply, #obj_state{}=State2} ->
             gen_server:reply(From, Reply),
@@ -432,7 +432,7 @@ handle_cast({nkdomain_async_op, Op}, State) ->
         {noreply, #obj_state{}=State2} ->
             noreply(do_save_timer(do_refresh(State2)));
         {noreply_and_save, #obj_state{}=State2} ->
-            {_, State3} = do_save(user_op, State2),
+            {_, State3} = do_save(user_op, State2#obj_state{is_dirty=true}),
             noreply(do_refresh(State3));
         {stop, Reason, #obj_state{}=State2} ->
             do_stop(Reason, State2);
