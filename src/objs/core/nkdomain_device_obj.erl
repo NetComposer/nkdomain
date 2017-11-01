@@ -27,7 +27,7 @@
 -include("nkdomain.hrl").
 -include("nkdomain_debug.hrl").
 
--export([create/2, attach_session/3, get_users/1, find_sso/1]).
+-export([create/2, attach_session/3, get_registered_user/1, find_sso/1]).
 -export([object_info/0, object_admin_info/0, object_api_syntax/2, object_api_cmd/2, object_send_event/2]).
 -export([object_es_mapping/0, object_parse/2]).
 -export([object_init/1, object_sync_op/3, object_link_down/2]).
@@ -80,7 +80,7 @@ create(Domain, Opts) ->
 %% You can use get_users/1 to get all registered users
 %% You can use find_sso/1 to find if any of my sso_device_ids have any registered user currently.
 -spec attach_session(nkdomain:id(), nkdomain:id(), nkdomain:obj_id()) ->
-    ok | {error, term()}.
+    ok | {error, existing_session|term()}.
 
 attach_session(DeviceId, User, SessId) ->
     case nkdomain_lib:load(SessId) of
@@ -101,18 +101,18 @@ attach_session(DeviceId, User, SessId) ->
 
 %% @private
 -spec find_sso(nkdomain:id()) ->
-    {ok, [UserId::nkdomain:obj_id()]} | {error, term()}.
+    {ok, UserId::nkdomain:obj_id()} | {error, no_session|term()}.
 
 find_sso(DeviceId) ->
     nkdomain_obj:sync_op(DeviceId, {?MODULE, find_sso}).
 
 
 %% @private
--spec get_users(nkdomain:id()) ->
-    {ok, [UserId::nkdomain:obj_id()]} | {error, term()}.
+-spec get_registered_user(nkdomain:id()) ->
+    {ok, UserId::nkdomain:obj_id()} | {error, no_session|term()}.
 
-get_users(DeviceId) ->
-    nkdomain_obj:sync_op(DeviceId, {?MODULE, get_users}).
+get_registered_user(DeviceId) ->
+    nkdomain_obj:sync_op(DeviceId, {?MODULE, get_registered_user}).
 
 
 
@@ -127,7 +127,7 @@ get_users(DeviceId) ->
 
 
 -record(session, {
-   user_sessions = [] :: [#user_session{}]
+   user_sessions2 :: undefined | [#user_session{}]
 }).
 
 
@@ -184,37 +184,38 @@ object_init(State) ->
 
 %% @private
 object_sync_op({?MODULE, attach_session, UserId, SessId, Pid}, _From, State) ->
-    % We monitor the session and are alive while the session is
-    State2 = nkdomain_obj:links_add(usage, {session, SessId, Pid}, State),
-    #obj_state{session=Session} = State2,
-    #session{user_sessions=UserSessions} = Session,
-    UserSession = #user_session{session_id=SessId, user_id=UserId},
-    UserSessions2 = lists:keystore(SessId, #user_session.session_id, UserSessions, UserSession),
-    Session2 = Session#session{user_sessions=UserSessions2},
-    State3 = State2#obj_state{session=Session2},
-    ?LLOG(notice, "attached user ~s (~s)", [UserId, SessId], State3),
-    {reply, ok, State3};
+    #obj_state{session=Session} = State,
+    case Session of
+        #session{user_sessions2=undefined} ->
+            % We monitor the session and are alive while the session is
+            State2 = nkdomain_obj:links_add(usage, {session, SessId, Pid}, State),
+            UserSession = #user_session{session_id=SessId, user_id=UserId},
+            Session2 = Session#session{user_sessions2=UserSession},
+            State3 = State2#obj_state{session=Session2},
+            ?LLOG(notice, "attached user ~s (~s)", [UserId, SessId], State3),
+            {reply, ok, State3};
+        _ ->
+            {reply, {error, existing_session}, State}
+    end;
 
-object_sync_op({?MODULE, get_users}, _From, #obj_state{session=#session{user_sessions=UserSessions}}=State) ->
-    Users = [UserId || #user_session{user_id=UserId} <- UserSessions],
-    {reply, {ok, Users}, State};
-
+object_sync_op({?MODULE, get_user}, _From, #obj_state{session=Session}=State) ->
+    case Session of
+        #user_session{user_id=UserId} ->
+            {reply, {ok, UserId}, State};
+        undefined ->
+            {reply, {error, no_session}, State}
+    end;
 
 object_sync_op({?MODULE, find_sso}, _From, #obj_state{obj=Obj}=State) ->
     #{?DOMAIN_DEVICE:=DeviceObj} = Obj,
     SsoDevices = maps:get(sso_device_ids, DeviceObj, []),
-    UserIds = lists:foldl(
-        fun(DeviceId, Acc) ->
-            case get_users(DeviceId) of
-                {ok, Users} ->
-                    lists:usort(Acc++Users);
-                _ ->
-                    Acc
-            end
-        end,
-        [],
-        SsoDevices),
-    {reply, {ok, UserIds}, State};
+    case do_find_sso(SsoDevices) of
+        {ok, User} ->
+            {reply, {ok, User}, State};
+        error ->
+            {reply, {error, no_sessionr}, State}
+    end;
+
 
 object_sync_op(_Op, _From, _State) ->
     continue.
@@ -222,12 +223,16 @@ object_sync_op(_Op, _From, _State) ->
 
 %% @private
 object_link_down({usage, {session, SessId, _Pid}}, State) ->
-    #obj_state{session=#session{user_sessions=UserSessions}=Session} = State,
-    UserSessions2 = lists:keydelete(SessId, #user_session.session_id, UserSessions),
-    Session2 = Session#session{user_sessions=UserSessions2},
-    State2 = State#obj_state{session=Session2},
-    ?LLOG(notice, "detached sessions ~s", [SessId], State),
-    {ok, State2};
+    #obj_state{session=Session} = State,
+    case Session of
+        #session{user_sessions2=#user_session{session_id=SessId}} ->
+            Session2 = Session#session{user_sessions2=undefined},
+            State2 = State#obj_state{session=Session2},
+            ?LLOG(notice, "detached sessions ~s", [SessId], State),
+            {ok, State2};
+        _ ->
+            {ok, State}
+    end;
 
 object_link_down(_Link, _State) ->
     continue.
@@ -235,3 +240,16 @@ object_link_down(_Link, _State) ->
 %% ===================================================================
 %% Internal
 %% ===================================================================
+
+
+%% @private
+do_find_sso([]) ->
+    error;
+
+do_find_sso([DeviceId|Rest]) ->
+    case get_registered_user(DeviceId) of
+        {ok, User} ->
+            {ok, User};
+        _ ->
+            do_find_sso(Rest)
+    end.

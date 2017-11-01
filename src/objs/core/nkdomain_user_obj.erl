@@ -83,7 +83,7 @@
 %%      - we find all user sessions with that type that registered that domain path, and call notify_fun()
 %%      - if any is available, that's it
 %%      - if none is available, we may send a wakeup removal push
-%% - Any session can tell the user to "launch" again all notificationa, for this specific session
+%% - Any session can tell the user to "launch" again all notifications, for this specific session
 %%
 
 -module(nkdomain_user_obj).
@@ -678,17 +678,9 @@ object_sync_op({?MODULE, check_device, _Pass}, _From, #obj_state{is_enabled=fals
 object_sync_op({?MODULE, check_device, DeviceId}, _From, #obj_state{id=Id, obj=Obj}=State) ->
     #obj_id_ext{obj_id=UserId} = Id,
     case nkdomain_device_obj:find_sso(DeviceId) of
-        {ok, Users} ->
-            case lists:member(UserId, Users) of
-                true ->
-                    #{domain_id:=DomainId} = Obj,
-                    {reply, {ok, {true, UserId, DomainId}}, State};
-                false ->
-                    lager:error("NKLOG USER ~p USers ~p", [UserId, Users]),
-
-
-                    {reply, {ok, false}, State}
-            end;
+        {ok, UserId} ->
+            #{domain_id:=DomainId} = Obj,
+            {reply, {ok, {true, UserId, DomainId}}, State};
         _ ->
             {reply, {ok, false}, State}
     end;

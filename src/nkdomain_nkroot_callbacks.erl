@@ -917,15 +917,15 @@ api_server_reg_down(_Link, _Reason, _State) ->
     continue.
 
 %% @doc
-api_server_http_auth(#nkreq{cmd = <<"objects/user/get_token">>}=NkReq, _HttpReq) ->
-    {true, <<>>, NkReq};
+api_server_http_auth(#nkreq{cmd = <<"objects/user/get_token">>}=_NkReq, _HttpReq) ->
+    {true, <<>>};
 
 api_server_http_auth(#nkreq{}=Req, HttpReq) ->
     Headers = nkapi_server_http:get_headers(HttpReq),
     Token = nklib_util:get_value(<<"x-netcomposer-auth">>, Headers, <<>>),
     case nkdomain_api_util:check_token(Token, Req) of
-        {ok, UserId, UserMeta} ->
-            {true, UserId, Req#nkreq{user_state=UserMeta}};
+        {ok, UserId, Req2} ->
+            {true, UserId, Req2};
         {error, _Error} ->
             false
     end.
