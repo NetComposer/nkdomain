@@ -166,16 +166,26 @@ get_parts(Type, Path) ->
 
 %% @private
 class(Type) ->
-    <<(to_bin(Type))/binary, "s">>.
+    Type2 = to_bin(Type),
+    Size = byte_size(Type2),
+    case binary:at(Type2, Size-1) of
+        $y ->
+            <<Type2:(Size-1)/binary, "ies">>;
+        _ ->
+            <<Type2/binary, "s">>
+    end.
 
 
 %% @private
 type(Class) ->
-    case byte_size(Class) - 1 of
-        Size when Size > 0 ->
-            case Class of
-                <<Type:Size/binary, $s>> ->
-                    {ok, Type};
+    Size = byte_size(Class),
+    case Size > 3 andalso binary:part(Class, Size, -3) of
+        <<"ies">> ->
+            {ok, <<(binary:part(Class, 0, byte_size(Class)-3))/binary, $y>>};
+        _ when Size > 1 ->
+            case binary:part(Class, Size, -1) of
+                <<"s">> ->
+                    {ok, binary:part(Class, 0, byte_size(Class)-1)};
                 _ ->
                     error
             end;
