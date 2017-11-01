@@ -90,6 +90,7 @@ error(token_invalid_ttl)                -> "Invalid token TTL";
 error(member_already_present)           -> "Member is already present";
 error(member_not_found)                 -> "Member not found";
 error(member_invalid)                   -> "Invalid member";
+error(multiple_ids)                     -> "Multiple matching ids";
 error(missing_auth_header)              -> "Missing authentication header";
 error({module_failed, Module})          -> {"Module '~s' failed", [Module]};
 error(object_access_not_allowed)        -> "Object access is not allowed";
