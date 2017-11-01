@@ -145,10 +145,8 @@ check_token(Token, Req) ->
             end,
             Req6 = case Data of
                 #{role:=Role, role_id:=RoleId} ->
-                    lager:error("NKLOG DATA12 ~p", [Data]),
                     add_meta(role, {Role, RoleId}, Req5);
                 _ ->
-                    lager:error("NKLOG DATA12B ~p", [Data]),
                     Req5
             end,
             {ok, UserId, Req6};
