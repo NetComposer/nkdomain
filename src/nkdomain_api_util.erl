@@ -86,7 +86,7 @@ session_login(#nkreq{srv_id=SrvId, data=Data, session_meta=SessMeta}=Req) ->
                     Req3 = add_id(?DOMAIN_DOMAIN, DomainId, Req2),
                     Req4 = add_id(?DOMAIN_USER, UserId, Req3),
                     Req5 = add_id(?DOMAIN_SESSION, SessId, Req4),
-                    Req6 =  case Data of
+                    Req6 = case Data of
                         #{role:=Role, role_id:=RoleId} ->
                             add_meta(role, {Role, RoleId}, Req5);
                         _ ->
@@ -114,9 +114,15 @@ token_login(#nkreq{srv_id=SrvId, data=Data, session_meta=SessMeta}) ->
                     LoginMeta = maps:get(meta, Data, #{}),
                     TokenData1 = maps:with([session_id, local, remote], SessMeta),
                     TokenData2 = TokenData1#{login_meta => LoginMeta},
+                    TokenData3 = case Data of
+                        #{role:=Role, role_id:=RoleId} ->
+                            TokenData2#{role=>Role, role_id=>RoleId};
+                        _ ->
+                            TokenData2
+                    end,
                     TokenOpts1 = maps:with([ttl], Data),
                     TokenOpts2 = TokenOpts1#{srv_id=>SrvId},
-                    nkdomain_user_obj:make_token(DomainId, UserId, TokenOpts2, TokenData2);
+                    nkdomain_user_obj:make_token(DomainId, UserId, TokenOpts2, TokenData3);
                 {error, Error} ->
                     {error, Error}
             end;
@@ -128,7 +134,8 @@ token_login(#nkreq{srv_id=SrvId, data=Data, session_meta=SessMeta}) ->
 %% @doc
 check_token(Token, Req) ->
     case check_raw_token(Token) of
-        {ok, UserId, DomainId, LoginMeta, SessId} ->
+        {ok, UserId, DomainId, Data, SessId} ->
+            LoginMeta = maps:get(login_meta, Data, #{}),
             Req2 = add_meta(login_meta, LoginMeta, Req),
             Req3 = add_id(?DOMAIN_DOMAIN, DomainId, Req2),
             Req4 = add_id(?DOMAIN_USER, UserId, Req3),
@@ -136,25 +143,30 @@ check_token(Token, Req) ->
                 <<>> -> Req4;
                 _ -> add_id(?DOMAIN_SESSION, SessId, Req4)
             end,
-            {ok, UserId, Req5};
+            Req6 = case Data of
+                #{role:=Role, role_id:=RoleId} ->
+                    lager:error("NKLOG DATA12 ~p", [Data]),
+                    add_meta(role, {Role, RoleId}, Req5);
+                _ ->
+                    lager:error("NKLOG DATA12B ~p", [Data]),
+                    Req5
+            end,
+            {ok, UserId, Req6};
         {error, Error} ->
             {error, Error}
     end.
-
 
 %% @doc
 check_raw_token(Token) ->
     case nkdomain:get_obj(Token) of
         {ok, #{type:=?DOMAIN_SESSION, ?DOMAIN_SESSION:=Data}=Obj} ->
             #{domain_id:=DomainId, created_by:=UserId} = Obj,
-            LoginMeta = maps:get(login_meta, Data, #{}),
-            {ok, UserId, DomainId, LoginMeta, Token};
+            {ok, UserId, DomainId, maps:get(data, Data, #{}), Token};
         {ok, #{type:=?DOMAIN_TOKEN, subtype:=SubTypes, ?DOMAIN_TOKEN:=Data}=Obj} ->
             case lists:member(?DOMAIN_USER, SubTypes) of
                 true ->
                     #{domain_id:=DomainId, created_by:=UserId} = Obj,
-                    LoginMeta = maps:get(login_meta, Data, #{}),
-                    {ok, UserId, DomainId, LoginMeta, <<>>};
+                    {ok, UserId, DomainId,  maps:get(data, Data, #{}), <<>>};
                 _ ->
                     {error, token_invalid}
             end;

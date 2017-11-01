@@ -38,6 +38,7 @@
          object_db_search_types/2, object_db_search_all_types/2,
          object_db_search_childs/2, object_db_search_all_childs/2, object_db_search_agg_field/4,
          object_db_delete_all_childs/2, object_db_clean/0]).
+-export([plugin_deps/0, plugin_syntax/0, plugin_config/2, plugin_listen/2]).
 -export([service_api_syntax/3, service_api_allow/2, service_api_cmd/2]).
 -export([api_server_http_auth/3, api_server_reg_down/4]).
 -export([service_init/2, service_handle_cast/2, service_handle_info/2]).
@@ -926,11 +927,54 @@ api_server_http_auth(_Id, HttpReq, #nkreq{}=Req) ->
     Headers = nkapi_server_http:get_headers(HttpReq),
     Token = nklib_util:get_value(<<"x-netcomposer-auth">>, Headers, <<>>),
     case nkdomain_api_util:check_token(Token, Req) of
-        {ok, UserId, UserMeta} ->
-            {true, UserId, Req#nkreq{user_state=UserMeta}};
+        {ok, UserId, Req2} ->
+            {true, UserId, Req2};
         {error, _Error} ->
             false
     end.
+
+%%%% @doc
+%%api_server_handle_info({nkdist, {sent_link_down, Link}}, State) ->
+%%    nkapi_server:stop(self(), {sent_link_down, Link}),
+%%    {ok, State};
+%%
+%%api_server_handle_info(_Info, _State) ->
+%%    continue.
+
+
+%% ===================================================================
+%% Plugin callbacks
+%% ===================================================================
+
+%% @private
+plugin_deps() ->
+    [].
+
+
+%% @private
+plugin_syntax() ->
+    #{
+        nkdomain => nkdomain_nkroot:syntax()
+    }.
+
+
+%% @private
+plugin_config(#{nkdomain:=DomCfg}=Config, _Service) ->
+    nkdomain_nkroot:config(DomCfg, Config);
+
+plugin_config(Config, _Service) ->
+    {ok, Config}.
+
+
+%% @private
+plugin_listen(_Config, #{id:=_SrvId}) ->
+    [].
+%%    case Config of
+%%        #{graphql_url:=Url} ->
+%%            nkdomain_graphql:get_listen(SrvId, Url, Config);
+%%        _ ->
+%%            []
+%%    end.
 
 
 %% @private
