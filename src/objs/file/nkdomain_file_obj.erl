@@ -53,8 +53,8 @@ http_post(Req) ->
     Domain = nklib_util:get_value(<<"domain">>, Qs, <<"/">>),
     StoreId = nklib_util:get_value(<<"store_id">>, Qs, <<>>),
     case http_post(Domain, StoreId, Name, Req) of
-        {ok, #obj_id_ext{obj_id=ObjId, path=Path}, _Unknown} ->
-            {ok, ObjId, Path};
+        {ok, #obj_id_ext{obj_id=ObjId, path=Path}, Obj} ->
+            {ok, ObjId, Path, Obj};
         {error, Error} ->
             {error, Error}
     end.
@@ -93,7 +93,12 @@ http_post(Domain, StoreId, Name, Req) ->
                                         name => Name,
                                         ?DOMAIN_FILE => maps:merge(File2, FileMeta)
                                     },
-                                    nkdomain_obj_make:create(Obj);
+                                    case nkdomain_obj_make:create(Obj) of
+                                        {ok, ExtId, _Unknown} ->
+                                            {ok, ExtId, Obj};
+                                        {error, Error} ->
+                                            {error, Error}
+                                    end;
                                 {error, Error} ->
                                     {error, Error}
                             end;

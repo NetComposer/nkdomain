@@ -184,7 +184,7 @@ nkservice_rest_http(get, [<<"_file">>, FileId], Req) ->
 
 nkservice_rest_http(post, [<<"_file">>], Req) ->
     case nkdomain_file_obj:http_post(Req) of
-        {ok, ObjId, Path} ->
+        {ok, ObjId, Path, _Obj} ->
             Reply = #{obj_id=>ObjId, path=>Path},
             nkservice_rest_http:reply_json({ok, Reply}, Req);
         {error, Error} ->
