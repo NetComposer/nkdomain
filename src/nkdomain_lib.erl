@@ -22,6 +22,7 @@
 -module(nkdomain_lib).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
+-export([get_module/1, get_all_modules/0, get_type/1, get_all_types/0, register/1]).
 -export([find/1, find_loaded/1, load/1]).
 
 -include("nkdomain.hrl").
@@ -36,6 +37,52 @@
 %% ===================================================================
 %% Public
 %% ===================================================================
+
+%% @doc Finds a type's module
+-spec get_module(nkdomain:type()) ->
+    module() | undefined.
+
+get_module(Type) ->
+    nklib_types:get_module(nkdomain, Type).
+
+
+%% @doc Gets all registered modules
+-spec get_all_modules() ->
+    [module()].
+
+get_all_modules() ->
+    nklib_types:get_all_modules(nkdomain).
+
+
+%% @doc Finds a module's type
+-spec get_type(module()) ->
+    nkdomain:type() | undefined.
+
+get_type(Module) ->
+    nklib_types:get_type(nkdomain, Module).
+
+
+%% @doc Gets all registered types
+-spec get_all_types() ->
+    [nkdomain:type()].
+
+get_all_types() ->
+    nklib_types:get_all_types(nkdomain).
+
+
+%% @doc Gets the obj module for a type
+-spec register(module()) ->
+    ok.
+
+%% @doc Registers a module
+register(Module) ->
+    #{type:=Type} = Module:object_info(),
+    Type2 = to_bin(Type),
+    _ = binary_to_atom(Type2, utf8),
+    % Ensure we have the corresponding atoms loaded
+    % We store the bin version of the service
+    nklib_types:register(nkdomain, Type2, Module).
+
 
 
 %% @doc Finds and object from UUID or Path, in memory and disk
