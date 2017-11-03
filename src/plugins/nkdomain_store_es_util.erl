@@ -23,7 +23,8 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([get_opts/0, get_index_opts/0, reload_index/0, clean/0, delete_index/0, read_obj/1]).
--export([db_init/2, normalize/1, normalize_multi/1, stored_srv/1]).
+-export([unparse/1]).
+-export([db_init/2, normalize/1, normalize_multi/1]).
 
 -define(LLOG(Type, Txt, Args),
     lager:Type("NkDOMAIN Store ES "++Txt, Args)).
@@ -81,6 +82,104 @@ read_obj(Id) ->
 
 
 
+%% ===================================================================
+%% Syntax
+%% ===================================================================
+
+
+%% @doc ES base base mapping
+base_mappings() ->
+    #{
+        vsn => #{type => keyword},
+        obj_id => #{type => keyword},
+        srv_id => #{type => keyword},
+        type => #{type => keyword},
+        path => #{type => keyword},
+        obj_name => #{type => keyword},
+        domain_id => #{type => keyword},
+        parent_id => #{type => keyword},
+        subtype => #{type => keyword},
+        created_by => #{type => keyword},
+        created_time => #{type => date},
+        updated_by => #{type => keyword},
+        updated_time => #{type => date},
+        enabled => #{type => boolean},
+        active => #{type => boolean},
+        expires_time => #{type => date},
+        destroyed => #{type => boolean},
+        destroyed_time => #{type => date},
+        destroyed_code => #{type => keyword},
+        destroyed_reason => #{type => keyword},
+        name => #{
+            type => text,
+            analyzer => standard,
+            fields => #{keyword => #{type=>keyword}}
+        },
+        name_norm => #{type=>text},
+        description => #{
+            type => text,
+            analyzer => standard,
+            fields => #{keyword => #{type=>keyword}}
+        },
+        description_norm => #{type=>text},
+        tags => #{type => keyword},
+        aliases => #{type => keyword},
+        icon_id => #{type => keyword},
+        next_status_time => #{type => date}
+    }.
+
+
+
+
+%% @doc Called to serialize an object to ES format
+-spec unparse(nkdomain:obj()) ->
+    map().
+
+unparse(#{type:=Type}=Obj) ->
+    BaseKeys = maps:keys(base_mappings()),
+    BaseMap1 = maps:with(BaseKeys, Obj),
+    BaseMap2 = case BaseMap1 of
+        #{pid:=Pid} ->
+            BaseMap1#{pid:=base64:encode(term_to_binary(Pid))};
+        _ ->
+            BaseMap1
+    end,
+    BaseMap3 = case BaseMap2 of
+        #{name:=Name} ->
+            BaseMap2#{name_norm=>nkdomain_store_es_util:normalize_multi(Name)};
+        _ ->
+            BaseMap2
+    end,
+    BaseMap4 = case BaseMap3 of
+        #{description:=Desc} ->
+            BaseMap3#{description_norm=>nkdomain_store_es_util:normalize_multi(Desc)};
+        _ ->
+            BaseMap3
+    end,
+    BaseMap5 = case BaseMap4 of
+        #{srv_id:=?NKROOT} ->
+            maps:remove(srv_id, BaseMap4);
+        _ ->
+            BaseMap4
+    end,
+    case nkdomain_lib:type_apply(Type, object_es_mapping, []) of
+        not_exported ->
+            BaseMap5#{Type => #{}};
+        not_indexed ->
+            ModData = maps:get(Type, Obj, #{}),
+            BaseMap5#{Type => ModData};
+        Map when is_map(Map) ->
+            case nkdomain_lib:type_apply(Type, object_es_unparse, [Obj, BaseMap5]) of
+                not_exported ->
+                    ModData = maps:get(Type, Obj, #{}),
+                    ModKeys = maps:keys(Map),
+                    ModMap = maps:with(ModKeys, ModData),
+                    BaseMap5#{Type => ModMap};
+                Value when is_map(Value) ->
+                    Value
+            end
+    end.
+
 
 %% ===================================================================
 %% Internal
@@ -100,7 +199,7 @@ db_init(IndexOpts, EsOpts) ->
 %% @doc
 %% TODO: each service could have their own type
 db_init_mappings(EsOpts) ->
-    Modules = nkdomain_all_types:get_all_modules(),
+    Modules = nkdomain_lib:get_all_modules(),
     Base = ?CALL_NKROOT(object_es_mapping, []),
     Mappings = do_get_mappings(Modules, Base),
     case nkelastic:add_mapping(Mappings, EsOpts) of
@@ -232,9 +331,9 @@ norm_multi([], Chars, Words) ->
     end.
 
 
-%% @doc
-stored_srv(<<>>) -> atom_to_binary(?NKROOT, latin1);
-stored_srv(Srv) -> Srv.
+%%%% @doc
+%%stored_srv(<<>>) -> atom_to_binary(?NKROOT, latin1);
+%%stored_srv(Srv) -> Srv.
 
 
 %% ===================================================================

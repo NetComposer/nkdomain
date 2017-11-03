@@ -130,7 +130,9 @@
         enabled => boolean(),
         session_events => [binary()],       % See bellow
         session_link => nklib_links:link(), %
-        callback_srv_id => nkservice:id(),
+        % callback_srv_id => nkservice:id(),
+        parent_pid => pid(),
+        allow_no_service => boolean(),
         meta => map()
     }.
 
@@ -173,8 +175,8 @@
 -spec start(nkdomain:obj(), loaded|created, start_opts()) ->
     {ok, pid()} | {error, term()}.
 
-start(Obj, Op, Meta) ->
-    case gen_server:start(?MODULE, {Op, Obj, Meta}, []) of
+start(Obj, Op, StartOpts) ->
+    case gen_server:start(?MODULE, {Op, Obj, StartOpts}, []) of
         {ok, Pid} -> {ok, Pid};
         {error, {already_registered, Pid}} -> {ok, Pid};
         {error, Error} -> {error, Error}
@@ -263,14 +265,14 @@ conflict_detected(Pid, WinnerPid) ->
 
 get_all() ->
     [
-        {SrvId, Type, ObjId, Path, Pid} ||
-        {{SrvId, Type, ObjId, Path}, Pid} <- nklib_proc:values(?MODULE)
+        {Type, ObjId, Path, Pid} ||
+        {{Type, ObjId, Path}, Pid} <- nklib_proc:values(?MODULE)
     ].
 
 %% @private
 unload_all() ->
     lists:foreach(
-        fun({_Module, _ObjId, _Path, Pid}) -> async_op(Pid, {unload, normal}) end,
+        fun({_Type, _ObjId, _Path, Pid}) -> async_op(Pid, {unload, normal}) end,
         get_all()).
 
 
@@ -283,105 +285,40 @@ unload_all() ->
 -spec init(term()) ->
     {ok, state()} | {error, term()}.
 
-init({Op, Obj, Meta}) when Op==loaded; Op==created ->
-    #{
-        srv_id := SrvId,
-        type := Type,
-        obj_id := ObjId,
-        path := Path,
-        obj_name := ObjName,
-        domain_id := DomainId,
-        parent_id := ParentId
-    } = Obj,
-    Module = nkdomain_all_types:get_module(Type),
-    false = Module==undefined,
-    Enabled = case maps:find(enabled, Meta) of
-        {ok, false} ->
-            false;
-        _ ->
-            maps:get(enabled, Obj, true)
-    end,
-    Info = Module:object_info(),
-    % This srv_id is the one from the object (the one that created the object)
-    % You can use the option 'callback_srv_id' to use a different one for most callbacks
-    ObjIdExt = #obj_id_ext{srv_id=SrvId, obj_id=ObjId, type=Type, path=Path, obj_name=ObjName, pid=self()},
-    Now = nkdomain_util:timestamp(),
-    NextStatusTimer = case Obj of
-        #{next_status_time:=NextStatusTime} ->
-            case NextStatusTime - Now of
-                Step when Step =< 0 ->
-                    self() ! nkdomain_obj_next_status_timer,
-                    undefined;
-                Step ->
-                    erlang:send_after(Step, self(), nkdomain_obj_next_status_timer)
-            end;
-        _ ->
-            undefined
-    end,
-    State1 = #obj_state{
-        id = ObjIdExt,
-        callback_srv_id = maps:get(callback_srv_id, Meta, ?NKROOT),
-        module = Module,
-        domain_id = DomainId,
-        parent_id = ParentId,
-        object_info = Info,
-        obj = Obj,
-        is_dirty = (Op == created),
-        is_enabled = Enabled,
-        started = Now,
-        childs = #{},
-        usage_links = nklib_links:new(),
-        event_links = nklib_links:new(),
-        session_events = maps:get(session_events, Meta, []),
-        session_link = maps:get(session_link, Meta, undefined),
-        meta = maps:get(meta, Meta, #{}),
-        unload_policy = set_unload_policy(Obj, Info),
-        domain_enabled = true,
-        parent_enabled = true,
-        session = #{},
-        next_status_timer = NextStatusTimer
-    },
-    ?DEBUG("started (~p)", [self()], State1),
-    State2 = do_init_common(State1),
-    % Register obj_id, domain, parent and type
-    case do_register(State2) of
-        {ok, State3} ->
-            case handle(object_init, [], State3) of
-                {ok, State4} ->
-                    State5 = case Op of
-                        created ->
-                            ?DEBUG("created (~p)", [self()], State4),
-                            do_event(created, State4);
-                        loaded ->
-                            State4
-                    end,
-                    ?DEBUG("loaded (~p)", [self()], State5),
-                    State6 = do_event(loaded, State5),
-                    % Save if created or init sets is_dirty = true
-                    case do_save(creation, State6) of
-                        {ok, State7} ->
-                            {ok, do_refresh(State7)};
-                        {{error, Error}, _State7} ->
+init({Op, Obj, StartOpts}) when Op==loaded; Op==created ->
+    case do_init(Op, Obj, StartOpts) of
+        {ok, State1} ->
+            ?DEBUG("started (~p)", [self()], State1),
+            % Register obj_id, domain, parent and type
+            case do_register(StartOpts, State1) of
+                {ok, State3} ->
+                    case handle(object_init, [], State3) of
+                        {ok, State4} ->
+                            State5 = case Op of
+                                created ->
+                                    ?DEBUG("created (~p)", [self()], State4),
+                                    do_event(created, State4);
+                                loaded ->
+                                    State4
+                            end,
+                            ?DEBUG("loaded (~p)", [self()], State5),
+                            State6 = do_event(loaded, State5),
+                            % Save if created or init sets is_dirty = true
+                            case do_save(creation, State6) of
+                                {ok, State7} ->
+                                    {ok, do_refresh(State7)};
+                                {{error, Error}, _State7} ->
+                                    {stop, Error}
+                            end;
+                        {error, Error} ->
                             {stop, Error}
                     end;
                 {error, Error} ->
                     {stop, Error}
             end;
         {error, Error} ->
-            {stop, Error}
+            {error, Error}
     end.
-
-%%init({moved, State, OldPid}) ->
-%%    State2 = do_init_common(State),
-%%    case do_register(OldPid, State2) of
-%%        {ok, State3} ->
-%%            %% TODO: Add 'moved' callback
-%%            %% TODO: Re-register childs
-%%            ?DEBUG("moved (~p)", [self()], State3),
-%%            {ok, do_refresh(State3)};
-%%        {error, Error} ->
-%%            {stop, Error}
-%%    end.
 
 
 %% @private
@@ -459,8 +396,8 @@ handle_cast(nkdomain_obj_deleted, State) ->
     do_stop(object_deleted, State#obj_state{is_dirty=false});
 
 handle_cast({nkdomain_obj_conflict_detected, WinnerPid}, State) ->
-    #obj_state{id=#obj_id_ext{srv_id=SrvId, type=Type}} = State,
-    handle(object_conflict_detected, [SrvId, Type, WinnerPid], State);
+    #obj_state{id=#obj_id_ext{type=Type}} = State,
+    handle(object_conflict_detected, [Type, WinnerPid], State);
 
 handle_cast(Msg, State) ->
     safe_handle(object_handle_cast, [Msg], State).
@@ -489,7 +426,7 @@ handle_info(nkdomain_destroy, State) ->
     {stop, normal, State};
 
 handle_info(nkdomain_find_parent, #obj_state{parent_pid=undefined}=State) ->
-    case register_parent(State) of
+    case register_parent(State, #{}) of
         {ok, State2} ->
             ?DEBUG("parent reloaded", [], State),
             noreply(State2);
@@ -532,14 +469,16 @@ handle_info(nkdomain_obj_save_timer, State) ->
 handle_info({'DOWN', _Ref, process, Pid, _Reason}, #obj_state{parent_pid=Pid}=State) ->
     ?LLOG(notice, "parent has failed", [], State),
     self() ! nkdomain_find_parent,
-    State2 = do_enabled(State#obj_state{parent_pid=undefined, parent_enabled=false}),
-    noreply(State2);
+    State2 = do_save(parent_down, State),
+    State3 = do_enabled(State2#obj_state{parent_pid=undefined, parent_enabled=false}),
+    noreply(State3);
 
 handle_info({'DOWN', _Ref, process, Pid, _Reason}, #obj_state{domain_pid=Pid}=State) ->
     ?LLOG(notice, "domain has failed", [], State),
     self() ! nkdomain_find_domain,
-    State2 = do_enabled(State#obj_state{domain_pid=undefined, domain_enabled=false}),
-    noreply(State2);
+    State2 = do_save(domain_down, State),
+    State3 = do_enabled(State2#obj_state{domain_pid=undefined, domain_enabled=false}),
+    noreply(State3);
 
 handle_info({'DOWN', Ref, process, _Pid, _Reason}=Info, State) ->
     case links_down(Ref, State) of
@@ -565,8 +504,8 @@ handle_info(Msg, State) ->
 -spec code_change(term(), state(), term()) ->
     {ok, state()}.
 
-code_change(OldVsn, #obj_state{callback_srv_id=SrvId}=State, Extra) ->
-    apply(SrvId, object_code_change, [OldVsn, State, Extra]).
+code_change(OldVsn, State, Extra) ->
+    nkdomain_obj_util:obj_apply(object_code_change, [OldVsn, State, Extra], State).
 
 
 %% @private
@@ -746,14 +685,41 @@ do_async_op(Op, State) ->
 %% Internals
 %% ===================================================================
 
-%% @private
-do_init_common(State) ->
-    #obj_state{
-        id = #obj_id_ext{type=Type},
-        unload_policy = Policy
-    }= State,
+do_init(Op, Obj, StartOpts) ->
+    #{
+        type := Type,
+        obj_id := ObjId,
+        path := Path,
+        obj_name := ObjName,
+        domain_id := DomainId,
+        parent_id := ParentId
+    } = Obj,
+    Module = nkdomain_lib:get_module(Type),
+    false = Module==undefined,
+    Enabled = case maps:find(enabled, StartOpts) of
+        {ok, false} ->
+            false;
+        _ ->
+            maps:get(enabled, Obj, true)
+    end,
+    Info = Module:object_info(),
+    ObjIdExt = #obj_id_ext{obj_id=ObjId, type=Type, path=Path, obj_name=ObjName, pid=self()},
+    Now = nkdomain_util:timestamp(),
+    NextStatusTimer = case Obj of
+        #{next_status_time:=NextStatusTime} ->
+            case NextStatusTime-Now of
+                Step when Step=<0 ->
+                    self() ! nkdomain_obj_next_status_timer,
+                    undefined;
+                Step ->
+                    erlang:send_after(Step, self(), nkdomain_obj_next_status_timer)
+            end;
+        _ ->
+            undefined
+    end,
+    UnloadPolicy = set_unload_policy(Obj, Info),
     % If expired, do proper delete
-    case Policy of
+    case UnloadPolicy of
         {expires, _} ->
             self() ! nkdomain_check_expire;
         _ ->
@@ -761,7 +727,29 @@ do_init_common(State) ->
     end,
     set_log(Type),
     nkservice_util:register_for_changes(?NKROOT),
-    State.
+    State = #obj_state{
+        id = ObjIdExt,
+        module = Module,
+        domain_id = DomainId,
+        parent_id = ParentId,
+        object_info = Info,
+        obj = Obj,
+        is_dirty = (Op==created),
+        is_enabled = Enabled,
+        started = Now,
+        childs = #{},
+        usage_links = nklib_links:new(),
+        event_links = nklib_links:new(),
+        session_events = maps:get(session_events, StartOpts, []),
+        session_link = maps:get(session_link, StartOpts, undefined),
+        meta = maps:get(meta, StartOpts, #{}),
+        unload_policy = UnloadPolicy,
+        domain_enabled = true,
+        parent_enabled = true,
+        session = #{},
+        next_status_timer=NextStatusTimer
+    },
+    load_srv_id(Obj, StartOpts, State).
 
 
 %% @private
@@ -777,13 +765,38 @@ set_log(Type) ->
 
 
 %% @private
-do_register(State) ->
+load_srv_id(#{srv_id:=SrvId}, Opts, State) ->
+    Allow = maps:get(allow_not_service, Opts, false),
+    case catch nklib_util:to_existing_atom(SrvId) of
+        {'EXIT', _} when Allow ->
+            ?LLOG(notice, "loading object with unknown service '~s'", [SrvId], State),
+            {ok, State#obj_state{effective_srv_id=?NKROOT}};
+        {'EXIT', _} ->
+            {error, {srv_id_invalid, SrvId}};
+        SrvId2 ->
+            case whereis(SrvId2) of
+                Pid when is_pid(Pid) ->
+                    {ok, State#obj_state{effective_srv_id=SrvId2}};
+                undefined when Allow ->
+                    ?LLOG(notice, "loading object with unknown service '~s'", [SrvId], State),
+                    {ok, State#obj_state{effective_srv_id=?NKROOT}};
+                undefined ->
+                    {error, {srv_id_invalid, SrvId}}
+            end
+    end;
+
+load_srv_id(_Obj, _Opts, State) ->
+    {ok, State#obj_state{effective_srv_id=?NKROOT}}.
+
+
+%% @private
+do_register(Opts, State) ->
     case register_domain(State) of
         {ok, State2} ->
-            case register_parent(State2) of
+            case register_parent(State2, Opts) of
                 {ok, State3} ->
-                    #obj_state{id=#obj_id_ext{type=Type, srv_id=SrvId, obj_id=ObjId, path=Path}} = State,
-                    nklib_proc:put(?MODULE, {SrvId, Type, ObjId, Path}),
+                    #obj_state{id=#obj_id_ext{type=Type, obj_id=ObjId, path=Path}} = State,
+                    nklib_proc:put(?MODULE, {Type, ObjId, Path}),
                     {ok, State3};
                 {error, Error} ->
                     {error, Error}
@@ -797,13 +810,21 @@ do_register(State) ->
 register_domain(#obj_state{id=#obj_id_ext{obj_id = <<"root">>, type = ?DOMAIN_DOMAIN}}=State) ->
     {ok, State};
 
-register_domain(#obj_state{id=ObjIdExt, domain_id=DomainId}=State) ->
+register_domain(#obj_state{id=ObjIdExt, domain_id=DomainId, effective_srv_id=SrvId}=State) ->
     % Sync operation, domain can deny our loading
     case sync_op(DomainId, {nkdomain_reg_obj, ObjIdExt}) of
-        {ok, Enabled, Pid} ->
+        {ok, DomSrvId, Enabled, Pid} ->
             ?DEBUG("registered with domain (enabled:~p)", [Enabled], State),
             monitor(process, Pid),
-            State2 = do_enabled(State#obj_state{domain_pid=Pid, domain_enabled=Enabled}),
+            % If the object has a srv_id that is not ?NKROOT, it is honored
+            % If not, we will take domain's srv_id
+            SrvId2 = case SrvId /= ?NKROOT of
+                true ->
+                    SrvId;
+                false ->
+                    DomSrvId
+             end,
+            State2 = do_enabled(State#obj_state{effective_srv_id=SrvId2, domain_pid=Pid, domain_enabled=Enabled}),
             {ok, State2};
         {error, object_not_found} ->
             ?LLOG(warning, "cannot load domain ~s: not found", [DomainId], State),
@@ -814,19 +835,21 @@ register_domain(#obj_state{id=ObjIdExt, domain_id=DomainId}=State) ->
 
 
 %% @private
-register_parent(#obj_state{id=#obj_id_ext{obj_id = <<"root">>, type = ?DOMAIN_DOMAIN}}=State) ->
+register_parent(#obj_state{id=#obj_id_ext{obj_id = <<"root">>, type = ?DOMAIN_DOMAIN}}=State, _Opts) ->
     {ok, State};
 
-register_parent(#obj_state{id=ObjIdExt, parent_id=ParentId}=State) ->
+register_parent(#obj_state{id=ObjIdExt, parent_id=ParentId}=State, #{parent_pid:=ParentPid}) ->
+    async_op(ParentPid, {nkdomain_reg_child, ObjIdExt}),
+    ?DEBUG("registered with parent ~s", [ParentId], State),
+    monitor(process, ParentPid),
+    % We will receive the parent enabled event
+    State2 = State#obj_state{parent_pid=ParentPid, parent_enabled=true},
+    {ok, State2};
+
+register_parent(#obj_state{parent_id=ParentId}=State, Opts) ->
     case nkdomain_lib:load(ParentId) of
         #obj_id_ext{pid=ParentPid} ->
-            % Async operation, in case the parent is who is starting us
-            async_op(ParentPid, {nkdomain_reg_child, ObjIdExt}),
-            ?DEBUG("registered with parent ~s", [ParentId], State),
-            monitor(process, ParentPid),
-            % We will receive the parent enabled event
-            State2 = State#obj_state{parent_pid=ParentPid, parent_enabled=true},
-            {ok, State2};
+            register_parent(State, Opts#{parent_pid:=ParentPid});
         {error, object_not_found} ->
             {error, {could_not_load_parent, ParentId}};
         {error, Error} ->
@@ -926,9 +949,9 @@ do_stop(Reason, State) ->
 
 
 %% @private
-do_stop2(Reason, #obj_state{callback_srv_id=SrvId, stop_reason=false, object_info=Info}=State) ->
+do_stop2(Reason, #obj_state{stop_reason=false, object_info=Info}=State) ->
     {ok, State2} = handle(object_stop, [Reason], State#obj_state{stop_reason=Reason}),
-    {Code, Txt} = nkservice_util:error(SrvId, Reason),
+    {Code, Txt} = nkdomain_obj_util:obj_error(Reason, State),
     State3 = do_event({stopped, Code, Txt}, State2),
     {_, State4} = do_save(object_stopped, State3),
     State5 = do_event({unloaded, Reason}, State4),
@@ -1006,8 +1029,8 @@ do_update_name(ObjName, #obj_state{id=Id, obj=Obj}=State) ->
 
 %% @private
 do_update(Update, #obj_state{id=Id, obj=Obj}=State) ->
-    #obj_id_ext{srv_id=SrvId, type=Type} = Id,
-    Update2 = Update#{type=>Type, srv_id=>SrvId},
+    #obj_id_ext{type=Type} = Id,
+    Update2 = Update#{type=>Type},
     case ?CALL_NKROOT(object_parse, [update, Update2]) of
         {ok, Update3, UnknownFields} ->
             case ?ADD_TO_OBJ_DEEP(Update3, Obj) of
@@ -1105,8 +1128,8 @@ noreply(#obj_state{}=State) ->
 
 %% @private
 %% Will call the service's functions
-handle(Fun, Args, #obj_state{callback_srv_id=SrvId}=State) ->
-    apply(SrvId, Fun, Args++[State]).
+handle(Fun, Args, State) ->
+    nkdomain_obj_util:obj_apply(Fun, Args++[State], State).
 
 
 %% @private

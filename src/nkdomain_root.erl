@@ -41,7 +41,7 @@ create() ->
         description => <<"NetComposer">>,
         created_time => nkdomain_util:timestamp()
     },
-    nkdomain_store_es:save_obj(root, Obj).
+    nkdomain_store_search:save_obj(root, Obj).
 
 
 

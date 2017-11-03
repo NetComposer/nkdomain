@@ -258,7 +258,7 @@ object_init(#obj_state{id=ObjIdExt}=State) ->
 
 
 %% @private
-object_sync_op({nkdomain_reg_obj, ObjIdExt}, _From, #obj_state{id=Id} = State) ->
+object_sync_op({nkdomain_reg_obj, ObjIdExt}, _From, #obj_state{id=Id, effective_srv_id=SrvId} = State) ->
     #obj_id_ext{path=DomainPath} = Id,
     #obj_id_ext{obj_id=ObjId, type=Type, path=Path, pid=Pid, obj_name=ObjName} = ObjIdExt,
     case nkdomain_util:get_parts(Type, Path) of
@@ -270,7 +270,7 @@ object_sync_op({nkdomain_reg_obj, ObjIdExt}, _From, #obj_state{id=Id} = State) -
                     State3 = do_add_obj(ObjIdExt, State2),
                     State4 = do_event({obj_loaded, Type, ObjId, ObjName, Pid}, State3),
                     #obj_state{is_enabled=Enabled} = State,
-                    {reply, {ok, Enabled, self()}, State4};
+                    {reply, {ok, SrvId, Enabled, self()}, State4};
                 {error, Error} ->
                     {reply, {error, Error}, State}
             end;
@@ -458,7 +458,7 @@ do_rm_obj(ObjId, #obj_state{session=Session}=State) ->
 
 
 %% @private
-register_service(#obj_state{callback_srv_id=SrvId, session=Session}=State) ->
+register_service(#obj_state{effective_srv_id=SrvId, session=Session}=State) ->
     case whereis(SrvId) of
         Pid when is_pid(Pid) ->
             monitor(process, Pid),

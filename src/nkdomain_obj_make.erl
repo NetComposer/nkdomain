@@ -84,9 +84,9 @@ make(Opts) ->
     User = maps:get(created_by, Opts, <<"admin">>),
     Parent = maps:get(parent_id, Opts, Domain),
     try
-        {DomainId, DomainPath, DomSrvId} = case nkdomain_lib:find(Domain) of
-            #obj_id_ext{srv_id=DomSrvId0, type=?DOMAIN_DOMAIN, obj_id=DomainId0, path=DomainPath0} ->
-                {DomainId0, DomainPath0, DomSrvId0};
+        {DomainId, DomainPath} = case nkdomain_lib:find(Domain) of
+            #obj_id_ext{type=?DOMAIN_DOMAIN, obj_id=DomainId0, path=DomainPath0} ->
+                {DomainId0, DomainPath0};
             {error, object_not_found} ->
                 throw({could_not_load_domain, Domain});
             {error, DomainError} ->
@@ -135,15 +135,8 @@ make(Opts) ->
         Now = nkdomain_util:timestamp(),
         Obj1 = maps:without([obj_name, ttl], Opts),
         Obj2 = maps:merge(#{Type2=>#{}}, Obj1),
-        SrvId = case Opts of
-            #{srv_id:=SrvId0} ->
-                SrvId0;
-            _ ->
-                DomSrvId
-        end,
         Obj3 = Obj2#{
             obj_id => ObjId2,
-            srv_id => SrvId,
             type => Type2,
             domain_id => DomainId,
             path => <<BasePath/binary, $/, Name2/binary>>,  % Must be unique
@@ -155,13 +148,19 @@ make(Opts) ->
             updated_by => UserId
         },
         Obj4 = case Opts of
-            #{ttl:=SecsTTL} ->
-                Expires = nkdomain_util:timestamp() + 1000*SecsTTL,
-                Obj3#{expires_time=>Expires};
+            #{srv_id:=SrvId0} ->
+                Obj3#{srv_id=>SrvId0};
             _ ->
                 Obj3
         end,
-        {ok, Obj4}
+        Obj5 = case Opts of
+            #{ttl:=SecsTTL} ->
+                Expires = nkdomain_util:timestamp() + 1000*SecsTTL,
+                Obj4#{expires_time=>Expires};
+            _ ->
+                Obj4
+        end,
+        {ok, Obj5}
     catch
         throw:Throw ->
             {error, Throw}
@@ -227,16 +226,16 @@ create(MakeOpts, Opts) ->
 -spec create2(nkdomain:obj(), nkdomain:start_opts()) ->
     #obj_id_ext{} | {error, term()}.
 
-create2(#{srv_id:=SrvId, type:=Type, obj_id:=ObjId, path:=Path}=Obj, Meta) ->
+create2(#{type:=Type, obj_id:=ObjId, path:=Path}=Obj, Meta) ->
     case ?CALL_NKROOT(object_db_find_obj, [Path]) of
         {error, object_not_found} ->
             case nkdomain_obj:start(Obj, created, Meta) of
                 {ok, Pid} ->
-                    #obj_id_ext{srv_id=SrvId, type=Type, obj_id=ObjId, path=Path, pid=Pid};
+                    #obj_id_ext{type=Type, obj_id=ObjId, path=Path, pid=Pid};
                 {error, Error} ->
                     {error, Error}
             end;
-        {ok, _, _, _, _} ->
+        {ok, _, _, _} ->
             {error, object_already_exists};
         {error, Error} ->
             {error, Error}

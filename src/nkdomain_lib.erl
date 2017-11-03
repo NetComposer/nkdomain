@@ -22,11 +22,13 @@
 -module(nkdomain_lib).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([get_module/1, get_all_modules/0, get_type/1, get_all_types/0, register/1]).
--export([find/1, find_loaded/1, load/1]).
+-export([get_module/1, get_all_modules/0, get_type/1, get_all_types/0, register/1, register_relation/2]).
+-export([find/1, find/2, find_loaded/1, load/1, load/2]).
+-export([type_apply/3]).
 
 -include("nkdomain.hrl").
 -include_lib("nkevent/include/nkevent.hrl").
+-include_lib("nkservice/include/nkservice.hrl").
 
 
 %% ===================================================================
@@ -81,7 +83,18 @@ register(Module) ->
     _ = binary_to_atom(Type2, utf8),
     % Ensure we have the corresponding atoms loaded
     % We store the bin version of the service
-    nklib_types:register(nkdomain, Type2, Module).
+    nklib_types:register_type(nkdomain, Type2, Module).
+
+
+%% @doc Registers a module
+register_relation(Type, Module) ->
+    Fun = fun(Meta) ->
+        Relations1 = maps:get(relations, Meta, []),
+        Relations2 = nklib_util:store_value(Module, Relations1),
+        Meta#{relations=>Relations2}
+    end,
+    nklib_types:update_meta(nkdomain, Type, Fun).
+
 
 
 
@@ -90,12 +103,20 @@ register(Module) ->
     #obj_id_ext{} | {error, object_not_found|term()}.
 
 find(Id) ->
+    find(?NKROOT, Id).
+
+
+%% @doc Finds and object using a service's functions
+-spec find(nkservice:id(), nkdomain:obj_id()|nkdomain:path()) ->
+    #obj_id_ext{} | {error, object_not_found|term()}.
+
+find(SrvId, Id) ->
     Id2 = to_bin(Id),
     case find_loaded(Id2) of
         #obj_id_ext{}=ObjIdExt ->
             ObjIdExt;
         not_found ->
-            case find_in_db(Id2) of
+            case find_in_db(SrvId, Id2) of
                 #obj_id_ext{}=ObjIdExt ->
                     ObjIdExt;
                 {alias, #obj_id_ext{obj_id=ObjId}=ObjIdExt} ->
@@ -120,17 +141,16 @@ find_loaded(Id) ->
 
 
 %% @private
-find_in_db(Id) ->
-    case ?CALL_NKROOT(object_db_find_obj, [Id]) of
-        {ok, Srv, Type, ObjId, Path} ->
+find_in_db(SrvId, Id) ->
+    case ?CALL_SRV(SrvId, object_db_find_obj, [Id]) of
+        {ok, Type, ObjId, Path} ->
             {ok, _, ObjName} = nkdomain_util:get_parts(Type, Path),
-            SrvId = load_srv(Srv),
-            #obj_id_ext{srv_id=SrvId, type=Type, obj_id=ObjId, path=Path, obj_name=ObjName};
+            #obj_id_ext{type=Type, obj_id=ObjId, path=Path, obj_name=ObjName};
         {error, object_not_found} ->
-            case ?CALL_NKROOT(object_db_search_alias, [Id]) of
+            case ?CALL_SRV(SrvId, object_db_search_alias, [Id]) of
                 {ok, 0, []} ->
                     {error, object_not_found};
-                {ok, N, [{Srv, Type, ObjId, Path}|_]}->
+                {ok, N, [{Type, ObjId, Path}|_]}->
                     case N > 1 of
                         true ->
                             lager:notice("NkDOMAIN: duplicated alias for ~s", [Id]);
@@ -138,8 +158,7 @@ find_in_db(Id) ->
                             ok
                     end,
                     {ok, _, ObjName} = nkdomain_util:get_parts(Type, Path),
-                    SrvId = load_srv(Srv),
-                    Alias = #obj_id_ext{srv_id=SrvId, type=Type, obj_id=ObjId, path=Path, obj_name=ObjName},
+                    Alias = #obj_id_ext{type=Type, obj_id=ObjId, path=Path, obj_name=ObjName},
                     {alias, Alias};
                 {error, Error} ->
                     {error, Error}
@@ -149,20 +168,34 @@ find_in_db(Id) ->
     end.
 
 
+
 %% @doc Finds an objects's pid or loads it from storage
 -spec load(nkdomain:id()) ->
     #obj_id_ext{} | {error, object_not_found|term()}.
 
 load(Id) ->
-    case find(Id) of
+    load(?NKROOT, Id).
+
+
+%% @doc Finds an objects's pid or loads it from storage
+-spec load(nkservice:id(), nkdomain:id()) ->
+    #obj_id_ext{} | {error, object_not_found|term()}.
+
+load(SrvId, Id) ->
+    case find(SrvId, Id) of
         #obj_id_ext{pid=Pid}=ObjIdExt when is_pid(Pid) ->
             ObjIdExt;
         #obj_id_ext{obj_id=ObjId, path=Path}=ObjIdExt ->
-            case ?CALL_NKROOT(object_db_read, [ObjId]) of
-                {ok, #{path:=Path}=Obj, _Meta} ->
-                    case nkdomain_obj:start(Obj, loaded, #{}) of
-                        {ok, Pid} ->
-                            ObjIdExt#obj_id_ext{pid=Pid};
+            case ?CALL_SRV(SrvId, object_db_read, [ObjId]) of
+                {ok, Map, _Meta} ->
+                    case ?CALL_SRV(SrvId, object_parse, [load, Map]) of
+                        {ok, #{path:=Path}=Obj, _Unknown} ->
+                            case nkdomain_obj:start(Obj, loaded, #{}) of
+                                {ok, Pid} ->
+                                    ObjIdExt#obj_id_ext{pid=Pid};
+                                {error, Error} ->
+                                    {error, Error}
+                            end;
                         {error, Error} ->
                             {error, Error}
                     end;
@@ -174,15 +207,23 @@ load(Id) ->
     end.
 
 
-%% @private
-load_srv(Srv) ->
-    case catch binary_to_existing_atom(Srv, latin1) of
-        {'EXIT', _} ->
-            lager:warning("NkDOMAIN: loading object with unknown service ~p", [Srv]),
-            binary_to_atom(Srv, latin1);
-        SrvId ->
-            SrvId
-    end.
+%% @doc Calls an object's function
+-spec type_apply(nkdomain:type()|module(), atom(), list()) ->
+    not_exported | term().
+
+type_apply(Module, Fun, Args) when is_atom(Module) ->
+    case erlang:function_exported(Module, Fun, length(Args)) of
+        true ->
+            apply(Module, Fun, Args);
+        false ->
+            not_exported
+    end;
+
+type_apply(Type, Fun, Args) when is_binary(Type) ->
+    Module = nkdomain_lib:get_module(Type),
+    true = is_atom(Module),
+    type_apply(Module, Fun, Args).
+
 
 
 

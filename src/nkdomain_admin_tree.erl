@@ -68,7 +68,7 @@ get_category(resources, #admin_session{db_types=Types}=Session) ->
     get_resources_category(Types, Session);
 
 get_category(sessions, Session) ->
-    Types = nkdomain_all_types:get_all_types(),
+    Types = nkdomain_lib:get_all_types(),
     get_sessions_category(Types, Session);
 
 get_category(services, Session) ->

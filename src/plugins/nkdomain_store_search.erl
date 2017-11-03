@@ -19,17 +19,10 @@
 %% -------------------------------------------------------------------
 
 %% @doc Elasticsearch plugin
-
-%% Low level operations
-%% {ok, E} = nkdomain_store_es_util:get_opts(SrvId).
-%% nkelastic:delete(ObjId, E).
-
-
-
--module(nkdomain_store_es).
+-module(nkdomain_store_search).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([read_obj/2, save_obj/3, delete_obj/2, find_obj/2]).
+-export([find_obj/2]).
 -export([search_agg_field/5]).
 -export([search_types/3, search_all_types/3, search_childs/3, search_all_childs/3, search/2, search_obj_alias/2]).
 -export([delete_all_childs/3]).
@@ -41,7 +34,7 @@
     lager:Type("NkDOMAIN Store ES "++Txt, Args)).
 
 -include("nkdomain.hrl").
-
+-include_lib("nkservice/include/nkservice.hrl").
 
 -type search_spec() :: nkelastic_search:search_spec().
 -type meta() :: nkelastic:resp_meta().
@@ -51,64 +44,6 @@
 %% Public
 %% ===================================================================
 
-
-%% @doc Reads an object
--spec read_obj(nkdomain:obj_id(), nkelastic:opts()) ->
-    {ok, map(), meta()} | {error, object_not_found|term()}.
-
-read_obj(ObjId, EsOpts) ->
-    case nkelastic:get(ObjId, EsOpts) of
-        {ok, Map, Meta} ->
-            case Map of
-                #{<<"srv_id">>:=<<"nkroot">>} ->
-                    %% TODO Temporary hack
-                    lager:warning("NKLOG Restoring empty nkroot on disk: ~s", [ObjId]),
-                    {ok, _} = nkelastic:put(ObjId, Map#{<<"srv_id">>:=<<>>}, EsOpts);
-                _ ->
-                    ok
-            end,
-            case ?CALL_NKROOT(object_es_parse, [Map]) of
-                {ok, Obj, []} ->
-                    {ok, Obj, Meta};
-                {ok, Obj, UnknownFields} ->
-                    {ok, Obj, Meta#{unknown_fields=>UnknownFields}};
-                {error, Error} ->
-                    ?LLOG(warning, "error parsing loaded object ~s: ~p\n~p", [ObjId, Error, Map]),
-                    {error, parse_error}
-            end;
-        {error, Error} ->
-            {error, Error}
-    end.
-
-
-%% @doc Saves an object
--spec save_obj(nkdomain:obj_id(), map(), nkelastic:opts()) ->
-    {ok, meta()} | {error, term()}.
-
-save_obj(ObjId, Obj, EsOpts) ->
-    Map = ?CALL_NKROOT(object_es_unparse, [Obj]),
-    nkelastic:put(ObjId, Map, EsOpts).
-
-
-%% @doc Removes an object
--spec delete_obj(nkdomain:obj_id(), nkelastic:opts()) ->
-    {ok, meta()} | {error, term()}.
-
-delete_obj(ObjId, EsOpts) ->
-    case search_childs(ObjId, #{size=>0}, EsOpts) of
-        {ok, 0, []} ->
-            case nkdomain_lib:find_loaded(ObjId) of
-                #obj_id_ext{pid=Pid} ->
-                    nkdomain_obj:object_deleted(Pid);
-                not_found ->
-                    ok
-            end,
-            nkelastic:delete(ObjId, EsOpts);
-        {ok, _, _} ->
-            {error, object_has_childs};
-        {error, Error} ->
-            {error, Error}
-    end.
 
 
 %% @doc Finds an object from its ID or Path
@@ -125,11 +60,11 @@ find_obj(Id, EsOpts) ->
     case do_search_objs(#{filters=>Filters}, EsOpts) of
         {ok, 0, []} ->
             {error, object_not_found};
-        {ok, 1, [{Srv, Type, ObjId, ObjPath}]} ->
-            {ok, nkdomain_store_es_util:stored_srv(Srv), Type, ObjId, ObjPath};
-        {ok, _, [{Srv, Type, ObjId, ObjPath}|_]} ->
+        {ok, 1, [{Type, ObjId, ObjPath}]} ->
+            {ok, Type, ObjId, ObjPath};
+        {ok, _, [{Type, ObjId, ObjPath}|_]} ->
             ?LLOG(warning, "Multiple objects for path ~s", [ObjPath]),
-            {ok, nkdomain_store_es_util:stored_srv(Srv), Type, ObjId, ObjPath}
+            {ok, Type, ObjId, ObjPath}
     end.
 
 
@@ -174,7 +109,7 @@ search_all_types(Id, Spec, EsOpts) ->
 
 %% @doc Finds all objects on a path
 -spec search_childs(nkdomain:id(), search_spec(), nkelastic:opts()) ->
-    {ok, integer(), [{Srv::binary(), nkdomain:type(), nkdomain:obj_id(), nkdomain:path()}], meta()} | {error, term()}.
+    {ok, integer(), [{nkdomain:type(), nkdomain:obj_id(), nkdomain:path()}], meta()} | {error, term()}.
 
 search_childs(Id, Spec, EsOpts) ->
     case filter_childs(Id, Spec, EsOpts) of
@@ -423,17 +358,17 @@ print(Txt, Obj) ->
 
 %% @private
 -spec do_search_objs(search_spec(), nkelastic:opts()) ->
-    {ok, N::integer(), [{Srv::binary(), nkdomain:type(), nkdomain:obj_id(), nkdomain:path()}]} | {error, term()}.
+    {ok, N::integer(), [{nkdomain:type(), nkdomain:obj_id(), nkdomain:path()}]} | {error, term()}.
 
 do_search_objs(Spec, EsOpts) ->
     Spec2 = Spec#{
-        fields => [<<"srv_id">>, <<"type">>, <<"path">>]
+        fields => [<<"type">>, <<"path">>]
     },
     case do_search(Spec2, EsOpts) of
         {ok, N, Data, _Aggs, _Meta} ->
             Data2 = lists:map(
-                fun(#{<<"obj_id">>:=ObjId, <<"srv_id">>:=SrvId, <<"type">>:=Type, <<"path">>:=Path}) ->
-                    {nkdomain_store_es_util:stored_srv(SrvId), Type, ObjId, Path}
+                fun(#{<<"obj_id">>:=ObjId, <<"type">>:=Type, <<"path">>:=Path}) ->
+                    {Type, ObjId, Path}
                 end,
                 Data),
             {ok, N, Data2};

@@ -172,7 +172,7 @@ object_send_event(Event, State) ->
 
 
 %% @private
-object_init(#obj_state{callback_srv_id=SrvId, domain_id=DomainId, id=Id, obj=Obj, meta=Meta}=State) ->
+object_init(#obj_state{effective_srv_id=SrvId, domain_id=DomainId, id=Id, obj=Obj, meta=Meta}=State) ->
     #obj_id_ext{obj_id=SessId} = Id,
     #{created_by:=UserId} = Obj,
     Session = #admin_session{
@@ -437,8 +437,8 @@ do_get_data(Parts, Spec, State) ->
 %% @private
 find_url(<<"_id/", ObjId/binary>>, _Session) ->
     case nkdomain_lib:find(ObjId) of
-        #obj_id_ext{srv_id=SrvId, type=Type, path=Path} ->
-            {ok, [?ADMIN_OBJ_ID, SrvId, ObjId, Type, Path]};
+        #obj_id_ext{type=Type, path=Path} ->
+            {ok, [?ADMIN_OBJ_ID, ObjId, Type, Path]};
         {error, _Error} ->
             {error, url_unknown}
     end;
@@ -449,8 +449,8 @@ find_url(Url, Session) ->
             #admin_session{domain_path=Base} = Session,
             Url2 = nkdomain_util:append(Base, Url),
             case nkdomain_lib:find(Url2) of
-                #obj_id_ext{srv_id=SrvId, obj_id=ObjId, type=Type, path=Path} ->
-                    {ok, [?ADMIN_OBJ_ID, SrvId, ObjId, Type, Path]};
+                #obj_id_ext{obj_id=ObjId, type=Type, path=Path} ->
+                    {ok, [?ADMIN_OBJ_ID, ObjId, Type, Path]};
                 {error, _} ->
                     find_url_class(Url2)
             end;

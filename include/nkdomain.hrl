@@ -36,7 +36,7 @@
 %-define(STATE, obj_state).
 
 -record(obj_id_ext, {
-    srv_id :: nkservice:id(),
+    %srv_id :: nkservice:id(),
     type :: nkdomain:type(),
     obj_id :: nkdomain:obj_id(),
     obj_name :: nkdomain:obj_name(),
@@ -48,7 +48,7 @@
 -record(obj_state, {
     id :: #obj_id_ext{},
     module :: module(),
-    callback_srv_id :: module(),
+    effective_srv_id :: module(),           % If on disk, will be used (if loaded)
     domain_id :: nkdomain:obj_id(),
     parent_id :: nkdomain:obj_id(),
     object_info :: nkdomain_obj:object_info(),

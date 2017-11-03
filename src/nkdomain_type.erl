@@ -30,7 +30,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -behaviour(gen_server).
 
--export([register/2, get_counter/3]).
+-export([register/2, get_counter/2]).
 -export([start_link/1, master_call/2]).
 -export([init/1, terminate/2, code_change/3, handle_call/3,
          handle_cast/2, handle_info/2]).
@@ -65,11 +65,11 @@ register(Module, #obj_id_ext{pid=ObjPid}=ObjIdExt) when is_pid(ObjPid) ->
 
 
 %% @doc
--spec get_counter(nkservice:id(), module(), nkdomain:domain()) ->
+-spec get_counter(module(), nkdomain:domain()) ->
     {ok, integer()}.
 
-get_counter(SrvId, Module, Domain) ->
-    master_call(Module, {get_counter, SrvId, to_bin(Domain)}).
+get_counter(Module, Domain) ->
+    master_call(Module, {get_counter, to_bin(Domain)}).
 
 
 
@@ -94,9 +94,9 @@ start_link(Module) ->
     module :: module(),
     type :: nkdomain:type(),
     master :: pid(),
-    pids = #{} :: #{pid() => {nkdomain:srv_id(), nkdomain:obj_id()}},
-    counters = #{} :: #{{nkservice:id(), Domain::binary()} => integer()},
-    objs = #{} :: #{{nkservice:id(), nkdomain:obj_id()} => #obj{}},
+    pids2 = #{} :: #{pid() => nkdomain:obj_id()},
+    counters2 = #{} :: #{Domain::binary() => integer()},
+    objs2 = #{} :: #{nkdomain:obj_id() => #obj{}},
     dom_cache = #{} :: #{Domain::binary() => [Domains::binary()]}
 }).
 
@@ -116,8 +116,8 @@ init([Module]) ->
     {noreply, #state{}} | {reply, term(), #state{}} |
     {stop, Reason::term(), #state{}} | {stop, Reason::term(), Reply::term(), #state{}}.
 
-handle_call({get_counter, SrvId, Domain}, _From, #state{counters=Counters}=State) ->
-    {reply, {ok, maps:get({SrvId, Domain}, Counters, 0)}, State};
+handle_call({get_counter, Domain}, _From, #state{counters2=Counters}=State) ->
+    {reply, {ok, maps:get(Domain, Counters, 0)}, State};
 
 handle_call(get_master, _From, #state{master=Master}=State) ->
     {reply, {ok, Master}, State};
@@ -126,19 +126,19 @@ handle_call(get_state, _From, State) ->
     {reply, State, State};
 
 handle_call({register, ObjIdExt}, _From, State) ->
-    #obj_id_ext{srv_id=SrvId, obj_id=ObjId, path=Path, type=Type, pid=Pid} = ObjIdExt,
-    #state{type=Type, objs=Objs, pids=Pids, counters=Counters} = State,
+    #obj_id_ext{obj_id=ObjId, path=Path, type=Type, pid=Pid} = ObjIdExt,
+    #state{type=Type, objs2=Objs, pids2=Pids, counters2=Counters} = State,
     case maps:is_key(Pid, Pids) of
         true ->
             {reply, {ok, self()}, State};
         false ->
             Obj = #obj{path=Path, pid=Pid},
-            Objs2 = Objs#{{SrvId, ObjId} => Obj},
-            Pids2 = Pids#{Pid => {SrvId, ObjId}},
+            Objs2 = Objs#{ObjId => Obj},
+            Pids2 = Pids#{Pid => ObjId},
             monitor(process, Pid),
             {DomainList, State2} = make_domains(Path, State),
-            Counters2 = update_counters(SrvId, DomainList, 1, Counters, State2),
-            State3 = State2#state{objs=Objs2, pids=Pids2, counters=Counters2},
+            Counters2 = update_counters(DomainList, 1, Counters, State2),
+            State3 = State2#state{objs2=Objs2, pids2=Pids2, counters2=Counters2},
             {reply, {ok, self()}, State3}
     end;
 
@@ -160,36 +160,16 @@ handle_cast(Msg, State) ->
 -spec handle_info(term(), #state{}) ->
     {noreply, #state{}} | {stop, term(), #state{}}.
 
-handle_info({nkdist, {master, Pid}}, State) when Pid==self() ->
-    % We are the new master
-    % The old master should have told everyone to register with us now
-    {noreply, State#state{master=Pid}};
-
-handle_info({nkdist, {master, Pid}}, #state{master=OldMaster, pids=Pids}=State) ->
-    % There is a new master
-    case OldMaster == self() of
-        true ->
-            % We were master, we must tell everyone to re-register
-            % We keep the records
-            lists:foreach(
-                fun(ObjPid) -> nkdomain_obj:new_type_master(ObjPid) end,
-                maps:keys(Pids)),
-            {noreply, State#state{master=Pid}};
-        false ->
-            % We were slave
-            {noreply, State#state{master=Pid}}
-    end;
-
 handle_info({'DOWN', _Ref, process, Pid, _Reason}, State) ->
-    #state{objs=Objs, pids=Pids, counters=Counters}=State,
+    #state{objs2=Objs, pids2=Pids, counters2=Counters}=State,
     case maps:find(Pid, Pids) of
-        {ok, {SrvId, ObjId}} ->
+        {ok, ObjId} ->
             Pids2 = maps:remove(Pid, Pids),
-            Objs2 = maps:remove({SrvId, ObjId}, Objs),
-            #obj{pid=Pid, path=Path} = maps:get({SrvId, ObjId}, Objs),
+            Objs2 = maps:remove(ObjId, Objs),
+            #obj{pid=Pid, path=Path} = maps:get(ObjId, Objs),
             {DomainList, State2} = make_domains(Path, State),
-            Counters2 = update_counters(SrvId, DomainList, -1, Counters, State2),
-            State3 = State2#state{objs=Objs2, pids=Pids2, counters=Counters2},
+            Counters2 = update_counters(DomainList, -1, Counters, State2),
+            State3 = State2#state{objs2=Objs2, pids2=Pids2, counters2=Counters2},
             {noreply, State3};
         error ->
             lager:warning("Module ~p received unexpected DOWN: ~p", [?MODULE, Pid]),
@@ -276,23 +256,23 @@ do_make_domains([Pos|Rest], Acc1, Acc2) ->
 
 
 %% @private
-update_counters(_SrvId, [], _N, Counters, _State) ->
+update_counters([], _N, Counters, _State) ->
     Counters;
 
-update_counters(SrvId, [Domain|Rest], N, Counters, State) ->
-    Count = maps:get({SrvId, Domain}, Counters, 0) + N,
-    send_event(SrvId, Domain, Count, State),
+update_counters([Domain|Rest], N, Counters, State) ->
+    Count = maps:get(Domain, Counters, 0) + N,
+    send_event(Domain, Count, State),
     Counters2 = case Count of
-        0 -> maps:remove({SrvId, Domain}, Counters);
-        _ -> Counters#{{SrvId, Domain} => Count}
+        0 -> maps:remove(Domain, Counters);
+        _ -> Counters#{Domain => Count}
     end,
-    update_counters(SrvId, Rest, N, Counters2, State).
+    update_counters(Rest, N, Counters2, State).
 
 
 %% @private
-send_event(SrvId, Domain, Count, #state{type=Type}) ->
+send_event(Domain, Count, #state{type=Type}) ->
     Event = #nkevent{
-        srv_id = SrvId,
+        srv_id = ?NKROOT,
         class = ?DOMAIN_EVENT_CLASS,
         subclass = Type,
         type = counter_updated,

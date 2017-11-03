@@ -62,7 +62,7 @@ start(Type) ->
 %% @private OTP standard start callback
 %% Last application must call maybe_start_nkroot
 start(_Type, _Args) ->
-    Syntax = nkdomain_nkroot:syntax(),
+    Syntax = nkdomain_nkroot_plugin:syntax(),
     case nklib_config:load_env(?APP, Syntax) of
         {ok, _} ->
             {ok, Pid} = nkdomain_sup:start_link(),
@@ -88,7 +88,7 @@ stop(_) ->
 maybe_start_nkroot() ->
     case get(start_nkroot) of
         true ->
-            case nkdomain_nkroot:start() of
+            case start() of
                 {ok, _} ->
                     lager:info("NkDOMAIN root started");
                 {error, Error} ->
@@ -102,25 +102,25 @@ maybe_start_nkroot() ->
 
 %% @doc Register our types
 register_types() ->
-    ok = nkdomain_all_types:register(nkdomain_domain_obj),
-    ok = nkdomain_all_types:register(nkdomain_user_obj),
-    ok = nkdomain_all_types:register(nkdomain_session_obj),
-    ok = nkdomain_all_types:register(nkdomain_config_obj),
-    ok = nkdomain_all_types:register(nkdomain_token_obj),
-    ok = nkdomain_all_types:register(nkdomain_service_obj),
-    ok = nkdomain_all_types:register(nkdomain_task_obj),
-    ok = nkdomain_all_types:register(nkdomain_alert_obj),
-    ok = nkdomain_all_types:register(nkdomain_device_obj),
-    ok = nkdomain_all_types:register(nkdomain_node_obj),
-    ok = nkdomain_all_types:register(nkdomain_location_obj),
+    ok = nkdomain_lib:register(nkdomain_domain_obj),
+    ok = nkdomain_lib:register(nkdomain_user_obj),
+    ok = nkdomain_lib:register(nkdomain_session_obj),
+    ok = nkdomain_lib:register(nkdomain_config_obj),
+    ok = nkdomain_lib:register(nkdomain_token_obj),
+    ok = nkdomain_lib:register(nkdomain_service_obj),
+    ok = nkdomain_lib:register(nkdomain_task_obj),
+    ok = nkdomain_lib:register(nkdomain_alert_obj),
+    ok = nkdomain_lib:register(nkdomain_device_obj),
+    ok = nkdomain_lib:register(nkdomain_node_obj),
+    ok = nkdomain_lib:register(nkdomain_location_obj),
 
-    ok = nkdomain_all_types:register(nkdomain_mail_obj),
-    ok = nkdomain_all_types:register(nkdomain_mail_provider_obj),
+    ok = nkdomain_lib:register(nkdomain_mail_obj),
+    ok = nkdomain_lib:register(nkdomain_mail_provider_obj),
 
-    ok = nkdomain_all_types:register(nkdomain_file_store_obj),
-    ok = nkdomain_all_types:register(nkdomain_file_obj),
+    ok = nkdomain_lib:register(nkdomain_file_store_obj),
+    ok = nkdomain_lib:register(nkdomain_file_obj),
 
-    ok = nkdomain_all_types:register(nkadmin_session_obj).
+    ok = nkdomain_lib:register(nkadmin_session_obj).
 
 
 

@@ -66,8 +66,8 @@
 
 find(Id) ->
     case nkdomain_lib:find(Id) of
-        #obj_id_ext{srv_id=SrvId, type=Type, obj_id=ObjId, path=Path, pid=Pid} ->
-            {ok, SrvId, Type, ObjId, Path, Pid};
+        #obj_id_ext{type=Type, obj_id=ObjId, path=Path, pid=Pid} ->
+            {ok, Type, ObjId, Path, Pid};
         {error, Error} ->
             {error, Error}
     end.
@@ -79,8 +79,8 @@ find(Id) ->
 
 load(Id) ->
     case nkdomain_lib:load(Id) of
-        #obj_id_ext{srv_id=SrvId, type=Type, obj_id=ObjId, path=Path, pid=Pid} ->
-            {ok, SrvId, Type, ObjId, Path, Pid};
+        #obj_id_ext{type=Type, obj_id=ObjId, path=Path, pid=Pid} ->
+            {ok, Type, ObjId, Path, Pid};
         {error, Error} ->
             {error, Error}
     end.
@@ -276,5 +276,5 @@ upgrade() ->
         lager:notice("Obj: ~p", [Obj]),
         Acc+1
     end,
-    nkdomain_store_es:iterate_objects(E, Fun, 0).
+    nkdomain_store_search:iterate_objects(E, Fun, 0).
 

@@ -31,7 +31,7 @@ execute(Ctx, #{type:=Type}=Obj, Field, Args) ->
         {ok, Res} ->
             {ok, Res};
         unknown ->
-            case nkdomain_all_types:get_module(Type) of
+            case nkdomain_lib:get_module(Type) of
                 undefined ->
                     {error, unknown_type};
                 Module ->

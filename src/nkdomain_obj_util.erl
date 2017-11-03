@@ -22,9 +22,9 @@
 %% @doc Basic Obj utilities
 -module(nkdomain_obj_util).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
+-export([obj_apply/3, obj_error/2]).
 -export([event/2, search_syntax/1, get_obj_info/1, get_obj_name/1]).
 -export([send_event/1, send_event/3, send_event/4, send_event/5]).
--export([call_type/3]).
 -export([link_to_session_server/2, unlink_from_session_server/2]).
 -export([set_active/2, set_next_status_timer/2]).
 -export([get_obj_session/1, set_obj_session/2]).
@@ -40,18 +40,27 @@
 %% Public
 %% ===================================================================
 
+%% @doc
+obj_apply(Fun, Args, #obj_state{effective_srv_id=SrvId}) ->
+    apply(SrvId, Fun, Args).
+
+
+%% @private
+obj_error(Error, #obj_state{effective_srv_id=SrvId}) ->
+    nkservice_util:error(SrvId, Error).
+
 
 %% @doc Sends an event inside an object process to all registered
 %% Calls SrvId:object_event() and SrvId:object_reg_event(), that
 %% normally call send_event/N here
 
-event(Event, #obj_state{callback_srv_id=SrvId, event_links=Links}=State) ->
+event(Event, #obj_state{event_links=Links}=State) ->
     Fun = fun(Link, Data, Acc) ->
-        {ok, Acc2} = apply(SrvId, object_reg_event, [Link, Data, Event, Acc]),
+        {ok, Acc2} = obj_apply(object_reg_event, [Link, Data, Event, Acc], State),
         Acc2
     end,
     State2 = nklib_links:fold_values(Fun, State, Links),
-    {ok, State3} = apply(SrvId, object_event, [Event, State2]),
+    {ok, State3} = obj_apply(object_event, [Event, State2], State2),
     State3.
 
 
@@ -205,27 +214,6 @@ get_obj_name(#obj_state{id=#obj_id_ext{obj_id=ObjId, path=Path}, obj=Obj}) ->
         end
     ],
     maps:from_list(lists:flatten(List)).
-
-
-
-%% @private
-call_type(Type, Fun, Args) ->
-    case nkdomain_all_types:get_module(Type) of
-        undefined ->
-            ok;
-        Module ->
-            case erlang:function_exported(Module, Fun, length(Args)) of
-                true ->
-                    case apply(Module, Fun, Args) of
-                        continue ->
-                            ok;
-                        Other ->
-                            Other
-                    end;
-                false ->
-                    ok
-            end
-    end.
 
 
 %% @doc

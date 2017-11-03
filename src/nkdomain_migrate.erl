@@ -19,11 +19,12 @@
 %% -------------------------------------------------------------------
 
 %% @doc NkDomain main module
--module(nkdomain_upgrade).
+-module(nkdomain_migrate).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 
 -export([import_7_to_8/1, print/1]).
+-export([import_8_to_9/1]).
 -include("nkdomain.hrl").
 
 
@@ -46,7 +47,7 @@ import_7_to_8(Path) ->
                 {upgrade, Obj}
         end
     end,
-    nkdomain_store_es:import_objects(<<"nkobjects_v7">>, Path, Fun).
+    nkdomain_store_search:import_objects(<<"nkobjects_v7">>, Path, Fun).
 
 
 %% @private
@@ -76,6 +77,26 @@ import_7_to_8_user(User) ->
         end,
         maps:get(<<"status">>, User, [])),
     User#{<<"push">>=>Push, <<"status">>:=Status}.
+
+
+import_8_to_9(Path) ->
+    Fun = fun(Obj) ->
+        case Obj of
+            #{<<"path">>:=<<"/sipstorm_c4">>} ->
+                {upgrade, Obj};
+            #{<<"path">>:=<<"/sphera">>} ->
+                {upgrade, Obj};
+            _ ->
+                Obj2 = maps:remove(<<"srv_id">>, Obj),
+                {upgrade, Obj2}
+        end
+    end,
+    nkdomain_store_search:import_objects(<<"nkobjects_v8">>, Path, Fun).
+
+
+
+
+
 
 
 
