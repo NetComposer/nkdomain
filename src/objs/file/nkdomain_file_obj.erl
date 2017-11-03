@@ -26,6 +26,7 @@
 
 -export([execute/4, http_post/1, http_post/4, http_get/2]).
 -export([find/0, delete_all/0]).
+-export([object_schema_types/0]).
 -export([object_info/0, object_es_mapping/0, object_parse/2, object_api_syntax/2, object_api_cmd/2]).
 -export([object_admin_info/0]).
 -export([make_file_id/0, upload/4, download/3]).
@@ -186,6 +187,19 @@ object_admin_info() ->
         class => resource,
         weight => 1100,
         type_view_mod => nkdomain_file_obj_type_view
+    }.
+
+
+object_schema_types() ->
+    #{
+        'File' => #{
+            fields => #{
+                contentType => string,
+                size => int
+            },
+            is_object => true,
+            comment => "An File"
+        }
     }.
 
 

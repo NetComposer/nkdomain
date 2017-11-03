@@ -26,6 +26,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([execute/4]).
+-export([object_schema_types/0, object_schema_queries/0, object_schema_mutations/0]).
 -export([object_info/0, object_admin_info/0, object_create/1, object_update/1, object_es_mapping/0, object_es_unparse/2,
          object_parse/2, object_api_syntax/2, object_api_cmd/2, object_send_event/2]).
 -export([object_init/1, object_save/1, object_event/2,
@@ -136,6 +137,77 @@ object_create(Obj) ->
         {error, Error} ->
             {error, Error}
     end.
+
+
+object_schema_types() ->
+    #{
+        'User' => #{
+            fields => #{
+                userName => {string, #{comment=>"User family name"}},
+                userSurname => {string, #{comment=>"User surname"}},
+                email => string,
+                phone => string,
+                address => string,
+                status => {connection, 'UserStatus'}
+            },
+            is_object => true,
+            comment => "An User"
+        },
+        'UserStatus' => #{
+            fields => #{
+                domainPath => {no_null, string, #{comment=>"my path"}},
+                userStatus => string,
+                updatedTime => time
+            },
+            is_connection => true
+        }
+    }.
+
+
+object_schema_queries() ->
+    #{
+        allUsers => {list, 'User', #{comment=>"All Users", params=>#{fieldA=>int}}},
+        allUsers2 => {list, 'User', #{comment=>"All Users2", params=>#{fieldA=>boolean}}}
+
+    }.
+
+
+
+object_schema_mutations() ->
+    #{
+        'User' => #{
+            input => #{name => string},
+            output => #{name=>string},
+            comment=>"mut1"
+        }
+    }.
+
+
+
+
+
+%% @doc Sample for type 'UserStatus' and data 'domainPath:...'
+%%  type UserStatusConnection {                 # This is an 'abstract' concept but UserStatusEdge is not
+%%      pageInfo : PageInfo!                    # it is the 'line' connecting Users and UserStatus objects
+%%      edges : [UserStatusEdge]                # an 'edge' is the 'relation' between among two objects
+%%      totalCount : Int                        # in this case, between 'User' and 'UserStatus' objects
+%%  }
+%%
+%%  type UserStatusEdge {                       # The real relation between the User and the UserStatus
+%%      node : UserStatus                       # it could have more metadata, but it is not common
+%%      cursor : String!
+%%  }
+%%
+%%  type UserStatus {
+%%      domainPath : String!
+%%      userStatus : String
+%%      updatedTime : UnixTime
+%%  }
+
+
+
+
+
 
 
 
