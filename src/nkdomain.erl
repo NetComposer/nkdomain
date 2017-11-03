@@ -62,7 +62,7 @@
 
 %% @doc Finds and object from UUID or Path, in memory and disk
 -spec find(id()) ->
-    {ok,  type(), obj_id(), path(), pid()|undefined} | {error, object_not_found|term()}.
+    {ok, type(), obj_id(), path(), pid()|undefined} | {error, object_not_found|term()}.
 
 find(Id) ->
     case nkdomain_lib:find(Id) of
@@ -75,7 +75,7 @@ find(Id) ->
 
 %% @doc Finds an objects's pid or loads it from storage
 -spec load(id()) ->
-    {ok,  type(), obj_id(), path(), pid()} |  {error, object_not_found|term()}.
+    {ok, type(), obj_id(), path(), pid()} |  {error, object_not_found|term()}.
 
 load(Id) ->
     case nkdomain_lib:load(Id) of

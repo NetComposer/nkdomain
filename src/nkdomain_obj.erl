@@ -766,22 +766,29 @@ set_log(Type) ->
 
 %% @private
 load_srv_id(#{srv_id:=SrvId}, Opts, State) ->
-    Allow = maps:get(allow_not_service, Opts, false),
-    case catch nklib_util:to_existing_atom(SrvId) of
-        {'EXIT', _} when Allow ->
-            ?LLOG(notice, "loading object with unknown service '~s'", [SrvId], State),
+    case SrvId of
+        <<>> ->
             {ok, State#obj_state{effective_srv_id=?NKROOT}};
-        {'EXIT', _} ->
-            {error, {srv_id_invalid, SrvId}};
-        SrvId2 ->
-            case whereis(SrvId2) of
-                Pid when is_pid(Pid) ->
-                    {ok, State#obj_state{effective_srv_id=SrvId2}};
-                undefined when Allow ->
+        ?NKROOT ->
+            {ok, State#obj_state{effective_srv_id=?NKROOT}};
+        _ ->
+            Allow = maps:get(allow_not_service, Opts, false),
+            case catch nklib_util:to_existing_atom(SrvId) of
+                {'EXIT', _} when Allow ->
                     ?LLOG(notice, "loading object with unknown service '~s'", [SrvId], State),
                     {ok, State#obj_state{effective_srv_id=?NKROOT}};
-                undefined ->
-                    {error, {srv_id_invalid, SrvId}}
+                {'EXIT', _} ->
+                    {error, {srv_id_invalid, SrvId}};
+                SrvId2 ->
+                    case whereis(SrvId2) of
+                        Pid when is_pid(Pid) ->
+                            {ok, State#obj_state{effective_srv_id=SrvId2}};
+                        undefined when Allow ->
+                            ?LLOG(notice, "loading object with unknown service '~s'", [SrvId], State),
+                            {ok, State#obj_state{effective_srv_id=?NKROOT}};
+                        undefined ->
+                            {error, {srv_id_invalid, SrvId}}
+                    end
             end
     end;
 
@@ -849,7 +856,7 @@ register_parent(#obj_state{id=ObjIdExt, parent_id=ParentId}=State, #{parent_pid:
 register_parent(#obj_state{parent_id=ParentId}=State, Opts) ->
     case nkdomain_lib:load(ParentId) of
         #obj_id_ext{pid=ParentPid} ->
-            register_parent(State, Opts#{parent_pid:=ParentPid});
+            register_parent(State, Opts#{parent_pid=>ParentPid});
         {error, object_not_found} ->
             {error, {could_not_load_parent, ParentId}};
         {error, Error} ->

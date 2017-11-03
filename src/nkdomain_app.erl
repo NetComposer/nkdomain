@@ -70,7 +70,6 @@ start(_Type, _Args) ->
             lager:info("NkDOMAIN v~s has started.", [Vsn]),
             nkdomain_i18n:reload(),
             register_types(),
-            ok = nkchat_app:register_types(),   %% TODO HACK
             {ok, Pid};
         {error, Error} ->
             lager:error("Error parsing config: ~p", [Error]),
@@ -88,7 +87,7 @@ stop(_) ->
 maybe_start_nkroot() ->
     case get(start_nkroot) of
         true ->
-            case start() of
+            case nkdomain_nkroot_plugin:start() of
                 {ok, _} ->
                     lager:info("NkDOMAIN root started");
                 {error, Error} ->

@@ -23,7 +23,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([get_opts/0, get_index_opts/0, reload_index/0, clean/0, delete_index/0, read_obj/1]).
--export([unparse/1]).
+-export([base_mappings/0, unparse/1]).
 -export([db_init/2, normalize/1, normalize_multi/1]).
 
 -define(LLOG(Type, Txt, Args),
@@ -200,8 +200,9 @@ db_init(IndexOpts, EsOpts) ->
 %% TODO: each service could have their own type
 db_init_mappings(EsOpts) ->
     Modules = nkdomain_lib:get_all_modules(),
-    Base = ?CALL_NKROOT(object_es_mapping, []),
+    Base = nkdomain_store_es_util:base_mappings(),
     Mappings = do_get_mappings(Modules, Base),
+    io:format("ES Mappings\n~s\n\n", [nklib_json:encode_pretty(Mappings)]),
     case nkelastic:add_mapping(Mappings, EsOpts) of
         {ok, _} ->
             db_init_root(EsOpts);
@@ -215,7 +216,7 @@ do_get_mappings([], Acc) ->
     Acc;
 
 do_get_mappings([Module|Rest], Acc) ->
-    Mapping = case ?CALL_NKROOT(object_es_mapping, [Module]) of
+    Mapping = case nkdomain_lib:type_apply(Module, object_es_mapping, []) of
         not_exported ->
             #{enabled => false};
         not_indexed ->

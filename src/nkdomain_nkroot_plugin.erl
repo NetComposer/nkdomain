@@ -22,7 +22,7 @@
 -module(nkdomain_nkroot_plugin).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([start/0, stop/0, init/1]).
+-export([start/0, stop/0, init/1, syntax/0]).
 -export([plugin_deps/0, plugin_syntax/0, plugin_config/2, plugin_listen/2]).
 
 

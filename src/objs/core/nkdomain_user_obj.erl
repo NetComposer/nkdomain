@@ -518,7 +518,14 @@ object_admin_info() ->
 
 %% @doc
 object_create(Obj) ->
-    nkdomain_obj_make:create(Obj#{type=>?DOMAIN_USER}).
+    case check_email(Obj) of
+        {ok, Obj2} ->
+            nkdomain_obj_make:create(Obj2#{type=>?DOMAIN_USER});
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
 
 
 %% @private
@@ -722,7 +729,7 @@ object_sync_op({?MODULE, get_info, Opts}, _From, #obj_state{obj=Obj}=State) ->
                 {true, DP} ->
                     DP;
                 {false, _} ->
-                    case nkdomain:find(Domain) of
+                    case nkdomain_lib:find(Domain) of
                         #obj_id_ext{path=DP} -> DP;
                         _ -> undefined
                     end

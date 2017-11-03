@@ -127,9 +127,9 @@ test_create_user(Pid) ->
     % Unload the user
     ok = nkdomain:unload(U2Id),
     timer:sleep(100),
-    {ok, _, <<"user">>, U2Id, <<"/users/tuser1">>, undefined} = F2 = nkdomain:find("/users/tuser1"),
+    {ok, <<"user">>, U2Id, <<"/users/tuser1">>, undefined} = F2 = nkdomain:find("/users/tuser1"),
     F2 = nkdomain:find(U2Id),
-    {ok, _, <<"user">>, U2Id, <<"/users/tuser1">>, Pid2} = F3 = nkdomain:load("/users/tuser1"),
+    {ok, <<"user">>, U2Id, <<"/users/tuser1">>, Pid2} = F3 = nkdomain:load("/users/tuser1"),
     F3 = nkdomain:find(U2Id),
     false = Pid1 == Pid2,
 
@@ -161,7 +161,7 @@ test_session1(Pid) ->
     {ok, Pid2, SessId} = login("/users/tuser1", pass2),
     {ok, #{<<"path">>:=<<"/users/tuser1">>, <<"obj_id">>:=UId}} = cmd(Pid2, <<"objects/user/get">>, #{}),
     {ok, #{<<"path">>:=<<"/users/admin">>}} = cmd(Pid, <<"objects/user/get">>, #{}),
-    {ok, _, <<"session">>, SessId, _, SPid} = nkdomain:find(SessId),
+    {ok, <<"session">>, SessId, _, SPid} = nkdomain:find(SessId),
     true = is_pid(SPid),
 
     % Object has active childs, we cannot delete it
@@ -449,7 +449,7 @@ test_basic_2(Pid) ->
 
 remove_data() ->
     case nkdomain:find("/users/tuser1") of
-        {ok, _, <<"user">>, UId, _, _} ->
+        {ok, <<"user">>, UId, _, _} ->
             {ok, _} = ?CALL_NKROOT(object_db_delete, [UId]);
         {error, object_not_found} ->
             ok
@@ -462,7 +462,7 @@ remove_data() ->
             nkdomain:delete_all_childs("/stest1")
     end,
     case nkdomain:find("/stest1") of
-        {ok, _, ?DOMAIN_DOMAIN, S1Id_0, _, _} ->
+        {ok, ?DOMAIN_DOMAIN, S1Id_0, _, _} ->
             %% lager:warning("/stest1 was already present"),
             ok = nkdomain:delete(S1Id_0);
         {error, object_not_found} ->
