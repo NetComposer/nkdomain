@@ -183,7 +183,7 @@ object_init(#obj_state{effective_srv_id=SrvId, domain_id=DomainId, id=Id, obj=Ob
         user_id = UserId,
         language = maps:get(language, Meta, <<"en">>)
     },
-    ok = nkdomain_user_obj:register_session(UserId, DomainId, ?DOMAIN_ADMIN_SESSION, SessId, #{}),
+    ok = nkdomain_user:register_session(UserId, DomainId, ?DOMAIN_ADMIN_SESSION, SessId, #{}),
     State2 = nkdomain_obj_util:link_to_session_server(?MODULE, State),
     State3 = State2#obj_state{meta=#{}, session=Session},
     {ok, State3}.

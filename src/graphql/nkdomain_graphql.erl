@@ -41,14 +41,15 @@
 
 mapping_rules() ->
     #{
-        scalars => #{ default => nkdomain_graphql_scalar },
-        enums => #{default => graphql_enum_coerce },
-        interfaces => #{ default => nkdomain_graphql_type },
-        unions => #{ default => nkdomain_graphql_type },
+        scalars => #{default => nkdomain_graphql_scalar},
+        enums => #{default => graphql_enum_coerce},
+        interfaces => #{default => nkdomain_graphql_type},
+        unions => #{default => nkdomain_graphql_type},
         objects => #{
             'Query' => nkdomain_graphql_query,
             'Mutation' => nkdomain_graphql_mutation,
-            default => nkdomain_graphql_object }
+            default => nkdomain_graphql_object
+        }
     }.
 
 
@@ -63,11 +64,14 @@ load_schema() ->
 
 %% tag::setupRoot[]
 setup_root() ->
-    Root = {root,
-            #{ query => 'Query',
-               mutation => 'Mutation',
-               interfaces => ['Node']
-            }},
+    Root = {
+        root,
+            #{
+                query => 'Query',
+                mutation => 'Mutation',
+                interfaces => ['Node']
+            }
+    },
     ok = graphql:insert_schema_definition(Root),
     ok.
 
@@ -182,19 +186,21 @@ type IntroduceUserPayload {
 object() -> <<"
     id : ID!
     vsn : String
+    objId : String!
     type : String!
     path : String!
     objName : String!
     domainId : String!
-    domain : Domain
+    domain : Domain!
     parentId : String!
-    parent : Object
+    parent : Object!
     srvId : String
     subtype : [String]
-    createdBy : User
-    createdTime : UnixTime
-    updatedBy : User
-    updatedTime : UnixTime
+    createdById : String!
+    createdBy : User!
+    createdTime : UnixTime!
+    updatedBy : User!
+    updatedTime : UnixTime!
     enabled : Boolean!
     active : boolean!
     expiresTime : UnixTime

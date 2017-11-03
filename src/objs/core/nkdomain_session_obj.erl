@@ -131,7 +131,7 @@ object_init(#obj_state{domain_id=DomainId, id=Id, obj=Obj}=State) ->
     %% TODO Link again if moved process
     #obj_id_ext{obj_id=SessId} = Id,
     #{created_by:=UserId} = Obj,
-    ok = nkdomain_user_obj:register_session(UserId, DomainId, ?DOMAIN_SESSION, SessId, #{}),
+    ok = nkdomain_user:register_session(UserId, DomainId, ?DOMAIN_SESSION, SessId, #{}),
     State2 = nkdomain_obj_util:link_to_session_server(?MODULE, State),
     {ok, State2}.
 

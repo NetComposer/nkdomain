@@ -287,7 +287,7 @@ db_init_admin(EsOpts) ->
                 ?DOMAIN_USER => #{
                     name => <<"Admin">>,
                     surname => <<"User">>,
-                    password => nkdomain_user_obj:user_pass("netcomposer")
+                    password => nkdomain_user:user_pass("netcomposer")
                 }
             },
             {ok, _} = nkelastic:put(<<"admin">>, Obj, EsOpts),

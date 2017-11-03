@@ -425,8 +425,8 @@ object_do_expired(ObjId) ->
 
 
 %% @doc
--spec object_send_push(nkdomain_user_obj:push_device_id(),
-                       nkdomain_user_obj:push_device(), nkdomain_user_obj:push_msg()) ->
+-spec object_send_push(nkdomain_user:push_device_id(),
+                       nkdomain_user:push_device(), nkdomain_user:push_msg()) ->
     ok | {error, term()}.
 
 object_send_push(_PushDeviceId, _PushDevice, _PushMsg) ->

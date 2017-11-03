@@ -59,7 +59,7 @@ test_basic_1(Pid) ->
             }
         } = U1} =
         cmd(Pid, <<"objects/user/get">>, #{}),
-    Pass = nkdomain_user_obj:user_pass(?ADMIN_PASS),
+    Pass = nkdomain_user:user_pass(?ADMIN_PASS),
     {ok, U1} = cmd(Pid, <<"objects/user/get">>, #{id=><<"admin">>}),
     {ok, U1} = cmd(Pid, <<"objects/user/get">>, #{id=><<"/users/admin">>}),
     {error, {<<"object_not_found">>,<<"Object not found">>}} = cmd(Pid, <<"objects/user/get">>, #{id=><<"admin2">>}),
@@ -115,7 +115,7 @@ test_create_user(Pid) ->
         } = U2} =
         cmd(Pid, <<"objects/user/get">>, #{id=>U2Id}),
     true = nkdomain_util:timestamp() - CT < 500,
-    P2 = nkdomain_user_obj:user_pass("pass1"),
+    P2 = nkdomain_user:user_pass("pass1"),
 
     % Find user by several ways
     {ok, U2} = cmd(Pid, <<"objects/user/get">>, #{id=><<"/users/tuser1">>}),
@@ -152,7 +152,7 @@ test_create_user(Pid) ->
             }
         }} =
         cmd(Pid, <<"objects/user/get">>, #{id=>U2Id}),
-    P3 = nkdomain_user_obj:user_pass("pass2"),
+    P3 = nkdomain_user:user_pass("pass2"),
     ok.
 
 
