@@ -87,6 +87,7 @@
 -type object_info() ::
     #{
         type => nkdomain:type(),                        %% Mandatory!
+        schema_type => nkdomain_graphql:schema_type(),
         permanent => boolean(),
         save_time => integer(),                         %% secs
         default_ttl => integer(),                       %% msecs

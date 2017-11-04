@@ -198,6 +198,7 @@ make_path(Id, Type, Name) ->
 object_info() ->
     #{
         type => ?DOMAIN_DOMAIN,
+        schema_type => 'Domain',
         permanent => true
     }.
 

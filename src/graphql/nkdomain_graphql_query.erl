@@ -18,67 +18,22 @@
 %%
 %% -------------------------------------------------------------------
 
-%% @doc NkDomain main module
+%% @doc Query processor.
 -module(nkdomain_graphql_query).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([execute/4]).
 
-%% tag::execute[]
-execute(Ctx, _DummyObj, <<"node">>, #{ <<"id">> := Id }) ->
+
+%% @doc
+execute(Ctx, _DummyObj, QueryName, Params) ->
     #{nkmeta:=#{start:=Start}} = Ctx,
-    lager:notice("NKLOG T1 ~p", [nklib_util:l_timestamp()-Start]),
-    case nkdomain:get_obj(Id) of
-        {ok, Obj} ->
-            lager:notice("NKLOG T2 ~p", [nklib_util:l_timestamp()-Start]),
-            {ok, Obj};
-        {error, Error} ->
-            {error, Error}
+    case nklib_types:get_module(nkdomain_query, QueryName) of
+        undefined ->
+            {error, unknown_query};
+        Module ->
+            Res = Module:object_query(QueryName, Params, Ctx),
+            lager:info("Query time: ~p", [nklib_util:l_timestamp()-Start]),
+            Res
     end.
-
-
-%%execute(_Ctx, _DummyObj, <<"starship">>, #{ <<"id">> := ID }) ->
-%%    load_node(['Starship'], ID);
-%%execute(_Ctx, _DummyObj, <<"allPlanets">>, _Args) ->
-%%    {atomic, Planets} = mnesia:transaction(load_all(planet)),
-%%    {ok, Planets};
-%%
-%%execute(_Ctx, _DummyObj, <<"allStarships">>, _Args) ->
-%%    {atomic, Starships} = mnesia:transaction(load_all(starship)),
-%%    {ok, Starships};
-%%execute(_Ctx, _DummyObj, <<"allPeople">>, _Args) ->
-%%    {atomic, People} = mnesia:transaction(load_all(person)),
-%%    {ok, People};
-%%execute(_Ctx, _DummyObj, <<"allVehicles">>, _Args) ->
-%%    {atomic, Vehicles} = mnesia:transaction(load_all(vehicle)),
-%%    {ok, Vehicles};
-%%execute(_Ctx, _DummyObj, <<"allSpecies">>, _Args) ->
-%%    {atomic, Species} = mnesia:transaction(load_all(species)),
-%%    {ok, Species};
-%%execute(_Ctx, _DummyObj, <<"allFilms">>, _Args) ->
-%%    {atomic, Films} = mnesia:transaction(load_all(film)),
-%%    {ok, Films}.
-
-%%load_all(vehicle) ->
-%%    fun() ->
-%%        QH = qlc:q([{ok, #{ vehicle => V, transport => T }} ||
-%%                       V <- mnesia:table(vehicle),
-%%                       T <- mnesia:table(transport),
-%%                    V#vehicle.id == T#transport.id]),
-%%        qlc:e(QH)
-%%    end;
-%%load_all(starship) ->
-%%    fun() ->
-%%        QH = qlc:q([{ok, #{ starship => S, transport => T }} ||
-%%                       S <- mnesia:table(starship),
-%%                       T <- mnesia:table(transport),
-%%                    S#starship.id == T#transport.id]),
-%%        qlc:e(QH)
-%%    end;
-%%load_all(Tab) ->
-%%    fun() ->
-%%        QH = qlc:q([{ok, F} || F <- mnesia:table(Tab)]),
-%%        qlc:e(QH)
-%%    end.
-
 

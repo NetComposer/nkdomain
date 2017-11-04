@@ -43,34 +43,37 @@ execute(Ctx, #{type:=Type}=Obj, Field, Args) ->
 %% @%% @private GraphQL execute
 common_field(Field, Obj) ->
     case Field of
-        <<"id">> -> {ok, maps:get(obj_id, Obj)};
-        <<"vsn">> -> {ok, maps:get(vsn, Obj, null)};
-        <<"type">> -> {ok, maps:get(type, Obj)};
-        <<"path">> -> {ok, maps:get(path, Obj)};
-        <<"objName">> -> {ok, maps:get(obj_name, Obj)};
-        <<"domainId">> -> {ok, maps:get(domain_id, Obj)};
-        <<"domain">> -> get_obj(maps:get(domain_id, Obj));
-        <<"parentId">> -> {ok, maps:get(parent_id, Obj)};
-        <<"parent">> -> get_obj(maps:get(parent_id, Obj));
-        <<"srvId">> -> {ok, maps:get(srv_id, Obj, null)};
-        <<"subtype">> -> {ok, maps:get(subtype, Obj, [])};
-        <<"createdBy">> -> get_obj(maps:get(created_by, Obj));
-        <<"createdTime">> -> {ok, maps:get(created_time, Obj, null)};
-        <<"updatedBy">> -> get_obj(maps:get(updated_by, Obj, null));
-        <<"updatedTime">> -> {ok, maps:get(updated_time, Obj, null)};
-        <<"enabled">> -> {ok, maps:get(enabled, Obj, true)};
         <<"active">> -> {ok, maps:get(active, Obj, null)};
-        <<"expiresTime">> -> {ok, maps:get(expires_time, Obj, null)};
+        <<"aliases">> -> {ok, maps:get(aliases, Obj, [])};
+        <<"createdBy">> -> get_obj(maps:get(created_by, Obj));
+        <<"createdById">> -> {ok, maps:get(created_by, Obj)};
+        <<"createdTime">> -> {ok, maps:get(created_time, Obj, null)};
+        <<"description">> -> {ok, maps:get(description, Obj, null)};
         <<"destroyed">> -> {ok, maps:get(destroyed, Obj, false)};
-        <<"destroyedTime">> -> {ok, maps:get(destroyed_time, Obj, null)};
         <<"destroyedCode">> -> {ok, maps:get(destroyed_code, Obj, null)};
         <<"destroyedReason">> -> {ok, maps:get(destroyed_reason, Obj, null)};
+        <<"destroyedTime">> -> {ok, maps:get(destroyed_time, Obj, null)};
+        <<"domain">> -> get_obj(maps:get(domain_id, Obj));
+        <<"domainId">> -> {ok, maps:get(domain_id, Obj)};
+        <<"enabled">> -> {ok, maps:get(enabled, Obj, true)};
+        <<"expiresTime">> -> {ok, maps:get(expires_time, Obj, null)};
+        <<"icon">> -> get_obj(maps:get(icon_id, Obj, null));
+        <<"iconId">> -> {ok, maps:get(icon_id, Obj, null)};
+        <<"id">> -> {ok, maps:get(obj_id, Obj)};
         <<"name">> -> {ok, maps:get(name, Obj, null)};
-        <<"description">> -> {ok, maps:get(description, Obj, null)};
+        <<"objId">> -> {ok, maps:get(obj_id, Obj)};
+        <<"objName">> -> {ok, maps:get(obj_name, Obj)};
+        <<"parent">> -> get_obj(maps:get(parent_id, Obj));
+        <<"parentId">> -> {ok, maps:get(parent_id, Obj)};
+        <<"path">> -> {ok, maps:get(path, Obj)};
+        <<"srvId">> -> {ok, maps:get(srv_id, Obj, null)};
+        <<"subtypes">> -> {ok, maps:get(subtype, Obj, [])};
         <<"tags">> -> {ok, maps:get(tags, Obj, [])};
-        <<"aliases">> -> {ok, maps:get(aliases, Obj, [])};
-        <<"iconId">> -> get_obj(maps:get(icon_id, Obj, null));
-        <<"nextStatusTime">> -> {ok, maps:get(next_status_time, Obj, null)};
+        <<"type">> -> {ok, maps:get(type, Obj)};
+        <<"updatedBy">> -> get_obj(maps:get(updated_by, Obj, null));
+        <<"updatedById">> -> {ok, maps:get(updated_by, Obj, null)};
+        <<"updatedTime">> -> {ok, maps:get(updated_time, Obj, null)};
+        <<"vsn">> -> {ok, maps:get(vsn, Obj, null)};
         _ -> unknown
     end.
 

@@ -20,18 +20,70 @@
 
 %% @doc NkDomain GraphQL main module
 
-%% When a query is received, it first go to nkdomain_graphql_object_query
+%% When a query is received, it first go to nkdomain_graphql_query
 %% If it is an abstract type (interface or union) it will go to find the type,
 %% and the to the type manager object (nkdomain_graphql_object manages all of them
 
 -module(nkdomain_graphql).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -export([load_schema/0, make_schema/0]).
--export([object_schema_scalars/0, object_schema_enums/0, object_schema_interfaces/0, object_schema_types/0,
-         object_schema_queries/0, object_schema_mutations/0]).
+-export([object_schema_scalars/0, object_schema_enums/0, object_schema_interfaces/0,
+         object_schema_types/0, object_schema_queries/0, object_schema_mutations/0]).
+-export([object_query/3]).
 
 
 
+%% ===================================================================
+%% Types
+%% ===================================================================
+
+-type schema_type() :: id | int | boolean | string | object | time | atom().
+
+
+-type field_key() :: atom().
+
+
+-type field_value() ::
+    schema_type() | {schema_type(), field_opts()} |
+    {no_null, schema_type()} | {no_null, schema_type(), field_opts()} |
+    {list, schema_type()} | {list, schema_type(), field_opts()} |
+    {list_not_null, schema_type()} | {list_not_null, schema_type(), field_opts()} |
+    {connection, schema_type()} | {connection, schema_type(), field_opts()}.
+
+
+-type field_opts() ::
+    #{
+        comment => string(),
+        params => #{field_key() => field_value()}
+    }.
+
+
+-type schema_fields() ::
+    #{field_key() => field_value()}.
+
+
+-type query_name() :: atom().
+
+-type mutation_name() :: atom().
+
+
+
+%% ===================================================================
+%% API
+%% ===================================================================
+
+
+%% @doc Generates an loads a new schema
+load_schema() ->
+    ok = graphql_schema:reset(),
+    Mapping = mapping_rules(),
+    ok = graphql:load_schema(Mapping, make_schema()),
+    ok = setup_root(),
+    ok = graphql:validate_schema(),
+    ok.
+
+
+%% @private
 mapping_rules() ->
     #{
         scalars => #{default => nkdomain_graphql_scalar},
@@ -46,16 +98,7 @@ mapping_rules() ->
     }.
 
 
-load_schema() ->
-    ok = graphql_schema:reset(),
-    Mapping = mapping_rules(),
-    ok = graphql:load_schema(Mapping, make_schema()),
-    ok = setup_root(),
-    ok = graphql:validate_schema(),
-    ok.
-
-
-%% tag::setupRoot[]
+%% @private
 setup_root() ->
     Root = {
         root,
@@ -69,28 +112,38 @@ setup_root() ->
     ok.
 
 
-%% @doc
+%% @doc Generates and schema
 make_schema() ->
     Modules = [?MODULE|nkdomain_lib:get_all_modules()],
-    Scalars = schema_scalars(Modules),
-    Enums = schema_enums(Modules),
-    Types = schema_types(Modules),
-    Interfaces = schema_interfaces(Modules),
-    Queries = schema_queries(Modules),
-    Mutations = schema_mutations(Modules),
+    Scalars = make_schema_scalars(Modules),
+    Enums = make_schema_enums(Modules),
+    Types = make_schema_types(Modules),
+    Interfaces = make_schema_interfaces(Modules),
+    Queries = make_schema_queries(Modules),
+    Mutations = make_schema_mutations(Modules),
     Bin = list_to_binary([Scalars, Enums, Interfaces, Types, Queries, Mutations]),
     io:format("\n~s\n\n", [Bin]),
     Bin.
 
+%% ===================================================================
+%% Common Schema
+%% ===================================================================
 
-%% @doc
+
+%% @doc Generates new scalars
+-spec object_schema_scalars() ->
+    #{schema_type() => #{comment => string()}}.
+
 object_schema_scalars() ->
     #{
         'UnixTime' => #{comment=>"Standard milisecond-resolution unix time"}
     }.
 
 
-%% @doc
+%% @doc Generates new enums
+-spec object_schema_enums() ->
+    #{schema_type() => #{opts => [atom()], comment => string()}}.
+
 object_schema_enums() ->
     #{
         'Mood' => #{
@@ -98,6 +151,17 @@ object_schema_enums() ->
             comment => "Sample enum"
         }
     }.
+
+
+%% @doc Generates new types
+-spec object_schema_types() ->
+    #{schema_type() =>
+        #{
+            fields => schema_fields(),
+            comment => string(),
+            is_object => boolean(),         % Generates an Object instance
+            is_connection => boolean()      % Generates specific connection types
+        }}.
 
 object_schema_types() ->
     #{
@@ -110,6 +174,14 @@ object_schema_types() ->
     }.
 
 
+%% @doc Generates new interfaces
+-spec object_schema_interfaces() ->
+    #{schema_type() =>
+        #{
+            fields => schema_fields(),
+            comment => string()
+        }}.
+
 object_schema_interfaces() ->
     #{
         'Node' => #{
@@ -117,11 +189,15 @@ object_schema_interfaces() ->
             comment => "Relay Modern Node Interface"
         },
         'Object'=> #{
-            fields => object2(),
+            fields => object_fields(),
             comment => "Standard NetComposer Object"
         }
     }.
 
+
+%% @doc Generates new queries
+-spec object_schema_queries() ->
+    #{query_name() => field_value()}.
 
 object_schema_queries() ->
     #{
@@ -133,14 +209,43 @@ object_schema_queries() ->
     }.
 
 
+%% @doc Generates new mutations
+-spec object_schema_mutations() ->
+    #{mutation_name() =>
+        #{
+            inputs => schema_fields(),
+            outputs => schema_fields(),
+            comment => string()
+        }}.
 
 object_schema_mutations() ->
     #{
     }.
 
 
+
+%% ===================================================================
+%% Queries implementations
+%% ===================================================================
+
+
+object_query(<<"node">>, #{<<"id">>:=Id}, _Ctx) ->
+    case nkdomain:get_obj(Id) of
+        {ok, Obj} ->
+            {ok, Obj};
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
+
+%% ===================================================================
+%% Internal
+%% ===================================================================
+
+
 %% @private
-schema_scalars(Modules) ->
+make_schema_scalars(Modules) ->
     lists:foldl(
         fun(Module, Acc) ->
             case nkdomain_lib:type_apply(Module, object_schema_scalars, []) of
@@ -161,7 +266,7 @@ schema_scalars(Modules) ->
 
 
 %% @private
-schema_enums(Modules) ->
+make_schema_enums(Modules) ->
     lists:foldl(
         fun(Module, Acc) ->
             case nkdomain_lib:type_apply(Module, object_schema_enums, []) of
@@ -183,7 +288,7 @@ schema_enums(Modules) ->
 
 
 %% @private
-schema_types(Modules) ->
+make_schema_types(Modules) ->
     lists:foldl(
         fun(Module, Acc) ->
             case nkdomain_lib:type_apply(Module, object_schema_types, []) of
@@ -198,7 +303,7 @@ schema_types(Modules) ->
                                 #{is_object:=true}  ->
                                     [
                                         " implements Node, Object {\n",
-                                        parse_fields(object2()), "\n"
+                                        parse_fields(object_fields()), "\n"
                                     ];
                                 _ ->
                                     " {\n"
@@ -233,7 +338,7 @@ schema_types(Modules) ->
 
 
 %% @private
-schema_interfaces(Modules) ->
+make_schema_interfaces(Modules) ->
     lists:foldl(
         fun(Module, Acc) ->
             case nkdomain_lib:type_apply(Module, object_schema_interfaces, []) of
@@ -253,14 +358,19 @@ schema_interfaces(Modules) ->
         Modules).
 
 
-%% @private
-schema_queries(Modules) ->
+%% @private Process queries and register modules
+make_schema_queries(Modules) ->
     List = lists:foldl(
         fun(Module, Acc) ->
             case nkdomain_lib:type_apply(Module, object_schema_queries, []) of
                 not_exported ->
                     Acc;
                 Map ->
+                    lists:foreach(
+                        fun(Query) ->
+                            nklib_types:register_type(nkdomain_query, Query, Module)
+                        end,
+                        maps:keys(Map)),
                     Acc ++ parse_fields(Map)
             end
         end,
@@ -270,24 +380,29 @@ schema_queries(Modules) ->
 
 
 %% @private
-schema_mutations(Modules) ->
+make_schema_mutations(Modules) ->
     {List, Inputs, Types} = lists:foldl(
         fun(Module, {Acc, AccInputs, AccTypes}) ->
             case nkdomain_lib:type_apply(Module, object_schema_mutations, []) of
                 not_exported ->
                     {Acc, AccInputs, AccTypes};
                 Map ->
+                    lists:foreach(
+                        fun(Mutation) ->
+                            nklib_types:register_type(nkdomain_mutation, Mutation, Module)
+                        end,
+                        maps:keys(Map)),
                     Acc2 = Acc ++ [
                         [
                             comment(Opts),
-                            sp(), "introduce", to_bin(Name), "(input: Introduce", to_bin(Name), "Input!) : ",
-                            "Introduce", to_bin(Name), "Payload\n"
+                            sp(), to_bin(Name), "(input: ", to_upper(Name), "Input!) : ",
+                            to_upper(Name), "Payload\n"
                         ]
                         || {Name, Opts} <- maps:to_list(Map)
                     ],
                     AccInputs2 = AccInputs ++ [
                         [
-                            "input Introduce", to_bin(Name), "Input {\n",
+                            "input ", to_upper(Name), "Input {\n",
                             parse_fields(Input#{clientMutationId => string}),
                             "}\n\n"
                         ]
@@ -295,7 +410,7 @@ schema_mutations(Modules) ->
                     ],
                     AccTypes2 = AccTypes ++ [
                         [
-                            "type Introduce", to_bin(Name), "Payload {\n",
+                            "type ", to_upper(Name), "Payload {\n",
                             parse_fields(Output#{clientMutationId => string}),
                             "}\n\n"
                         ]
@@ -314,68 +429,44 @@ schema_mutations(Modules) ->
 
 
 
-%%object_schema(Type, Data) ->
-%%    T = to_bin(Type),
-%%    [
-%%        "+description(text: \"Representation of an ", T, "\")\n",
-%%        "type ", T, " implements Node, Object {\n",
-%%        parse_fields(object2()), "\n",
-%%        parse_fields(Data),
-%%        "}\n\n"
-%%    ].
+%% @private
+object_fields() ->
+    #{
+        active => {no_null, boolean, #{comment => "True if object is performing a task"}},
+        aliases => {list, string, #{comment => "List of object aliases"}},
+        createdBy => {no_null, 'User', #{comment => "User that created the object"}},
+        createdById => {no_null, string, #{comment => "UserId that created the object"}},
+        createdTime => {no_null, time, #{comment => "Object creation time"}},
+        description => {string, #{comment => "User-related description"}},
+        destroyed => {boolean, #{comment => "True if the object is destroyed"}},
+        destroyedCode => {string, #{comment => "Destruction reason code"}},
+        destroyedReason => {string, #{comment => "Destruction reason text"}},
+        destroyedTime => {time, #{comment => "Destructin time"}},
+        domain => {no_null, 'Domain', #{comment => "Domain this object belongs to"}},
+        domainId => {no_null, string, #{comment => "DomainId this object belongs to"}},
+        enabled => {no_null, boolean, #{comment => "False if object is disabled"}},
+        expiresTime => {time, #{comment => "Time this object will expire"}},
+        icon => {'File', #{comment => "Object File icon"}},
+        iconId => {string, #{comment => "Object FileId icon"}},
+        id => {no_null, id, #{comment=>"Main ID fetcher"}},
+        name => {string, #{comment => "Object's user-related name"}},
+        objId => {no_null, string, #{comment => "Object's ID"}},
+        objName => {no_null, string, #{comment => "Object's short name"}},
+        parent => {no_null, object, #{comment => "Object's parent Object"}},
+        parentId => {no_null, string, #{comment => "Object's parent ID Object"}},
+        path => {no_null, string, #{comment => "Object's directory path"}},
+        srvId => {string, #{comment => "Object's service"}},
+        subtypes => {list, string, #{comment => "Object's subtypes"}},
+        tags => {list, string, #{comment => "Object's tags"}},
+        type => {no_null, string, #{comment => "Object's type"}},
+        updatedBy => {no_null, 'User', #{comment => "User that updated the object"}},
+        updatedById => {no_null, string, #{comment => "UserId that updated the object"}},
+        updatedTime => {no_null, time, #{comment => "Object updation time"}},
+        vsn => {string, #{comment => "Object's current version"}}
+    }.
 
 
-%% @doc Sample for type 'UserStats' and data 'domainPath:...'
-%%  type UserStatusConnection {                 # This is an 'abstract' concept but UserStatusEdge is not
-%%      pageInfo : PageInfo!                    # it is the 'line' connecting Users and UserStatus objects
-%%      edges : [UserStatusEdge]                # an 'edge' is the 'relation' between among two objects
-%%      totalCount : Int                        # in this case, between 'User' and 'UserStatus' objects
-%%  }
-%%
-%%  type UserStatusEdge {                       # The real relation between the User and the UserStatus
-%%      node : UserStatus                       # it could have more metadata, but it is not common
-%%      cursor : String!
-%%  }
-%%
-%%  type UserStatus {
-%%      domainPath : String!
-%%      userStatus : String
-%%      updatedTime : UnixTime
-%%  }
-
-
-%%object_schema_connection(Type, Data) ->
-%%    T = to_bin(Type),
-%%    [
-%%        "type ", T, "Connection {\n",
-%%        parse_fields(#{
-%%            pageInfo => {no_null, 'PageInfo'},
-%%            edges => {list, <<T/binary, "Edge">>},
-%%            totalCount => int
-%%        }), "\n\n",
-%%        "type ", T, "Edge {\n",
-%%        parse_fields(#{
-%%            node => T,
-%%            cursor => {no_null, string}
-%%         }), "\n\n",
-%%        "type ", T, "{\n",
-%%        parse_fields(Data),
-%%        "}\n\n"
-%%    ].
-
-%%object_schema_mutation(Type, Data1, Data2) ->
-%%    T = to_bin(Type),
-%%    [
-%%        "    introduce", T, "(input: Introduce", T, "Input!) : Introduce", T, "Payload\n",
-%%        "}\n\n",
-%%        "input Introduce", T, "Input {\n",
-%%        parse_fields(Data1#{clientMutationId => string}),
-%%        "}\n\n",
-%%        "type Introduce", T, "Payload {\n",
-%%        parse_fields(Data2#{clientMutationId => string})
-%%    ].
-
-
+%% @private
 parse_fields(Map) when is_map(Map) ->
     parse_fields(maps:to_list(Map), []);
 
@@ -383,9 +474,9 @@ parse_fields(List) when is_list(List) ->
     parse_fields(List, []).
 
 
-
+%% @private
 parse_fields([], Acc) ->
-    Acc;
+    [Data || {_Field, Data} <- lists:sort(Acc)];
 
 parse_fields([{Field, Value}|Rest], Acc) ->
     Line = case Value of
@@ -410,9 +501,10 @@ parse_fields([{Field, Value}|Rest], Acc) ->
         _ ->
             [field(Field), " : ", value(Value)]
     end,
-    parse_fields(Rest, [Line, "\n" |Acc]).
+    parse_fields(Rest, [{Field, [Line, "\n"]} | Acc]).
 
 
+%% @private
 value(id)      -> <<"ID">>;
 value(int)     -> <<"Int">>;
 value(string)  -> <<"String">>;
@@ -422,37 +514,40 @@ value(boolean) -> <<"Boolean">>;
 value(Other)   -> to_bin(Other).
 
 
+%% @private
 field(F) ->
     field(F, #{}).
 
 
+%% @private
 field(F, Opts) ->
     [sp(), to_bin(F), params(Opts)].
 
-
-
-
+%% @private
 connection() ->
     ["Connection", params(#{params=>#{'after'=>string, first=>int, before=>string, last=>int}})].
 
 
+%% @private
 comment(#{comment:=C}=Opts) ->
-     case to_bin(C) of
-         <<>> ->
-             [];
-         C2 ->
-             [
-                 case Opts of #{no_margin:=true} -> []; _ -> sp() end,
-                 "+description(text: \"", C2, "\")\n"]
-     end;
+    case to_bin(C) of
+        <<>> ->
+            [];
+        C2 ->
+            [
+                case Opts of #{no_margin:=true} -> []; _ -> sp() end,
+                "+description(text: \"", C2, "\")\n"]
+    end;
 
 comment(_) ->
     [].
 
 
+%% @private
 sp() -> <<"    ">>.
 
 
+%% @private
 params(#{params:=Map}) ->
     ["(\n", [[sp(), L] || L <- parse_fields(Map)], sp(), ")"];
 
@@ -460,189 +555,15 @@ params(_) ->
     [].
 
 
-
-
-object2() ->
-    #{
-        id => {no_null, id, #{comment=>"Main ID fetcher"}},
-        vsn => string,
-        objId => {no_null, string},
-        type => {no_null, string},
-        path => {no_null, string},
-        objName => {no_null, string},
-        domainId => {no_null, string},
-        domain => {no_null, 'Domain'},
-        parentId => {no_null, string},
-        parent => {no_null, object},
-        srvId => string,
-        subtype => {list, string},
-        createdById => {no_null, string},
-        createdBy => {no_null, 'User'},
-        createdTime => {no_null, time},
-        updatedBy => {no_null, 'User'},
-        updatedTime => {no_null, time},
-        enabled => {no_null, boolean},
-        active => {no_null, boolean},
-        expiresTime => time,
-        destroyed => boolean,
-        destroyedTime => time,
-        destroyedCode => string,
-        destroyedReason => string,
-        name => string,
-        description => string,
-        tags => {list, string},
-        aliases => {list, string},
-        iconId => 'File',
-        nextStatusTime => time
-    }.
-
-
-
-
-
-
-
-
-%%schema() -> <<"
-%%+descripton(text: \"Standard miliseconds unix time\")
-%%scalar UnixTime
-%%
-%%enum Mood {
-%%     TRANQUIL
-%%     DODGY
-%%     AGGRESSIVE
-%%}
-%%
-%%type Query {
-%%  +description(text: \"Relay Modern specification Node fetcher\")
-%%  node(id : ID!) : Node
-%%  +description(text: \"Get all users\")
-%%  allUsers : [User]
-%%}
-%%
-%%
-%%
-%%+description(text: \"Relay Modern Node Interface\")
-%%interface Node {
-%%  +description(text: \"Unique Identity of a Node\")
-%%  id : ID!
-%%}
-%%
-%%
-%%interface Object {",
-%%(object())/binary,
-%%"}
-%%
-%%
-%%type PageInfo {
-%%  hasNextPage : Boolean!
-%%  hasPreviousPage : Boolean!
-%%}
-%%
-%%+description(text: \"Representation of Domains\")
-%%type Domain implements Node, Object {",
-%%(object())/binary, "
-%%}
-%%
-%%+description(text: \"Representation of Users\")
-%%type User implements Node, Object {",
-%%(object())/binary, "
-%%  userName : String,
-%%  userSurname : String
-%%  email : String
-%%  #password : String
-%%  phone : String,
-%%  address : String
-%%  statusConnection(         # connections to 'UserStatus' objects
-%%    after : String
-%%    first : Int
-%%    before : String
-%%    last : Int) : UserStatusConnection
-%%}
-%%
-%%
-%%type UserStatusConnection {                 # This is an 'abstract' concept but UserStatusEdge is not
-%%    pageInfo : PageInfo!                    # it is the 'line' connecting Users and UserStatus objects
-%%    edges : [UserStatusEdge]                # an 'edge' is the 'relation' between among two objects
-%%    totalCount : Int                        # in this case, between 'User' and 'UserStatus' objects
-%%}
-%%
-%%type UserStatusEdge {                       # The real relation between the User and the UserStatus
-%%    node : UserStatus                       # it could have more metadata, but it is not common
-%%    cursor : String!
-%%}
-%%
-%%type UserStatus {
-%%    domainPath : String!
-%%    userStatus : String
-%%    updatedTime : UnixTime
-%%}
-%%
-%%
-%%type File implements Node, Object {",
-%%(object())/binary, "
-%%  contentType : String
-%%  size : Int
-%%}
-%%
-%%
-%%## -- MUTATION OBJECTS ----------
-%%
-%%type Mutation {
-%%    introduceUser(input: IntroduceUserInput!) : IntroduceUserPayload
-%%}
-%%
-%%
-%%input IntroduceUserInput {
-%%    clientMutationId : String
-%%    name : String!
-%%}
-%%
-%%
-%%type IntroduceUserPayload {
-%%    clientMutationId : String
-%%}
-%%
-%%">>.
-%%
-%%
-%%
-%%object() ->
-%%    <<"    id : ID!
-%%    vsn : String
-%%    objId : String!
-%%    type : String!
-%%    path : String!
-%%    objName : String!
-%%    domainId : String!
-%%    domain : Domain!
-%%    parentId : String!
-%%    parent : Object!
-%%    srvId : String
-%%    subtype : [String]
-%%    createdById : String!
-%%    createdBy : User!
-%%    createdTime : UnixTime!
-%%    updatedBy : User!
-%%    updatedTime : UnixTime!
-%%    enabled : Boolean!
-%%    active : boolean!
-%%    expiresTime : UnixTime
-%%    destroyed : Boolean
-%%    destroyedTime : UnixTime,
-%%    destroyedCode : String
-%%    destroyedReason : String
-%%    name : String
-%%    description : String
-%%    tags : [String]
-%%    aliases : [String]
-%%    iconId : File
-%%    nextStatusTime : UnixTime\n">>.
-
-
-
-
-
 %% @private
 to_bin(T) when is_binary(T)-> T;
 to_bin(T) -> nklib_util:to_binary(T).
+
+
+%% @private A Type with uppercase in the first letter
+to_upper(T) ->
+    <<First, Rest/binary>> = to_bin(T),
+    <<(nklib_util:to_upper(<<First>>))/binary, Rest/binary>>.
+
+
+

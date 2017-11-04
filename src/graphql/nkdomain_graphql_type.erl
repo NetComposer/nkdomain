@@ -26,8 +26,15 @@
 
 -export([execute/1]).
 
-execute(#{type:=?DOMAIN_USER}) -> {ok, 'User'};
-execute(#{type:=?DOMAIN_DOMAIN}) -> {ok, 'Domain'};
-execute(#{type:=?DOMAIN_FILE}) -> {ok, 'File'};
-execute(_Otherwise) -> {error, unknown_type}.
-
+execute(#{type:=Type}) ->
+    case nkdomain_lib:get_module(Type) of
+        undefined ->
+            {error, unknown_type};
+        Module ->
+            case Module:object_info() of
+                #{schema_type:=SchemaType} ->
+                    {ok, SchemaType};
+                _ ->
+                    {error, unknown_type}
+            end
+    end.

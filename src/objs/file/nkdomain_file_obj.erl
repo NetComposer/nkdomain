@@ -177,7 +177,8 @@ delete_all() ->
 %% @private
 object_info() ->
     #{
-        type => ?DOMAIN_FILE
+        type => ?DOMAIN_FILE,
+        schema_type => 'File'
     }.
 
 

@@ -22,7 +22,6 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([make_path/3, is_path/1, get_parts/1, get_parts/2, class/1, type/1, name/1, field/2, fields/2]).
--export([s_type/1]).
 -export([append/2, get_srv_id/1, add_destroyed/3]).
 -export([timestamp/0]).
 -export_type([error/0]).
@@ -213,12 +212,6 @@ get_srv_id(Obj) ->
         SrvId ->
             SrvId
     end.
-
-
-%% @private A Type with uppercase in the first letter
-s_type(Type) ->
-    <<First, Rest/binary>> = to_bin(Type),
-    <<(nklib_util:to_upper(<<First>>))/binary, Rest/binary>>.
 
 
 %% @doc

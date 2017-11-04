@@ -24,27 +24,15 @@
 
 -export([execute/4]).
 
-%% tag::execute[]
-execute(Ctx, _, Field, #{ <<"input">> := Input}) ->
-    with_client_mutation(Ctx, Field, Input).
-
-with_client_mutation(Ctx, Field, Input) ->
-    {CM, Rest} = maps:take(<<"clientMutationId">>, Input),
-    case execute_mutation(Ctx, Field, Rest) of
-        {ok, Payload} ->
-            {ok, Payload#{ <<"clientMutationId">> => CM }};
-        {error, Reason} ->
-            {error, Reason}
+execute(Ctx, _, MutationName, #{<<"input">>:=Params}) ->
+    #{nkmeta:=#{start:=Start}} = Ctx,
+    case nklib_types:get_module(nkdomain_mutation, MutationName) of
+        undefined ->
+            {error, unknown_mutation};
+        Module ->
+            Params2 = maps:filter(fun(_K, V) -> V /= null end, Params),
+            Res = Module:object_mutation(MutationName, Params2, Ctx),
+            lager:info("Mutarion time: ~p", [nklib_util:l_timestamp()-Start]),
+            Res
     end.
-%% end::execute[]
-
-%% tag::executeMutation[]
-execute_mutation(Ctx, <<"introduceFaction">>, Input) ->
-    {ok, Faction} = sw_core_faction:introduce(Ctx, Input),
-    {ok, #{ <<"faction">> => Faction }};
-execute_mutation(Ctx, <<"introduceStarship">>, Input) ->
-    {ok, Faction, Starship} = sw_core_starship:introduce(Ctx, Input),
-    {ok, #{ <<"faction">> => Faction,
-            <<"starship">> => Starship }}.
-%% end::executeMutation[]
 

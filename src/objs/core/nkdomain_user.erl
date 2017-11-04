@@ -90,7 +90,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([create/1, auth/2, make_token/4, get_name/1, get_info/2]).
--export([find_childs/1]).
+-export([find_childs/1, user_pass/1]).
 -export([get_sessions/1, get_sessions/2, get_presence/3, update_presence/3]).
 -export([register_session/5, unregister_session/2, launch_session_notifications/2, set_status/4, get_status/3]).
 -export([add_token_notification/4, remove_token_notification/3]).
@@ -181,17 +181,17 @@
 %% ===================================================================
 
 
-
 %% @doc
 -spec create(map()) ->
     {ok, #obj_id_ext{}, [Unknown::binary()]} | {error, term()}.
 
 create(Obj) ->
-    nkdomain_user:object_create(Obj).
+    nkdomain_user_obj:object_create(Obj).
 
 
 %% @doc
 -spec auth(User::binary(), auth_opts()) ->
+
     {ok, UserId::nkdomain:obj_id(), DomainId::nkdomain:obj_id()} |
     {error, user_not_found|term()}.
 
