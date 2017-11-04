@@ -26,11 +26,11 @@
 
 -module(nkdomain_graphql).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
--export([load_schema/0, make_schema/0]).
+-export([load_schema/0]).
 -export([object_schema_scalars/0, object_schema_enums/0, object_schema_interfaces/0,
-         object_schema_types/0, object_schema_queries/0, object_schema_mutations/0]).
+         object_schema_types/0, object_schema_inputs/0, object_schema_queries/0, object_schema_mutations/0]).
 -export([object_query/3]).
-
+-export([object_fields/0]).
 
 
 %% ===================================================================
@@ -75,55 +75,9 @@
 
 %% @doc Generates an loads a new schema
 load_schema() ->
-    ok = graphql_schema:reset(),
-    Mapping = mapping_rules(),
-    ok = graphql:load_schema(Mapping, make_schema()),
-    ok = setup_root(),
-    ok = graphql:validate_schema(),
-    ok.
+    nkdomain_graphql_util:load_schema().
 
 
-%% @private
-mapping_rules() ->
-    #{
-        scalars => #{default => nkdomain_graphql_scalar},
-        enums => #{default => graphql_enum_coerce},
-        interfaces => #{default => nkdomain_graphql_type},
-        unions => #{default => nkdomain_graphql_type},
-        objects => #{
-            'Query' => nkdomain_graphql_query,
-            'Mutation' => nkdomain_graphql_mutation,
-            default => nkdomain_graphql_object
-        }
-    }.
-
-
-%% @private
-setup_root() ->
-    Root = {
-        root,
-            #{
-                query => 'Query',
-                mutation => 'Mutation',
-                interfaces => ['Node']
-            }
-    },
-    ok = graphql:insert_schema_definition(Root),
-    ok.
-
-
-%% @doc Generates and schema
-make_schema() ->
-    Modules = [?MODULE|nkdomain_lib:get_all_modules()],
-    Scalars = make_schema_scalars(Modules),
-    Enums = make_schema_enums(Modules),
-    Types = make_schema_types(Modules),
-    Interfaces = make_schema_interfaces(Modules),
-    Queries = make_schema_queries(Modules),
-    Mutations = make_schema_mutations(Modules),
-    Bin = list_to_binary([Scalars, Enums, Interfaces, Types, Queries, Mutations]),
-    io:format("\n~s\n\n", [Bin]),
-    Bin.
 
 %% ===================================================================
 %% Common Schema
@@ -136,6 +90,7 @@ make_schema() ->
 
 object_schema_scalars() ->
     #{
+        'Cursor' => #{comment=>"Pagination cursor"},
         'UnixTime' => #{comment=>"Standard milisecond-resolution unix time"}
     }.
 
@@ -146,9 +101,15 @@ object_schema_scalars() ->
 
 object_schema_enums() ->
     #{
-        'Mood' => #{
-            opts => ['TRANQUIL', 'DODGY', 'AGGRESSIVE'],
-            comment => "Sample enum"
+        objectSortByFields => #{
+            opts => [domain]
+        },
+        sortOrder => #{
+            opts => [asc, desc]
+        },
+        'RangeOperators' => #{
+            opts => [gt, gte, eq, lte, lt],
+            comment => "Range operators for queries"
         }
     }.
 
@@ -165,11 +126,52 @@ object_schema_enums() ->
 
 object_schema_types() ->
     #{
+        'SearchResult' => #{
+            fields => #{
+                objects => {list_no_null, 'Object'},
+                pageInfo => {no_null, 'PageInfo'},
+                totalCount => int,
+                cursor => 'Cursor'
+            }
+        },
         'PageInfo' => #{
             fields => #{
                 hasNextPage => {no_null, boolean},
                 hasPreviousPage => {no_null, boolean}
             }
+        }
+    }.
+
+
+%% @doc Generates new inputs
+-spec object_schema_inputs() ->
+    #{schema_type() =>
+        #{
+            fields => schema_fields(),
+            comment => string()
+        }}.
+
+object_schema_inputs() ->
+    #{
+        'Range' => #{
+            fields => #{
+                value => int,
+                min => int,
+                max => int,
+                operator => 'RangeOperators'
+            },
+            comment => "A value to filter against, or a min and a max value"
+        },
+        objectFilter => #{
+            fields => object_fields_filter(),
+            comment => "Filter values to sort on"
+        },
+        objectSortBy => #{
+            fields => #{
+                fields => objectSortByFields,
+                sortOrder => sortOrder
+            },
+            comment => "Fields to sort on"
         }
     }.
 
@@ -205,6 +207,18 @@ object_schema_queries() ->
                     #{
                         params => #{id => {no_null, id}},
                         comment => "Relay Modern specification Node fetcher"
+                    }},
+        allObjects => {'SearchResult',
+                    #{
+                        params => #{
+                            filter => objectFilter,
+                            sort => objectSortBy,
+                            first => int,
+                            last => int,
+                            'after' => 'Cursor',
+                            before => 'Cursor'
+                        }
+
                     }}
     }.
 
@@ -235,198 +249,40 @@ object_query(<<"node">>, #{<<"id">>:=Id}, _Ctx) ->
             {ok, Obj};
         {error, Error} ->
             {error, Error}
+    end;
+
+object_query(<<"allObjects">>, _Params, _Ctx) ->
+    case nkdomain:search(#{filters=>#{type=>user}, fields=>[]}) of
+        {ok, Total, Data, _Meta} ->
+            Data2 = lists:foldl(
+                fun(#{<<"obj_id">>:=ObjId}, Acc) ->
+                    {ok, O} = nkdomain:get_obj(ObjId),
+                    [O|Acc]
+                end,
+                [],
+                Data),
+            lager:error("NKLOG DATA ~p", [Data2]),
+            Result = #{
+                <<"objects">> => Data2,
+                <<"totalCount">> => Total,
+                <<"pageInfo">> => #{
+                    <<"hasNextPage">> => false,
+                    <<"hasPreviousPage">> => false
+                },
+                <<"cursor">> => <<>>
+            },
+            {ok, Result};
+        {error, Error} ->
+            {error, Error}
     end.
+
+
 
 
 
 %% ===================================================================
 %% Internal
 %% ===================================================================
-
-
-%% @private
-make_schema_scalars(Modules) ->
-    lists:foldl(
-        fun(Module, Acc) ->
-            case nkdomain_lib:type_apply(Module, object_schema_scalars, []) of
-                not_exported ->
-                    Acc;
-                Map ->
-                    Acc ++[
-                        [
-                            comment(Opts#{no_margin=>true}),
-                            "scalar ", to_bin(T), "\n\n"
-                        ]
-                        || {T, Opts} <- maps:to_list(Map)
-                    ]
-            end
-        end,
-        [],
-        Modules).
-
-
-%% @private
-make_schema_enums(Modules) ->
-    lists:foldl(
-        fun(Module, Acc) ->
-            case nkdomain_lib:type_apply(Module, object_schema_enums, []) of
-                not_exported ->
-                    Acc;
-                Map ->
-                    Acc ++ [
-                        [
-                            comment(Opts#{no_margin=>true}),
-                            "enum ", to_bin(Name), " {\n",
-                            [["    ", to_bin(E), "\n"] || E <- EnumOpts], "}\n\n"
-                        ]
-                        || {Name, #{opts:=EnumOpts}=Opts} <- maps:to_list(Map)
-                    ]
-            end
-        end,
-        [],
-        Modules).
-
-
-%% @private
-make_schema_types(Modules) ->
-    lists:foldl(
-        fun(Module, Acc) ->
-            case nkdomain_lib:type_apply(Module, object_schema_types, []) of
-                not_exported ->
-                    Acc;
-                Map ->
-                    Acc ++ [
-                        [
-                            comment(Opts#{no_margin=>true}),
-                            "type ",to_bin(Name),
-                            case Opts of
-                                #{is_object:=true}  ->
-                                    [
-                                        " implements Node, Object {\n",
-                                        parse_fields(object_fields()), "\n"
-                                    ];
-                                _ ->
-                                    " {\n"
-                            end,
-                            parse_fields(Fields),
-                            "}\n\n",
-                            case Opts of
-                                #{is_connection:=true} ->
-                                    [
-                                        "type ", to_bin(Name), "Connection {\n",
-                                        parse_fields(#{
-                                            pageInfo => {no_null, 'PageInfo'},
-                                            edges => {list, <<(to_bin(Name))/binary, "Edge">>},
-                                            totalCount => int
-                                        }), "}\n\n",
-                                        "type ", to_bin(Name), "Edge {\n",
-                                        parse_fields(#{
-                                            node => to_bin(Name),
-                                            cursor => {no_null, string}
-                                        }), "}\n\n"
-                                    ];
-                                _ ->
-                                    []
-                            end
-                        ]
-                        || {Name, #{fields:=Fields}=Opts} <- maps:to_list(Map)
-                    ]
-            end
-        end,
-        [],
-        Modules).
-
-
-%% @private
-make_schema_interfaces(Modules) ->
-    lists:foldl(
-        fun(Module, Acc) ->
-            case nkdomain_lib:type_apply(Module, object_schema_interfaces, []) of
-                not_exported ->
-                    Acc;
-                Map ->
-                    Acc ++ [
-                        [
-                            comment(Opts#{no_margin=>true}),
-                            "interface ",to_bin(Name), " {\n", parse_fields(Fields), "}\n\n"
-                        ]
-                        || {Name, #{fields:=Fields}=Opts} <- maps:to_list(Map)
-                    ]
-            end
-        end,
-        [],
-        Modules).
-
-
-%% @private Process queries and register modules
-make_schema_queries(Modules) ->
-    List = lists:foldl(
-        fun(Module, Acc) ->
-            case nkdomain_lib:type_apply(Module, object_schema_queries, []) of
-                not_exported ->
-                    Acc;
-                Map ->
-                    lists:foreach(
-                        fun(Query) ->
-                            nklib_types:register_type(nkdomain_query, Query, Module)
-                        end,
-                        maps:keys(Map)),
-                    Acc ++ parse_fields(Map)
-            end
-        end,
-        [],
-        Modules),
-    ["type Query {\n", List, "}\n\n"].
-
-
-%% @private
-make_schema_mutations(Modules) ->
-    {List, Inputs, Types} = lists:foldl(
-        fun(Module, {Acc, AccInputs, AccTypes}) ->
-            case nkdomain_lib:type_apply(Module, object_schema_mutations, []) of
-                not_exported ->
-                    {Acc, AccInputs, AccTypes};
-                Map ->
-                    lists:foreach(
-                        fun(Mutation) ->
-                            nklib_types:register_type(nkdomain_mutation, Mutation, Module)
-                        end,
-                        maps:keys(Map)),
-                    Acc2 = Acc ++ [
-                        [
-                            comment(Opts),
-                            sp(), to_bin(Name), "(input: ", to_upper(Name), "Input!) : ",
-                            to_upper(Name), "Payload\n"
-                        ]
-                        || {Name, Opts} <- maps:to_list(Map)
-                    ],
-                    AccInputs2 = AccInputs ++ [
-                        [
-                            "input ", to_upper(Name), "Input {\n",
-                            parse_fields(Input#{clientMutationId => string}),
-                            "}\n\n"
-                        ]
-                        || {Name, #{input:=Input}} <- maps:to_list(Map)
-                    ],
-                    AccTypes2 = AccTypes ++ [
-                        [
-                            "type ", to_upper(Name), "Payload {\n",
-                            parse_fields(Output#{clientMutationId => string}),
-                            "}\n\n"
-                        ]
-                        || {Name, #{output:=Output}} <- maps:to_list(Map)
-                    ],
-                    {Acc2, AccInputs2, AccTypes2}
-            end
-        end,
-        {[], [], []},
-        Modules),
-    [
-        "type Mutation {\n", List, "}\n\n",
-        Inputs,
-        Types
-    ].
-
 
 
 %% @private
@@ -441,7 +297,7 @@ object_fields() ->
         destroyed => {boolean, #{comment => "True if the object is destroyed"}},
         destroyedCode => {string, #{comment => "Destruction reason code"}},
         destroyedReason => {string, #{comment => "Destruction reason text"}},
-        destroyedTime => {time, #{comment => "Destructin time"}},
+        destroyedTime => {time, #{comment => "Destruction time"}},
         domain => {no_null, 'Domain', #{comment => "Domain this object belongs to"}},
         domainId => {no_null, string, #{comment => "DomainId this object belongs to"}},
         enabled => {no_null, boolean, #{comment => "False if object is disabled"}},
@@ -467,103 +323,36 @@ object_fields() ->
 
 
 %% @private
-parse_fields(Map) when is_map(Map) ->
-    parse_fields(maps:to_list(Map), []);
-
-parse_fields(List) when is_list(List) ->
-    parse_fields(List, []).
-
-
-%% @private
-parse_fields([], Acc) ->
-    [Data || {_Field, Data} <- lists:sort(Acc)];
-
-parse_fields([{Field, Value}|Rest], Acc) ->
-    Line = case Value of
-        {no_null, V} ->
-            [field(Field), " : ", value(V), "!"];
-        {no_null, V, Opts} ->
-            [comment(Opts), field(Field, Opts), " : ", value(V), "!"];
-        {list_no_null, V} ->
-            [field(Field), " : [", value(V), "!]"];
-        {list_no_null, V, Opts} ->
-            [comment(Opts), field(Field, Opts), ": [", value(V), "!]"];
-        {list, V} ->
-            [field(Field), " : [", value(V), "]"];
-        {list, V, Opts} ->
-            [comment(Opts), field(Field, Opts), " : [", value(V), "]"];
-        {connection, V} ->
-            [field(Field), connection(), " : ", to_bin(V), "Connection"];
-        {connection, V, Opts} ->
-            [comment(Opts), field(Field, Opts), connection(), " : ", to_bin(V), "Connection"];
-        {V, Opts} ->
-            [comment(Opts), field(Field, Opts), " : ", value(V)];
-        _ ->
-            [field(Field), " : ", value(Value)]
-    end,
-    parse_fields(Rest, [{Field, [Line, "\n"]} | Acc]).
+object_fields_filter() ->
+    #{
+          active => {boolean, #{comment => "Look for objects performing a task"}},
+          aliases => {list, string, #{comment => "Object has an alias"}},
+          createdBy => {string, #{comment => "Objects created by this user"}},
+          createdTime => {'Range', #{comment => "Object creation time"}},
+          description => {string, #{comment => "Words in description"}},
+          destroyed => {boolean, #{comment => "Filter by destroyed objects"}},
+          destroyedTime => {'Range', #{comment => "Destruction time"}},
+          domain => {string, #{comment => "Filter objects belonging to this domain"}},
+          enabled => {boolean, #{comment => "Filter enabled or disabled objects"}},
+          expiresTime => {'Range', #{comment => "Time this object will expire"}},
+          has_icon => {boolean, #{comment => "Objects having an icon"}},
+          iconId => {string, #{comment => "Objects hanving this iconId"}},
+          name => {string, #{comment => "Words in name"}},
+          objId => {string, #{comment => "Object's ID"}},
+          objName => {string, #{comment => "Object's with this short name"}},
+          parent => {string, #{comment => "Object's parent"}},
+          path => {string, #{comment => "Filter on this path"}},
+          srvId => {string, #{comment => "Object's service"}},
+          subtypes => {list, string, #{comment => "Object's subtypes"}},
+          tags => {list, string, #{comment => "Object's tags"}},
+          type => {string, #{comment => "Object's type"}},
+          updatedBy => {string, #{comment => "User that updated the object"}},
+          updatedTime => {'Range', #{comment => "Object updation time"}},
+          vsn => {string, #{comment => "Object's current version"}}
+    }.
 
 
-%% @private
-value(id)      -> <<"ID">>;
-value(int)     -> <<"Int">>;
-value(string)  -> <<"String">>;
-value(object)  -> <<"Object">>;
-value(time)    -> <<"UnixTime">>;
-value(boolean) -> <<"Boolean">>;
-value(Other)   -> to_bin(Other).
 
-
-%% @private
-field(F) ->
-    field(F, #{}).
-
-
-%% @private
-field(F, Opts) ->
-    [sp(), to_bin(F), params(Opts)].
-
-%% @private
-connection() ->
-    ["Connection", params(#{params=>#{'after'=>string, first=>int, before=>string, last=>int}})].
-
-
-%% @private
-comment(#{comment:=C}=Opts) ->
-    case to_bin(C) of
-        <<>> ->
-            [];
-        C2 ->
-            [
-                case Opts of #{no_margin:=true} -> []; _ -> sp() end,
-                "+description(text: \"", C2, "\")\n"]
-    end;
-
-comment(_) ->
-    [].
-
-
-%% @private
-sp() -> <<"    ">>.
-
-
-%% @private
-params(#{params:=Map}) ->
-    ["(\n", [[sp(), L] || L <- parse_fields(Map)], sp(), ")"];
-
-params(_) ->
-    [].
-
-
-%% @private
-to_bin(T) when is_binary(T)-> T;
-to_bin(T) -> nklib_util:to_binary(T).
-
-
-%% @private A Type with uppercase in the first letter
-to_upper(T) ->
-    <<First, Rest/binary>> = to_bin(T),
-    <<(nklib_util:to_upper(<<First>>))/binary, Rest/binary>>.
 
 
 

@@ -249,11 +249,6 @@ object_mutation(<<"introduceUser">>, Params, _Ctx) ->
     end.
 
 
-
-
-
-
-
 %% @private
 object_es_mapping() ->
     #{

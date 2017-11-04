@@ -37,7 +37,13 @@ execute(Ctx, #{type:=Type}=Obj, Field, Args) ->
                 Module ->
                     Module:execute(Ctx, Obj, Field, Args)
             end
-    end.
+    end;
+
+execute(_Ctx, Obj, Field, _Args) ->
+    {ok, maps:get(Field, Obj, null)}.
+
+
+
 
 
 %% @%% @private GraphQL execute
