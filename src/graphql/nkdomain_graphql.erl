@@ -31,7 +31,7 @@
 
 -module(nkdomain_graphql).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
--export([load_schema/0]).
+-export([load_schema/0, request/2]).
 -export_type([schema_type/0, field_key/0, field_value/0, field_opts/0]).
 -export_type([schema_fields/0, query_name/0, mutation_name/0]).
 
@@ -98,7 +98,7 @@ mapping_rules() ->
         objects => #{
             'Query' => nkdomain_graphql_query,
             'Mutation' => nkdomain_graphql_mutation,
-            default => nkdomain_graphql_object
+            default => nkdomain_graphql_obj
         }
     }.
 
@@ -116,4 +116,124 @@ setup_root() ->
     ok = graphql:insert_schema_definition(Root),
     ok.
 
+
+%% @doc Launches a request
+request(Str, Meta) when is_list(Str) ->
+    request(list_to_binary(Str), Meta);
+
+request(Str, Meta) when is_binary(Str) ->
+    case gather(#{<<"query">>=>Str, <<"vaiables">>=>null}, #{}) of
+        {ok, Decoded} ->
+            Start = nklib_util:l_timestamp(),
+            run_request(Decoded#{nkmeta=>#{start=>Start}, nkuser=>Meta});
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
+%% @private
+run_request(#{document:=Doc}=Ctx) ->
+    case graphql:parse(Doc) of
+        {ok, AST} ->
+            run_preprocess(Ctx#{document:=AST});
+        {error, Reason} ->
+            {error, Reason}
+    end.
+
+
+%% @private
+run_preprocess(#{document:=AST}=ReqCtx) ->
+    try
+        Elaborated = graphql:elaborate(AST),
+        {ok, #{
+                fun_env := FunEnv,
+                ast := AST2
+            }
+        } = graphql:type_check(Elaborated),
+        ok = graphql:validate(AST2),
+        run_execute(ReqCtx#{document := AST2, fun_env => FunEnv})
+    catch
+        throw:Err ->
+            {error, Err}
+    end.
+
+
+%% @private
+run_execute(ReqCtx) ->
+    #{
+        document := AST,
+        fun_env := FunEnv,
+        vars := Vars,
+        operation_name := OpName,
+        nkmeta := NkMeta,
+        nkuser := NkUser
+    } = ReqCtx,
+    Coerced = graphql:type_check_params(FunEnv, OpName, Vars), % <1>
+    Ctx = #{
+        params => Coerced,
+        operation_name => OpName,
+        nkmeta => NkMeta,
+        nkuser => NkUser
+    },
+    case graphql:execute(Ctx, AST) of
+        #{errors:=[Error1|Errors], data:=Data} ->
+            {error, {Error1, Errors, Data}};
+        #{data:=Data} ->
+            {ok, Data};
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
+
+%% @private
+gather(Body, Params) ->
+    QueryDocument = document([Params, Body]),
+    case variables([Params, Body]) of
+        {ok, Vars} ->
+            Operation = operation_name([Params, Body]),
+            {ok, #{ document => QueryDocument,
+                    vars => Vars,
+                    operation_name => Operation}};
+        {error, Reason} ->
+            {error, Reason}
+    end.
+
+
+%% @private
+document([#{ <<"query">> := Q }|_]) -> Q;
+document([_|Next]) -> document(Next);
+document([]) -> undefined.
+
+
+%% @private
+variables([#{ <<"variables">> := Vars} | _]) ->
+    if
+        is_binary(Vars) ->
+            case nklib_json:decode(Vars) of
+                null ->
+                    {ok, #{}};
+                JSON when is_map(JSON) ->
+                    {ok, JSON};
+                _ ->
+                    {error, invalid_json}
+            end;
+        is_map(Vars) ->
+            {ok, Vars};
+        Vars == null ->
+            {ok, #{}}
+    end;
+variables([_ | Next]) ->
+    variables(Next);
+variables([]) ->
+    {ok, #{}}.
+
+
+%% @private
+operation_name([#{ <<"operationName">> := OpName } | _]) ->
+    OpName;
+operation_name([_ | Next]) ->
+    operation_name(Next);
+operation_name([]) ->
+    undefined.
 

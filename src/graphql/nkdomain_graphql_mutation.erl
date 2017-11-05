@@ -24,6 +24,9 @@
 
 -export([execute/4]).
 
+-include("nkdomain.hrl").
+
+
 %% @doc Called at the beginning of the mutation process
 execute(Ctx, _, MutationName, #{<<"input">>:=Params}) ->
     #{nkmeta:=#{start:=Start}} = Ctx,
@@ -32,8 +35,12 @@ execute(Ctx, _, MutationName, #{<<"input">>:=Params}) ->
             {error, unknown_mutation};
         Module ->
             Params2 = maps:filter(fun(_K, V) -> V /= null end, Params),
-            Res = Module:object_mutation(MutationName, Params2, Ctx),
-            lager:info("Mutarion time: ~p", [nklib_util:l_timestamp()-Start]),
-            Res
+            case Module:object_mutation(MutationName, Params2, Ctx) of
+                {ok, #obj_id_ext{}=ObjIdExt, Obj} ->
+                    lager:info("Mutation time: ~p", [nklib_util:l_timestamp()-Start]),
+                    {ok, {ObjIdExt, Obj}};
+                {error, Error} ->
+                    {error, Error}
+            end
     end.
 

@@ -18,28 +18,28 @@
 %%
 %% -------------------------------------------------------------------
 
-%% @doc GraphQL Type Callback
--module(nkdomain_graphql_type).
--author('Carlos Gonzalez <carlosj.gf@gmail.com>').
+-ifndef(NKDOMAIN_GRAPHQL_HRL_).
+-define(NKDOMAIN_GRAPHQL_HRL_, 1).
 
--include("nkdomain.hrl").
+%% ===================================================================
+%% Defines
+%% ===================================================================
 
--export([execute/1]).
+-record(page_info, {
+    has_next_page :: boolean(),
+    has_previous_page :: boolean()
+}).
 
 
-%% @doc Called when a abstract object is found (interface or union)
-%% to find its type
-%% Called from graphql_execute:514 (others from :778)
+-record(search_results, {
+    objects = [] :: [{nkdomain:obj_id_ex(), nkdomain:obj()}],
+    total_count = 0 :: integer(),
+    page_info :: #page_info{},
+    cursor :: binary
+}).
 
-execute({#obj_id_ext{type=Type}, _Obj}) ->
-    case nkdomain_reg:get_type_module(Type) of
-        undefined ->
-            {error, unknown_type};
-        Module ->
-            case Module:object_info() of
-                #{schema_type:=SchemaType} ->
-                    {ok, SchemaType};
-                _ ->
-                    {error, unknown_type}
-            end
-    end.
+
+
+
+-endif.
+

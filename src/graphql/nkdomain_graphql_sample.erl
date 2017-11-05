@@ -18,10 +18,38 @@
 %%
 %% -------------------------------------------------------------------
 
-%% @doc NkDomain main module
+%% @doc GraphQL samples
 -module(nkdomain_graphql_sample).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -compile(export_all).
 
 
+get1() ->
+    Query = <<"
+        query {
+            node(id: \"root\") {
+                id
+            }
+        }
+    ">>,
+    {ok, #{<<"node">> := #{<<"id">> := <<"root">>}}} = nkdomain_graphql:request(Query, #{}),
+    ok.
+
+
+
+
+introduce_user(Num) ->
+    Num2 = nklib_util:to_binary(Num),
+    Mutation = [
+        "mutation {
+            introduceUser(input: {
+                userName: \"Name", Num2, "\"
+                userSurname: \"SurName", Num2, "1\"
+                email: \"g", Num2, "@test\"
+            }) {
+                objId
+            }
+        }"],
+    {ok, #{<<"introduceUser">>:=#{<<"objId">>:=ObjId}}} = nkdomain_graphql:request(Mutation, #{}),
+    ObjId.
 

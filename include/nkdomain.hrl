@@ -36,7 +36,6 @@
 %-define(STATE, obj_state).
 
 -record(obj_id_ext, {
-    %srv_id :: nkservice:id(),
     type :: nkdomain:type(),
     obj_id :: nkdomain:obj_id(),
     obj_name :: nkdomain:obj_name(),

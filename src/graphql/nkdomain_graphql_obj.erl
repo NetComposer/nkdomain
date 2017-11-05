@@ -29,17 +29,16 @@
 -export([object_fields/0]).
 
 -include("nkdomain.hrl").
-
+-include("nkdomain_graphql.hrl").
 
 %% ===================================================================
 %% GraphQL Object callback
 %% ===================================================================
 
 
-%% Assume we are given a map(). Look up the field in the map. If not
-%% present, return the value null.
-execute(Ctx, #{type:=Type}=Obj, Field, Args) ->
-    case object_execute(Field, Obj, Args, Ctx) of
+%% @doc Called from GraphQL to extract fields on any type
+execute(Ctx, {#obj_id_ext{type=Type}=ObjIdExt, Obj}, Field, Args) ->
+    case object_execute(Field, ObjIdExt, Obj, Args, Ctx) of
         {ok, Res} ->
             {ok, Res};
         unknown ->
@@ -47,12 +46,34 @@ execute(Ctx, #{type:=Type}=Obj, Field, Args) ->
                 undefined ->
                     {error, unknown_type};
                 Module ->
-                    Module:execute(Ctx, Obj, Field, Args)
+                    case erlang:function_exported(Module, object_execute, 5) of
+                        true ->
+                            Module:object_execute(Field, ObjIdExt, Obj, Args, Ctx);
+                        false ->
+                            {error, invalid_type}
+                    end
             end
     end;
 
-execute(_Ctx, Obj, Field, _Args) ->
-    {ok, maps:get(Field, Obj, null)}.
+execute(_Ctx, #search_results{objects=Objects}, <<"objects">>, _) ->
+    {ok, Objects};
+
+execute(_Ctx, #search_results{total_count=TotalCount}, <<"totalCount">>, _) ->
+    {ok, TotalCount};
+
+execute(_Ctx, #search_results{page_info=PageInfo}, <<"pageInfo">>, _) ->
+    {ok, PageInfo};
+
+execute(_Ctx, #search_results{cursor=Cursor}, <<"cursor">>, _) ->
+    {ok, Cursor};
+
+execute(_Ctx, #page_info{has_next_page=Next}, <<"hasNextPage">>, _) ->
+    {ok, Next};
+
+execute(_Ctx, #page_info{has_previous_page=Previous}, <<"hasPreviousPage">>, _) ->
+    {ok, Previous}.
+
+
 
 
 
@@ -225,9 +246,9 @@ object_schema_mutations() ->
 
 
 object_query(<<"node">>, #{<<"id">>:=Id}, _Ctx) ->
-    case nkdomain_lib:find(Id) of
-        #obj_id_ext{} = ObjId ->
-            {ok, ObjId};
+    case nkdomain_lib:read(Id) of
+        {ok, #obj_id_ext{}=ObjIdExt, Obj} ->
+            {ok, {ObjIdExt, Obj}};
         {error, Error} ->
             {error, Error}
     end;
@@ -265,10 +286,10 @@ object_query(<<"allObjects">>, _Params, _Ctx) ->
 
 
 %% @doc GraphQL execute
--spec object_execute(binary(), map(), map(), any()) ->
+-spec object_execute(binary(), #obj_id_ext{}, map(), map(), any()) ->
     {ok, term()} | {error, term()} | unknown.
 
-object_execute(Field, Obj, _Args, _Ctx) ->
+object_execute(Field,_ObjIdExt, Obj, _Args, _Ctx) ->
     case Field of
         <<"aliases">> -> {ok, maps:get(aliases, Obj, [])};
         <<"createdBy">> -> get_obj(maps:get(created_by, Obj));

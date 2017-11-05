@@ -51,7 +51,6 @@ http(post, [], Req) ->
         {error, Reason} ->
             err(400, Reason);
         {ok, Decoded} ->
-            %io:format("DECODED ~p\n", [Decoded]),
             run_request(Decoded#{nkmeta=>#{start=>Start}})
     end;
 
@@ -103,7 +102,7 @@ run_execute(ReqCtx) ->
         fun_env := FunEnv,
         vars := Vars,
         operation_name := OpName,
-        nkmeta :=NkMeta
+        nkmeta := NkMeta
     } = ReqCtx,
     Coerced = graphql:type_check_params(FunEnv, OpName, Vars), % <1>
     Ctx = #{

@@ -27,14 +27,14 @@
 
 %% @doc Called at the beginning of the query processing
 execute(Ctx, _DummyObj, QueryName, Params) ->
-    #{nkmeta:=#{start:=Start}} = Ctx,
+    %#{nkmeta:=#{start:=Start}} = Ctx,
     % Find who is in charge of this query
     case nklib_types:get_module(nkdomain_query, QueryName) of
         undefined ->
             {error, unknown_query};
         Module ->
             Res = Module:object_query(QueryName, Params, Ctx),
-            lager:info("Query time: ~p", [nklib_util:l_timestamp()-Start]),
+            %lager:info("Query time: ~p", [nklib_util:l_timestamp()-Start]),
             Res
     end.
 
