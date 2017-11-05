@@ -695,7 +695,7 @@ do_init(Op, Obj, StartOpts) ->
         domain_id := DomainId,
         parent_id := ParentId
     } = Obj,
-    Module = nkdomain_lib:get_module(Type),
+    Module = nkdomain_reg:get_type_module(Type),
     false = Module==undefined,
     Enabled = case maps:find(enabled, StartOpts) of
         {ok, false} ->

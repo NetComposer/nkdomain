@@ -18,7 +18,7 @@
 %%
 %% -------------------------------------------------------------------
 
-%% @doc NkDomain main module
+%% @doc GraphQL Type Callback
 -module(nkdomain_graphql_type).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
@@ -26,8 +26,13 @@
 
 -export([execute/1]).
 
+
+%% @doc Called when a abstract object is found (interface or union)
+%% to find its type
+%% Called from graphql_execute:514 (others from :778)
+
 execute(#{type:=Type}) ->
-    case nkdomain_lib:get_module(Type) of
+    case nkdomain_reg:get_type_module(Type) of
         undefined ->
             {error, unknown_type};
         Module ->

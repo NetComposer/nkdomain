@@ -20,13 +20,9 @@
 
 %% @doc NkDomain GraphQL main module
 
-%% When a query is received, it first go to nkdomain_graphql_query
-%% If it is an abstract type (interface or union) it will go to find the type,
-%% and the to the type manager object (nkdomain_graphql_object manages all of them
-
--module(nkdomain_graphql_util).
+-module(nkdomain_graphql_schema).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
--export([load_schema/0, make_schema/0]).
+-export([make_schema/0]).
 
 
 
@@ -34,48 +30,10 @@
 %% API
 %% ===================================================================
 
-%% @doc Generates an loads a new schema
-load_schema() ->
-    ok = graphql_schema:reset(),
-    Mapping = mapping_rules(),
-    ok = graphql:load_schema(Mapping, make_schema()),
-    ok = setup_root(),
-    ok = graphql:validate_schema(),
-    ok.
-
-
-%% @private
-mapping_rules() ->
-    #{
-        scalars => #{default => nkdomain_graphql_scalar},
-        enums => #{default => graphql_enum_coerce},
-        interfaces => #{default => nkdomain_graphql_type},
-        unions => #{default => nkdomain_graphql_type},
-        objects => #{
-            'Query' => nkdomain_graphql_query,
-            'Mutation' => nkdomain_graphql_mutation,
-            default => nkdomain_graphql_object
-        }
-    }.
-
-
-%% @private
-setup_root() ->
-    Root = {
-        root,
-            #{
-                query => 'Query',
-                mutation => 'Mutation',
-                interfaces => ['Node']
-            }
-    },
-    ok = graphql:insert_schema_definition(Root),
-    ok.
-
 
 %% @doc Generates and schema
 make_schema() ->
-    Modules = [nkdomain_graphql|nkdomain_lib:get_all_modules()],
+    Modules = [nkdomain_graphql_obj|nkdomain_reg:get_all_type_modules()],
     Scalars = make_schema_scalars(Modules),
     Enums = make_schema_enums(Modules),
     Interfaces = make_schema_interfaces(Modules),
@@ -152,7 +110,7 @@ make_schema_types(Modules) ->
                                 #{is_object:=true}  ->
                                     [
                                         " implements Node, Object {\n",
-                                        parse_fields(nkdomain_graphql:object_fields()), "\n"
+                                        parse_fields(nkdomain_graphql_obj:object_fields()), "\n"
                                     ];
                                 _ ->
                                     " {\n"
@@ -164,15 +122,15 @@ make_schema_types(Modules) ->
                                     [
                                         "type ", to_bin(Name), "Connection {\n",
                                         parse_fields(#{
-                                            pageInfo => {no_null, 'PageInfo'},
-                                            edges => {list, <<(to_bin(Name))/binary, "Edge">>},
-                                            totalCount => int
-                                        }), "}\n\n",
+                                                         pageInfo => {no_null, 'PageInfo'},
+                                                         edges => {list, <<(to_bin(Name))/binary, "Edge">>},
+                                                         totalCount => int
+                                                     }), "}\n\n",
                                         "type ", to_bin(Name), "Edge {\n",
                                         parse_fields(#{
-                                            node => to_bin(Name),
-                                            cursor => {no_null, string}
-                                        }), "}\n\n"
+                                                         node => to_bin(Name),
+                                                         cursor => {no_null, string}
+                                                     }), "}\n\n"
                                     ];
                                 _ ->
                                     []

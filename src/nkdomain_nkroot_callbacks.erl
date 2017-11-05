@@ -94,7 +94,7 @@ service_api_syntax(_Id, Syntax, #nkreq{cmd = <<"objects/", Rest/binary>>}=Req) -
         [] ->
             continue;
         [Type, Cmd] ->
-            case nkdomain_lib:get_module(Type) of
+            case nkdomain_reg:get_type_module(Type) of
                 undefined ->
                     continue;
                 Module ->

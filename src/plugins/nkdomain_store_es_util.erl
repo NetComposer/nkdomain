@@ -199,7 +199,7 @@ db_init(IndexOpts, EsOpts) ->
 %% @doc
 %% TODO: each service could have their own type
 db_init_mappings(EsOpts) ->
-    Modules = nkdomain_lib:get_all_modules(),
+    Modules = nkdomain_reg:get_all_type_modules(),
     Base = nkdomain_store_es_util:base_mappings(),
     Mappings = do_get_mappings(Modules, Base),
     io:format("ES Mappings\n~s\n\n", [nklib_json:encode_pretty(Mappings)]),

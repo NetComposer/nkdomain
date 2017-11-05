@@ -18,12 +18,13 @@
 %%
 %% -------------------------------------------------------------------
 
-%% @doc NkDomain main module
+%% @doc Mutation callback
 -module(nkdomain_graphql_mutation).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([execute/4]).
 
+%% @doc Called at the beginning of the mutation process
 execute(Ctx, _, MutationName, #{<<"input">>:=Params}) ->
     #{nkmeta:=#{start:=Start}} = Ctx,
     case nklib_types:get_module(nkdomain_mutation, MutationName) of

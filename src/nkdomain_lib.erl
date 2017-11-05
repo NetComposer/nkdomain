@@ -18,12 +18,11 @@
 %%
 %% -------------------------------------------------------------------
 
-%% @doc NkDomain main module
+%% @doc NkDomain library module
 -module(nkdomain_lib).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([get_module/1, get_all_modules/0, get_type/1, get_all_types/0, register/1, register_relation/2]).
--export([find/1, find/2, find_loaded/1, load/1, load/2]).
+-export([find/1, find/2, find_loaded/1, read/1, read/2, load/1, load/2]).
 -export([type_apply/3]).
 
 -include("nkdomain.hrl").
@@ -39,63 +38,6 @@
 %% ===================================================================
 %% Public
 %% ===================================================================
-
-%% @doc Finds a type's module
--spec get_module(nkdomain:type()) ->
-    module() | undefined.
-
-get_module(Type) ->
-    nklib_types:get_module(nkdomain, Type).
-
-
-%% @doc Gets all registered modules
--spec get_all_modules() ->
-    [module()].
-
-get_all_modules() ->
-    nklib_types:get_all_modules(nkdomain).
-
-
-%% @doc Finds a module's type
--spec get_type(module()) ->
-    nkdomain:type() | undefined.
-
-get_type(Module) ->
-    nklib_types:get_type(nkdomain, Module).
-
-
-%% @doc Gets all registered types
--spec get_all_types() ->
-    [nkdomain:type()].
-
-get_all_types() ->
-    nklib_types:get_all_types(nkdomain).
-
-
-%% @doc Gets the obj module for a type
--spec register(module()) ->
-    ok.
-
-%% @doc Registers a module
-register(Module) ->
-    #{type:=Type} = Module:object_info(),
-    Type2 = to_bin(Type),
-    _ = binary_to_atom(Type2, utf8),
-    % Ensure we have the corresponding atoms loaded
-    % We store the bin version of the service
-    nklib_types:register_type(nkdomain, Type2, Module).
-
-
-%% @doc Registers a module
-register_relation(Type, Module) ->
-    Fun = fun(Meta) ->
-        Relations1 = maps:get(relations, Meta, []),
-        Relations2 = nklib_util:store_value(Module, Relations1),
-        Meta#{relations=>Relations2}
-    end,
-    nklib_types:update_meta(nkdomain, Type, Fun).
-
-
 
 
 %% @doc Finds and object from UUID or Path, in memory and disk
@@ -168,6 +110,45 @@ find_in_db(SrvId, Id) ->
     end.
 
 
+%% @doc Reads an object from memory if loaded, or disk if not
+-spec read(nkdomain:obj_id()) ->
+    {ok, #obj_id_ext{}, nkdomain:obj()} | {error, term()}.
+
+read(Id) ->
+    read(?NKROOT, Id).
+
+
+%% @doc Reads an object from memory if loaded, or disk if not
+-spec read(nkservice:id(), nkdomain:obj_id()) ->
+    {ok, #obj_id_ext{}, nkdomain:obj()} | {error, term()}.
+
+read(SrvId, Id) ->
+    case find(SrvId, Id) of
+        #obj_id_ext{pid=Pid}=ObjIdExt when is_pid(Pid) ->
+            case nkdomain:get_obj(Pid) of
+                {ok, Obj} ->
+                    {ok, ObjIdExt, Obj};
+                {error, Error} ->
+                    {error, Error}
+            end;
+        #obj_id_ext{obj_id=ObjId}=ObjIdExt ->
+            case ?CALL_SRV(SrvId, object_db_read, [ObjId]) of
+                {ok, Map, _Meta} ->
+                    case ?CALL_SRV(SrvId, object_parse, [load, Map]) of
+                        {ok, Obj, _Unknown} ->
+                            {ok, ObjIdExt, Obj};
+                        {error, Error} ->
+                            {error, Error}
+                    end;
+                {error, Error} ->
+                    {error, Error}
+            end;
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
+
 
 %% @doc Finds an objects's pid or loads it from storage
 -spec load(nkdomain:id()) ->
@@ -220,7 +201,7 @@ type_apply(Module, Fun, Args) when is_atom(Module) ->
     end;
 
 type_apply(Type, Fun, Args) when is_binary(Type) ->
-    Module = nkdomain_lib:get_module(Type),
+    Module = nkdomain_reg:get_type_module(Type),
     true = is_atom(Module),
     type_apply(Module, Fun, Args).
 

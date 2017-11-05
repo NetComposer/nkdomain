@@ -25,9 +25,10 @@
 -export([execute/4]).
 
 
-%% @doc
+%% @doc Called at the beginning of the query processing
 execute(Ctx, _DummyObj, QueryName, Params) ->
     #{nkmeta:=#{start:=Start}} = Ctx,
+    % Find who is in charge of this query
     case nklib_types:get_module(nkdomain_query, QueryName) of
         undefined ->
             {error, unknown_query};

@@ -246,7 +246,7 @@ object_syntax(create) ->
     {ok, #obj_id_ext{}, [Unknown::binary()]} | {error, term()}.
 
 object_create(SrvId, DomainId, Type, UserId, Obj) ->
-    case nkdomain_lib:get_module(Type) of
+    case nkdomain_reg:get_type_module(Type) of
         undefined ->
             {error, unknown_type};
         Module ->
@@ -289,7 +289,7 @@ object_parse(Mode, Map) ->
         #{type:=Type0} -> Type0;
         _ -> <<>>
     end,
-    case nkdomain_lib:get_module(Type) of
+    case nkdomain_reg:get_type_module(Type) of
         undefined ->
             {error, {invalid_type, Type}};
         Module ->
@@ -328,7 +328,7 @@ object_parse(Mode, Map) ->
     nkdomain_admin:object_admin_info().
 
 object_admin_info(Type) ->
-    Module = nkdomain_lib:get_module(Type),
+    Module = nkdomain_reg:get_type_module(Type),
     case erlang:function_exported(Module, object_admin_info, 0) of
         true ->
             Module:object_admin_info();
