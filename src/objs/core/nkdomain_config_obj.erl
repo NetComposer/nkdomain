@@ -27,7 +27,7 @@
 -export([create/3, find_configs/2]).
 -export([object_info/0, object_es_mapping/0, object_parse/2,
          object_api_syntax/2, object_api_cmd/2]).
--export([object_admin_info/0]).
+-export([object_admin_info/0, object_schema_types/0]).
 
 -include("nkdomain.hrl").
 
@@ -76,6 +76,7 @@ find_configs(Path, SubType) ->
 object_info() ->
     #{
         type => ?DOMAIN_CONFIG,
+        schema_type => 'Config',
         default_ttl => 5*60*1000
     }.
 
@@ -85,6 +86,18 @@ object_admin_info() ->
     #{
         class => resource,
         weight => 900
+    }.
+
+
+%% @doc
+object_schema_types() ->
+    #{
+        'Config' => #{
+            fields => #{
+            },
+            is_object => true,
+            comment => "A Config Object"
+        }
     }.
 
 

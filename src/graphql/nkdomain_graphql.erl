@@ -137,6 +137,7 @@ run_request(#{document:=Doc}=Ctx) ->
         {ok, AST} ->
             run_preprocess(Ctx#{document:=AST});
         {error, Reason} ->
+            lager:error("NKLOG RR1 ~p", [Reason]),
             {error, Reason}
     end.
 
@@ -153,7 +154,10 @@ run_preprocess(#{document:=AST}=ReqCtx) ->
         ok = graphql:validate(AST2),
         run_execute(ReqCtx#{document := AST2, fun_env => FunEnv})
     catch
+        throw:{error, Map} ->
+            make_error(Map);
         throw:Err ->
+            lager:error("NKLOG RR2 ~p", [Err]),
             {error, Err}
     end.
 
@@ -175,11 +179,15 @@ run_execute(ReqCtx) ->
         nkmeta => NkMeta,
         nkuser => NkUser
     },
-    case graphql:execute(Ctx, AST) of
-        #{errors:=[Error1|Errors], data:=Data} ->
-            {error, {Error1, Errors, Data}};
+    Res = graphql:execute(Ctx, AST),
+    % lager:error("NKLOG L ~p", [Res]),
+    case Res of
+        #{errors:=[Error1|_], data:=_Data} ->
+            make_error(Error1);
         #{data:=Data} ->
             {ok, Data};
+        {error, {error, Error}} ->
+            {error, Error};
         {error, Error} ->
             {error, Error}
     end.
@@ -236,4 +244,10 @@ operation_name([_ | Next]) ->
     operation_name(Next);
 operation_name([]) ->
     undefined.
+
+
+%% @private
+make_error(#{key:=Key, message:=Msg, path:=Path}) ->
+    Text = list_to_binary([Msg, " (", nklib_util:bjoin(Path, <<".">>), ")"]),
+    {error, {Key, Text}}.
 

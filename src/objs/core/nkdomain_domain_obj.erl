@@ -217,7 +217,7 @@ object_schema_types() ->
         'Domain' => #{
             fields => #{},
             is_object => true,
-            comment => "An Domain"
+            comment => "A Domain"
         }
     }.
 

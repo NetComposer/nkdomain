@@ -66,6 +66,7 @@ delete_all() ->
 object_info() ->
     #{
         type => ?DOMAIN_MAIL_PROVIDER,
+        schema_type => 'MailProvider',
         subtype => [?DOMAIN_CONFIG]
     }.
 
@@ -86,8 +87,7 @@ object_es_mapping() ->
 %% @private
 object_parse(_Mode, Obj) ->
     #{?DOMAIN_MAIL_PROVIDER:=Config} = Obj,
-    SrvId = nkdomain_util:get_srv_id(Obj),
-    case nkmail:parse_provider(SrvId, Config, #{path=>?DOMAIN_MAIL_PROVIDER}) of
+    case nkmail:parse_provider(?NKROOT, Config, #{path=>?DOMAIN_MAIL_PROVIDER}) of
         {ok, Provider, UnknownFields} ->
             {type_obj, Provider, UnknownFields};
         {error, Error} ->

@@ -65,6 +65,7 @@ delete_all() ->
 object_info() ->
     #{
         type => ?DOMAIN_FILE_STORE,
+        schema_type => 'FileStore',
         subtype => [?DOMAIN_CONFIG]
     }.
 
@@ -87,8 +88,7 @@ object_es_mapping() ->
 %% @see nkfile_s3:store_syntax()
 object_parse(_Mode, Obj) ->
     #{?DOMAIN_FILE_STORE:=Config} = Obj,
-    SrvId = nkdomain_util:get_srv_id(Obj),
-    case nkfile:parse_store(SrvId, Config, #{path=>?DOMAIN_FILE_STORE}) of
+    case nkfile:parse_store(?NKROOT, Config, #{path=>?DOMAIN_FILE_STORE}) of
         {ok, Store, UnknownTypes} ->
             {type_obj, Store, UnknownTypes};
         {error, Error} ->

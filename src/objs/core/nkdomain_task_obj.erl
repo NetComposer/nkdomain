@@ -26,7 +26,8 @@
 
 -include("nkdomain.hrl").
 
--export([object_info/0, object_admin_info/0, object_api_syntax/2, object_api_cmd/2, object_send_event/2]).
+-export([object_info/0, object_admin_info/0, object_schema_types/0,
+         object_api_syntax/2, object_api_cmd/2, object_send_event/2]).
 -export_type([events/0]).
 
 -define(LLOG(Type, Txt, Args),
@@ -55,6 +56,7 @@
 %% @private
 object_info() ->
     #{
+        schema_type => 'Task',
         type => ?DOMAIN_TASK
     }.
 
@@ -64,6 +66,18 @@ object_admin_info() ->
     #{
         class => session,
         weight => 100
+    }.
+
+
+%% @doc
+object_schema_types() ->
+    #{
+        'Task' => #{
+            fields => #{
+            },
+            is_object => true,
+            comment => "A Task"
+        }
     }.
 
 

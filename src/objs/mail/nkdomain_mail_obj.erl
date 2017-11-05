@@ -53,6 +53,7 @@
 %% @private
 object_info() ->
     #{
+        schema_type => 'MailMessage',
         type => ?DOMAIN_MAIL
     }.
 

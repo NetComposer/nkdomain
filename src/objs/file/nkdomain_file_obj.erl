@@ -199,7 +199,7 @@ object_schema_types() ->
                 size => int
             },
             is_object => true,
-            comment => "An File"
+            comment => "A File"
         }
     }.
 

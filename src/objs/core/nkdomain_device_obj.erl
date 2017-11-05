@@ -28,7 +28,8 @@
 -include("nkdomain_debug.hrl").
 
 -export([create/2, attach_session/3, get_registered_user/1, find_sso/1]).
--export([object_info/0, object_admin_info/0, object_api_syntax/2, object_api_cmd/2, object_send_event/2]).
+-export([object_info/0, object_admin_info/0, object_schema_types/0,
+         object_api_syntax/2, object_api_cmd/2, object_send_event/2]).
 -export([object_es_mapping/0, object_parse/2]).
 -export([object_init/1, object_sync_op/3, object_link_down/2]).
 
@@ -135,6 +136,7 @@ get_registered_user(DeviceId) ->
 %% @private
 object_info() ->
     #{
+        schema_type => 'Device',
         type => ?DOMAIN_DEVICE
     }.
 
@@ -144,6 +146,18 @@ object_admin_info() ->
     #{
         class => session,
         weight => 100
+    }.
+
+
+%% @doc
+object_schema_types() ->
+    #{
+        'Device' => #{
+            fields => #{
+            },
+            is_object => true,
+            comment => "A Device"
+        }
     }.
 
 

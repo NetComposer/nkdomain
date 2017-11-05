@@ -32,14 +32,20 @@
 %% Called from graphql_execute:514 (others from :778)
 
 execute({#obj_id_ext{type=Type}, _Obj}) ->
+    lager:error("NKLOG TYPE ~p", [Type]),
     case nkdomain_reg:get_type_module(Type) of
         undefined ->
             {error, unknown_type};
         Module ->
             case Module:object_info() of
                 #{schema_type:=SchemaType} ->
+                    lager:error("NKLOG TYPE2 ~p ~p", [Type, SchemaType]),
                     {ok, SchemaType};
                 _ ->
                     {error, unknown_type}
             end
-    end.
+    end;
+
+execute(_Obj) ->
+    lager:error("NKLOG Invalid type execute  ~p", [_Obj]),
+    error(invalid_type).

@@ -27,7 +27,7 @@
 -include("nkdomain.hrl").
 
 -export([create/0]).
--export([object_info/0, object_admin_info/0, object_parse/2]).
+-export([object_info/0, object_admin_info/0, object_schema_types/0, object_parse/2]).
 -export([object_api_syntax/2, object_api_cmd/2, object_send_event/2]).
 -export_type([events/0]).
 
@@ -78,6 +78,7 @@ create() ->
 object_info() ->
     #{
         type => ?DOMAIN_NODE,
+        schema_type => 'Server',
         permanent => true
     }.
 
@@ -90,7 +91,19 @@ object_admin_info() ->
         type_view_mod => nkdomain_node_obj_type_view 
 %%        tree_id => <<"domain_tree_sessions_node">>
     }.
- 
+
+%% @doc
+object_schema_types() ->
+    #{
+        'Server' => #{
+            fields => #{
+            },
+            is_object => true,
+            comment => "A NetComposer Server"
+        }
+    }.
+
+
 % @private
 object_parse(_Mode, _Map) ->
     #{}.

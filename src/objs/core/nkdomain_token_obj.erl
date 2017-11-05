@@ -27,7 +27,7 @@
 -export([create/3]).
 -export([object_info/0, object_es_mapping/0, object_parse/2, object_send_event/2,
          object_sync_op/3, object_async_op/2]).
--export([object_admin_info/0]).
+-export([object_admin_info/0, object_schema_types/0]).
 -export([get_token_data/1, consume_token/2]).
 
 -include("nkdomain.hrl").
@@ -125,6 +125,7 @@ get_token_data(Id) ->
 object_info() ->
     #{
         type => ?DOMAIN_TOKEN,
+        schema_type => 'Token',
         remove_after_stop => true
     }.
 
@@ -134,6 +135,18 @@ object_admin_info() ->
         class => session,
         weight => 5000,
         type_view_mod => nkdomain_token_obj_type_view
+    }.
+
+
+%% @doc
+object_schema_types() ->
+    #{
+        'Token' => #{
+            fields => #{
+            },
+            is_object => true,
+            comment => "A Token"
+        }
     }.
 
 

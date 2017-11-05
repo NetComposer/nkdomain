@@ -283,7 +283,6 @@ object_create(SrvId, DomainId, Type, UserId, Obj) ->
     {ok, nkdomain:obj(), Unknown::[binary()]} | {error, term()}.
 
 object_parse(Mode, Map) ->
-
     Type = case Map of
         #{<<"type">>:=Type0} -> Type0;
         #{type:=Type0} -> Type0;

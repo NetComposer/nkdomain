@@ -53,3 +53,17 @@ introduce_user(Num) ->
     {ok, #{<<"introduceUser">>:=#{<<"objId">>:=ObjId}}} = nkdomain_graphql:request(Mutation, #{}),
     ObjId.
 
+
+all_objs() ->
+    Query = <<"
+        query {
+            allObjects(first: 5) {
+                totalCount
+                objects {
+                    objId
+                    name
+                }
+            }
+        }
+    ">>,
+    nkdomain_graphql:request(Query, #{}).

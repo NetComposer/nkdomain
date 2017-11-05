@@ -25,7 +25,8 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([start/4]).
--export([object_info/0, object_es_mapping/0, object_parse/2, object_api_syntax/2, object_api_cmd/2,
+-export([object_info/0, object_schema_types/0, object_es_mapping/0, object_parse/2,
+         object_api_syntax/2, object_api_cmd/2,
          object_init/1, object_stop/2, object_event/2]).
 -export([object_admin_info/0]).
 -export([object_check_active/1]).
@@ -92,6 +93,7 @@ start(SrvId, DomainId, UserId, Opts) ->
 object_info() ->
     #{
         type => ?DOMAIN_SESSION,
+        schema_type => 'Session',
         stop_after_disabled => true,
         remove_after_stop => true
     }.
@@ -104,6 +106,18 @@ object_admin_info() ->
         weight => 1000,
         type_view_mod => nkdomain_session_obj_type_view
 %%        tree_id => <<"domain_tree_sessions_sessions">>
+    }.
+
+
+%% @doc
+object_schema_types() ->
+    #{
+        'Session' => #{
+            fields => #{
+            },
+            is_object => true,
+            comment => "An User Session"
+        }
     }.
 
 

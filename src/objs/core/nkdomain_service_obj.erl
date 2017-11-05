@@ -26,7 +26,7 @@
 
 -include("nkdomain.hrl").
 
--export([object_info/0, object_admin_info/0, object_es_mapping/0, object_parse/2]).
+-export([object_info/0, object_admin_info/0, object_schema_types/0, object_es_mapping/0, object_parse/2]).
 -export([object_api_syntax/2, object_api_cmd/2, object_send_event/2]).
 -export_type([events/0]).
 
@@ -57,6 +57,7 @@
 object_info() ->
     #{
         type => ?DOMAIN_SERVICE,
+        schema_type => 'Service',
         default_ttl => permanent
     }.
 
@@ -66,6 +67,18 @@ object_admin_info() ->
     #{
         class => service,
         weight => 100
+    }.
+
+
+%% @doc
+object_schema_types() ->
+    #{
+        'Service' => #{
+            fields => #{
+            },
+            is_object => true,
+            comment => "A NetComposer Service"
+        }
     }.
 
 

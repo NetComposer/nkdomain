@@ -50,13 +50,15 @@ execute(Ctx, {#obj_id_ext{type=Type}=ObjIdExt, Obj}, Field, Args) ->
                         true ->
                             Module:object_execute(Field, ObjIdExt, Obj, Args, Ctx);
                         false ->
-                            {error, invalid_type}
+                            lager:error("NKLOG No execute module ~p", [Module]),
+                            null
                     end
             end
     end;
 
 execute(_Ctx, #search_results{objects=Objects}, <<"objects">>, _) ->
-    {ok, Objects};
+    lager:error("NKLOG OBJEC ~p", [Objects]),
+    {ok, [{ok, Obj} || Obj <-Objects]};
 
 execute(_Ctx, #search_results{total_count=TotalCount}, <<"totalCount">>, _) ->
     {ok, TotalCount};
@@ -254,24 +256,24 @@ object_query(<<"node">>, #{<<"id">>:=Id}, _Ctx) ->
     end;
 
 object_query(<<"allObjects">>, _Params, _Ctx) ->
-    case nkdomain:search(#{filters=>#{type=>user}, fields=>[]}) of
+    case nkdomain:search(#{fields=>[]}) of
         {ok, Total, Data, _Meta} ->
             Data2 = lists:foldl(
                 fun(#{<<"obj_id">>:=ObjId}, Acc) ->
-                    {ok, O} = nkdomain:get_obj(ObjId),
-                    [O|Acc]
+                    lager:error("NKLOG READ ~p", [ObjId]),
+                    {ok, ObjIdExt, Obj} = nkdomain_lib:read(ObjId),
+                    [{ObjIdExt, Obj}|Acc]
                 end,
                 [],
                 Data),
-            lager:error("NKLOG DATA ~p", [Data2]),
-            Result = #{
-                <<"objects">> => Data2,
-                <<"totalCount">> => Total,
-                <<"pageInfo">> => #{
-                    <<"hasNextPage">> => false,
-                    <<"hasPreviousPage">> => false
+            Result = #search_results{
+                objects = Data2,
+                total_count = Total,
+                page_info = #page_info{
+                    has_next_page = false,
+                    has_previous_page = false
                 },
-                <<"cursor">> => <<>>
+                cursor = <<>>
             },
             {ok, Result};
         {error, Error} ->
