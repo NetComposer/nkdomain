@@ -278,21 +278,21 @@ parse_fields([{Field, Value}|Rest], Acc) ->
         {no_null, V} ->
             [field(Field), " : ", value(V), "!"];
         {no_null, V, Opts} ->
-            [comment(Opts), field(Field, Opts), " : ", value(V), "!"];
+            [comment(Opts), field(Field, Opts), " : ", value(V), "!", default(Opts)];
         {list_no_null, V} ->
             [field(Field), " : [", value(V), "!]"];
         {list_no_null, V, Opts} ->
-            [comment(Opts), field(Field, Opts), ": [", value(V), "!]"];
+            [comment(Opts), field(Field, Opts), ": [", value(V), "!]", default(Opts)];
         {list, V} ->
             [field(Field), " : [", value(V), "]"];
         {list, V, Opts} ->
-            [comment(Opts), field(Field, Opts), " : [", value(V), "]"];
+            [comment(Opts), field(Field, Opts), " : [", value(V), "]", default(Opts)];
         {connection, V} ->
             [field(Field), connection(), " : ", to_bin(V), "Connection"];
         {connection, V, Opts} ->
             [comment(Opts), field(Field, Opts), connection(), " : ", to_bin(V), "Connection"];
         {V, Opts} ->
-            [comment(Opts), field(Field, Opts), " : ", value(V)];
+            [comment(Opts), field(Field, Opts), " : ", value(V), default(Opts)];
         _ ->
             [field(Field), " : ", value(Value)]
     end,
@@ -335,6 +335,14 @@ comment(#{comment:=C}=Opts) ->
     end;
 
 comment(_) ->
+    [].
+
+
+%% @private
+default(#{default:=D}) ->
+    <<" = ", (to_bin(D))/binary>>;
+
+default(_Opts) ->
     [].
 
 

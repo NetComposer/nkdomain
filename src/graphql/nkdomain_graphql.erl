@@ -57,8 +57,9 @@
 
 -type field_opts() ::
     #{
-        comment => string(),
-        params => #{field_key() => field_value()}
+        params => #{field_key() => field_value()},
+        default => string(),
+        comment => string()
     }.
 
 

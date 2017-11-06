@@ -37,7 +37,7 @@
 
 
 %% @doc Called from GraphQL to extract fields on any type
-execute(Ctx, {#obj_id_ext{type=Type}=ObjIdExt, Obj}, Field, Args) ->
+execute(Ctx, {#obj_id_ext{obj_id=ObjId, type=Type}=ObjIdExt, Obj}, Field, Args) ->
     case object_execute(Field, ObjIdExt, Obj, Args, Ctx) of
         {ok, Res} ->
             {ok, Res};
@@ -48,16 +48,20 @@ execute(Ctx, {#obj_id_ext{type=Type}=ObjIdExt, Obj}, Field, Args) ->
                 Module ->
                     case erlang:function_exported(Module, object_execute, 5) of
                         true ->
-                            Module:object_execute(Field, ObjIdExt, Obj, Args, Ctx);
+                            Res = Module:object_execute(Field, ObjIdExt, Obj, Args, Ctx),
+                            lager:notice("NKLOG RES: ~p", [Res]),
+                            Res;
                         false ->
                             lager:error("NKLOG No execute module ~p", [Module]),
                             null
                     end
-            end
+            end;
+        {error, Error} ->
+            lager:warning("NKLOG Obj execute error (~p, ~p): ~p", [ObjId, Field, Error]),
+            {error, Error}
     end;
 
 execute(_Ctx, #search_results{objects=Objects}, <<"objects">>, _) ->
-    lager:error("NKLOG OBJEC ~p", [Objects]),
     {ok, [{ok, Obj} || Obj <-Objects]};
 
 execute(_Ctx, #search_results{total_count=TotalCount}, <<"totalCount">>, _) ->
@@ -105,8 +109,9 @@ object_schema_enums() ->
             opts => nkdomain_reg:get_all_schema_types(),
             comment => "Object Types"
         },
-        objectSortByFields => #{
-            opts => [domain]
+        objectSortByField => #{
+            opts => [domainId, createdById, createdTime, enabled, expiresTime, name, objName, path,
+                     srvId, type]
         },
         sortOrder => #{
             opts => [asc, desc]
@@ -174,8 +179,8 @@ object_schema_inputs() ->
         },
         objectSortBy => #{
             fields => #{
-                fields => objectSortByFields,
-                sortOrder => sortOrder
+                field => {no_null, objectSortByField},
+                sortOrder => {sortOrder, #{default => <<"asc">>}}
             },
             comment => "Fields to sort on"
         }
@@ -217,11 +222,9 @@ object_schema_queries() ->
         allObjects => {'SearchResult', #{
                            params => #{
                                filter => objectFilter,
-                               sort => objectSortBy,
-                               first => int,
-                               last => int,
-                               'after' => 'Cursor',
-                               before => 'Cursor'
+                               sort => {list, objectSortBy},
+                               from => {int, #{default => 0}},
+                               size => {int, #{default => 10}}
                            }}}
     }.
 
@@ -255,13 +258,37 @@ object_query(<<"node">>, #{<<"id">>:=Id}, _Ctx) ->
             {error, Error}
     end;
 
-object_query(<<"allObjects">>, _Params, _Ctx) ->
-    case nkdomain:search(#{fields=>[]}) of
+object_query(<<"allObjects">>, Params, _Ctx) ->
+    #{
+        <<"from">> := From,
+        <<"size">> := Size,
+        <<"filter">> := _Filter,
+        <<"sort">> := PSort
+    } = Params,
+    lager:error("NKLOG Params ~p", [Params]),
+    Spec1 = #{
+        from => From,
+        size => Size
+    },
+    Spec2 = case PSort of
+        null ->
+            Spec1;
+        _ ->
+            Spec1#{sort=> [
+                <<Order/binary, $:, (to_bin(camel_to_erl(Field)))/binary>>
+                || #{<<"field">>:={enum, Field}, <<"sortOrder">>:={enum, Order}} <- PSort
+            ]}
+
+    end,
+    lager:error("Spec1: ~p", [Spec2]),
+
+
+    case nkdomain:search(Spec2#{fields=>[]}) of
         {ok, Total, Data, _Meta} ->
             Data2 = lists:foldl(
                 fun(#{<<"obj_id">>:=ObjId}, Acc) ->
-                    lager:error("NKLOG READ ~p", [ObjId]),
                     {ok, ObjIdExt, Obj} = nkdomain_lib:read(ObjId),
+                    % lager:error("NKLOG OBJ ~p", [Obj]),
                     [{ObjIdExt, Obj}|Acc]
                 end,
                 [],
@@ -291,7 +318,7 @@ object_query(<<"allObjects">>, _Params, _Ctx) ->
 -spec object_execute(binary(), #obj_id_ext{}, map(), map(), any()) ->
     {ok, term()} | {error, term()} | unknown.
 
-object_execute(Field,_ObjIdExt, Obj, _Args, _Ctx) ->
+object_execute(Field, _ObjIdExt, Obj, _Args, _Ctx) ->
     case Field of
         <<"aliases">> -> {ok, maps:get(aliases, Obj, [])};
         <<"createdBy">> -> get_obj(maps:get(created_by, Obj));
@@ -302,7 +329,7 @@ object_execute(Field,_ObjIdExt, Obj, _Args, _Ctx) ->
         <<"destroyedCode">> -> {ok, maps:get(destroyed_code, Obj, null)};
         <<"destroyedReason">> -> {ok, maps:get(destroyed_reason, Obj, null)};
         <<"destroyedTime">> -> {ok, maps:get(destroyed_time, Obj, null)};
-        <<"domain">> -> get_obj(maps:get(domain_id, Obj));
+        <<"domain">> -> get_obj(case maps:get(domain_id, Obj) of <<>> -> <<"root">>; O -> O end);
         <<"domainId">> -> {ok, maps:get(domain_id, Obj)};
         <<"enabled">> -> {ok, maps:get(enabled, Obj, true)};
         <<"expiresTime">> -> {ok, maps:get(expires_time, Obj, null)};
@@ -328,8 +355,13 @@ object_execute(Field,_ObjIdExt, Obj, _Args, _Ctx) ->
 %% @private
 get_obj(null) ->
     {ok, null};
-get_obj(DomainId) ->
-    nkdomain:get_obj(DomainId).
+get_obj(ObjId) ->
+    case nkdomain_lib:read(ObjId) of
+        {ok, #obj_id_ext{}=ObjIdExt, Obj} ->
+            {ok, {ObjIdExt, Obj}};
+        {error, Error} ->
+            {error, Error}
+    end.
 
 
 %% @private
@@ -337,10 +369,15 @@ get_type(#{type:=Type}) ->
     Module = nkdomain_reg:get_type_module(Type),
     case Module:object_info() of
         #{schema_type:=SchemaType} ->
-            {ok, SchemaType};
+            {ok, nklib_util:to_binary(SchemaType)};
         _ ->
+            lager:error("NKLOG Unknown type ~p", [Type]),
             {error, unknown_type}
-    end.
+    end;
+
+get_type(Obj) ->
+    lager:error("NKLOG Unknown type ~p", [Obj]),
+    {error, unknown_type}.
 
 
 %% ===================================================================
@@ -410,7 +447,41 @@ object_fields_filter() ->
     }.
 
 
+%% @private
+camel_to_erl(<<"createdById">>) -> created_by;
+camel_to_erl(<<"createdTime">>) -> created_time;
+camel_to_erl(<<"destroyedCode">>) -> destroyed_code;
+camel_to_erl(<<"destroyedReason">>) -> destroyed_reason;
+camel_to_erl(<<"destroyedTime">>) -> destroyed_time;
+camel_to_erl(<<"domainId">>) -> domain_id;
+camel_to_erl(<<"expiresTime">>) -> expires_time;
+camel_to_erl(<<"iconId">>) -> icon_id;
+camel_to_erl(<<"objId">>) -> obj_id;
+camel_to_erl(<<"objName">>) -> obj_name;
+camel_to_erl(<<"srvId">>) -> srv_id;
+camel_to_erl(<<"updatedById">>) -> updated_by;
+camel_to_erl(<<"updatedTime">>) -> updated_time;
+camel_to_erl(Erl) -> binary_to_existing_atom(Erl, utf8).
 
 
+%%camel_to_erl(created_by) -> createdById;
+%%camel_to_erl(created_time) -> createdTime;
+%%camel_to_erl(destroyed_code) -> destroyedCode;
+%%camel_to_erl(destroyedReason) -> destroyed_reason;
+%%camel_to_erl(destroyedTime) -> destroyed_time;
+%%camel_to_erl(domainId) -> domain_id;
+%%camel_to_erl(expiresTime) -> expires_time;
+%%camel_to_erl(iconId) -> icon_id;
+%%camel_to_erl(objId) -> obj_id;
+%%camel_to_erl(objName) -> obj_name;
+%%camel_to_erl(srvId) -> srv_id;
+%%camel_to_erl(updatedById) -> updated_by;
+%%camel_to_erl(updatedTime) -> updated_time;
+%%camel_to_erl(Erl) -> Erl.
+
+
+%% @private
+to_bin(T) when is_binary(T)-> T;
+to_bin(T) -> nklib_util:to_binary(T).
 
 

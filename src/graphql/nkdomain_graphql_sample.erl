@@ -57,13 +57,29 @@ introduce_user(Num) ->
 all_objs() ->
     Query = <<"
         query {
-            allObjects(first: 5) {
+            allObjects(
+                from: 2
+                size: 5
+                sort: [
+                    {
+                        field: path
+                        sortOrder: asc
+                    }
+                ]
+            ) {
                 totalCount
                 objects {
+                    type
                     objId
+                    path
                     name
+                    domain {
+                        name
+                    }
                 }
             }
         }
     ">>,
     nkdomain_graphql:request(Query, #{}).
+
+

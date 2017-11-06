@@ -33,9 +33,12 @@ input(<<"UnixTime">>, Input) ->
     end;
 
 input(_Type, Val) ->
+    %lager:error("In Val: ~p", [Val]),
     {ok, Val}.
 
 
 %% @doc
 output(_Type, Val) ->
+    %
+    % lager:error("Out Val: ~p", [Val]),
     {ok, Val}.

@@ -33,8 +33,13 @@ execute(Ctx, _DummyObj, QueryName, Params) ->
         undefined ->
             {error, unknown_query};
         Module ->
-            Res = Module:object_query(QueryName, Params, Ctx),
-            %lager:info("Query time: ~p", [nklib_util:l_timestamp()-Start]),
-            Res
+            try
+                Res = Module:object_query(QueryName, Params, Ctx),
+                %lager:info("Query time: ~p", [nklib_util:l_timestamp()-Start]),
+                Res
+            catch
+                throw:Error ->
+                    {error, Error}
+            end
     end.
 
