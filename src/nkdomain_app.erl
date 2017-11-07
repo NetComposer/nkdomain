@@ -87,7 +87,7 @@ stop(_) ->
 maybe_start_nkroot() ->
     case get(start_nkroot) of
         true ->
-            case nkdomain_nkroot_plugin:start() of
+            case nkdomain_nkroot_svc:start() of
                 {ok, _} ->
                     lager:info("NkDOMAIN root started");
                 {error, Error} ->

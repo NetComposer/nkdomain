@@ -19,7 +19,8 @@
 %% -------------------------------------------------------------------
 
 %% @doc Elasticsearch plugin
--module(nkdomain_store_es_util).
+-module(
+nkdomain_store_es_util).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([get_opts/0, get_index_opts/0, reload_index/0, clean/0, delete_index/0, read_obj/1]).

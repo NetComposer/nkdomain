@@ -22,17 +22,13 @@
 -module(nkdomain_nkroot_plugin).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([start/0, stop/0, init/1, syntax/0]).
 -export([plugin_deps/0, plugin_syntax/0, plugin_config/2, plugin_listen/2]).
+-export([init/1, syntax/0]).
 
 
--define(LLOG(Type, Txt, Args), lager:Type("NkDOMAIN Callbacks: "++Txt, Args)).
+-define(LLOG(Type, Txt, Args), lager:Type("NkDOMAIN ROOT Plugin: "++Txt, Args)).
 
 -include("nkdomain.hrl").
-
-%%-include_lib("nkapi/include/nkapi.hrl").
-%%-include_lib("nkevent/include/nkevent.hrl").
-%%-include_lib("nkservice/include/nkservice.hrl").
 
 
 %% ===================================================================
@@ -44,6 +40,7 @@
 %% ===================================================================
 %% Plugin callbacks
 %% ===================================================================
+
 
 %% @private
 plugin_deps() ->
@@ -77,29 +74,10 @@ plugin_listen(_Config, #{id:=_SrvId}) ->
 
 
 
-%% @doc
-start() ->
-    Spec = #{
-        plugins => [
-            nkdomain_nkroot, nkdomain_store_es, nkadmin,
-            nkapi, nkmail, nkmail_smtp_client, nkfile_filesystem, nkfile_s3, nkservice_rest
-        ],
-        nkdomain => nklib_config:get_env(nkdomain),
-        debug => [
-            %% {nkapi_client, #{nkpacket=>true}},
-            %% nkapi_server,
-            %% nkelastic
-            %% {nkelastic, [full]},
-            %% {nkdomain_obj, all}
-            {nkdomain_obj, #{types=>[<<"med.encounter">>]}}
-        ]
-    },
-    nkservice:start(?NKROOT, Spec).
+%% ===================================================================
+%% Config
+%% ===================================================================
 
-
-%% @doc
-stop() ->
-    nkservice:stop(?NKROOT).
 
 
 %% @private
@@ -117,10 +95,8 @@ syntax() ->
         start_rest => boolean,
         db_clusters => {list, map},
         db_store => binary,
-        file_stores => {list, BaseFile#{id=>binary}},
-        default_file_store => binary,
         default_store_id => binary,
-        mail_providers => {list, mail_syntax()},
+        default_file_store => binary,
         default_mail_provider => binary,
         start_services => {list, binary},
         '__defaults' => #{
@@ -133,7 +109,7 @@ syntax() ->
             start_admin => true,
             start_rest => true
         },
-        '__mandatory' => [db_store, default_file_store]
+        '__mandatory' => [db_store]
     }.
 
 
@@ -202,23 +178,14 @@ config(Config, _Service) ->
         _ ->
             error(missing_nkdomain_db_store)
     end,
-    case parse_file_stores(Env, Config4) of
-        {ok, #{default_file_store:=FileStore}=Config5} ->
-            case parse_mail_providers(Env, Config5) of
-                {ok, #{default_mail_provider:=MailProvider}=Config6} ->
-                    Cache = #nkdomain_config_cache{
-                        db_store = DbStore,
-                        file_store = FileStore,
-                        email_provider = MailProvider
-                    },
-                    Config7 = add_graphql(Config6),
-                    {ok, Config7, Cache};
-                {error, Error} ->
-                    {error, Error}
-            end;
-        {error, Error} ->
-            {error, Error}
-    end.
+    Cache = #nkdomain_config_cache{
+        db_store = DbStore,
+        file_store = maps:get(default_file_store, Env, <<>>),
+        email_provider = maps:get(default_file_store, Env, <<>>)
+    },
+    Config5 = add_graphql(Config4),
+    {ok, Config5, Cache}.
+
 
 
 %% @private
@@ -226,8 +193,6 @@ config(Config, _Service) ->
 init(State) ->
     case ?CALL_NKROOT(object_db_init, [State]) of
         {ok, State2} ->
-            ok = load_file_stores(),
-            ok = load_mail_providers(),
             nkdomain_node:nkroot_started(),
             {ok, State2};
         {error, Error} ->
@@ -240,164 +205,6 @@ init(State) ->
 %% ===================================================================
 %% Internal - File Stores
 %% ===================================================================
-
-mail_syntax() ->
-    #{
-        id => binary,
-        class => binary,
-        from => binary,
-        config => map,
-        '__madatory' => [id, class, from, config]
-    }.
-
-
-%% @private
-parse_file_stores(DomCfg, Config) ->
-    Stores1 = maps:get(file_stores, DomCfg, []),
-    case do_parse_file_stores(Stores1, #{}) of
-        {ok, Stores2} ->
-            #{default_file_store:=FileStoreId1} = DomCfg,
-            FileStoreId2 = case maps:is_key(FileStoreId1, Stores2) of
-                true ->
-                    <<"/file.stores/", FileStoreId1/binary>>;
-                false ->
-                    FileStoreId1
-            end,
-            Config2 = Config#{
-                default_file_store => FileStoreId2,
-                nkdomain_file_stores => Stores2
-            },
-            {ok, Config2};
-        {error, Error} ->
-            {error, Error}
-    end.
-
-
-%% @private
-do_parse_file_stores([], Acc) ->
-    {ok, Acc};
-
-do_parse_file_stores([Data|Rest], Acc) ->
-    Id = maps:get(id, Data, <<"main">>),
-    case maps:is_key(Id, Acc) of
-        false ->
-            do_parse_file_stores(Rest, Acc#{Id=>maps:remove(id, Data)});
-        true ->
-            {error, {duplicated_id, Id}}
-    end.
-
-
-%% @private
-load_file_stores() ->
-    case ?CALL_NKROOT(config, []) of
-        #{nkdomain_file_stores:=Stores} ->
-            load_file_stores(maps:to_list(Stores));
-        _ ->
-            ok
-    end.
-
-
-%% @private
-load_file_stores([]) ->
-    ok;
-load_file_stores([{Id, Data}|Rest]) ->
-    Obj = #{
-        obj_name => Id,
-        type => ?DOMAIN_FILE_STORE,
-        srv_id => ?NKROOT,
-        domain_id => <<"root">>,
-        created_by => <<"admin">>,
-        ?DOMAIN_FILE_STORE => Data
-    },
-    case nkdomain_obj_make:create(Obj) of
-        {ok, #obj_id_ext{path=Path}, _} ->
-            lager:notice("NkDOMAIN: created file.store ~s", [Path]);
-        {error, object_already_exists} ->
-            lager:notice("NkDOMAIN: file.store ~s NOT created (already exists)", [Id]);
-        {error, Error} ->
-            lager:error("NkDOMAIN: file.store ~s NOT created: ~p", [Id, Error]),
-            error(object_creation)
-    end,
-    load_file_stores(Rest).
-
-
-
-
-
-%% ===================================================================
-%% Internal - Mail Providers
-%% ===================================================================
-
-
-%% @private
-parse_mail_providers(DomCfg, Config) ->
-    Providers1 = maps:get(mail_providers, DomCfg, []),
-    case do_parse_mail_providers(Providers1, #{}) of
-        {ok, Providers2} ->
-            MailProviderId1 = maps:get(default_mail_provider, DomCfg, <<>>),
-            MailProviderId2 = case maps:is_key(MailProviderId1, Providers2) of
-                true ->
-                    <<"/mail.providers/", MailProviderId1/binary>>;
-                false ->
-                    MailProviderId1
-            end,
-            Config2 = Config#{
-                default_mail_provider => MailProviderId2,
-                nkdomain_mail_providers => Providers2
-            },
-            {ok, Config2};
-        {error, Error} ->
-            {error, Error}
-    end.
-
-
-%% @private
-do_parse_mail_providers([], Acc) ->
-    {ok, Acc};
-
-do_parse_mail_providers([Data|Rest], Acc) ->
-    Id = maps:get(id, Data, <<"main">>),
-    case maps:is_key(Id, Acc) of
-        false ->
-            do_parse_mail_providers(Rest, Acc#{Id=>maps:remove(id, Data)});
-        true ->
-            {error, {duplicated_id, Id}}
-    end.
-
-
-%% @private
-load_mail_providers() ->
-    case ?CALL_NKROOT(config, []) of
-        #{nkdomain_mail_providers:=Providers} ->
-            load_mail_providers(maps:to_list(Providers));
-        _ ->
-            ok
-    end.
-
-
-%% @private
-load_mail_providers([]) ->
-    ok;
-load_mail_providers([{Id, Data}|Rest]) ->
-    Obj = #{
-        obj_name => Id,
-        type => ?DOMAIN_MAIL_PROVIDER,
-        domain_id => <<"root">>,
-        created_by => <<"admin">>,
-        srv_id => ?NKROOT,
-        ?DOMAIN_MAIL_PROVIDER => Data
-    },
-    case nkdomain_obj_make:create(Obj) of
-        {ok, #obj_id_ext{path=Path}, _} ->
-            lager:notice("NkDOMAIN: created mail.provider ~s", [Path]);
-        {error, object_already_exists} ->
-            lager:notice("NkDOMAIN: mail.provider ~s NOT created (already exists)", [Id]);
-        {error, Error} ->
-            lager:error("NkDOMAIN: mail.provider ~s NOT created: ~p", [Id, Error]),
-            error(object_creation)
-    end,
-    load_mail_providers(Rest).
-
 
 
 add_graphql(Config) ->

@@ -29,6 +29,33 @@
 
 
 %% ===================================================================
+%% 8 to 9
+%% ===================================================================
+
+
+import_8_to_9(Path) ->
+    Fun = fun(Obj) ->
+        case Obj of
+            #{<<"obj_id">>:=<<"root">>} ->
+                continue;
+            #{<<"obj_id">>:=<<"admin">>} ->
+                continue;
+            #{<<"path">>:=<<"/sipstorm_c4">>} ->
+                {upgrade, Obj};
+            #{<<"path">>:=<<"/sphera">>} ->
+                {upgrade, Obj};
+            _ ->
+                Obj2 = maps:remove(<<"srv_id">>, Obj),
+                {upgrade, Obj2}
+        end
+    end,
+    nkdomain_store_search:import_objects(<<"nkobjects_v8">>, Path, Fun).
+
+
+
+
+
+%% ===================================================================
 %% 7 to 8
 %% ===================================================================
 
@@ -79,19 +106,6 @@ import_7_to_8_user(User) ->
     User#{<<"push">>=>Push, <<"status">>:=Status}.
 
 
-import_8_to_9(Path) ->
-    Fun = fun(Obj) ->
-        case Obj of
-            #{<<"path">>:=<<"/sipstorm_c4">>} ->
-                {upgrade, Obj};
-            #{<<"path">>:=<<"/sphera">>} ->
-                {upgrade, Obj};
-            _ ->
-                Obj2 = maps:remove(<<"srv_id">>, Obj),
-                {upgrade, Obj2}
-        end
-    end,
-    nkdomain_store_search:import_objects(<<"nkobjects_v8">>, Path, Fun).
 
 
 
