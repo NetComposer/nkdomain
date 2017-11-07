@@ -83,7 +83,6 @@ plugin_listen(_Config, #{id:=_SrvId}) ->
 %% @private
 %% Called from nkdomain_nkroot_callbacks:plugin_syntax/0
 syntax() ->
-    BaseFile = nkfile_util:store_syntax(),
     #{
         start_nkroot => boolean,
         listen_ip => host,
@@ -115,6 +114,9 @@ syntax() ->
 
 %% @private
 %% Called from nkdomain_nkroot_callbacks:plugin_config/2
+%% If start_api_server is true, we will listen for http and ws APIs (/_api and /_api/ws)
+%% If start_rest is true, we listen on / and can user nkservice_rest_http (in nkdomain_nkroot_callbacks)
+%% If start_admin is true, we listen on /_admin for webserver and /admin/_ws for API
 config(Config, _Service) ->
     #{nkdomain:=Env} = Config,
     #{

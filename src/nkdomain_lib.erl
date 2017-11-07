@@ -201,7 +201,6 @@ load(SrvId, Id) ->
     end.
 
 
-
 %% @private
 check_object(SrvId, #{obj_id:=ObjId}=Obj) ->
     Res1 = case Obj of
@@ -234,7 +233,6 @@ check_object(SrvId, #{obj_id:=ObjId}=Obj) ->
                     ok
             end
     end.
-
 
 
 %% @doc Calls an object's function
