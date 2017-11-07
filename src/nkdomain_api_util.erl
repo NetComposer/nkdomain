@@ -21,7 +21,7 @@
 -module(nkdomain_api_util).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([session_login/1, token_login/1, check_token/2, check_raw_token/1]).
+-export([session_login/1, token_login/2, check_token/2, check_raw_token/1]).
 -export([search/1, get_id/3, get_id/4, add_id/3, add_meta/3, get_meta/2, remove_meta/2]).
 -export([head_type_fields/2]).
 -export_type([login_data/0, session_meta/0]).
@@ -102,54 +102,41 @@ session_login(#nkreq{srv_id=SrvId, data=Data, session_meta=SessMeta}=Req) ->
 
 
 %% @doc
--spec token_login(#nkreq{}) ->
+-spec token_login(nkdomain:id(), #nkreq{}) ->
     {ok, TokenId::nkdomain:obj_id(), TTLSecs::integer()} | {error, term()}.
 
-token_login(#nkreq{srv_id=SrvId, data=Data, session_meta=SessMeta}) ->
-    #{id:=User} = Data,
-    case get_domain(Data) of
-        {ok, DomainId} ->
-            case nkdomain_user:auth(User, Data) of
-                {ok, UserId, _UserDomainId} ->
-                    LoginMeta = maps:get(meta, Data, #{}),
-                    TokenData1 = maps:with([session_id, local, remote], SessMeta),
-                    TokenData2 = TokenData1#{login_meta => LoginMeta},
-                    TokenData3 = case Data of
-                        #{role:=Role, role_id:=RoleId} ->
-                            TokenData2#{role=>Role, role_id=>RoleId};
-                        _ ->
-                            TokenData2
-                    end,
-                    TokenOpts1 = maps:with([ttl], Data),
-                    TokenOpts2 = TokenOpts1#{srv_id=>SrvId},
-                    nkdomain_user:make_token(DomainId, UserId, TokenOpts2, TokenData3);
-                {error, Error} ->
-                    {error, Error}
-            end;
+token_login(User, #nkreq{srv_id=SrvId, data=Data, session_meta=SessMeta, user_state=UserState}) ->
+    case nkdomain_user:auth(User, Data) of
+        {ok, UserId, UserDomainId} ->
+            TokenData = #{
+                session_meta => SessMeta,
+                user_state => UserState
+            },
+            TokenOpts1 = maps:with([ttl], Data),
+            TokenOpts2 = TokenOpts1#{srv_id=>SrvId},
+            nkdomain_user:make_token(UserDomainId, UserId, TokenOpts2, TokenData);
         {error, Error} ->
             {error, Error}
     end.
 
 
 %% @doc
-check_token(Token, Req) ->
+check_token(Token, #nkreq{session_meta=NewSessMeta, user_state=NewState}=Req) ->
     case check_raw_token(Token) of
         {ok, UserId, DomainId, Data, SessId} ->
-            LoginMeta = maps:get(login_meta, Data, #{}),
-            Req2 = add_meta(login_meta, LoginMeta, Req),
+            TokenSessMeta = maps:get(session_meta, Data, #{}),
+            TokenState = maps:get(user_state, Data, #{}),
+            Req2 = Req#nkreq{
+                session_meta = maps:merge(TokenSessMeta, NewSessMeta),
+                user_state = maps:merge(TokenState, NewState)
+            },
             Req3 = add_id(?DOMAIN_DOMAIN, DomainId, Req2),
             Req4 = add_id(?DOMAIN_USER, UserId, Req3),
             Req5 = case SessId of
                 <<>> -> Req4;
                 _ -> add_id(?DOMAIN_SESSION, SessId, Req4)
             end,
-            Req6 = case Data of
-                #{role:=Role, role_id:=RoleId} ->
-                    add_meta(role, {Role, RoleId}, Req5);
-                _ ->
-                    Req5
-            end,
-            {ok, UserId, Req6};
+            {ok, UserId, Req5};
         {error, Error} ->
             {error, Error}
     end.
@@ -188,28 +175,28 @@ check_raw_token(Token) ->
     end.
 
 
-%% @private
-get_domain(#{domain_id:=Domain}) ->
-    load_domain(Domain);
+%%%% @private
+%%get_domain(#{domain_id:=Domain}) ->
+%%    load_domain(Domain);
+%%
+%%get_domain(#{id:=User}) ->
+%%    case nkdomain_lib:find(User) of
+%%        #obj_id_ext{path=Path} ->
+%%            {ok, Domain, _} = nkdomain_util:get_parts(?DOMAIN_USER, Path),
+%%            load_domain(Domain);
+%%        {error, Error} ->
+%%            {error, Error}
+%%    end.
 
-get_domain(#{id:=User}) ->
-    case nkdomain_lib:find(User) of
-        #obj_id_ext{path=Path} ->
-            {ok, Domain, _} = nkdomain_util:get_parts(?DOMAIN_USER, Path),
-            load_domain(Domain);
-        {error, Error} ->
-            {error, Error}
-    end.
 
-
-%% @private
-load_domain(Domain) ->
-    case nkdomain_lib:find(Domain) of
-        #obj_id_ext{type = ?DOMAIN_DOMAIN, obj_id=DomainId} ->
-            {ok, DomainId};
-        {error, _} ->
-            {error, {domain_unknown, Domain}}
-    end.
+%%%% @private
+%%load_domain(Domain) ->
+%%    case nkdomain_lib:find(Domain) of
+%%        #obj_id_ext{type = ?DOMAIN_DOMAIN, obj_id=DomainId} ->
+%%            {ok, DomainId};
+%%        {error, _} ->
+%%            {error, {domain_unknown, Domain}}
+%%    end.
 
 
 %% @doc
