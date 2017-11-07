@@ -42,7 +42,7 @@ make_schema() ->
     Queries = make_schema_queries(Modules),
     Mutations = make_schema_mutations(Modules),
     Bin = list_to_binary([Scalars, Enums, Interfaces, Types, Inputs, Queries, Mutations]),
-    io:format("\n~s\n\n", [Bin]),
+    file:write_file("schema.txt", Bin),
     Bin.
 
 

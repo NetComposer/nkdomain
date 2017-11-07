@@ -80,7 +80,7 @@
 
 %% @doc Generates an loads a new schema
 load_schema() ->
-    ok = graphql_schema:reset(),
+    ok = graphql_schema:reset(default),
     Mapping = mapping_rules(),
     Schema = nkdomain_graphql_schema:make_schema(),
     ok = graphql:load_schema(Mapping, Schema),

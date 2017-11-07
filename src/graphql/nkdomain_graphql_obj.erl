@@ -110,8 +110,8 @@ object_schema_enums() ->
             comment => "Object Types"
         },
         objectSortByField => #{
-            opts => [domainId, createdById, createdTime, enabled, expiresTime, name, objName, path,
-                     srvId, type]
+            opts => [domainId, createdById, createdTime, enabled, expiresTime,
+                     name, objName, path, srvId, type]
         },
         sortOrder => #{
             opts => [asc, desc]
@@ -138,7 +138,7 @@ object_schema_types() ->
     #{
         'SearchResult' => #{
             fields => #{
-                objects => {list_no_null, 'Object'},
+                objects => {list_no_null, 'Object', #{comment => "My Objects"}},
                 pageInfo => {no_null, 'PageInfo'},
                 totalCount => int,
                 cursor => 'Cursor'
@@ -173,6 +173,36 @@ object_schema_inputs() ->
             },
             comment => "A value to filter against, or a min and a max value"
         },
+        objectFilterId => #{
+            fields => #{
+                eq => string
+            }
+        },
+        objectFilterString => #{
+            fields => #{
+                eq => string,
+                gt => string,
+                gte => string,
+                lt => string,
+                lte => string,
+                prefix => string
+            }
+        },
+        objectFilterInt => #{
+            fields => #{
+                eq => int,
+                gt => int,
+                gte => int,
+                lt => int,
+                lte => int
+            }
+        },
+        objectFilterBoolean => #{
+            fields => #{
+                eq => boolean
+            }
+        },
+
         objectFilter => #{
             fields => object_fields_filter(),
             comment => "Filter values to sort on"
@@ -221,7 +251,7 @@ object_schema_queries() ->
                  }},
         allObjects => {'SearchResult', #{
                            params => #{
-                               filter => objectFilter,
+                               filter => {list, objectFilter, #{default => "[]"}},
                                sort => {list, objectSortBy},
                                from => {int, #{default => 0}},
                                size => {int, #{default => 10}}
@@ -422,28 +452,28 @@ object_fields() ->
 %% @private
 object_fields_filter() ->
     #{
-        aliases => {list, string, #{comment => "Object has an alias"}},
-        createdBy => {string, #{comment => "Objects created by this user"}},
-        createdTime => {'Range', #{comment => "Object creation time"}},
-        description => {string, #{comment => "Words in description"}},
-        destroyed => {boolean, #{comment => "Filter by destroyed objects"}},
-        destroyedTime => {'Range', #{comment => "Destruction time"}},
-        domain => {string, #{comment => "Filter objects belonging to this domain"}},
-        enabled => {boolean, #{comment => "Filter enabled or disabled objects"}},
-        expiresTime => {'Range', #{comment => "Time this object will expire"}},
-        has_icon => {boolean, #{comment => "Objects having an icon"}},
-        iconId => {string, #{comment => "Objects hanving this iconId"}},
-        name => {string, #{comment => "Words in name"}},
-        objId => {string, #{comment => "Object's ID"}},
-        objName => {string, #{comment => "Object's with this short name"}},
-        path => {string, #{comment => "Filter on this path"}},
-        srvId => {string, #{comment => "Object's service"}},
-        subtypes => {list, string, #{comment => "Object's subtypes"}},
-        tags => {list, string, #{comment => "Object's tags"}},
-        type => {string, #{comment => "Object's type"}},
-        updatedBy => {string, #{comment => "User that updated the object"}},
-        updatedTime => {'Range', #{comment => "Object updation time"}},
-        vsn => {string, #{comment => "Object's current version"}}
+        aliases => {objectFilterString, #{comment => "Object has an alias"}},
+        createdById => {objectFilterId, #{comment => "Objects created by this user"}},
+        createdTime => {objectFilterInt, #{comment => "Object creation time"}},
+        description => {objectFilterString, #{comment => "Words in description"}},
+        destroyed => {objectFilterBoolean, #{comment => "Filter by destroyed objects"}},
+        destroyedTime => {objectFilterInt, #{comment => "Destruction time"}},
+        domainId => {objectFilterId, #{comment => "Filter objects belonging to this domain"}},
+        enabled => {objectFilterBoolean, #{comment => "Filter enabled or disabled objects"}},
+        expiresTime => {objectFilterInt, #{comment => "Time this object will expire"}},
+        has_icon => {objectFilterBoolean, #{comment => "Objects having an icon"}},
+        iconId => {objectFilterId, #{comment => "Objects hanving this iconId"}},
+        name => {objectFilterString, #{comment => "Words in name"}},
+        objId => {objectFilterId, #{comment => "Object's ID"}},
+        objName => {objectFilterString, #{comment => "Object's with this short name"}},
+        path => {objectFilterString, #{comment => "Filter on this path"}},
+        srvId => {objectFilterId, #{comment => "Object's service"}},
+        subtypes => {list, objectFilterId, #{comment => "Object's subtypes"}},
+        tags => {list, objectFilterId, #{comment => "Object's tags"}},
+        type => {objectFilterId, #{comment => "Object's type"}},
+        updatedById => {objectFilterId, #{comment => "User that updated the object"}},
+        updatedTime => {objectFilterInt, #{comment => "Object updation time"}},
+        vsn => {objectFilterString, #{comment => "Object's current version"}}
     }.
 
 
@@ -463,21 +493,6 @@ camel_to_erl(<<"updatedById">>) -> updated_by;
 camel_to_erl(<<"updatedTime">>) -> updated_time;
 camel_to_erl(Erl) -> binary_to_existing_atom(Erl, utf8).
 
-
-%%camel_to_erl(created_by) -> createdById;
-%%camel_to_erl(created_time) -> createdTime;
-%%camel_to_erl(destroyed_code) -> destroyedCode;
-%%camel_to_erl(destroyedReason) -> destroyed_reason;
-%%camel_to_erl(destroyedTime) -> destroyed_time;
-%%camel_to_erl(domainId) -> domain_id;
-%%camel_to_erl(expiresTime) -> expires_time;
-%%camel_to_erl(iconId) -> icon_id;
-%%camel_to_erl(objId) -> obj_id;
-%%camel_to_erl(objName) -> obj_name;
-%%camel_to_erl(srvId) -> srv_id;
-%%camel_to_erl(updatedById) -> updated_by;
-%%camel_to_erl(updatedTime) -> updated_time;
-%%camel_to_erl(Erl) -> Erl.
 
 
 %% @private

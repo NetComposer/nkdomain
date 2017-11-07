@@ -149,7 +149,7 @@ object_schema_types() ->
                 userName => {string, #{comment=>"User family name"}},
                 userSurname => {string, #{comment=>"User surname"}},
                 email => string,
-                phone => string,
+                phoneTwo => string,
                 address => string,
                 status => {connection, 'UserStatus', #{comment => "User current statuses"}}
             },
@@ -169,9 +169,6 @@ object_schema_types() ->
 
 object_schema_queries() ->
     #{
-        allUsers => {list, 'User', #{comment=>"All Users", params=>#{fieldA=>int}}},
-        allUsers2 => {list, 'User', #{comment=>"All Users2", params=>#{fieldA=>boolean}}}
-
     }.
 
 

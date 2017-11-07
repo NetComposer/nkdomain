@@ -196,7 +196,9 @@ object_schema_types() ->
         'File' => #{
             fields => #{
                 contentType => string,
-                size => int
+                size => int,
+                storeId => {no_null, string},
+                password => string
             },
             is_object => true,
             comment => "A File"
