@@ -95,6 +95,7 @@
 -export([register_session/5, unregister_session/2, launch_session_notifications/2, set_status/4, get_status/3]).
 -export([add_token_notification/4, remove_token_notification/3]).
 -export([add_push_device/5, remove_push_device/2, send_push/3, remove_all_push_devices/1]).
+-export([sync_op/2, async_op/2]).
 
 -export_type([events/0, push_msg/0, push_device_id/0, push_device_data/0]).
 
@@ -107,6 +108,8 @@
 
 -define(INVALID_PASSWORD_TIME, 500).
 -define(USER_PASS_ITERS, 10).
+-define(USER_MOD, nkdomain_user_obj).
+
 
 %-define(MAX_EXPIRE, 60).    % Secs
 
@@ -197,7 +200,7 @@ create(Obj) ->
 
 auth(User, #{password:=Pass}) ->
     Pass2 = user_pass(Pass),
-    case nkdomain_obj:sync_op(User, {?MODULE, check_pass, Pass2}) of
+    case sync_op(User, {check_pass, Pass2}) of
         {ok, {true, UserId, DomainId}} ->
             {ok, UserId, DomainId};
         {ok, false} ->
@@ -208,7 +211,7 @@ auth(User, #{password:=Pass}) ->
     end;
 
 auth(User, #{sso_device_id:=DeviceId}) ->
-    case nkdomain_obj:sync_op(User, {?MODULE, check_device, DeviceId}) of
+    case sync_op(User, {check_device, DeviceId}) of
         {ok, {true, UserId, DomainId}} ->
             {ok, UserId, DomainId};
         {ok, false} ->
@@ -278,7 +281,7 @@ get_name(Id) ->
     {ok, map()} | {error, term()}.
 
 get_info(Id, Opts) ->
-    nkdomain_obj:sync_op(Id, {?MODULE, get_info, Opts}).
+    sync_op(Id, {get_info, Opts}).
 
 
 %% @doc
@@ -289,7 +292,7 @@ get_info(Id, Opts) ->
 register_session(Id, Domain, Type, SessId, Opts) ->
     case nkdomain_lib:find(Domain) of
         #obj_id_ext{type=?DOMAIN_DOMAIN, path=DomainPath} ->
-            nkdomain_obj:sync_op(Id, {?MODULE, register_session, DomainPath, Type, SessId, Opts, self()});
+            sync_op(Id, {register_session, DomainPath, Type, SessId, Opts, self()});
         {error, Error} ->
             {error, Error}
     end.
@@ -297,7 +300,7 @@ register_session(Id, Domain, Type, SessId, Opts) ->
 
 %% @doc
 unregister_session(Id, SessId) ->
-    nkdomain_obj:async_op(Id, {?MODULE, unregister_session, SessId}).
+    async_op(Id, {unregister_session, SessId}).
 
 
 %% @doc
@@ -305,7 +308,7 @@ unregister_session(Id, SessId) ->
     {ok, map()} | {error, term()}.
 
 get_sessions(UserId) ->
-    nkdomain_obj:sync_op(UserId, {?MODULE, get_sessions}).
+    sync_op(UserId, get_sessions).
 
 
 %% @doc
@@ -313,7 +316,7 @@ get_sessions(UserId) ->
     {ok, [{nkdomain:obj_id(), Meta::map(), pid()}]} | {error, term()}.
 
 get_sessions(UserId, Type) ->
-    nkdomain_obj:sync_op(UserId, {?MODULE, get_sessions, nklib_util:to_binary(Type)}).
+    sync_op(UserId, {get_sessions, nklib_util:to_binary(Type)}).
 
 
 %% @doc
@@ -323,7 +326,7 @@ get_sessions(UserId, Type) ->
 get_presence(Id, Type, Domain) ->
     case nkdomain_lib:find(Domain) of
         #obj_id_ext{path=DomainPath} ->
-            nkdomain_obj:sync_op(Id, {?MODULE, get_presence, Type, DomainPath});
+            sync_op(Id, {get_presence, Type, DomainPath});
         {error, Error} ->
             {error, Error}
     end.
@@ -334,7 +337,7 @@ get_presence(Id, Type, Domain) ->
     ok | {error, term()}.
 
 update_presence(Id, SessId, Presence) ->
-    nkdomain_obj:async_op(Id, {?MODULE, update_presence, SessId, Presence}).
+    async_op(Id, {update_presence, SessId, Presence}).
 
 
 %% @doc See above
@@ -348,7 +351,7 @@ set_status(Id, Srv, Domain, Status) when is_map(Status) ->
         SrvId ->
             case nkdomain_lib:find(Domain) of
                 #obj_id_ext{path=DomainPath} ->
-                    nkdomain_obj:async_op(Id, {?MODULE, set_status, SrvId, DomainPath, Status});
+                    async_op(Id, {set_status, SrvId, DomainPath, Status});
                 {error, Error} ->
                     {error, Error}
             end
@@ -366,7 +369,7 @@ get_status(Id, Srv, Domain) ->
         SrvId ->
             case nkdomain_lib:find(Domain) of
                 #obj_id_ext{path=DomainPath} ->
-                    nkdomain_obj:sync_op(Id, {?MODULE, get_status, SrvId, DomainPath});
+                    sync_op(Id, {get_status, SrvId, DomainPath});
                 {error, Error} ->
                     {error, Error}
             end
@@ -378,7 +381,7 @@ get_status(Id, Srv, Domain) ->
     {ok, UserId::nkdomain:obj_id(), nkdomain_token_obj:token_data()} | {error, term()}.
 
 add_token_notification(Id, Type, Opts, Token) ->
-    nkdomain_obj:sync_op(Id, {?MODULE, add_notification_op, Type, Opts, Token}).
+    sync_op(Id, {add_notification_op, Type, Opts, Token}).
 
 
 %% @doc
@@ -386,12 +389,12 @@ add_token_notification(Id, Type, Opts, Token) ->
     ok | {error, term()}.
 
 remove_token_notification(Id, TokenId, Reason) ->
-    nkdomain_obj:async_op(Id, {?MODULE, remove_notification, TokenId, Reason}).
+    async_op(Id, {remove_notification, TokenId, Reason}).
 
 
 %% @doc Force sends of all pending notifications for this session
 launch_session_notifications(Id, SessId) ->
-    nkdomain_obj:async_op(Id, {?MODULE, launch_session_notifications, SessId}).
+    async_op(Id, {launch_session_notifications, SessId}).
 
 
 %% @doc Registers a push device
@@ -405,7 +408,7 @@ add_push_device(Id, Domain, Srv, DeviceId, PushData) ->
         SrvId ->
             case nkdomain_lib:find(Domain) of
                 #obj_id_ext{path=DomainPath} ->
-                    nkdomain_obj:async_op(Id, {?MODULE, add_push_device, DomainPath, SrvId, DeviceId, PushData});
+                    async_op(Id, {add_push_device, DomainPath, SrvId, DeviceId, PushData});
                 {error, Error} ->
                     {error, Error}
             end
@@ -414,12 +417,12 @@ add_push_device(Id, Domain, Srv, DeviceId, PushData) ->
 
 %% @doc
 remove_push_device(Id, DeviceId) ->
-    nkdomain_obj:async_op(Id, {?MODULE, remove_push_device, DeviceId}).
+    async_op(Id, {remove_push_device, DeviceId}).
 
 
 %% @doc
 remove_all_push_devices(Id) ->
-    nkdomain_obj:async_op(Id, {?MODULE, remove_push_devices}).
+    async_op(Id, {remove_push_devices}).
 
 
 %% @doc
@@ -431,7 +434,7 @@ send_push(Id, Srv, Push) ->
         undefined ->
             ok;
         SrvId ->
-            nkdomain_obj:async_op(Id, {?MODULE, send_push, SrvId, Push})
+            async_op(Id, {send_push, SrvId, Push})
     end.
 
 
@@ -450,3 +453,12 @@ find_childs(User) ->
             {error, Error}
     end.
 
+
+%% @private
+sync_op(User, Op) ->
+    nkdomain_obj:sync_op(User, {nkdomain_user_obj, Op}).
+
+
+%% @private
+async_op(User, Op) ->
+    nkdomain_obj:async_op(User, {nkdomain_user_obj, Op}).

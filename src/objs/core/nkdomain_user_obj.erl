@@ -395,9 +395,9 @@ object_save(#obj_state{obj=Obj, session=Session}=State) ->
 object_event(Event, State) ->
     case Event of
         {child_loaded, ?DOMAIN_TOKEN, TokenId, Pid} ->
-            nkdomain_obj:async_op(self(), {?MODULE, loaded_token, TokenId, Pid});
+            nkdomain_user:async_op(self(), {loaded_token, TokenId, Pid});
         {child_unloaded, ?DOMAIN_TOKEN, TokenId} ->
-            nkdomain_obj:async_op(self(), {?MODULE, unloaded_token, TokenId});
+            nkdomain_user:async_op(self(), {unloaded_token, TokenId});
         _ ->
             ok
     end,
@@ -405,10 +405,68 @@ object_event(Event, State) ->
 
 
 % @private
-object_sync_op({?MODULE, check_pass, _Pass}, _From, #obj_state{is_enabled=false}=State) ->
+object_sync_op({?MODULE, Op}, From, State) ->
+    sync_op(Op, From, State);
+
+object_sync_op(_Op, _From, _State) ->
+    continue.
+
+
+%% @private
+object_async_op({?MODULE, Op}, State) ->
+    async_op(Op, State);
+
+object_async_op(_Op, _State) ->
+    continue.
+
+
+%% @private
+%%object_handle_info({?MODULE, expired_notify, NotifyId}, State) ->
+%%    lager:warning("NKLOG Expired ~p", [NotifyId]),
+%%    State2 = do_remove_notification(NotifyId, timeout, State),
+%%    {noreply, State2};
+
+object_handle_info({?MODULE, {launch_session_notifications, SessId}}, #obj_state{session=Session}=State) ->
+    #session{user_sessions=UserSessions} = Session,
+    State2 = case lists:keyfind(SessId, #user_session.id, UserSessions) of
+        #user_session{} = UserSession ->
+            do_launch_session_tokens(UserSession, State);
+        false ->
+            State
+    end,
+    {noreply, State2};
+
+object_handle_info(_Info, _State) ->
+    continue.
+
+
+%% @private
+object_link_down({usage, {?MODULE, session, SessId, _Pid}}, State) ->
+    case find_session(SessId, State) of
+        {ok, #user_session{domain_path=Path, type=Type}} ->
+            State2 = do_event({session_stopped, Type, SessId}, State),
+            ?DEBUG("registered session down: ~s", [SessId], State2),
+            State3 = rm_session(SessId, State2),
+            State4 = do_update_presence(Type, Path, State3),
+            {ok, State4};
+        not_found ->
+            {ok, State}
+    end;
+
+object_link_down(_Link, State) ->
+    {ok, State}.
+
+
+
+%% ===================================================================
+%% Internal
+%% ===================================================================
+
+% @private
+sync_op({check_pass, _Pass}, _From, #obj_state{is_enabled=false}=State) ->
     {reply, {error, object_is_disabled}, State};
 
-object_sync_op({?MODULE, check_pass, Pass}, _From, #obj_state{id=Id, obj=Obj}=State) ->
+sync_op({check_pass, Pass}, _From, #obj_state{id=Id, obj=Obj}=State) ->
     case Obj of
         #{domain_id:=DomainId, ?DOMAIN_USER:=#{password:=Pass}} ->
             #obj_id_ext{obj_id=UserId} = Id,
@@ -417,10 +475,10 @@ object_sync_op({?MODULE, check_pass, Pass}, _From, #obj_state{id=Id, obj=Obj}=St
             {reply, {ok, false}, State}
     end;
 
-object_sync_op({?MODULE, check_device, _Pass}, _From, #obj_state{is_enabled=false}=State) ->
+sync_op({check_device, _Pass}, _From, #obj_state{is_enabled=false}=State) ->
     {reply, {error, object_is_disabled}, State};
 
-object_sync_op({?MODULE, check_device, DeviceId}, _From, #obj_state{id=Id, obj=Obj}=State) ->
+sync_op({check_device, DeviceId}, _From, #obj_state{id=Id, obj=Obj}=State) ->
     #obj_id_ext{obj_id=UserId} = Id,
     case nkdomain_device_obj:find_sso(DeviceId) of
         {ok, UserId} ->
@@ -430,7 +488,7 @@ object_sync_op({?MODULE, check_device, DeviceId}, _From, #obj_state{id=Id, obj=O
             {reply, {ok, false}, State}
     end;
 
-object_sync_op({?MODULE, get_info, Opts}, _From, #obj_state{obj=Obj}=State) ->
+sync_op({get_info, Opts}, _From, #obj_state{obj=Obj}=State) ->
     Base = nkdomain_obj_util:get_obj_name(State),
     #{name:=UserName, surname:=UserSurName} = User = maps:get(?DOMAIN_USER, Obj),
     Data = Base#{
@@ -487,7 +545,7 @@ object_sync_op({?MODULE, get_info, Opts}, _From, #obj_state{obj=Obj}=State) ->
     end,
     {reply, {ok, Data3}, State};
 
-object_sync_op({?MODULE, register_session, DomainPath, Type, SessId, Opts, Pid}, _From, State) ->
+sync_op({register_session, DomainPath, Type, SessId, Opts, Pid}, _From, State) ->
     case find_session(SessId, State) of
         {ok, _} ->
             State2 = rm_session(SessId, State),
@@ -497,14 +555,14 @@ object_sync_op({?MODULE, register_session, DomainPath, Type, SessId, Opts, Pid},
             {reply, ok, State2}
     end;
 
-object_sync_op({?MODULE, get_sessions}, _From, #obj_state{session=Session}=State) ->
+sync_op({get_sessions}, _From, #obj_state{session=Session}=State) ->
     #session{user_sessions=UserSessions} = Session,
     Reply = lists:map(
         fun(UserSession) -> export_session(UserSession) end,
         UserSessions),
     {reply, {ok, Reply}, State};
 
-object_sync_op({?MODULE, get_sessions, Type}, _From, #obj_state{session=Session}=State) ->
+sync_op({get_sessions, Type}, _From, #obj_state{session=Session}=State) ->
     #session{user_sessions=UserSessions1} = Session,
     UserSessions2 = [US || #user_session{type=T}=US <- UserSessions1, T==Type],
     Reply = lists:map(
@@ -512,7 +570,7 @@ object_sync_op({?MODULE, get_sessions, Type}, _From, #obj_state{session=Session}
         UserSessions2),
     {reply, {ok, Reply}, State};
 
-object_sync_op({?MODULE, add_notification_op, SessType, Opts, Token}, _From, State) ->
+sync_op({add_notification_op, SessType, Opts, Token}, _From, State) ->
     #obj_state{id=#obj_id_ext{obj_id=UserId}} = State,
     UserData1 = maps:get(?DOMAIN_USER, Token, #{}),
     UserNotification1 = #{
@@ -528,20 +586,20 @@ object_sync_op({?MODULE, add_notification_op, SessType, Opts, Token}, _From, Sta
     UserData2 = UserData1#{<<"notification">> => UserNotification2},
     {reply, {ok, UserId, Token#{?DOMAIN_USER=>UserData2}}, State};
 
-object_sync_op({?MODULE, get_status, SrvId, DomainPath}, _From, State) ->
+sync_op({get_status, SrvId, DomainPath}, _From, State) ->
     Reply = do_get_status(SrvId, DomainPath, State),
     {reply, Reply, State};
 
-object_sync_op({?MODULE, get_presence, Type, DomainPath}, _From, State) ->
+sync_op({get_presence, Type, DomainPath}, _From, State) ->
     Reply = do_get_presence(Type, DomainPath, State),
     {reply, Reply, State};
 
-object_sync_op(_Op, _From, _State) ->
+sync_op(_Op, _From, _State) ->
     continue.
 
 
 %% @private
-object_async_op({?MODULE, unregister_session, SessId}, State) ->
+async_op({unregister_session, SessId}, State) ->
     case find_session(SessId, State) of
         {ok, #user_session{domain_path=Path, type=Type}} ->
             State2 = rm_session(SessId, State),
@@ -551,7 +609,7 @@ object_async_op({?MODULE, unregister_session, SessId}, State) ->
             {noreply, State}
     end;
 
-object_async_op({?MODULE, update_presence, SessId, Presence}, State) ->
+async_op({update_presence, SessId, Presence}, State) ->
     case find_session(SessId, State) of
         {ok, #user_session{domain_path=Path, type=Type}=UserSession} ->
             UserSession2 = UserSession#user_session{presence=Presence},
@@ -562,16 +620,16 @@ object_async_op({?MODULE, update_presence, SessId, Presence}, State) ->
             {noreply, State}
     end;
 
-object_async_op({?MODULE, launch_session_notifications, _SessId}=Msg, State) ->
+async_op({launch_session_notifications, _SessId}=Msg, State) ->
     % Reply to client first
-    erlang:send_after(1000, self(), Msg),
+    erlang:send_after(1000, self(), {?MODULE, Msg}),
     {noreply, State};
 
-object_async_op({?MODULE, set_status, SrvId, DomainPath, UserStatus}, State) ->
+async_op({set_status, SrvId, DomainPath, UserStatus}, State) ->
     State2 = do_set_status(SrvId, DomainPath, UserStatus, State),
     {noreply, State2};
 
-object_async_op({?MODULE, loaded_token, TokenId, Pid}, State) ->
+async_op({loaded_token, TokenId, Pid}, State) ->
     case nkdomain_token_obj:get_token_data(Pid) of
         {ok, #{domain_id:=DomainId, data:=Data}} ->
             case Data of
@@ -605,76 +663,35 @@ object_async_op({?MODULE, loaded_token, TokenId, Pid}, State) ->
             {noreply, State}
     end;
 
-object_async_op({?MODULE, unloaded_token, TokenId}, State) ->
+async_op({unloaded_token, TokenId}, State) ->
     ?LLOG(info, "unloaded notification token ~s", [TokenId], State),
     State2 = do_remove_notification(TokenId, timeout, State),
     {noreply, State2};
 
-object_async_op({?MODULE, remove_notification, TokenId, Reason}, State) ->
+async_op({remove_notification, TokenId, Reason}, State) ->
     State2 = do_remove_notification(TokenId, Reason, State),
     {noreply, State2};
 
-object_async_op({?MODULE, add_push_device, DomainPath, SrvId, DeviceId, PushData}, State) ->
+async_op({add_push_device, DomainPath, SrvId, DeviceId, PushData}, State) ->
     State2 = add_push(DomainPath, SrvId, DeviceId, PushData, State),
     {noreply, State2};
 
-object_async_op({?MODULE, send_push, SrvId, Push}, State) ->
+async_op({send_push, SrvId, Push}, State) ->
     do_send_push(SrvId, Push, State),
     {noreply, State};
 
-object_async_op({?MODULE, remove_push_device, DeviceId}, State) ->
+async_op({remove_push_device, DeviceId}, State) ->
     State2 = remove_push(DeviceId, State),
     {noreply, State2};
 
-object_async_op({?MODULE, remove_push_devices}, State) ->
+async_op({remove_push_devices}, State) ->
     State2 = do_remove_all_push_devices(State),
     {noreply, State2};
 
-object_async_op(_Op, _State) ->
+async_op(_Op, _State) ->
     continue.
 
 
-%% @private
-object_handle_info({?MODULE, expired_notify, NotifyId}, State) ->
-    lager:warning("NKLOG Expired ~p", [NotifyId]),
-    State2 = do_remove_notification(NotifyId, timeout, State),
-    {noreply, State2};
-
-object_handle_info({?MODULE, launch_session_notifications, SessId}, #obj_state{session=Session}=State) ->
-    #session{user_sessions=UserSessions} = Session,
-    State2 = case lists:keyfind(SessId, #user_session.id, UserSessions) of
-        #user_session{} = UserSession ->
-            do_launch_session_tokens(UserSession, State);
-        false ->
-            State
-    end,
-    {noreply, State2};
-
-object_handle_info(_Info, _State) ->
-    continue.
-
-
-%% @private
-object_link_down({usage, {?MODULE, session, SessId, _Pid}}, State) ->
-    case find_session(SessId, State) of
-        {ok, #user_session{domain_path=Path, type=Type}} ->
-            State2 = do_event({session_stopped, Type, SessId}, State),
-            ?DEBUG("registered session down: ~s", [SessId], State2),
-            State3 = rm_session(SessId, State2),
-            State4 = do_update_presence(Type, Path, State3),
-            {ok, State4};
-        not_found ->
-            {ok, State}
-    end;
-
-object_link_down(_Link, State) ->
-    {ok, State}.
-
-
-
-%% ===================================================================
-%% Internal
-%% ===================================================================
 
 %% @private
 fun_user_pass(Pass) ->
