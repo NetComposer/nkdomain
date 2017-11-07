@@ -384,7 +384,7 @@ object_db_delete_all_childs(_Path, _Spec) ->
 
 
 %% @doc Called to perform a cleanup of the store (expired objects, etc.)
-%% Should call object_check_active/3 for each 'active' object found
+%% Should call object_do_active/3 for each 'active' object found
 -spec object_db_clean() ->
     ok | {error, term()}.
 

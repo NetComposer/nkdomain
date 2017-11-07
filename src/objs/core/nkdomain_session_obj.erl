@@ -29,7 +29,7 @@
          object_api_syntax/2, object_api_cmd/2,
          object_init/1, object_stop/2, object_event/2]).
 -export([object_admin_info/0]).
--export([object_check_active/1]).
+-export([object_do_active/1]).
 
 -include("nkdomain.hrl").
 -include("nkdomain_debug.hrl").
@@ -194,7 +194,7 @@ object_event(_Event, State) ->
 %% ===================================================================
 
 %% @private
-object_check_active(_Id) ->
+object_do_active(_Id) ->
     delete_if_not_loaded.
 
 

@@ -26,7 +26,7 @@
 -export([find/1, load/1, unload/1, unload/2, get_obj/1, get_info/1, get_name/1, get_domain_id/1]).
 -export([enable/2, update/2, update_name/2, delete/1, send_info/3]).
 -export([search/1, search/2, search/3, delete_all_childs/1, delete_all_childs_type/2, search_agg_field/4]).
--export([clean/0, upgrade/0]).
+-export([clean/0]).
 -export_type([obj_id/0, obj_name/0, obj/0, path/0, id/0, type/0]).
 -export_type([timestamp/0]).
 
@@ -268,13 +268,3 @@ delete_all_childs_type(Id, Type) ->
 
 clean() ->
     ?CALL_NKROOT(object_db_clean, []).
-
-
-upgrade() ->
-    {ok, E} = nkdomain_store_es_util:get_opts(),
-    Fun = fun(Obj, Acc) ->
-        lager:notice("Obj: ~p", [Obj]),
-        Acc+1
-    end,
-    nkdomain_store_search:iterate_objects(E, Fun, 0).
-

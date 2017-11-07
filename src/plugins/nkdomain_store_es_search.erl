@@ -19,7 +19,7 @@
 %% -------------------------------------------------------------------
 
 %% @doc Elasticsearch plugin
--module(nkdomain_store_search).
+-module(nkdomain_store_es_search).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([find_obj/2]).
@@ -267,11 +267,11 @@ do_clean_active(EsOpts) ->
         fields => [<<"type">>]
     },
     Fun = fun(#{<<"obj_id">>:=ObjId, <<"type">>:=Type}, Acc) ->
-        case ?CALL_NKROOT(object_check_active, [Type, ObjId]) of
-            false ->
-                {ok, Acc+1};
-            true ->
-                {ok, Acc}
+        case ?CALL_NKROOT(object_do_active, [Type, ObjId]) of
+            ok ->
+                {ok, Acc};
+            _ ->
+                {ok, Acc+1}
         end
     end,
     case iterate(Spec, Fun, 0, EsOpts) of

@@ -23,7 +23,7 @@
 nkdomain_store_es_util).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([get_opts/0, get_index_opts/0, reload_index/0, clean/0, delete_index/0, read_obj/1]).
+-export([get_opts/0, get_index_opts/0, reload_index/0, delete_index/0, read_obj/1]).
 -export([base_mappings/0, unparse/1]).
 -export([db_init/2, normalize/1, normalize_multi/1]).
 
@@ -64,10 +64,6 @@ get_index_opts() ->
 reload_index() ->
     {ok, _} = ?CALL_NKROOT(object_db_init, [#{id=>?NKROOT}]),
     ok.
-
-
-clean() ->
-    ?CALL_NKROOT(object_db_clean, []).
 
 
 %% @doc CAUTION! CAUTION!

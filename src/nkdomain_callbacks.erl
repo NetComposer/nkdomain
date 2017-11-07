@@ -27,7 +27,7 @@
          admin_element_action/5, admin_get_data/3]).
 -export([object_admin_info/1]).
 -export([object_syntax/1, object_create/5, object_parse/2, object_update/1]).
--export([object_check_active/2, object_do_expired/1]).
+-export([object_do_active/2, object_do_expired/1]).
 -export([object_send_push/3]).
 -export([object_init/1, object_terminate/2, object_stop/2,
          object_event/2, object_reg_event/4, object_sync_op/3, object_async_op/2,
@@ -356,23 +356,22 @@ object_update(#{type:=Type}=Obj) ->
 
 
 %% @doc Called if an active object is detected on storage
-%% If 'true' is returned, the object is ok
-%% If 'false' is returned, it only means that the object has been processed
--spec object_check_active(type(), obj_id()) ->
-    boolean().
+%% If 'ok' is returned, the object is ok
+%% If 'processed' is returned, it only means that the object needed processing
+%% If 'removed' is returned, the object has been removed
+-spec object_do_active(type(), obj_id()) ->
+    true | false | removed.
 
-object_check_active(Type, ObjId) ->
-    case nkdomain_lib:type_apply(Type, object_check_active, [ObjId]) of
+object_do_active(Type, ObjId) ->
+    case nkdomain_lib:type_apply(Type, object_do_active, [ObjId]) of
         not_exported ->
-            true;
-        true ->
-            true;
-        false ->
-            false;
+            ok;
+        Res when Res==ok; Res==processed; Res==removed ->
+            Res;
         force_load ->
             case nkdomain_lib:find_loaded(ObjId) of
                 #obj_id_ext{} ->
-                    true;
+                    ok;
                 _ ->
                     spawn_link(
                         fun() ->
@@ -384,12 +383,12 @@ object_check_active(Type, ObjId) ->
                                                  [ObjId, Type, Error])
                             end
                         end),
-                    false
+                    processed
             end;
         delete_if_not_loaded ->
             case nkdomain_lib:find_loaded(ObjId) of
                 #obj_id_ext{} ->
-                    true;
+                    ok;
                 _ ->
                     spawn_link(
                         fun() ->
@@ -401,22 +400,27 @@ object_check_active(Type, ObjId) ->
                                           [ObjId, Type, Error])
                             end
                         end),
-                    false
+                    removed
             end
     end.
 
 
 %% @doc Called if an object is over its expired time
 -spec object_do_expired(obj_id()) ->
-    any().
+    removed.
 
 object_do_expired(ObjId) ->
-    lager:notice("NkDOMAIN: removing expired object ~s", [ObjId]),
-    ok.
-
-
-
-
+    spawn_link(
+        fun() ->
+            case ?CALL_NKROOT(object_db_delete, [ObjId]) of
+                {ok, _Meta} ->
+                    ?LLOG(notice, "removed expired object ~s", [ObjId]);
+                {error, Error} ->
+                    ?LLOG(warning, "could not remove expired object ~s: ~p",
+                          [ObjId, Error])
+            end
+        end),
+    removed.
 
 
 
@@ -755,7 +759,7 @@ object_db_delete_all_childs(Path, Spec) ->
 
 
 %% @doc Called to perform a cleanup of the store (expired objects, etc.)
-%% Should call object_check_active/3 for each 'active' object found
+%% Should call object_do_active/3 for each 'active' object found
 -spec object_db_clean() ->
     ok | {error, term()}.
 

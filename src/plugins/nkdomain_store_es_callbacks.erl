@@ -106,7 +106,7 @@ object_db_save(#{obj_id:=ObjId}=Obj) ->
 object_db_delete(ObjId) ->
     case nkdomain_store_es_util:get_opts() of
         {ok, EsOpts} ->
-            case nkdomain_store_search:search_childs(ObjId, #{size=>0}, EsOpts) of
+            case nkdomain_store_es_search:search_childs(ObjId, #{size=>0}, EsOpts) of
                 {ok, 0, []} ->
                     case nkdomain_lib:find_loaded(ObjId) of
                         #obj_id_ext{pid=Pid} ->
@@ -132,7 +132,7 @@ object_db_delete(ObjId) ->
 object_db_find_obj(Id) ->
     case nkdomain_store_es_util:get_opts() of
         {ok, EsOpts} ->
-            nkdomain_store_search:find_obj(Id, EsOpts);
+            nkdomain_store_es_search:find_obj(Id, EsOpts);
         _ ->
             continue
     end.
@@ -146,7 +146,7 @@ object_db_find_obj(Id) ->
 object_db_search(Spec) ->
     case nkdomain_store_es_util:get_opts() of
         {ok, EsOpts} ->
-            nkdomain_store_search:search(Spec, EsOpts);
+            nkdomain_store_es_search:search(Spec, EsOpts);
         _ ->
             continue
     end.
@@ -160,7 +160,7 @@ object_db_search(Spec) ->
 object_db_search_alias(Alias) ->
     case nkdomain_store_es_util:get_opts() of
         {ok, EsOpts} ->
-            nkdomain_store_search:search_obj_alias(Alias, EsOpts);
+            nkdomain_store_es_search:search_obj_alias(Alias, EsOpts);
         _ ->
             continue
     end.
@@ -173,7 +173,7 @@ object_db_search_alias(Alias) ->
 object_db_search_types(Id, Spec) ->
     case nkdomain_store_es_util:get_opts() of
         {ok, EsOpts} ->
-            nkdomain_store_search:search_types(Id, Spec, EsOpts);
+            nkdomain_store_es_search:search_types(Id, Spec, EsOpts);
         _ ->
             continue
     end.
@@ -186,7 +186,7 @@ object_db_search_types(Id, Spec) ->
 object_db_search_all_types(Id, Spec) ->
     case nkdomain_store_es_util:get_opts() of
         {ok, EsOpts} ->
-            nkdomain_store_search:search_all_types(Id, Spec, EsOpts);
+            nkdomain_store_es_search:search_all_types(Id, Spec, EsOpts);
         _ ->
             continue
     end.
@@ -200,7 +200,7 @@ object_db_search_all_types(Id, Spec) ->
 object_db_search_childs(Id, Spec) ->
     case nkdomain_store_es_util:get_opts() of
         {ok, EsOpts} ->
-            nkdomain_store_search:search_childs(Id, Spec, EsOpts);
+            nkdomain_store_es_search:search_childs(Id, Spec, EsOpts);
         _ ->
             continue
     end.
@@ -214,7 +214,7 @@ object_db_search_childs(Id, Spec) ->
 object_db_search_all_childs(Id, Spec) ->
     case nkdomain_store_es_util:get_opts() of
         {ok, EsOpts} ->
-            nkdomain_store_search:search_all_childs(Id, Spec, EsOpts);
+            nkdomain_store_es_search:search_all_childs(Id, Spec, EsOpts);
         _ ->
             continue
     end.
@@ -227,21 +227,21 @@ object_db_search_all_childs(Id, Spec) ->
 object_db_delete_all_childs(Id, Spec) ->
     case nkdomain_store_es_util:get_opts() of
         {ok, EsOpts} ->
-            nkdomain_store_search:delete_all_childs(Id, Spec, EsOpts);
+            nkdomain_store_es_search:delete_all_childs(Id, Spec, EsOpts);
         _ ->
             continue
     end.
 
 
 %% @doc Called to perform a cleanup of the store (expired objects, etc.)
-%% Should call object_check_active/3 for each 'active' object found
+%% Should call object_do_active/3 for each 'active' object found
 -spec object_db_clean() ->
     ok | {error, term()}.
 
 object_db_clean() ->
     case nkdomain_store_es_util:get_opts() of
         {ok, EsOpts} ->
-            nkdomain_store_search:clean(EsOpts);
+            nkdomain_store_es_search:clean(EsOpts);
         _ ->
             continue
     end.
@@ -255,7 +255,7 @@ object_db_clean() ->
 object_db_search_agg_field(Id, Field, Spec, SubChilds) ->
     case nkdomain_store_es_util:get_opts() of
         {ok, EsOpts} ->
-            nkdomain_store_search:search_agg_field(Id, Field, Spec, SubChilds, EsOpts);
+            nkdomain_store_es_search:search_agg_field(Id, Field, Spec, SubChilds, EsOpts);
         _ ->
             continue
     end.

@@ -30,6 +30,9 @@
 -include_lib("nkservice/include/nkservice.hrl").
 
 
+-define(LLOG(Type, Txt, Args), lager:Type("NkDOMAIN LIB "++Txt, Args)).
+
+
 %% ===================================================================
 %% Types
 %% ===================================================================
@@ -136,7 +139,12 @@ read(SrvId, Id) ->
                 {ok, Map, _Meta} ->
                     case ?CALL_SRV(SrvId, object_parse, [load, Map]) of
                         {ok, Obj, _Unknown} ->
-                            {ok, ObjIdExt, Obj};
+                            case check_object(SrvId, Obj) of
+                                ok ->
+                                    {ok, ObjIdExt, Obj};
+                                removed ->
+                                    {error, object_not_found}
+                            end;
                         {error, Error} ->
                             {error, Error}
                     end;
@@ -171,11 +179,16 @@ load(SrvId, Id) ->
                 {ok, Map, _Meta} ->
                     case ?CALL_SRV(SrvId, object_parse, [load, Map]) of
                         {ok, #{path:=Path}=Obj, _Unknown} ->
-                            case nkdomain_obj:start(Obj, loaded, #{}) of
-                                {ok, Pid} ->
-                                    ObjIdExt#obj_id_ext{pid=Pid};
-                                {error, Error} ->
-                                    {error, Error}
+                            case check_object(SrvId, Obj) of
+                                ok ->
+                                    case nkdomain_obj:start(Obj, loaded, #{}) of
+                                        {ok, Pid} ->
+                                            ObjIdExt#obj_id_ext{pid=Pid};
+                                        {error, Error} ->
+                                            {error, Error}
+                                    end;
+                                removed ->
+                                    {error, object_not_found}
                             end;
                         {error, Error} ->
                             {error, Error}
@@ -186,6 +199,42 @@ load(SrvId, Id) ->
         {error, Error} ->
             {error, Error}
     end.
+
+
+
+%% @private
+check_object(SrvId, #{obj_id:=ObjId}=Obj) ->
+    Res1 = case Obj of
+        #{expires_time:=Expires} ->
+            Now = nkdomain_util:timestamp(),
+            case Now > Expires of
+                true ->
+                    removed = ?CALL_SRV(SrvId, object_do_expired, [ObjId]);
+                false ->
+                    ok
+            end;
+        _ ->
+            ok
+    end,
+    case Res1 of
+        removed ->
+            removed;
+        ok ->
+            case Obj of
+                #{active:=true, type:=Type} ->
+                    case ?CALL_SRV(SrvId, object_do_active, [Type, ObjId]) of
+                        ok ->
+                            ok;
+                        processed ->
+                            ok;
+                        removed ->
+                            removed
+                    end;
+                _ ->
+                    ok
+            end
+    end.
+
 
 
 %% @doc Calls an object's function
@@ -204,8 +253,6 @@ type_apply(Type, Fun, Args) when is_binary(Type) ->
     Module = nkdomain_reg:get_type_module(Type),
     true = is_atom(Module),
     type_apply(Module, Fun, Args).
-
-
 
 
 

@@ -49,7 +49,7 @@ import_8_to_9(Path) ->
                 {upgrade, Obj2}
         end
     end,
-    nkdomain_store_search:import_objects(<<"nkobjects_v8">>, Path, Fun).
+    nkdomain_store_es_search:import_objects(<<"nkobjects_v8">>, Path, Fun).
 
 
 
@@ -74,7 +74,7 @@ import_7_to_8(Path) ->
                 {upgrade, Obj}
         end
     end,
-    nkdomain_store_search:import_objects(<<"nkobjects_v7">>, Path, Fun).
+    nkdomain_store_es_search:import_objects(<<"nkobjects_v7">>, Path, Fun).
 
 
 %% @private
