@@ -27,7 +27,7 @@
 -include("nkdomain.hrl").
 -include("nkdomain_debug.hrl").
 
--export([create/2, attach_session/3, get_registered_user/1, find_sso/1]).
+-export([create/2, attach_session/3, get_registered_user/1, find_device_uuid/2, find_sso/1]).
 -export([object_info/0, object_admin_info/0, object_schema_types/0,
          object_api_syntax/2, object_api_cmd/2, object_send_event/2]).
 -export([object_es_mapping/0, object_parse/2]).
@@ -48,6 +48,7 @@
 #{
     obj_id => binary(),
     created_by => nkdomain:obj_id(),
+    device_uuid => binary(),
     sso_device_ids => [binary()]
 }.
 
@@ -61,7 +62,7 @@
     {ok, DeviceIdId::nkdomain:obj_id(), pid()} | {error, term()}.
 
 create(Domain, Opts) ->
-    DeviceObj = maps:with([sso_device_ids], Opts),
+    DeviceObj = maps:with([device_id, sso_device_ids], Opts),
     Obj = #{
         type => ?DOMAIN_DEVICE,
         domain_id => Domain,
@@ -100,6 +101,24 @@ attach_session(DeviceId, User, SessId) ->
             {error, Error}
     end.
 
+
+%% @doc
+find_device_uuid(Domain, DeviceUUID) ->
+    Fields = [{<<"device_uuid">>, nklib_util:to_binary(DeviceUUID)}],
+    Filter = nkdomain_api_util:head_type_fields(?DOMAIN_DEVICE, Fields),
+    Spec = #{
+        filters => Filter,
+        fields => []
+    },
+    case nkdomain:search(Domain, ?DOMAIN_DEVICE, Spec) of
+        {ok, _, Data, _} ->
+            Data2 = [ObjId || #{<<"obj_id">>:=ObjId} <- Data],
+            {ok, Data2};
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
 %% @private
 -spec find_sso(nkdomain:id()) ->
     {ok, UserId::nkdomain:obj_id()} | {error, no_session|term()}.
@@ -121,14 +140,10 @@ get_registered_user(DeviceId) ->
 %% nkdomain_obj behaviour
 %% ===================================================================
 
--record(user_session, {
-    session_id :: nkdomain:obj_id(),
-    user_id :: nkdomain:user_id()
-}).
-
 
 -record(session, {
-   user_sessions2 :: undefined | [#user_session{}]
+    session_id :: nkdomain:obj_id(),
+    user_id :: nkdomain:user_id()
 }).
 
 
@@ -164,6 +179,7 @@ object_schema_types() ->
 %% @private
 object_es_mapping() ->
     #{
+        device_uuid => #{type => keyword},
         sso_device_ids => #{type => keyword}
     }.
 
@@ -171,6 +187,7 @@ object_es_mapping() ->
 %% @private
 object_parse(_Type, _Obj) ->
     #{
+        device_uuid => binary,
         sso_device_ids => {list, binary}
     }.
 
@@ -200,11 +217,10 @@ object_init(State) ->
 object_sync_op({?MODULE, attach_session, UserId, SessId, Pid}, _From, State) ->
     #obj_state{session=Session} = State,
     case Session of
-        #session{user_sessions2=undefined} ->
+        #session{session_id=undefined} ->
             % We monitor the session and are alive while the session is
             State2 = nkdomain_obj:links_add(usage, {session, SessId, Pid}, State),
-            UserSession = #user_session{session_id=SessId, user_id=UserId},
-            Session2 = Session#session{user_sessions2=UserSession},
+            Session2 = Session#session{session_id=SessId, user_id=UserId},
             State3 = State2#obj_state{session=Session2},
             ?LLOG(notice, "attached user ~s (~s)", [UserId, SessId], State3),
             {reply, ok, State3};
@@ -212,12 +228,12 @@ object_sync_op({?MODULE, attach_session, UserId, SessId, Pid}, _From, State) ->
             {reply, {error, existing_session}, State}
     end;
 
-object_sync_op({?MODULE, get_user}, _From, #obj_state{session=Session}=State) ->
+object_sync_op({?MODULE, get_registered_user}, _From, #obj_state{session=Session}=State) ->
     case Session of
-        #user_session{user_id=UserId} ->
-            {reply, {ok, UserId}, State};
-        undefined ->
-            {reply, {error, no_session}, State}
+        #session{session_id=undefined} ->
+            {reply, {error, no_session}, State};
+        #session{user_id=UserId} ->
+            {reply, {ok, UserId}, State}
     end;
 
 object_sync_op({?MODULE, find_sso}, _From, #obj_state{obj=Obj}=State) ->
@@ -227,7 +243,7 @@ object_sync_op({?MODULE, find_sso}, _From, #obj_state{obj=Obj}=State) ->
         {ok, User} ->
             {reply, {ok, User}, State};
         error ->
-            {reply, {error, no_sessionr}, State}
+            {reply, {error, no_session}, State}
     end;
 
 
@@ -239,8 +255,8 @@ object_sync_op(_Op, _From, _State) ->
 object_link_down({usage, {session, SessId, _Pid}}, State) ->
     #obj_state{session=Session} = State,
     case Session of
-        #session{user_sessions2=#user_session{session_id=SessId}} ->
-            Session2 = Session#session{user_sessions2=undefined},
+        #session{session_id=SessId} ->
+            Session2 = Session#session{session_id=undefined, user_id=undefined},
             State2 = State#obj_state{session=Session2},
             ?LLOG(notice, "detached sessions ~s", [SessId], State),
             {ok, State2};
