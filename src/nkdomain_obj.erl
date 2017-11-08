@@ -394,12 +394,12 @@ handle_call({nkdomain_sync_op, Op}, From, State) ->
         {reply, Reply, #obj_state{}=State2} ->
             reply(Reply, do_save_timer(do_refresh(State2)));
         {reply_and_save, Reply, #obj_state{}=State2} ->
-            {_, State3} = do_save(user_op, State2),
+            {_, State3} = do_save(user_op, State2#obj_state{is_dirty=true}),
             reply(Reply, do_refresh(State3));
         {noreply, #obj_state{}=State2} ->
             noreply(do_save_timer(do_refresh(State2)));
         {noreply_and_save, #obj_state{}=State2} ->
-            {_, State3} = do_save(user_op, State2),
+            {_, State3} = do_save(user_op, State2#obj_state{is_dirty=true}),
             noreply(do_refresh(State3));
         {stop, Reason, Reply, #obj_state{}=State2} ->
             gen_server:reply(From, Reply),
@@ -409,11 +409,14 @@ handle_call({nkdomain_sync_op, Op}, From, State) ->
         continue ->
             do_sync_op(Op, From, State);
         {continue, [Op2, _From2, #obj_state{}=State2]} ->
-            do_sync_op(Op2, From, State2)
+            do_sync_op(Op2, From, State2);
+        Other ->
+            ?LLOG(error, "invalid response for sync op ~p: ~p", [Op, Other], State),
+            error(invalid_sync_response)
     end;
 
 handle_call(Msg, From, State) ->
-    handle(object_handle_call, [Msg, From], State).
+    safe_handle(object_handle_call, [Msg, From], State).
 
 
 %% @private
@@ -429,14 +432,17 @@ handle_cast({nkdomain_async_op, Op}, State) ->
         {noreply, #obj_state{}=State2} ->
             noreply(do_save_timer(do_refresh(State2)));
         {noreply_and_save, #obj_state{}=State2} ->
-            {_, State3} = do_save(user_op, State2),
+            {_, State3} = do_save(user_op, State2#obj_state{is_dirty=true}),
             noreply(do_refresh(State3));
         {stop, Reason, #obj_state{}=State2} ->
             do_stop(Reason, State2);
         continue ->
             do_async_op(Op, State);
         {continue, [Op2, #obj_state{}=State2]} ->
-            do_async_op(Op2, State2)
+            do_async_op(Op2, State2);
+        Other ->
+            ?LLOG(error, "invalid response for async op ~p: ~p", [Op, Other], State),
+            error(invalid_async_response)
     end;
 
 handle_cast({nkdomain_parent_enabled, Enabled}, State) ->
@@ -457,7 +463,7 @@ handle_cast({nkdomain_obj_conflict_detected, WinnerPid}, State) ->
     handle(object_conflict_detected, [SrvId, Type, WinnerPid], State);
 
 handle_cast(Msg, State) ->
-    handle(object_handle_cast, [Msg], State).
+    safe_handle(object_handle_cast, [Msg], State).
 
 
 %% @private
@@ -510,17 +516,18 @@ handle_info(nkdomain_find_domain, #obj_state{domain_pid=undefined}=State) ->
 handle_info(nkdomain_find_domain, State) ->
     {noreply, State};
 
-%%handle_info({nkdist, Msg}, State) ->
-%%    do_nkdist(Msg, State);
-
 handle_info(nkdomain_obj_next_status_timer, State) ->
     State2 = State#obj_state{next_status_timer=undefined},
     {ok, State3} = handle(object_next_status_timer, [], State2),
     {noreply, State3};
 
-handle_info(nkdomain_obj_save_timer, State) ->
+handle_info(nkdomain_obj_save_timer, #obj_state{is_dirty=true}=State) ->
+    ?LLOG(info, "timer save", [], State),
     {_, State2} = do_save(timer, State),
     {noreply, State2};
+
+handle_info(nkdomain_obj_save_timer, State) ->
+    {noreply, State};
 
 handle_info({'DOWN', _Ref, process, Pid, _Reason}, #obj_state{parent_pid=Pid}=State) ->
     ?LLOG(notice, "parent has failed", [], State),
@@ -547,11 +554,11 @@ handle_info({'DOWN', Ref, process, _Pid, _Reason}=Info, State) ->
             {ok, State3} = handle(object_link_down, [{usage, Link}], State2),
             do_check_timeout(State3);
         not_found ->
-            handle(object_handle_info, [Info], State)
+            safe_handle(object_handle_info, [Info], State)
     end;
 
 handle_info(Msg, State) ->
-    handle(object_handle_info, [Msg], State).
+    safe_handle(object_handle_info, [Msg], State).
 
 
 %% @private
@@ -607,9 +614,6 @@ do_sync_op(get_state, _From, State) ->
 
 do_sync_op(get_childs, _From, #obj_state{childs=Childs}=State) ->
     reply({ok, Childs}, State);
-
-do_sync_op(get_time, _From, State) ->
-    reply({ok, get_timer(State)}, State);
 
 do_sync_op(get_domain_id, _From, #obj_state{domain_id=DomainId}=State) ->
     reply({ok, DomainId}, State);
@@ -1106,6 +1110,28 @@ handle(Fun, Args, #obj_state{callback_srv_id=SrvId}=State) ->
 
 
 %% @private
+safe_handle(Fun, Args, State) ->
+    Reply = handle(Fun, Args, State),
+    case Reply of
+        {reply, _, #obj_state{}} ->
+            Reply;
+        {reply, _, #obj_state{}, _} ->
+            Reply;
+        {noreply, #obj_state{}} ->
+            Reply;
+        {noreply, #obj_state{}, _} ->
+            Reply;
+        {stop, _, _, #obj_state{}} ->
+            Reply;
+        {stop, _, #obj_state{}} ->
+            Reply;
+        Other ->
+            ?LLOG(error, "invalid response for ~p(~p): ~p", [Fun, Args, Other], State),
+            error(invalid_handle_response)
+    end.
+
+
+%% @private
 send_childs(Msg, #obj_state{childs=Childs}=State) ->
     lists:foreach(
         fun({_ObjId, {Type, Pid}}) ->
@@ -1152,10 +1178,3 @@ links_iter(usage, Fun, Acc, #obj_state{usage_links=Links}) ->
 
 links_iter(event, Fun, Acc, #obj_state{event_links=Links}) ->
     nklib_links:fold(Fun, Acc, Links).
-
-
-%% @private
-get_timer(#obj_state{timer=Timer}) when is_reference(Timer) ->
-    erlang:read_timer(Timer);
-get_timer(_) ->
-    permanent.

@@ -236,7 +236,7 @@ table_filter({_Field, ?ADMIN_ALL_OBJS}, _Info, Acc) ->
     {ok, Acc};
 
 table_filter({<<"nkBaseDomain">>, Path}, _Info, Acc) ->
-    {ok, Acc#{<<"path">> => <<"childs_of:", Path/binary>>}};
+    {ok, Acc#{path => <<"childs_of:", Path/binary>>}};
 
 table_filter({<<"domain">>, Data}, _Info, Acc) ->
     {ok, Acc#{<<"domain_id">> => Data}};

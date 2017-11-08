@@ -90,6 +90,7 @@ error(token_invalid_ttl)                -> "Invalid token TTL";
 error(member_already_present)           -> "Member is already present";
 error(member_not_found)                 -> "Member not found";
 error(member_invalid)                   -> "Invalid member";
+error(multiple_ids)                     -> "Multiple matching ids";
 error(missing_auth_header)              -> "Missing authentication header";
 error({module_failed, Module})          -> {"Module '~s' failed", [Module]};
 error(object_access_not_allowed)        -> "Object access is not allowed";
@@ -122,9 +123,11 @@ error(session_already_present)          -> "Session is already present";
 error(session_not_found)                -> "Session not found";
 error(session_is_disabled)              -> "Session is disabled";
 error(session_type_unsupported)         -> "Session type not supported";
+error(sso_not_available)                -> "SSO is not available";
 error(status_not_defined)               -> "Status is not defined";
 error(store_id_invalid)                 -> "Invalid Store Id";
 error(store_id_missing)                 -> "Missing Store Id";
+error(token_down)                       -> "Token process is down";
 error(url_unknown)      		        -> "Unknown url";
 error(user_is_disabled) 		        -> "User is disabled";
 error(user_unknown)                     -> "Unknown user";
@@ -181,7 +184,7 @@ nkservice_rest_http(get, [<<"_file">>, FileId], Req) ->
 
 nkservice_rest_http(post, [<<"_file">>], Req) ->
     case nkdomain_file_obj:http_post(Req) of
-        {ok, ObjId, Path} ->
+        {ok, ObjId, Path, _Obj} ->
             Reply = #{obj_id=>ObjId, path=>Path},
             nkservice_rest_http:reply_json({ok, Reply}, Req);
         {error, Error} ->
@@ -915,15 +918,15 @@ api_server_reg_down(_Link, _Reason, _State) ->
     continue.
 
 %% @doc
-api_server_http_auth(#nkreq{cmd = <<"objects/user/get_token">>}=NkReq, _HttpReq) ->
-    {true, <<>>, NkReq};
+api_server_http_auth(#nkreq{cmd = <<"objects/user/get_token">>}=_NkReq, _HttpReq) ->
+    {true, <<>>};
 
 api_server_http_auth(#nkreq{}=Req, HttpReq) ->
     Headers = nkapi_server_http:get_headers(HttpReq),
     Token = nklib_util:get_value(<<"x-netcomposer-auth">>, Headers, <<>>),
     case nkdomain_api_util:check_token(Token, Req) of
-        {ok, UserId, UserMeta} ->
-            {true, UserId, Req#nkreq{user_state=UserMeta}};
+        {ok, UserId, Req2} ->
+            {true, UserId, Req2};
         {error, _Error} ->
             false
     end.

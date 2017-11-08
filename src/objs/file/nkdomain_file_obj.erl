@@ -53,12 +53,11 @@ http_post(Req) ->
     Domain = nklib_util:get_value(<<"domain">>, Qs, <<"/">>),
     StoreId = nklib_util:get_value(<<"store_id">>, Qs, <<>>),
     case http_post(Domain, StoreId, Name, Req) of
-        {ok, #obj_id_ext{obj_id=ObjId, path=Path}, _Unknown} ->
-            {ok, ObjId, Path};
+        {ok, #obj_id_ext{obj_id=ObjId, path=Path}, Obj} ->
+            {ok, ObjId, Path, Obj};
         {error, Error} ->
-            {erorr, Error}
+            {error, Error}
     end.
-
 
 
 %% @doc Creates a file over HTTP
@@ -66,7 +65,7 @@ http_post(Domain, StoreId, Name, Req) ->
     Headers = nkservice_rest_http:get_headers(Req),
     Token = nklib_util:get_value(<<"x-netcomposer-auth">>, Headers, <<>>),
     case nkdomain_api_util:check_raw_token(Token) of
-        {ok, UserId, _UserDomainId, _LoginMeta, _SessId} ->
+        {ok, UserId, _UserDomainId, _Data, _SessId} ->
             CT = nkservice_rest_http:get_ct(Req),
             File1 = #{
                 content_type => CT,
@@ -94,7 +93,12 @@ http_post(Domain, StoreId, Name, Req) ->
                                         name => Name,
                                         ?DOMAIN_FILE => maps:merge(File2, FileMeta)
                                     },
-                                    nkdomain_obj_make:create(Obj);
+                                    case nkdomain_obj_make:create(Obj) of
+                                        {ok, ExtId, _Unknown} ->
+                                            {ok, ExtId, Obj};
+                                        {error, Error} ->
+                                            {error, Error}
+                                    end;
                                 {error, Error} ->
                                     {error, Error}
                             end;
@@ -120,7 +124,7 @@ http_get(FileId, Req) ->
             Auth0
     end,
     case nkdomain_api_util:check_raw_token(Token) of
-        {ok, _UserId, _UserDomainId, _LoginMeta, _SessId} ->
+        {ok, _UserId, _UserDomainId, _Data, _SessId} ->
             case nkdomain:get_obj(FileId) of
                 {ok, #{obj_id:=FileObjId, ?DOMAIN_FILE:=File}} ->
                     CT = maps:get(content_type, File),

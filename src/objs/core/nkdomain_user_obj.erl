@@ -83,7 +83,7 @@
 %%      - we find all user sessions with that type that registered that domain path, and call notify_fun()
 %%      - if any is available, that's it
 %%      - if none is available, we may send a wakeup removal push
-%% - Any session can tell the user to "launch" again all notificationa, for this specific session
+%% - Any session can tell the user to "launch" again all notifications, for this specific session
 %%
 
 -module(nkdomain_user_obj).
@@ -195,17 +195,32 @@ create(Obj) ->
     {ok, UserId::nkdomain:obj_id(), DomainId::nkdomain:obj_id()} |
     {error, user_not_found|term()}.
 
-auth(UserId, #{password:=Pass}) ->
+auth(User, #{password:=Pass}) ->
     Pass2 = user_pass(Pass),
-    case nkdomain_obj:sync_op(UserId, {?MODULE, check_pass, Pass2}) of
-        {ok, {true, ObjId, DomainId}} ->
-            {ok, ObjId, DomainId};
+    case nkdomain_obj:sync_op(User, {?MODULE, check_pass, Pass2}) of
+        {ok, {true, UserId, DomainId}} ->
+            {ok, UserId, DomainId};
         {ok, false} ->
             timer:sleep(?INVALID_PASSWORD_TIME),
             {error, invalid_password};
         {error, Error} ->
             {error, Error}
-    end.
+    end;
+
+auth(User, #{sso_device_id:=DeviceId}) ->
+    case nkdomain_obj:sync_op(User, {?MODULE, check_device, DeviceId}) of
+        {ok, {true, UserId, DomainId}} ->
+            {ok, UserId, DomainId};
+        {ok, false} ->
+            timer:sleep(?INVALID_PASSWORD_TIME),
+            {error, invalid_password};
+        {error, Error} ->
+            {error, Error}
+    end;
+
+auth(_User, _Data) ->
+    {error, no_password}.
+
 
 %% @doc
 -spec make_token(nkdomain:id(), nkdomain:id(), #{ttl=>integer()}, map()) ->
@@ -651,8 +666,21 @@ object_sync_op({?MODULE, check_pass, _Pass}, _From, #obj_state{is_enabled=false}
 object_sync_op({?MODULE, check_pass, Pass}, _From, #obj_state{id=Id, obj=Obj}=State) ->
     case Obj of
         #{domain_id:=DomainId, ?DOMAIN_USER:=#{password:=Pass}} ->
-            #obj_id_ext{obj_id=ObjId} = Id,
-            {reply, {ok, {true, ObjId, DomainId}}, State};
+            #obj_id_ext{obj_id=UserId} = Id,
+            {reply, {ok, {true, UserId, DomainId}}, State};
+        _ ->
+            {reply, {ok, false}, State}
+    end;
+
+object_sync_op({?MODULE, check_device, _Pass}, _From, #obj_state{is_enabled=false}=State) ->
+    {reply, {error, object_is_disabled}, State};
+
+object_sync_op({?MODULE, check_device, DeviceId}, _From, #obj_state{id=Id, obj=Obj}=State) ->
+    #obj_id_ext{obj_id=UserId} = Id,
+    case nkdomain_device_obj:find_sso(DeviceId) of
+        {ok, UserId} ->
+            #{domain_id:=DomainId} = Obj,
+            {reply, {ok, {true, UserId, DomainId}}, State};
         _ ->
             {reply, {ok, false}, State}
     end;
@@ -803,7 +831,7 @@ object_async_op({?MODULE, loaded_token, TokenId, Pid}, State) ->
         {ok, #{domain_id:=DomainId, data:=Data}} ->
             case Data of
                 #{?DOMAIN_USER:=#{<<"notification">>:=Notification}} ->
-                    ?LLOG(notice, "detected notification token ~s", [TokenId], State),
+                    ?LLOG(info, "detected notification token ~s", [TokenId], State),
                     #{
                         <<"session_type">> := SessType
                     } = Notification,
@@ -833,7 +861,7 @@ object_async_op({?MODULE, loaded_token, TokenId, Pid}, State) ->
     end;
 
 object_async_op({?MODULE, unloaded_token, TokenId}, State) ->
-    ?LLOG(notice, "unloaded notification token ~s", [TokenId], State),
+    ?LLOG(info, "unloaded notification token ~s", [TokenId], State),
     State2 = do_remove_notification(TokenId, timeout, State),
     {noreply, State2};
 
