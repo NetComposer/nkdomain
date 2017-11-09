@@ -93,37 +93,37 @@ objs() ->
                 encryption => aes_cfb128
             }
         },
-        #{
-            path => "/file.stores/carlos.s3",
-            ?DOMAIN_FILE_STORE => #{
-                class => <<"s3">>,
-                config => #{
-                    bucket => <<"nkobjects">>,
-                    aws_id => <<"AKIAITCSLY34RVKXHP4Q">>,
-                    aws_secret => <<"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">>,
-                    bucket_access_method => <<"auto">>,
-                    bucket_after_host => false,
-                    port => 80,
-                    scheme => <<"https://">>
-                }
-            }
-        },
-        #{
-            path => "/file.stores/carlos.s3_secure",
-            ?DOMAIN_FILE_STORE => #{
-                class => <<"s3">>,
-                config => #{
-                    bucket => <<"nkobjects">>,
-                    aws_id => <<"AKIAITCSLY34RVKXHP4Q">>,
-                    aws_secret => <<"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">>,
-                    bucket_access_method => <<"auto">>,
-                    bucket_after_host => false,
-                    port => 80,
-                    scheme => <<"https://">>
-                },
-                encryption => aes_cfb128
-            }
-        },
+%%        #{
+%%            path => "/file.stores/carlos.s3",
+%%            ?DOMAIN_FILE_STORE => #{
+%%                class => <<"s3">>,
+%%                config => #{
+%%                    bucket => <<"nkobjects">>,
+%%                    aws_id => <<"AKIAITCSLY34RVKXHP4Q">>,
+%%                    aws_secret => <<"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">>,
+%%                    bucket_access_method => <<"auto">>,
+%%                    bucket_after_host => false,
+%%                    port => 80,
+%%                    scheme => <<"https://">>
+%%                }
+%%            }
+%%        },
+%%        #{
+%%            path => "/file.stores/carlos.s3_secure",
+%%            ?DOMAIN_FILE_STORE => #{
+%%                class => <<"s3">>,
+%%                config => #{
+%%                    bucket => <<"nkobjects">>,
+%%                    aws_id => <<"AKIAITCSLY34RVKXHP4Q">>,
+%%                    aws_secret => <<"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">>,
+%%                    bucket_access_method => <<"auto">>,
+%%                    bucket_after_host => false,
+%%                    port => 80,
+%%                    scheme => <<"https://">>
+%%                },
+%%                encryption => aes_cfb128
+%%            }
+%%        },
         #{
             path => "/mail.providers/direct",
             ?DOMAIN_MAIL_PROVIDER => #{
@@ -135,7 +135,7 @@ objs() ->
             }
         },
         #{
-            path => "/mail.providers/direct",
+            path => "/mail.providers/carlos.gmail",
             ?DOMAIN_MAIL_PROVIDER => #{
                 class => smtp,
                 config => #{
