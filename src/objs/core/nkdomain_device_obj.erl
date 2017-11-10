@@ -105,7 +105,7 @@ attach_session(DeviceId, User, SessId) ->
 %% @doc
 find_device_uuid(Domain, DeviceUUID) ->
     Fields = [{<<"device_uuid">>, nklib_util:to_binary(DeviceUUID)}],
-    Filter = nkdomain_api_util:head_type_fields(?DOMAIN_DEVICE, Fields),
+    Filter = nkdomain_api_util:head_type_filters(?DOMAIN_DEVICE, Fields),
     Spec = #{
         filters => Filter,
         fields => []
