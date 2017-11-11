@@ -77,8 +77,11 @@ execute(_Ctx, #page_info{has_next_page=Next}, <<"hasNextPage">>, _) ->
     {ok, Next};
 
 execute(_Ctx, #page_info{has_previous_page=Previous}, <<"hasPreviousPage">>, _) ->
-    {ok, Previous}.
+    {ok, Previous};
 
+execute(_Ctx, Data, Field, _Args) ->
+    lager:error("Invalid execute at ~p: ~p, ~p", [?MODULE, Data, Field]),
+    error(invalid_execute).
 
 
 
@@ -115,10 +118,6 @@ object_schema_enums() ->
         },
         sortOrder => #{
             opts => [asc, desc]
-        },
-        'RangeOperators' => #{
-            opts => [gt, gte, eq, lte, lt],
-            comment => "Range operators for queries"
         }
     }.
 
@@ -140,8 +139,7 @@ object_schema_types() ->
             fields => #{
                 objects => {list_no_null, 'Object', #{comment => "My Objects"}},
                 pageInfo => {no_null, 'PageInfo'},
-                totalCount => int,
-                cursor => 'Cursor'
+                totalCount => int
             }
         },
         'PageInfo' => #{
@@ -164,15 +162,15 @@ object_schema_types() ->
 
 object_schema_inputs() ->
     #{
-        'Range' => #{
-            fields => #{
-                value => int,
-                min => int,
-                max => int,
-                operator => 'RangeOperators'
-            },
-            comment => "A value to filter against, or a min and a max value"
-        },
+%%        'Range' => #{
+%%            fields => #{
+%%                value => int,
+%%                min => int,
+%%                max => int,
+%%                operator => 'RangeOperators'
+%%            },
+%%            comment => "A value to filter against, or a min and a max value"
+%%        },
         objectFilterId => #{
             fields => #{
                 eq => string
@@ -181,6 +179,7 @@ object_schema_inputs() ->
         objectFilterString => #{
             fields => #{
                 eq => string,
+                ne => string,
                 gt => string,
                 gte => string,
                 lt => string,
@@ -191,6 +190,7 @@ object_schema_inputs() ->
         objectFilterInt => #{
             fields => #{
                 eq => int,
+                ne => int,
                 gt => int,
                 gte => int,
                 lt => int,
@@ -202,7 +202,6 @@ object_schema_inputs() ->
                 eq => boolean
             }
         },
-
         objectFilter => #{
             fields => object_fields_filter(),
             comment => "Filter values to sort on"
@@ -292,50 +291,138 @@ object_query(<<"allObjects">>, Params, _Ctx) ->
     #{
         <<"from">> := From,
         <<"size">> := Size,
-        <<"filter">> := _Filter,
-        <<"sort">> := PSort
+        <<"filter">> := Filter
     } = Params,
+    F = add_filters(Filter, #{}),
+    lager:error("FF: ~p", [F]),
+
+
     lager:error("NKLOG Params ~p", [Params]),
-    Spec1 = #{
-        from => From,
-        size => Size
-    },
-    Spec2 = case PSort of
-        null ->
-            Spec1;
-        _ ->
+    Spec1 = #{},
+    Spec2 = case Params of
+        #{<<"sort">>:=Sort} ->
             Spec1#{sort=> [
                 <<Order/binary, $:, (to_bin(camel_to_erl(Field)))/binary>>
-                || #{<<"field">>:={enum, Field}, <<"sortOrder">>:={enum, Order}} <- PSort
-            ]}
-
+                || #{<<"field">>:={enum, Field}, <<"sortOrder">>:={enum, Order}} <- Sort
+            ]};
+        _ ->
+            Spec1
     end,
-    lager:error("Spec1: ~p", [Spec2]),
-
-
-    case nkdomain:search(Spec2#{fields=>[]}) of
-        {ok, Total, Data, _Meta} ->
-            Data2 = lists:foldl(
-                fun(#{<<"obj_id">>:=ObjId}, Acc) ->
-                    {ok, ObjIdExt, Obj} = nkdomain_lib:read(ObjId),
-                    % lager:error("NKLOG OBJ ~p", [Obj]),
-                    [{ObjIdExt, Obj}|Acc]
-                end,
-                [],
-                Data),
+    lager:error("Spec2: ~p", [Spec2]),
+    case read_objs(From, Size, Spec2) of
+        {ok, Total, Data2} ->
             Result = #search_results{
                 objects = Data2,
                 total_count = Total,
                 page_info = #page_info{
                     has_next_page = false,
                     has_previous_page = false
-                },
-                cursor = <<>>
+                }
             },
             {ok, Result};
         {error, Error} ->
             {error, Error}
     end.
+
+
+%% @private
+add_filters([], Acc) ->
+    Acc;
+
+add_filters([Filter|Rest], Acc) ->
+    Acc2 = do_add_filter(maps:to_list(Filter), Acc),
+    add_filters(Rest, Acc2).
+
+
+%% @private
+do_add_filter([], Acc) ->
+    Acc;
+
+do_add_filter([{_Field, null}|Rest], Acc) ->
+    do_add_filter(Rest, Acc);
+
+do_add_filter([{Field, Filter}|Rest], Acc) when Filter /= null ->
+    Acc2 = do_add_filter2(Field, maps:to_list(Filter), Acc),
+    do_add_filter(Rest, Acc2).
+
+
+%% @private
+do_add_filter2(_Field, [], Acc) ->
+    Acc;
+
+do_add_filter2(Field, [{_Op, null}|Rest], Acc) ->
+    do_add_filter2(Field, Rest, Acc);
+
+do_add_filter2(Field, [{<<"eq">>, Value}|Rest], Acc) ->
+    Acc2 = do_add_filter_op(Field, [Value], Acc),
+    do_add_filter2(Field, Rest, Acc2);
+
+do_add_filter2(Field, [{<<"gt">>, Value}|Rest], Acc) ->
+    Acc2 = do_add_filter_op(Field, [$>, Value], Acc),
+    do_add_filter2(Field, Rest, Acc2);
+
+do_add_filter2(Field, [{<<"ge">>, Value}|Rest], Acc) ->
+    Acc2 = do_add_filter_op(Field, [">=", Value], Acc),
+    do_add_filter2(Field, Rest, Acc2);
+
+do_add_filter2(Field, [{<<"lt">>, Value}|Rest], Acc) ->
+    Acc2 = do_add_filter_op(Field, [$<, Value], Acc),
+    do_add_filter2(Field, Rest, Acc2);
+
+do_add_filter2(Field, [{<<"le">>, Value}|Rest], Acc) ->
+    Acc2 = do_add_filter_op(Field, ["<=", Value], Acc),
+    do_add_filter2(Field, Rest, Acc2);
+
+do_add_filter2(Field, [{<<"ne">>, Value}|Rest], Acc) ->
+    Acc2 = do_add_filter_op(Field, ["!", Value], Acc),
+    do_add_filter2(Field, Rest, Acc2).
+
+
+%% @private
+do_add_filter_op(Field, Value, Acc) ->
+    Field2 = camel_to_erl(Field),
+    Acc#{Field2 => list_to_binary(Value)}.
+
+
+
+
+%% @private
+read_objs(From, Size, Spec) ->
+    do_read_objs(From, Size, Spec, []).
+
+
+%% @private
+do_read_objs(Start, Size, Spec, Acc) ->
+    case nkdomain:search(Spec#{from=>Start, size=>Size, fields=>[]}) of
+        {ok, Total, [], _Meta} ->
+            {ok, Total, lists:reverse(Acc)};
+        {ok, Total, Data, _Meta} ->
+            Acc2 = lists:foldl(
+                fun(#{<<"obj_id">>:=ObjId}, FunAcc) ->
+                    case nkdomain_lib:read(ObjId) of
+                        {ok, ObjIdExt, Obj} ->
+                            [{ObjIdExt, Obj}|FunAcc];
+                        {error, Error} ->
+                            lager:warning("could not read object ~s: ~p", [ObjId, Error]),
+                            FunAcc
+                    end
+                end,
+                Acc,
+                Data),
+            case length(Acc2) of
+                Size ->
+                    {ok, Total, lists:reverse(Acc2)};
+                Records when Records > Size ->
+                    {ok, Total, lists:sublist(lists:reverse(Acc2), Size)};
+                _ ->
+                    do_read_objs(Start+Size, Size, Spec, Acc2)
+            end;
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
+
 
 
 

@@ -26,6 +26,7 @@
 -export([admin_tree_categories/2, admin_tree_get_category/2, admin_event/3,
          admin_element_action/5, admin_get_data/3]).
 -export([object_admin_info/1]).
+-export([object_graphql_query/4, object_graphql_mutation/4]).
 -export([object_syntax/1, object_create/5, object_parse/2, object_update/1]).
 -export([object_do_active/2, object_do_expired/1]).
 -export([object_send_push/3]).
@@ -178,6 +179,28 @@ admin_element_action(ElementIdParts, Action, Value, Updates, Session) ->
 %% @doc
 admin_get_data(ElementIdParts, Spec, Session) ->
     nkdomain_admin_util:get_data(ElementIdParts, Spec, Session).
+
+
+%% ===================================================================
+%% Graphql related callbacks
+%% ===================================================================
+
+
+%% @doc Process an incoming graphql query
+-spec object_graphql_query(binary(), module(), map(), map()) ->
+    {ok, nkdomain_graphql:object()} | {error, term()} | continue().
+
+object_graphql_query(QueryName, Module, Params, Ctx) ->
+    Module:object_query(QueryName, Params, Ctx).
+
+
+%% @doc Process an incoming graphql mutation
+-spec object_graphql_mutation(binary(), module(), map(), map()) ->
+    {ok, nkdomain_graphql:object()} | {error, term()} | continue().
+
+object_graphql_mutation(QueryName, Module, Params, Ctx) ->
+    Module:object_mutation(QueryName, Params, Ctx).
+
 
 
 %% ===================================================================

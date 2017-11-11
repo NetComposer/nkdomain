@@ -23,6 +23,9 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -compile(export_all).
 
+-include("nkdomain.hrl").
+
+
 
 get1() ->
     Query = <<"
@@ -32,7 +35,7 @@ get1() ->
             }
         }
     ">>,
-    {ok, #{<<"node">> := #{<<"id">> := <<"root">>}}} = nkdomain_graphql:request(Query, #{}),
+    {ok, #{<<"node">> := #{<<"id">> := <<"root">>}}} = request(Query),
     ok.
 
 
@@ -50,7 +53,7 @@ introduce_user(Num) ->
                 objId
             }
         }"],
-    {ok, #{<<"introduceUser">>:=#{<<"objId">>:=ObjId}}} = nkdomain_graphql:request(Mutation, #{}),
+    {ok, #{<<"introduceUser">>:=#{<<"objId">>:=ObjId}}} = request(Mutation),
     ObjId.
 
 
@@ -58,13 +61,22 @@ all_objs() ->
     Query = <<"
         query {
             allObjects(
-                from: 2
-                size: 5
+                from: 0
+                size: 3
+                filter: [
+                    {
+                        aliases: {prefix: \"hi\"}
+                    }
+                ]
                 sort: [
                     {
-                        field: path
-                        sortOrder: asc
+                        field: domainId
+                        sortOrder: \"asc\"
+                    },
+                    {
+                        field: \"path\"
                     }
+
                 ]
             ) {
                 totalCount
@@ -80,6 +92,9 @@ all_objs() ->
             }
         }
     ">>,
-    nkdomain_graphql:request(Query, #{}).
+    request(Query).
 
 
+
+request(Query) ->
+    nkdomain_graphql:request(?NKROOT, Query, #{}).

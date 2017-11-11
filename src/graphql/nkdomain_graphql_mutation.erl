@@ -25,22 +25,25 @@
 -export([execute/4]).
 
 -include("nkdomain.hrl").
+-include_lib("nkservice/include/nkservice.hrl").
 
 
 %% @doc Called at the beginning of the mutation process
 execute(Ctx, _, MutationName, #{<<"input">>:=Params}) ->
-    #{nkmeta:=#{start:=Start}} = Ctx,
+    #{nkmeta:=#{start:=Start, srv_id:=SrvId}} = Ctx,
+    % Find who is in charge of this query
     case nklib_types:get_module(nkdomain_mutation, MutationName) of
         undefined ->
             {error, unknown_mutation};
         Module ->
-            Params2 = maps:filter(fun(_K, V) -> V /= null end, Params),
-            case Module:object_mutation(MutationName, Params2, Ctx) of
-                {ok, #obj_id_ext{}=ObjIdExt, Obj} ->
-                    lager:info("Mutation time: ~p", [nklib_util:l_timestamp()-Start]),
-                    {ok, {ObjIdExt, Obj}};
-                {error, Error} ->
-                    {error, Error}
+            Params2 = nkdomain_util:remove_nulls(Params),
+            try
+                Res = ?CALL_SRV(SrvId, object_graphql_mutation, [MutationName, Module, Params2, Ctx]),
+                lager:info("Mutation time: ~p", [nkdomain_util:timestamp()-Start]),
+                Res
+            catch
+                throw:Throw ->
+                    {error, Throw}
             end
     end.
 

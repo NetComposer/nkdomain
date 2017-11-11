@@ -241,7 +241,7 @@ object_mutation(<<"introduceUser">>, Params, _Ctx) ->
     case nkdomain_user:create(Obj2) of
         {ok, #obj_id_ext{pid=Pid}=ObjIdExt, _} ->
             {ok, Obj} = nkdomain:get_obj(Pid),
-            {ok, ObjIdExt, Obj};
+            {ok, {ObjIdExt, Obj}};
         {error, Error} ->
             {error, Error}
     end.
