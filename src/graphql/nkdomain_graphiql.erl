@@ -112,7 +112,6 @@ run_execute(ReqCtx) ->
         nkmeta => NkMeta
     },
     Response = graphql:execute(Ctx, AST), % <2>
-    lager:error("NKLOG RESP ~p", [Response]),
     ResponseBody = jsx:encode(fixup(Response)), % <3>
     {http, 200, [], ResponseBody}.
 

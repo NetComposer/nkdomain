@@ -116,6 +116,10 @@ object_schema_enums() ->
             opts => [domainId, createdById, createdTime, enabled, expiresTime,
                      name, objName, path, srvId, type]
         },
+        filterOp => #{
+            opts => ['AND', 'OR', 'NOT'],
+            comment => "Operation mode for a filter"
+        },
         sortOrder => #{
             opts => [asc, desc]
         }
@@ -162,44 +166,66 @@ object_schema_types() ->
 
 object_schema_inputs() ->
     #{
-%%        'Range' => #{
-%%            fields => #{
-%%                value => int,
-%%                min => int,
-%%                max => int,
-%%                operator => 'RangeOperators'
-%%            },
-%%            comment => "A value to filter against, or a min and a max value"
-%%        },
         objectFilterId => #{
             fields => #{
-                eq => string
+                eq => string,
+                values => {list, string},
+                exists => bool
             }
         },
-        objectFilterString => #{
+        objectFilterType => #{
+            fields => #{
+                eq => objectType,
+                values => {list, objectType}
+            }
+        },
+        objectFilterKeyword => #{
             fields => #{
                 eq => string,
-                ne => string,
+                values => {list, string},
                 gt => string,
                 gte => string,
                 lt => string,
                 lte => string,
-                prefix => string
+                prefix => string,
+                exists => bool
+            }
+        },
+        objectFilterText => #{
+            fields => #{
+                eq => string,
+                prefix => string,
+                wordsAndPrefix => string
+            }
+        },
+        objectFilterPath => #{
+            fields => #{
+                eq => string,
+                values => {list, string},
+                gt => string,
+                gte => string,
+                lt => string,
+                lte => string,
+                childsOf => string,
+                exists => bool
             }
         },
         objectFilterInt => #{
             fields => #{
+                values => {list, int},
                 eq => int,
                 ne => int,
                 gt => int,
                 gte => int,
                 lt => int,
-                lte => int
+                lte => int,
+                exists => bool
             }
         },
         objectFilterBoolean => #{
             fields => #{
-                eq => boolean
+                eq => boolean,
+                exists => bool
             }
         },
         objectFilter => #{
@@ -278,7 +304,7 @@ object_schema_mutations() ->
 %% Queries implementations
 %% ===================================================================
 
-
+%% @doc
 object_query(<<"node">>, #{<<"id">>:=Id}, _Ctx) ->
     case nkdomain_lib:read(Id) of
         {ok, #obj_id_ext{}=ObjIdExt, Obj} ->
@@ -287,143 +313,8 @@ object_query(<<"node">>, #{<<"id">>:=Id}, _Ctx) ->
             {error, Error}
     end;
 
-object_query(<<"allObjects">>, Params, _Ctx) ->
-    #{
-        <<"from">> := From,
-        <<"size">> := Size,
-        <<"filter">> := Filter
-    } = Params,
-    F = add_filters(Filter, #{}),
-    lager:error("FF: ~p", [F]),
-
-
-    lager:error("NKLOG Params ~p", [Params]),
-    Spec1 = #{},
-    Spec2 = case Params of
-        #{<<"sort">>:=Sort} ->
-            Spec1#{sort=> [
-                <<Order/binary, $:, (to_bin(camel_to_erl(Field)))/binary>>
-                || #{<<"field">>:={enum, Field}, <<"sortOrder">>:={enum, Order}} <- Sort
-            ]};
-        _ ->
-            Spec1
-    end,
-    lager:error("Spec2: ~p", [Spec2]),
-    case read_objs(From, Size, Spec2) of
-        {ok, Total, Data2} ->
-            Result = #search_results{
-                objects = Data2,
-                total_count = Total,
-                page_info = #page_info{
-                    has_next_page = false,
-                    has_previous_page = false
-                }
-            },
-            {ok, Result};
-        {error, Error} ->
-            {error, Error}
-    end.
-
-
-%% @private
-add_filters([], Acc) ->
-    Acc;
-
-add_filters([Filter|Rest], Acc) ->
-    Acc2 = do_add_filter(maps:to_list(Filter), Acc),
-    add_filters(Rest, Acc2).
-
-
-%% @private
-do_add_filter([], Acc) ->
-    Acc;
-
-do_add_filter([{_Field, null}|Rest], Acc) ->
-    do_add_filter(Rest, Acc);
-
-do_add_filter([{Field, Filter}|Rest], Acc) when Filter /= null ->
-    Acc2 = do_add_filter2(Field, maps:to_list(Filter), Acc),
-    do_add_filter(Rest, Acc2).
-
-
-%% @private
-do_add_filter2(_Field, [], Acc) ->
-    Acc;
-
-do_add_filter2(Field, [{_Op, null}|Rest], Acc) ->
-    do_add_filter2(Field, Rest, Acc);
-
-do_add_filter2(Field, [{<<"eq">>, Value}|Rest], Acc) ->
-    Acc2 = do_add_filter_op(Field, [Value], Acc),
-    do_add_filter2(Field, Rest, Acc2);
-
-do_add_filter2(Field, [{<<"gt">>, Value}|Rest], Acc) ->
-    Acc2 = do_add_filter_op(Field, [$>, Value], Acc),
-    do_add_filter2(Field, Rest, Acc2);
-
-do_add_filter2(Field, [{<<"ge">>, Value}|Rest], Acc) ->
-    Acc2 = do_add_filter_op(Field, [">=", Value], Acc),
-    do_add_filter2(Field, Rest, Acc2);
-
-do_add_filter2(Field, [{<<"lt">>, Value}|Rest], Acc) ->
-    Acc2 = do_add_filter_op(Field, [$<, Value], Acc),
-    do_add_filter2(Field, Rest, Acc2);
-
-do_add_filter2(Field, [{<<"le">>, Value}|Rest], Acc) ->
-    Acc2 = do_add_filter_op(Field, ["<=", Value], Acc),
-    do_add_filter2(Field, Rest, Acc2);
-
-do_add_filter2(Field, [{<<"ne">>, Value}|Rest], Acc) ->
-    Acc2 = do_add_filter_op(Field, ["!", Value], Acc),
-    do_add_filter2(Field, Rest, Acc2).
-
-
-%% @private
-do_add_filter_op(Field, Value, Acc) ->
-    Field2 = camel_to_erl(Field),
-    Acc#{Field2 => list_to_binary(Value)}.
-
-
-
-
-%% @private
-read_objs(From, Size, Spec) ->
-    do_read_objs(From, Size, Spec, []).
-
-
-%% @private
-do_read_objs(Start, Size, Spec, Acc) ->
-    case nkdomain:search(Spec#{from=>Start, size=>Size, fields=>[]}) of
-        {ok, Total, [], _Meta} ->
-            {ok, Total, lists:reverse(Acc)};
-        {ok, Total, Data, _Meta} ->
-            Acc2 = lists:foldl(
-                fun(#{<<"obj_id">>:=ObjId}, FunAcc) ->
-                    case nkdomain_lib:read(ObjId) of
-                        {ok, ObjIdExt, Obj} ->
-                            [{ObjIdExt, Obj}|FunAcc];
-                        {error, Error} ->
-                            lager:warning("could not read object ~s: ~p", [ObjId, Error]),
-                            FunAcc
-                    end
-                end,
-                Acc,
-                Data),
-            case length(Acc2) of
-                Size ->
-                    {ok, Total, lists:reverse(Acc2)};
-                Records when Records > Size ->
-                    {ok, Total, lists:sublist(lists:reverse(Acc2), Size)};
-                _ ->
-                    do_read_objs(Start+Size, Size, Spec, Acc2)
-            end;
-        {error, Error} ->
-            {error, Error}
-    end.
-
-
-
-
+object_query(<<"allObjects">>, Params, Ctx) ->
+    nkdomain_graphql_util:search(Params, Ctx).
 
 
 %% ===================================================================
@@ -438,7 +329,7 @@ do_read_objs(Start, Size, Spec, Acc) ->
 object_execute(Field, _ObjIdExt, Obj, _Args, _Ctx) ->
     case Field of
         <<"aliases">> -> {ok, maps:get(aliases, Obj, [])};
-        <<"createdBy">> -> get_obj(maps:get(created_by, Obj));
+        <<"createdBy">> -> nkdomain_graphql_util:get_obj(maps:get(created_by, Obj));
         <<"createdById">> -> {ok, maps:get(created_by, Obj)};
         <<"createdTime">> -> {ok, maps:get(created_time, Obj, null)};
         <<"description">> -> {ok, maps:get(description, Obj, null)};
@@ -446,11 +337,11 @@ object_execute(Field, _ObjIdExt, Obj, _Args, _Ctx) ->
         <<"destroyedCode">> -> {ok, maps:get(destroyed_code, Obj, null)};
         <<"destroyedReason">> -> {ok, maps:get(destroyed_reason, Obj, null)};
         <<"destroyedTime">> -> {ok, maps:get(destroyed_time, Obj, null)};
-        <<"domain">> -> get_obj(case maps:get(domain_id, Obj) of <<>> -> <<"root">>; O -> O end);
+        <<"domain">> -> nkdomain_graphql_util:get_obj(maps:get(domain_id, Obj));
         <<"domainId">> -> {ok, maps:get(domain_id, Obj)};
         <<"enabled">> -> {ok, maps:get(enabled, Obj, true)};
         <<"expiresTime">> -> {ok, maps:get(expires_time, Obj, null)};
-        <<"icon">> -> get_obj(maps:get(icon_id, Obj, null));
+        <<"icon">> -> nkdomain_graphql_util:get_obj(maps:get(icon_id, Obj, null));
         <<"iconId">> -> {ok, maps:get(icon_id, Obj, null)};
         <<"id">> -> {ok, maps:get(obj_id, Obj)};
         <<"name">> -> {ok, maps:get(name, Obj, null)};
@@ -460,8 +351,8 @@ object_execute(Field, _ObjIdExt, Obj, _Args, _Ctx) ->
         <<"srvId">> -> {ok, maps:get(srv_id, Obj, null)};
         <<"subtypes">> -> {ok, maps:get(subtype, Obj, [])};
         <<"tags">> -> {ok, maps:get(tags, Obj, [])};
-        <<"type">> -> get_type(Obj);
-        <<"updatedBy">> -> get_obj(maps:get(updated_by, Obj, null));
+        <<"type">> -> nkdomain_graphql_util:get_type(Obj);
+        <<"updatedBy">> -> nkdomain_graphql_util:get_obj(maps:get(updated_by, Obj, null));
         <<"updatedById">> -> {ok, maps:get(updated_by, Obj, null)};
         <<"updatedTime">> -> {ok, maps:get(updated_time, Obj, null)};
         <<"vsn">> -> {ok, maps:get(vsn, Obj, null)};
@@ -469,32 +360,6 @@ object_execute(Field, _ObjIdExt, Obj, _Args, _Ctx) ->
     end.
 
 
-%% @private
-get_obj(null) ->
-    {ok, null};
-get_obj(ObjId) ->
-    case nkdomain_lib:read(ObjId) of
-        {ok, #obj_id_ext{}=ObjIdExt, Obj} ->
-            {ok, {ObjIdExt, Obj}};
-        {error, Error} ->
-            {error, Error}
-    end.
-
-
-%% @private
-get_type(#{type:=Type}) ->
-    Module = nkdomain_reg:get_type_module(Type),
-    case Module:object_info() of
-        #{schema_type:=SchemaType} ->
-            {ok, nklib_util:to_binary(SchemaType)};
-        _ ->
-            lager:error("NKLOG Unknown type ~p", [Type]),
-            {error, unknown_type}
-    end;
-
-get_type(Obj) ->
-    lager:error("NKLOG Unknown type ~p", [Obj]),
-    {error, unknown_type}.
 
 
 %% ===================================================================
@@ -539,51 +404,34 @@ object_fields() ->
 %% @private
 object_fields_filter() ->
     #{
-        aliases => {objectFilterString, #{comment => "Object has an alias"}},
+        op => {filterOp, #{comment => "Operation Type"}},
+        aliases => {objectFilterKeyword, #{comment => "Object has an alias"}},
         createdById => {objectFilterId, #{comment => "Objects created by this user"}},
         createdTime => {objectFilterInt, #{comment => "Object creation time"}},
-        description => {objectFilterString, #{comment => "Words in description"}},
+        description => {objectFilterText, #{comment => "Words in description"}},
         destroyed => {objectFilterBoolean, #{comment => "Filter by destroyed objects"}},
         destroyedTime => {objectFilterInt, #{comment => "Destruction time"}},
         domainId => {objectFilterId, #{comment => "Filter objects belonging to this domain"}},
         enabled => {objectFilterBoolean, #{comment => "Filter enabled or disabled objects"}},
         expiresTime => {objectFilterInt, #{comment => "Time this object will expire"}},
-        has_icon => {objectFilterBoolean, #{comment => "Objects having an icon"}},
+        hasIcon => {objectFilterBoolean, #{comment => "Objects having an icon"}},
         iconId => {objectFilterId, #{comment => "Objects hanving this iconId"}},
-        name => {objectFilterString, #{comment => "Words in name"}},
+        name => {objectFilterText, #{comment => "Words in name"}},
         objId => {objectFilterId, #{comment => "Object's ID"}},
-        objName => {objectFilterString, #{comment => "Object's with this short name"}},
-        path => {objectFilterString, #{comment => "Filter on this path"}},
+        objName => {objectFilterKeyword, #{comment => "Object's with this short name"}},
+        path => {objectFilterPath, #{comment => "Filter on this path"}},
         srvId => {objectFilterId, #{comment => "Object's service"}},
-        subtypes => {list, objectFilterId, #{comment => "Object's subtypes"}},
+        subTypes => {list, objectFilterId, #{comment => "Object's subtypes"}},
         tags => {list, objectFilterId, #{comment => "Object's tags"}},
-        type => {objectFilterId, #{comment => "Object's type"}},
+        type => {objectFilterType, #{comment => "Object's type"}},
         updatedById => {objectFilterId, #{comment => "User that updated the object"}},
         updatedTime => {objectFilterInt, #{comment => "Object updation time"}},
-        vsn => {objectFilterString, #{comment => "Object's current version"}}
+        vsn => {objectFilterKeyword, #{comment => "Object's current version"}}
     }.
 
 
-%% @private
-camel_to_erl(<<"createdById">>) -> created_by;
-camel_to_erl(<<"createdTime">>) -> created_time;
-camel_to_erl(<<"destroyedCode">>) -> destroyed_code;
-camel_to_erl(<<"destroyedReason">>) -> destroyed_reason;
-camel_to_erl(<<"destroyedTime">>) -> destroyed_time;
-camel_to_erl(<<"domainId">>) -> domain_id;
-camel_to_erl(<<"expiresTime">>) -> expires_time;
-camel_to_erl(<<"iconId">>) -> icon_id;
-camel_to_erl(<<"objId">>) -> obj_id;
-camel_to_erl(<<"objName">>) -> obj_name;
-camel_to_erl(<<"srvId">>) -> srv_id;
-camel_to_erl(<<"updatedById">>) -> updated_by;
-camel_to_erl(<<"updatedTime">>) -> updated_time;
-camel_to_erl(Erl) -> binary_to_existing_atom(Erl, utf8).
-
-
-
-%% @private
-to_bin(T) when is_binary(T)-> T;
-to_bin(T) -> nklib_util:to_binary(T).
+%%%% @private
+%%to_bin(T) when is_binary(T)-> T;
+%%to_bin(T) -> nklib_util:to_binary(T).
 
 

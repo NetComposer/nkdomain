@@ -64,9 +64,22 @@ all_objs() ->
                 from: 0
                 size: 3
                 filter: [
+                    #{
+                    #    type: {values: [User, Domain]},
+                    #    name: {prefix: \"Last\"}
+                    #},
                     {
-                        aliases: {prefix: \"hi\"}
+                        name: {wordsAndPrefix: \"carlos las\"}
                     }
+
+                    #{
+                    #    op: AND
+                    #    path: {childsOf: \"/sphera\"}
+                    #}
+                    #{
+                    #    op: OR
+                    #    objId: {eq: \"root\"}
+                    #}
                 ]
                 sort: [
                     {

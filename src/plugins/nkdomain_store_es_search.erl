@@ -423,7 +423,7 @@ do_search(Spec, EsOpts) ->
             end;
         {error, Error} ->
             ?LLOG(warning, "query error ~p: ~p", [Spec, Error]),
-            {error, internal_error}
+            {error, Error}
     end.
 
 
