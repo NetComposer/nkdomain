@@ -207,6 +207,16 @@ add_filter_text(Field, <<"wordsAndPrefix">>, Value, Acc) ->
         Words ->
             [Last|Full] = lists:reverse(Words),
             [{Field, prefix, Last}, {Field, values, Full} | Acc]
+    end;
+
+add_filter_text(Field, <<"fuzzy">>, Value, Acc) ->
+    case nkdomain_store_es_util:normalize_multi(Value) of
+        [] ->
+            Acc;
+        [Word] ->
+            [{Field, fuzzy, Word}|Acc];
+        Words ->
+            [{Field, fuzzy, W} || W <-Words] ++ Acc
     end.
 
 

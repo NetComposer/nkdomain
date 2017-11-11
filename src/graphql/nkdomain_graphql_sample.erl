@@ -64,14 +64,10 @@ all_objs() ->
                 from: 0
                 size: 3
                 filter: [
-                    #{
-                    #    type: {values: [User, Domain]},
-                    #    name: {prefix: \"Last\"}
-                    #},
                     {
-                        name: {wordsAndPrefix: \"carlos las\"}
+                        #type: {values: [User, Domain]},
+                        name: {fuzzy: \"carlos last\"}
                     }
-
                     #{
                     #    op: AND
                     #    path: {childsOf: \"/sphera\"}

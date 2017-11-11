@@ -195,7 +195,8 @@ object_schema_inputs() ->
             fields => #{
                 eq => string,
                 prefix => string,
-                wordsAndPrefix => string
+                wordsAndPrefix => string,
+                fuzzy => string
             }
         },
         objectFilterPath => #{
