@@ -22,7 +22,7 @@
 -module(nkdomain_graphql_util).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([search/2, get_obj/1, get_type/1]).
+-export([object_execute/4, search/2, get_obj/1, get_type/1]).
 
 -include("nkdomain.hrl").
 -include("nkdomain_graphql.hrl").
@@ -31,6 +31,67 @@
 %% Public
 %% ===================================================================
 
+
+%% @doc GraphQL execute
+-spec object_execute(binary(), nkdomain_graphql:object(), map(), map()) ->
+    {ok, term()} | null | {error, term()} | obj_type_field.
+
+object_execute(Field, {#obj_id_ext{}, Obj}, _Args, _Ctx) ->
+    case Field of
+        <<"aliases">> -> {ok, maps:get(aliases, Obj, [])};
+        <<"createdBy">> -> nkdomain_graphql_util:get_obj(maps:get(created_by, Obj));
+        <<"createdById">> -> {ok, maps:get(created_by, Obj)};
+        <<"createdTime">> -> {ok, maps:get(created_time, Obj, null)};
+        <<"description">> -> {ok, maps:get(description, Obj, null)};
+        <<"destroyed">> -> {ok, maps:get(destroyed, Obj, false)};
+        <<"destroyedCode">> -> {ok, maps:get(destroyed_code, Obj, null)};
+        <<"destroyedReason">> -> {ok, maps:get(destroyed_reason, Obj, null)};
+        <<"destroyedTime">> -> {ok, maps:get(destroyed_time, Obj, null)};
+        <<"domain">> -> nkdomain_graphql_util:get_obj(maps:get(domain_id, Obj));
+        <<"domainId">> -> {ok, maps:get(domain_id, Obj)};
+        <<"enabled">> -> {ok, maps:get(enabled, Obj, true)};
+        <<"expiresTime">> -> {ok, maps:get(expires_time, Obj, null)};
+        <<"icon">> -> nkdomain_graphql_util:get_obj(maps:get(icon_id, Obj, null));
+        <<"iconId">> -> {ok, maps:get(icon_id, Obj, null)};
+        <<"id">> -> {ok, maps:get(obj_id, Obj)};
+        <<"name">> -> {ok, maps:get(name, Obj, null)};
+        <<"objId">> -> {ok, maps:get(obj_id, Obj)};
+        <<"objName">> -> {ok, maps:get(obj_name, Obj)};
+        <<"path">> -> {ok, maps:get(path, Obj)};
+        <<"srvId">> -> {ok, maps:get(srv_id, Obj, null)};
+        <<"subtypes">> -> {ok, maps:get(subtype, Obj, [])};
+        <<"tags">> -> {ok, maps:get(tags, Obj, [])};
+        <<"type">> -> nkdomain_graphql_util:get_type(Obj);
+        <<"updatedBy">> -> nkdomain_graphql_util:get_obj(maps:get(updated_by, Obj, null));
+        <<"updatedById">> -> {ok, maps:get(updated_by, Obj, null)};
+        <<"updatedTime">> -> {ok, maps:get(updated_time, Obj, null)};
+        <<"vsn">> -> {ok, maps:get(vsn, Obj, null)};
+        _ -> unknown_obj
+    end;
+
+object_execute(Field, #search_results{}=SR, _, _) ->
+    case Field of
+        <<"objects">> ->
+            {ok, [{ok, Obj} || Obj <- SR#search_results.objects]};
+        <<"totalCount">> ->
+            {ok, SR#search_results.total_count};
+        <<"pageInfo">> ->
+            {ok, SR#search_results.page_info};
+        <<"cursor">> ->
+            {ok, SR#search_results.cursor}
+    end;
+
+object_execute(Field, #page_info{}=PI, _, _) ->
+    case Field of
+        <<"hasNextPage">> ->
+            {ok, PI#page_info.has_next_page};
+        <<"hasPreviousPage">> ->
+            {ok, PI#page_info.has_previous_page}
+    end;
+
+object_execute(_Field, _Obj, _Args, _Ctx) ->
+    lager:error("Invalid execute at ~p: ~p, ~p", [?MODULE, _Field, _Obj]),
+    error(invalid_execute).
 
 
 % Search operations

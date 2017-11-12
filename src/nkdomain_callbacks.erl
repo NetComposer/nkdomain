@@ -26,7 +26,7 @@
 -export([admin_tree_categories/2, admin_tree_get_category/2, admin_event/3,
          admin_element_action/5, admin_get_data/3]).
 -export([object_admin_info/1]).
--export([object_graphql_query/4, object_graphql_mutation/4]).
+-export([object_graphql_query/4, object_graphql_mutation/4, object_graphql_execute/4]).
 -export([object_syntax/1, object_create/5, object_parse/2, object_update/1]).
 -export([object_do_active/2, object_do_expired/1]).
 -export([object_send_push/3]).
@@ -200,6 +200,35 @@ object_graphql_query(QueryName, Module, Params, Ctx) ->
 
 object_graphql_mutation(QueryName, Module, Params, Ctx) ->
     Module:object_mutation(QueryName, Params, Ctx).
+
+
+%% @doc Process an execute on a field
+-spec object_graphql_execute(binary(), module(), map(), map()) ->
+    {ok, term()} | null | {error, term()} | continue().
+
+object_graphql_execute(Field, SchObj, Args, Ctx) ->
+    case nkdomain_graphql_util:object_execute(Field, SchObj, Args, Ctx) of
+        {ok, Res} ->
+            {ok, Res};
+        obj_type_field ->
+            {#obj_id_ext{type=Type}=ObjIdExt, Obj} = SchObj,
+            case nkdomain_reg:get_type_module(Type) of
+                undefined ->
+                    null;
+                Module ->
+                    case erlang:function_exported(Module, object_execute, 5) of
+                        true ->
+                            Module:object_execute(Field, ObjIdExt, Obj, Args, Ctx);
+                        false ->
+                            null
+                    end
+            end;
+        {error, Error} ->
+            lager:warning("NKLOG Obj execute error (~p, ~p): ~p", [Field, SchObj, Error]),
+            {error, Error}
+    end.
+
+
 
 
 

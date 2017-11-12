@@ -30,6 +30,7 @@
 
 -include("nkdomain.hrl").
 -include("nkdomain_graphql.hrl").
+-include_lib("nkservice/include/nkservice.hrl").
 
 %% ===================================================================
 %% GraphQL Object callback
@@ -37,53 +38,11 @@
 
 
 %% @doc Called from GraphQL to extract fields on any type
-execute(Ctx, {#obj_id_ext{obj_id=ObjId, type=Type}=ObjIdExt, Obj}, Field, Args) ->
-    case object_execute(Field, ObjIdExt, Obj, Args, Ctx) of
-        {ok, Res} ->
-            {ok, Res};
-        unknown ->
-            case nkdomain_reg:get_type_module(Type) of
-                undefined ->
-                    {error, unknown_type};
-                Module ->
-                    case erlang:function_exported(Module, object_execute, 5) of
-                        true ->
-                            Res = Module:object_execute(Field, ObjIdExt, Obj, Args, Ctx),
-                            lager:notice("NKLOG RES: ~p", [Res]),
-                            Res;
-                        false ->
-                            lager:error("NKLOG No execute module ~p", [Module]),
-                            null
-                    end
-            end;
-        {error, Error} ->
-            lager:warning("NKLOG Obj execute error (~p, ~p): ~p", [ObjId, Field, Error]),
-            {error, Error}
-    end;
-
-execute(_Ctx, #search_results{objects=Objects}, <<"objects">>, _) ->
-    {ok, [{ok, Obj} || Obj <-Objects]};
-
-execute(_Ctx, #search_results{total_count=TotalCount}, <<"totalCount">>, _) ->
-    {ok, TotalCount};
-
-execute(_Ctx, #search_results{page_info=PageInfo}, <<"pageInfo">>, _) ->
-    {ok, PageInfo};
-
-execute(_Ctx, #search_results{cursor=Cursor}, <<"cursor">>, _) ->
-    {ok, Cursor};
-
-execute(_Ctx, #page_info{has_next_page=Next}, <<"hasNextPage">>, _) ->
-    {ok, Next};
-
-execute(_Ctx, #page_info{has_previous_page=Previous}, <<"hasPreviousPage">>, _) ->
-    {ok, Previous};
-
-execute(_Ctx, Data, Field, _Args) ->
-    lager:error("Invalid execute at ~p: ~p, ~p", [?MODULE, Data, Field]),
-    error(invalid_execute).
-
-
+execute(Ctx, Obj, Field, Args) ->
+    #{nkmedia:=#{srv_id:=SrvId}} = Ctx,
+    Res = ?CALL_SRV(SrvId, object_graphql_execute, [Field, Obj, Args, Ctx]),
+    lager:notice("NKLOG RES: ~p", [Res]),
+    Res.
 
 
 %% ===================================================================
@@ -321,45 +280,6 @@ object_query(<<"allObjects">>, Params, Ctx) ->
 %% ===================================================================
 %% Queries execute
 %% ===================================================================
-
-
-%% @doc GraphQL execute
--spec object_execute(binary(), #obj_id_ext{}, map(), map(), any()) ->
-    {ok, term()} | {error, term()} | unknown.
-
-object_execute(Field, _ObjIdExt, Obj, _Args, _Ctx) ->
-    case Field of
-        <<"aliases">> -> {ok, maps:get(aliases, Obj, [])};
-        <<"createdBy">> -> nkdomain_graphql_util:get_obj(maps:get(created_by, Obj));
-        <<"createdById">> -> {ok, maps:get(created_by, Obj)};
-        <<"createdTime">> -> {ok, maps:get(created_time, Obj, null)};
-        <<"description">> -> {ok, maps:get(description, Obj, null)};
-        <<"destroyed">> -> {ok, maps:get(destroyed, Obj, false)};
-        <<"destroyedCode">> -> {ok, maps:get(destroyed_code, Obj, null)};
-        <<"destroyedReason">> -> {ok, maps:get(destroyed_reason, Obj, null)};
-        <<"destroyedTime">> -> {ok, maps:get(destroyed_time, Obj, null)};
-        <<"domain">> -> nkdomain_graphql_util:get_obj(maps:get(domain_id, Obj));
-        <<"domainId">> -> {ok, maps:get(domain_id, Obj)};
-        <<"enabled">> -> {ok, maps:get(enabled, Obj, true)};
-        <<"expiresTime">> -> {ok, maps:get(expires_time, Obj, null)};
-        <<"icon">> -> nkdomain_graphql_util:get_obj(maps:get(icon_id, Obj, null));
-        <<"iconId">> -> {ok, maps:get(icon_id, Obj, null)};
-        <<"id">> -> {ok, maps:get(obj_id, Obj)};
-        <<"name">> -> {ok, maps:get(name, Obj, null)};
-        <<"objId">> -> {ok, maps:get(obj_id, Obj)};
-        <<"objName">> -> {ok, maps:get(obj_name, Obj)};
-        <<"path">> -> {ok, maps:get(path, Obj)};
-        <<"srvId">> -> {ok, maps:get(srv_id, Obj, null)};
-        <<"subtypes">> -> {ok, maps:get(subtype, Obj, [])};
-        <<"tags">> -> {ok, maps:get(tags, Obj, [])};
-        <<"type">> -> nkdomain_graphql_util:get_type(Obj);
-        <<"updatedBy">> -> nkdomain_graphql_util:get_obj(maps:get(updated_by, Obj, null));
-        <<"updatedById">> -> {ok, maps:get(updated_by, Obj, null)};
-        <<"updatedTime">> -> {ok, maps:get(updated_time, Obj, null)};
-        <<"vsn">> -> {ok, maps:get(vsn, Obj, null)};
-        _ -> unknown
-    end.
-
 
 
 

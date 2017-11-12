@@ -25,9 +25,8 @@
 -behavior(nkdomain_obj).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([execute/4]).
--export([object_schema_types/0, object_schema_queries/0, object_schema_mutations/0]).
--export([object_mutation/3]).
+-export([object_execute/5, object_schema_types/0, object_schema_queries/0, object_schema_mutations/0,
+         object_mutation/3]).
 -export([object_info/0, object_admin_info/0, object_create/1, object_update/1, object_es_mapping/0, object_es_unparse/2,
 
          object_parse/2, object_api_syntax/2, object_api_cmd/2, object_send_event/2]).
@@ -51,18 +50,6 @@
 %% ===================================================================
 %% API
 %% ===================================================================
-
-
-
-%% @%% @private GraphQL execute
-execute(_Ctx, #{?DOMAIN_USER:=User}, Field, _Args) ->
-    case Field of
-        <<"userName">> -> {ok, maps:get(name, User, null)};
-        <<"userSurname">> -> {ok, maps:get(surname, User, null)};
-        <<"email">> -> {ok, maps:get(email, User, null)};
-        <<"phone">> -> {ok, maps:get(phone_t, User, null)};
-        <<"address">> -> {ok, maps:get(address_t, User, null)}
-    end.
 
 
 
@@ -142,109 +129,30 @@ object_create(Obj) ->
     end.
 
 
+%% @doc
 object_schema_types() ->
-    #{
-        'User' => #{
-            fields => #{
-                userName => {string, #{comment=>"User family name"}},
-                userSurname => {string, #{comment=>"User surname"}},
-                email => string,
-                phoneTwo => string,
-                address => string,
-                status => {connection, 'UserStatus', #{comment => "User current statuses"}}
-            },
-            is_object => true,
-            comment => "An User"
-        },
-        'UserStatus' => #{
-            fields => #{
-                domainPath => {no_null, string, #{comment=>"Domain this status belongs to"}},
-                userStatus => string,
-                updatedTime => time
-            },
-            is_connection => true
-        }
-    }.
+    nkdomain_user_obj_schema:object_schema_types().
 
 
+%% @doc
 object_schema_queries() ->
-    #{
-    }.
+    nkdomain_user_obj_schema:object_schema_queries().
 
 
+%% @doc
+object_execute(Field, _ObjId, #{?DOMAIN_USER:=User}, _Args, _Ctx) ->
+    nkdomain_user_obj_schema:object_execute(Field, User).
 
 
-
+%% @doc
 object_schema_mutations() ->
-    #{
-        introduceUser => #{
-            input => #{
-                userName => {no_null, string},
-                userSurname => {no_null, string},
-                domain => string,
-                objName => string,
-                password => string,
-                email => {no_null, string},
-                phone => string,
-                address => string
-            },
-            output => #{
-                objId => {no_null, string},
-                objName => {no_null, string},
-                path => {no_null, string},
-                email => {no_null, string},
-                phone => string,
-                address => string
-            },
-            comment => "Creates a new user"
-        }
-    }.
+    nkdomain_user_obj_schema:object_schema_mutations().
 
 
-%% Sample:
-%% mutation M {
-%%     introduceUser(input: {
-%%         userName: "Name1"
-%%         userSurname: "SurName1"
-%%         email: "g1@test"
-%%     }) {
-%%         objId
-%%     }
-%% }
+%% @doc
+object_mutation(MutationName, Params, Ctx) ->
+    nkdomain_user_obj_schema:object_mutation(MutationName, Params, Ctx).
 
-object_mutation(<<"introduceUser">>, Params, _Ctx) ->
-    {Base, User} = lists:foldl(
-        fun({Key, Val}, {BaseAcc, UserAcc}) ->
-            case Key of
-                <<"userName">> ->
-                    {BaseAcc, UserAcc#{name=>Val}};
-                <<"userSurname">> ->
-                    {BaseAcc, UserAcc#{surname=>Val}};
-                <<"domain">> ->
-                    {BaseAcc#{domain_id=>Val}, UserAcc};
-                <<"objName">> ->
-                    {BaseAcc#{obj_name=>Val}, UserAcc};
-                <<"password">> ->
-                    {BaseAcc, UserAcc#{password=>Val}};
-                <<"email">> ->
-                    {BaseAcc, UserAcc#{email=>Val}};
-                <<"phone">> ->
-                    {BaseAcc, UserAcc#{phone_t=>Val}};
-                <<"address">> ->
-                    {BaseAcc, UserAcc#{address_t=>Val}}
-            end
-        end,
-        {#{}, #{}},
-        maps:to_list(Params)),
-    Obj1 = Base#{?DOMAIN_USER=>User},
-    Obj2 = maps:merge(#{domain_id=>root}, Obj1),
-    case nkdomain_user:create(Obj2) of
-        {ok, #obj_id_ext{pid=Pid}=ObjIdExt, _} ->
-            {ok, Obj} = nkdomain:get_obj(Pid),
-            {ok, {ObjIdExt, Obj}};
-        {error, Error} ->
-            {error, Error}
-    end.
 
 
 %% @private
