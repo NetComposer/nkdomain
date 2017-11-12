@@ -134,8 +134,8 @@ object_schema(Type) ->
 
 
 %% @doc
-object_execute(Field, _ObjId, #{?DOMAIN_USER:=User}, _Args, _Ctx) ->
-    nkdomain_user_obj_schema:object_execute(Field, User).
+object_execute(Field, ObjIdExt, #{?DOMAIN_USER:=User}, Args, _Ctx) ->
+    nkdomain_user_obj_schema:object_execute(Field, ObjIdExt, User, Args).
 
 
 %% @doc
@@ -266,7 +266,6 @@ object_send_event(Event, State) ->
 %% @private
 object_api_cmd(Cmd, Req) ->
     nkdomain_user_obj_cmd:cmd(Cmd, Req).
-
 
 
 %% @private
@@ -529,7 +528,7 @@ async_op({launch_session_notifications, _SessId}=Msg, State) ->
 
 async_op({set_status, SrvId, DomainPath, UserStatus}, State) ->
     State2 = do_set_status(SrvId, DomainPath, UserStatus, State),
-    {noreply, State2};
+    {noreply_and_save, State2};
 
 async_op({loaded_token, TokenId, Pid}, State) ->
     case nkdomain_token_obj:get_token_data(Pid) of

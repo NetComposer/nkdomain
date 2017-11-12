@@ -22,7 +22,7 @@
 -module(nkdomain_user_obj_schema).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([object_execute/2, object_schema/1, object_query/3, object_mutation/3]).
+-export([object_execute/4, object_schema/1, object_query/3, object_mutation/3]).
 
 -include("nkdomain.hrl").
 
@@ -36,14 +36,27 @@
 
 
 %% @doc 
-object_execute(Field, User) ->
+object_execute(Field, _ObjIdExt, User, _Args) ->
     case Field of
         <<"userName">> -> {ok, maps:get(name, User, null)};
         <<"userSurname">> -> {ok, maps:get(surname, User, null)};
         <<"email">> -> {ok, maps:get(email, User, null)};
         <<"phone">> -> {ok, maps:get(phone_t, User, null)};
-        <<"address">> -> {ok, maps:get(address_t, User, null)}
+        <<"address">> -> {ok, maps:get(address_t, User, null)};
+        <<"statusConnection">> -> {ok, get_status(User)}
     end.
+
+
+get_status(User) ->
+    StatusList1 = maps:get(status, User, []),
+    StatusList2 = [
+        #{<<"domainPath">>=>Path, <<"userStatus">>=>nklib_json:encode(US), <<"updatedTime">>=>Time} ||
+        #{domain_path:=Path, user_status:=US, updated_time:=Time} <- StatusList1
+    ],
+    #{
+        <<"edges">> => [{ok, #{<<"cursor">>=><<>>, <<"node">>=>Node}} ||Node <-StatusList2],
+        <<"totalCount">> => length(StatusList2)
+    }.
 
 
 %%  @doc Generates new schema entries

@@ -145,6 +145,7 @@
     get_childs|
     get_domain_id |
     get_parent_id |
+    %{apply_type_field, atom(), fun((term()) -> term())} |
     get_time |
     is_enabled |
     {enable, boolean()} |
@@ -562,6 +563,11 @@ do_sync_op(get_parent_id, _From, #obj_state{parent_id=ParentId}=State) ->
 
 do_sync_op(get_path, _From, #obj_state{id=#obj_id_ext{path=Path}}=State) ->
     reply({ok, Path}, State);
+
+%%do_sync_op({apply_type_field, Field, Fun}, _From, #obj_state{id=#obj_id_ext{type=Type}, obj=Obj}=State) ->
+%%    TypeObj = maps:get(Type, Obj, #{}),
+%%    Value = maps:get(Field, TypeObj, undefined),
+%%    reply({ok, Fun(Value)}, State);
 
 do_sync_op(save, _From, State) ->
     {Reply, State2} = do_save(user_order, State),

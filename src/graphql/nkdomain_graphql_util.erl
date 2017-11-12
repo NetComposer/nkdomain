@@ -89,6 +89,9 @@ object_execute(Field, #page_info{}=PI, _, _) ->
             {ok, PI#page_info.has_previous_page}
     end;
 
+object_execute(Field, Obj, _Args, _Ctx) when is_map(Obj) ->
+    {ok, maps:get(Field, Obj, null)};
+
 object_execute(_Field, _Obj, _Args, _Ctx) ->
     lager:error("Invalid execute at ~p: ~p, ~p", [?MODULE, _Field, _Obj]),
     error(invalid_execute).
@@ -182,6 +185,22 @@ get_type(#{type:=Type}) ->
 get_type(Obj) ->
     lager:error("NKLOG Unknown type ~p", [Obj]),
     {error, unknown_type}.
+
+
+%%%% @doc
+%%apply_field(Field, Fun, #obj_id_ext{pid=Pid} = ObjIdExt, Obj) when is_pid(Pid) ->
+%%    case nkdomain_obj:sync_op(Pid, {apply_type_field, Field, Fun}) of
+%%        {ok, Value} ->
+%%            {ok, Value};
+%%        _ ->
+%%            apply_field(Field, Fun, ObjIdExt#obj_id_ext{pid=undefined}, Obj)
+%%    end;
+%%
+%%apply_field(Field, Fun, #obj_id_ext{type=Type}, Obj) ->
+%%    TypeObj = maps:get(Type, Obj, #{}),
+%%    Fun(maps:get(Field, TypeObj, undefined)).
+
+
 
 
 
