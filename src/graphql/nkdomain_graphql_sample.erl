@@ -38,7 +38,21 @@ get1() ->
     {ok, #{<<"node">> := #{<<"id">> := <<"root">>}}} = request(Query),
     ok.
 
-
+get2() ->
+    Query = <<"
+        query {
+            node(id: \"carlos@mail\") {
+                id
+                ... on User {
+                    userName
+                    domain {
+                        name
+                    }
+                }
+            }
+        }
+    ">>,
+    request(Query).
 
 
 introduce_user(Num) ->
@@ -79,11 +93,12 @@ all_objs() ->
                 ]
                 sort: [
                     {
-                        field: domainId
-                        sortOrder: \"asc\"
+                        domainId: {
+                            order: \"DESC\"
+                        }
                     },
                     {
-                        field: \"path\"
+                        path: {}
                     }
 
                 ]
@@ -103,6 +118,28 @@ all_objs() ->
     ">>,
     request(Query).
 
+
+
+all_users() ->
+    Query = <<"
+        query {
+            allUsers(
+                from: 0
+                size: 3
+                sort: [{path: {}}]
+                filter: [{path: {childsOf: \"/sipstorm\"}}]
+            ) {
+                totalCount
+                objects {
+                    type
+                    objId
+                    path
+                    userName
+                }
+            }
+        }
+    ">>,
+    request(Query).
 
 
 request(Query) ->

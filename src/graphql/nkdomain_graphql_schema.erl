@@ -42,7 +42,8 @@ make_schema() ->
     Queries = make_schema_queries(Modules),
     Mutations = make_schema_mutations(Modules),
     Bin = list_to_binary([Scalars, Enums, Interfaces, Types, Inputs, Queries, Mutations]),
-    file:write_file("schema.txt", Bin),
+    LogPath = nkservice_app:get(log_path),
+    file:write_file(filename:join(LogPath, "schema.txt"), Bin),
     Bin.
 
 
@@ -55,18 +56,14 @@ make_schema() ->
 make_schema_scalars(Modules) ->
     lists:foldl(
         fun(Module, Acc) ->
-            case nkdomain_lib:type_apply(Module, object_schema_scalars, []) of
-                not_exported ->
-                    Acc;
-                Map ->
-                    Acc ++[
-                        [
-                            comment(Opts#{no_margin=>true}),
-                            "scalar ", to_bin(T), "\n\n"
-                        ]
-                        || {T, Opts} <- maps:to_list(Map)
-                    ]
-            end
+            Map = get_module_schema(scalars, Module),
+            Acc ++[
+                [
+                    comment(Opts#{no_margin=>true}),
+                    "scalar ", to_bin(T), "\n\n"
+                ]
+                || {T, Opts} <- maps:to_list(Map)
+            ]
         end,
         [],
         Modules).
@@ -76,19 +73,15 @@ make_schema_scalars(Modules) ->
 make_schema_enums(Modules) ->
     lists:foldl(
         fun(Module, Acc) ->
-            case nkdomain_lib:type_apply(Module, object_schema_enums, []) of
-                not_exported ->
-                    Acc;
-                Map ->
-                    Acc ++ [
-                        [
-                            comment(Opts#{no_margin=>true}),
-                            "enum ", to_bin(Name), " {\n",
-                            [["    ", to_bin(E), "\n"] || E <- EnumOpts], "}\n\n"
-                        ]
-                        || {Name, #{opts:=EnumOpts}=Opts} <- maps:to_list(Map)
-                    ]
-            end
+            Map = get_module_schema(enums, Module),
+            Acc ++ [
+                [
+                    comment(Opts#{no_margin=>true}),
+                    "enum ", to_bin(Name), " {\n",
+                    [["    ", to_bin(E), "\n"] || E <- EnumOpts], "}\n\n"
+                ]
+                || {Name, #{opts:=EnumOpts}=Opts} <- maps:to_list(Map)
+            ]
         end,
         [],
         Modules).
@@ -98,47 +91,43 @@ make_schema_enums(Modules) ->
 make_schema_types(Modules) ->
     lists:foldl(
         fun(Module, Acc) ->
-            case nkdomain_lib:type_apply(Module, object_schema_types, []) of
-                not_exported ->
-                    Acc;
-                Map ->
-                    Acc ++ [
-                        [
-                            comment(Opts#{no_margin=>true}),
-                            "type ",to_bin(Name),
-                            case Opts of
-                                #{is_object:=true}  ->
-                                    [
-                                        " implements Node, Object {\n",
-                                        parse_fields(nkdomain_graphql_obj:object_fields()), "\n"
-                                    ];
-                                _ ->
-                                    " {\n"
-                            end,
-                            parse_fields(Fields),
-                            "}\n\n",
-                            case Opts of
-                                #{is_connection:=true} ->
-                                    [
-                                        "type ", to_bin(Name), "Connection {\n",
-                                        parse_fields(#{
-                                                         pageInfo => {no_null, 'PageInfo'},
-                                                         edges => {list, <<(to_bin(Name))/binary, "Edge">>},
-                                                         totalCount => int
-                                                     }), "}\n\n",
-                                        "type ", to_bin(Name), "Edge {\n",
-                                        parse_fields(#{
-                                                         node => to_bin(Name),
-                                                         cursor => {no_null, string}
-                                                     }), "}\n\n"
-                                    ];
-                                _ ->
-                                    []
-                            end
-                        ]
-                        || {Name, #{fields:=Fields}=Opts} <- maps:to_list(Map)
-                    ]
-            end
+            Map = get_module_schema(types, Module),
+            Acc ++ [
+                [
+                    comment(Opts#{no_margin=>true}),
+                    "type ",to_bin(Name),
+                    case Opts of
+                        #{is_object:=true}  ->
+                            [
+                                " implements Node, Object {\n",
+                                parse_fields(nkdomain_graphql_obj:object_fields()), "\n"
+                            ];
+                        _ ->
+                            " {\n"
+                    end,
+                    parse_fields(Fields),
+                    "}\n\n",
+                    case Opts of
+                        #{is_connection:=true} ->
+                            [
+                                "type ", to_bin(Name), "Connection {\n",
+                                parse_fields(#{
+                                                 pageInfo => {no_null, 'PageInfo'},
+                                                 edges => {list, <<(to_bin(Name))/binary, "Edge">>},
+                                                 totalCount => int
+                                             }), "}\n\n",
+                                "type ", to_bin(Name), "Edge {\n",
+                                parse_fields(#{
+                                                 node => to_bin(Name),
+                                                 cursor => {no_null, string}
+                                             }), "}\n\n"
+                            ];
+                        _ ->
+                            []
+                    end
+                ]
+                || {Name, #{fields:=Fields}=Opts} <- maps:to_list(Map)
+            ]
         end,
         [],
         Modules).
@@ -148,20 +137,16 @@ make_schema_types(Modules) ->
 make_schema_inputs(Modules) ->
     lists:foldl(
         fun(Module, Acc) ->
-            case nkdomain_lib:type_apply(Module, object_schema_inputs, []) of
-                not_exported ->
-                    Acc;
-                Map ->
-                    Acc ++ [
-                        [
-                            comment(Opts#{no_margin=>true}),
-                            "input ",to_bin(Name), " {\n",
-                            parse_fields(Fields),
-                            "}\n\n"
-                        ]
-                        || {Name, #{fields:=Fields}=Opts} <- maps:to_list(Map)
-                    ]
-            end
+            Map = get_module_schema(inputs, Module),
+            Acc ++ [
+                [
+                    comment(Opts#{no_margin=>true}),
+                    "input ",to_bin(Name), " {\n",
+                    parse_fields(Fields),
+                    "}\n\n"
+                ]
+                || {Name, #{fields:=Fields}=Opts} <- maps:to_list(Map)
+            ]
         end,
         [],
         Modules).
@@ -171,18 +156,14 @@ make_schema_inputs(Modules) ->
 make_schema_interfaces(Modules) ->
     lists:foldl(
         fun(Module, Acc) ->
-            case nkdomain_lib:type_apply(Module, object_schema_interfaces, []) of
-                not_exported ->
-                    Acc;
-                Map ->
-                    Acc ++ [
-                        [
-                            comment(Opts#{no_margin=>true}),
-                            "interface ",to_bin(Name), " {\n", parse_fields(Fields), "}\n\n"
-                        ]
-                        || {Name, #{fields:=Fields}=Opts} <- maps:to_list(Map)
-                    ]
-            end
+            Map = get_module_schema(interfaces, Module),
+            Acc ++ [
+                [
+                    comment(Opts#{no_margin=>true}),
+                    "interface ",to_bin(Name), " {\n", parse_fields(Fields), "}\n\n"
+                ]
+                || {Name, #{fields:=Fields}=Opts} <- maps:to_list(Map)
+            ]
         end,
         [],
         Modules).
@@ -192,73 +173,82 @@ make_schema_interfaces(Modules) ->
 make_schema_queries(Modules) ->
     List = lists:foldl(
         fun(Module, Acc) ->
-            case nkdomain_lib:type_apply(Module, object_schema_queries, []) of
-                not_exported ->
-                    Acc;
-                Map ->
-                    lists:foreach(
-                        fun(Query) ->
-                            nklib_types:register_type(nkdomain_query, Query, Module)
-                        end,
-                        maps:keys(Map)),
-                    Acc ++ parse_fields(Map)
-            end
+            Map = get_module_schema(queries, Module),
+            lists:foreach(
+                fun(Query) ->
+                    nklib_types:register_type(nkdomain_query, Query, Module)
+                end,
+                maps:keys(Map)),
+            Acc ++ parse_fields(Map)
         end,
         [],
         Modules),
-    ["type Query {\n", List, "}\n\n"].
+    case List of
+        [] ->
+            [];
+        _ ->
+            ["type Query {\n", List, "}\n\n"]
+    end.
 
 
 %% @private
 make_schema_mutations(Modules) ->
     {List, Inputs, Types} = lists:foldl(
         fun(Module, {Acc, AccInputs, AccTypes}) ->
-            case nkdomain_lib:type_apply(Module, object_schema_mutations, []) of
-                not_exported ->
-                    {Acc, AccInputs, AccTypes};
-                Map ->
-                    lists:foreach(
-                        fun(Mutation) ->
-                            nklib_types:register_type(nkdomain_mutation, Mutation, Module)
-                        end,
-                        maps:keys(Map)),
-                    Acc2 = Acc ++ [
-                        [
-                            comment(Opts),
-                            sp(), to_bin(Name), "(input: ", to_upper(Name), "Input!) : ",
-                            to_upper(Name), "Payload\n"
-                        ]
-                        || {Name, Opts} <- maps:to_list(Map)
-                    ],
-                    AccInputs2 = AccInputs ++ [
-                        [
-                            "input ", to_upper(Name), "Input {\n",
-                            parse_fields(Input#{clientMutationId => string}),
-                            "}\n\n"
-                        ]
-                        || {Name, #{input:=Input}} <- maps:to_list(Map)
-                    ],
-                    AccTypes2 = AccTypes ++ [
-                        [
-                            "type ", to_upper(Name), "Payload {\n",
-                            parse_fields(Output#{clientMutationId => string}),
-                            "}\n\n"
-                        ]
-                        || {Name, #{output:=Output}} <- maps:to_list(Map)
-                    ],
-                    {Acc2, AccInputs2, AccTypes2}
-            end
+            Map = get_module_schema(mutations, Module),
+            lists:foreach(
+                fun(Mutation) ->
+                    nklib_types:register_type(nkdomain_mutation, Mutation, Module)
+                end,
+                maps:keys(Map)),
+            Acc2 = Acc ++ [
+                [
+                    comment(Opts),
+                    sp(), to_bin(Name), "(input: ", to_upper(Name), "Input!) : ",
+                    to_upper(Name), "Payload\n"
+                ]
+                || {Name, Opts} <- maps:to_list(Map)
+            ],
+            AccInputs2 = AccInputs ++ [
+                [
+                    "input ", to_upper(Name), "Input {\n",
+                    parse_fields(Input#{clientMutationId => string}),
+                    "}\n\n"
+                ]
+                || {Name, #{input:=Input}} <- maps:to_list(Map)
+            ],
+            AccTypes2 = AccTypes ++ [
+                [
+                    "type ", to_upper(Name), "Payload {\n",
+                    parse_fields(Output#{clientMutationId => string}),
+                    "}\n\n"
+                ]
+                || {Name, #{output:=Output}} <- maps:to_list(Map)
+            ],
+            {Acc2, AccInputs2, AccTypes2}
         end,
         {[], [], []},
         Modules),
-    [
-        "type Mutation {\n", List, "}\n\n",
-        Inputs,
-        Types
-    ].
+    case List of
+        [] ->
+            [];
+        _ ->
+            [
+                "type Mutation {\n", List, "}\n\n",
+                Inputs,
+                Types
+            ]
+    end.
 
 
-
+%% @private
+get_module_schema(Type, Module) ->
+    case nkdomain_lib:type_apply(Module, object_schema, [Type]) of
+        not_exported ->
+            #{};
+        Map when is_map(Map) ->
+            Map
+    end.
 
 
 %% @private

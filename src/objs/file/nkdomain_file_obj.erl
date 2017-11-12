@@ -26,7 +26,7 @@
 
 -export([http_post/1, http_post/4, http_get/2]).
 -export([find/0, delete_all/0]).
--export([object_schema_types/0, object_execute/5]).
+-export([object_schema/1, object_execute/5]).
 -export([object_info/0, object_es_mapping/0, object_parse/2, object_api_syntax/2, object_api_cmd/2]).
 -export([object_admin_info/0]).
 -export([make_file_id/0, upload/4, download/3]).
@@ -183,7 +183,8 @@ object_admin_info() ->
     }.
 
 
-object_schema_types() ->
+%% @doc
+object_schema(types) ->
     #{
         'File' => #{
             fields => #{
@@ -195,7 +196,10 @@ object_schema_types() ->
             is_object => true,
             comment => "A File"
         }
-    }.
+    };
+
+object_schema(_) ->
+    #{}.
 
 
 %% @doc

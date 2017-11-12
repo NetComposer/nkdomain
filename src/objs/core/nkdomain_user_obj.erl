@@ -25,8 +25,7 @@
 -behavior(nkdomain_obj).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([object_execute/5, object_schema_types/0, object_schema_queries/0, object_schema_mutations/0,
-         object_mutation/3]).
+-export([object_execute/5, object_schema/1, object_query/3, object_mutation/3]).
 -export([object_info/0, object_admin_info/0, object_create/1, object_update/1, object_es_mapping/0, object_es_unparse/2,
 
          object_parse/2, object_api_syntax/2, object_api_cmd/2, object_send_event/2]).
@@ -130,13 +129,8 @@ object_create(Obj) ->
 
 
 %% @doc
-object_schema_types() ->
-    nkdomain_user_obj_schema:object_schema_types().
-
-
-%% @doc
-object_schema_queries() ->
-    nkdomain_user_obj_schema:object_schema_queries().
+object_schema(Type) ->
+    nkdomain_user_obj_schema:object_schema(Type).
 
 
 %% @doc
@@ -145,8 +139,8 @@ object_execute(Field, _ObjId, #{?DOMAIN_USER:=User}, _Args, _Ctx) ->
 
 
 %% @doc
-object_schema_mutations() ->
-    nkdomain_user_obj_schema:object_schema_mutations().
+object_query(QueryName, Params, Ctx) ->
+    nkdomain_user_obj_schema:object_query(QueryName, Params, Ctx).
 
 
 %% @doc

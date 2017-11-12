@@ -66,7 +66,7 @@ object_execute(Field, {#obj_id_ext{}, Obj}, _Args, _Ctx) ->
         <<"updatedById">> -> {ok, maps:get(updated_by, Obj, null)};
         <<"updatedTime">> -> {ok, maps:get(updated_time, Obj, null)};
         <<"vsn">> -> {ok, maps:get(vsn, Obj, null)};
-        _ -> unknown_obj
+        _ -> obj_type_field
     end;
 
 object_execute(Field, #search_results{}=SR, _, _) ->
@@ -100,29 +100,40 @@ object_execute(_Field, _Obj, _Args, _Ctx) ->
 % - All 'or' filters go together (even if several are used for a single field)
 %   One or more of them must be true
 
+-type search_opts() ::
+    #{
+        fields => #{
+            binary() => atom()|binary()|list() | {norm, atom()|binary()|list()},
+            {sort, binary()} => atom()|binary()|list()
+        },
+        filters => [#{Field::binary() => #{Op::binary() => Val::binary()}}]
+    }.
+
+-spec search(map(), search_opts()) ->
+    {ok, #search_results{}} | {error, term()}.
+
+
 %% @doc 
-search(Params, _Ctx) ->
+search(Params, Opts) ->
+    Fields = get_obj_fields(Opts),
     #{
         <<"from">> := From,
         <<"size">> := Size,
-        <<"filter">> := Filter
+        <<"filter">> := Filters,
+        <<"sort">> := Sort
     } = Params,
-    Spec1 = case add_filters(Filter, []) of
+    Filters2 = maps:get(filters, Opts, []) ++ Filters,
+    Spec1 = case add_filters(Filters2, Fields, []) of
         [] ->
             #{};
         FilterList ->
-            #{
-                filter_list => FilterList
-            }
+            #{filter_list => FilterList}
     end,
-    Spec2 = case Params of
-        #{<<"sort">>:=Sort} ->
-            Spec1#{sort=> [
-                <<Order/binary, $:, (to_bin(camel_to_erl(Field)))/binary>>
-                || #{<<"field">>:={enum, Field}, <<"sortOrder">>:={enum, Order}} <- Sort
-            ]};
-        _ ->
-            Spec1
+    Spec2 = case add_sort(Sort, Fields, []) of
+        [] ->
+            Spec1;
+        SortList ->
+            Spec1#{sort => SortList}
     end,
     lager:error("Spec2: ~p", [Spec2]),
     case read_objs(From, Size, Spec2) of
@@ -139,7 +150,6 @@ search(Params, _Ctx) ->
         {error, Error} ->
             {error, Error}
     end.
-
 
 
 %% @private
@@ -180,51 +190,71 @@ get_type(Obj) ->
 %% ===================================================================
 
 
+%% @private
+add_sort([], _Fields, Acc) ->
+    lists:reverse(Acc);
+
+add_sort([#{}=Set|Rest], Fields, Acc) ->
+    add_sort(maps:to_list(Set)++Rest, Fields, Acc);
+
+add_sort([{_Field, null}|Rest], Fields, Acc) ->
+    add_sort(Rest, Fields, Acc);
+
+add_sort([{Field, #{<<"order">>:={enum, Order}}}|Rest], Fields, Acc) ->
+    Order2 = case Order of
+        <<"ASC">> -> <<"asc">>;
+        <<"DESC">> -> <<"desc">>
+    end,
+    {ok, ObjField} = get_sort_field(Field, Fields),
+    Acc2 = [<<Order2/binary, $:, ObjField/binary>>|Acc],
+    add_sort(Rest, Fields, Acc2).
+
+
 
 %% @private
-add_filters([], Acc) ->
+add_filters([], _Fields, Acc) ->
     Acc;
 
-add_filters([Filter|Rest], Acc) ->
-    {Op, Spec} = do_add_filter(maps:to_list(Filter), 'and', []),
-    add_filters(Rest, [{Op, Spec}|Acc]).
+add_filters([Filter|Rest], Fields, Acc) ->
+    {Op, Spec} = do_add_filter(maps:to_list(Filter), 'and', Fields, []),
+    add_filters(Rest, Fields, [{Op, Spec}|Acc]).
 
 
 %% @private
-do_add_filter([], Op, Acc) ->
+do_add_filter([], Op, _Fields, Acc) ->
     {Op, Acc};
 
-do_add_filter([{_Field, null}|Rest], Op, Acc) ->
-    do_add_filter(Rest, Op, Acc);
+do_add_filter([{_Field, null}|Rest], Op, Fields, Acc) ->
+    do_add_filter(Rest, Op, Fields, Acc);
 
-do_add_filter([{<<"op">>, {enum, Type}}|Rest], _Op, Acc) ->
+do_add_filter([{<<"op">>, {enum, Type}}|Rest], _Op, Fields, Acc) ->
     Op2 = case Type of
         <<"AND">> -> 'and';
         <<"OR">> -> 'or';
         <<"NOT">> -> 'not'
     end,
-    do_add_filter(Rest, Op2, Acc);
+    do_add_filter(Rest, Op2, Fields, Acc);
 
-do_add_filter([{Field, Filter}|Rest], Op, Acc) ->
-    Acc2 = do_add_filter2(Field, maps:to_list(Filter), Acc),
-    do_add_filter(Rest, Op, Acc2).
+do_add_filter([{Field, Filter}|Rest], Op, Fields, Acc) ->
+    Acc2 = do_add_filter2(Field, maps:to_list(Filter), Fields, Acc),
+    do_add_filter(Rest, Op, Fields, Acc2).
 
 
 %% @private
-do_add_filter2(_Field, [], Acc) ->
+do_add_filter2(_Field, [], _Fields, Acc) ->
     Acc;
 
-do_add_filter2(Field, [{_Op, null}|Rest], Acc) ->
-    do_add_filter2(Field, Rest, Acc);
+do_add_filter2(Field, [{_Op, null}|Rest], Fields, Acc) ->
+    do_add_filter2(Field, Rest, Fields, Acc);
 
-do_add_filter2(<<"type">>, [{<<"eq">>, {enum, Type}}|Rest], Acc) ->
+do_add_filter2(<<"type">>, [{<<"eq">>, {enum, Type}}|Rest], Fields, Acc) ->
     Mod = nkdomain_reg:get_schema_type_module(Type),
     true = Mod /= undefined,
     Type2 = nkdomain_reg:get_module_type(Mod),
     Acc2 = [{type, eq, Type2}|Acc],
-    do_add_filter2(<<"type">>, Rest, Acc2);
+    do_add_filter2(<<"type">>, Rest, Fields, Acc2);
 
-do_add_filter2(<<"type">>, [{<<"values">>, Values}|Rest], Acc) ->
+do_add_filter2(<<"type">>, [{<<"values">>, Values}|Rest], Fields, Acc) ->
     Types = lists:map(
         fun({enum, Type}) ->
             Mod = nkdomain_reg:get_schema_type_module(Type),
@@ -233,33 +263,39 @@ do_add_filter2(<<"type">>, [{<<"values">>, Values}|Rest], Acc) ->
         end,
         Values),
     Acc2 = [{type, values, Types}|Acc],
-    do_add_filter2(<<"type">>, Rest, Acc2);
+    do_add_filter2(<<"type">>, Rest, Fields, Acc2);
 
-do_add_filter2(<<"name">>, [{Op, Val}|Rest], Acc) ->
-    Acc2 = add_filter_text(name_norm, Op, Val, Acc),
-    do_add_filter2(<<"name">>, Rest, Acc2);
+do_add_filter2(<<"type">>, [Op|_Rest], _Fields, _Acc) ->
+    lager:warning("Module ~p: invalid operartion for 'type': ~p", [?MODULE, Op]),
+    error(invalid_type_operation);
 
-do_add_filter2(<<"description">>, [{Op, Val}|Rest], Acc) ->
-    Acc2 = add_filter_text(description_norm, Op, Val, Acc),
-    do_add_filter2(<<"description">>, Rest, Acc2);
-
-do_add_filter2(Field, [{Op, Value}|Rest], Acc)
-        when Op == <<"eq">>; Op == <<"values">>; Op == <<"gt">>; Op == <<"gte">>;
-             Op == <<"lt">>; Op == <<"lte">>; Op == <<"prefix">>; Op == <<"exists">> ->
-    Acc2 =  [{camel_to_erl(Field), binary_to_existing_atom(Op, latin1), Value}|Acc],
-    do_add_filter2(Field, Rest, Acc2);
-
-do_add_filter2(<<"path">>, [{<<"childsOf">>, Value}|Rest], Acc) ->
+do_add_filter2(<<"path">>, [{<<"childsOf">>, Value}|Rest], Fields, Acc) ->
     Acc2 =  [{path, subdir, Value}|Acc],
-    do_add_filter2(<<"path">>, Rest, Acc2).
+    do_add_filter2(<<"path">>, Rest, Fields, Acc2);
+
+do_add_filter2(Field, [{Op, Val}|Rest], Fields, Acc) ->
+    Acc2 = case get_filter_field(Field, Fields) of
+        {ok, Field2} when is_binary(Field2) ->
+            do_add_filter_std(Field2, Op, Val, Acc);
+        {norm, Field2} ->
+            add_filter_norm(Field2, Op, Val, Acc)
+    end,
+    do_add_filter2(Field, Rest, Fields, Acc2).
 
 
 %% @private
-add_filter_text(Field, Op, Value, Acc) when Op == <<"eq">>; Op == <<"prefix">> ->
+do_add_filter_std(Field, Op, Value, Acc)
+    when Op == <<"eq">>; Op == <<"values">>; Op == <<"gt">>; Op == <<"gte">>;
+         Op == <<"lt">>; Op == <<"lte">>; Op == <<"prefix">>; Op == <<"exists">> ->
+    [{Field, binary_to_existing_atom(Op, latin1), Value}|Acc].
+
+
+%% @private
+add_filter_norm(Field, Op, Value, Acc) when Op==<<"eq">>; Op==<<"prefix">> ->
     Value2 = nkdomain_store_es_util:normalize(Value),
     [{Field, binary_to_existing_atom(Op, latin1), Value2}|Acc];
 
-add_filter_text(Field, <<"wordsAndPrefix">>, Value, Acc) ->
+add_filter_norm(Field, <<"wordsAndPrefix">>, Value, Acc) ->
     case nkdomain_store_es_util:normalize_multi(Value) of
         [] ->
             Acc;
@@ -270,7 +306,7 @@ add_filter_text(Field, <<"wordsAndPrefix">>, Value, Acc) ->
             [{Field, prefix, Last}, {Field, values, Full} | Acc]
     end;
 
-add_filter_text(Field, <<"fuzzy">>, Value, Acc) ->
+add_filter_norm(Field, <<"fuzzy">>, Value, Acc) ->
     case nkdomain_store_es_util:normalize_multi(Value) of
         [] ->
             Acc;
@@ -279,8 +315,6 @@ add_filter_text(Field, <<"fuzzy">>, Value, Acc) ->
         Words ->
             [{Field, fuzzy, W} || W <-Words] ++ Acc
     end.
-
-
 
 %% @private
 read_objs(From, Size, Spec) ->
@@ -317,27 +351,63 @@ do_read_objs(Start, Size, Spec, Acc) ->
             {error, Error}
     end.
 
-
+%% @private
+get_obj_fields(Opts) ->
+    Base = #{
+        <<"createdById">> => <<"created_by">>,
+        <<"createdTime">> => <<"created_time">>,
+        <<"description">> => {norm, <<"description_norm">>},
+        <<"destroyedCode">> => <<"destroyed_code">>,
+        <<"destroyedReason">> => <<"destroyed_reason">>,
+        <<"destroyedTime">> => <<"destroyed_time">>,
+        <<"domainId">> => <<"domain_id">>,
+        <<"expiresTime">> => <<"expires_time">>,
+        <<"iconId">> => <<"icon_id">>,
+        <<"name">> => {norm, <<"name_norm">>},
+        <<"objId">> => <<"obj_id">>,
+        <<"objName">> => <<"obj_name">>,
+        <<"srvId">> => <<"srv_id">>,
+        <<"subTypes">> => <<"subtypes">>,
+        <<"updatedById">> => <<"updated_by">>,
+        <<"updatedTime">> => <<"updated_time">>
+    },
+    Fields = maps:get(fields, Opts, #{}),
+    maps:merge(Base, Fields).
 
 
 %% @private
-camel_to_erl(<<"createdById">>) -> created_by;
-camel_to_erl(<<"createdTime">>) -> created_time;
-camel_to_erl(<<"destroyedCode">>) -> destroyed_code;
-camel_to_erl(<<"destroyedReason">>) -> destroyed_reason;
-camel_to_erl(<<"destroyedTime">>) -> destroyed_time;
-camel_to_erl(<<"domainId">>) -> domain_id;
-camel_to_erl(<<"expiresTime">>) -> expires_time;
-camel_to_erl(<<"iconId">>) -> icon_id;
-camel_to_erl(<<"objId">>) -> obj_id;
-camel_to_erl(<<"objName">>) -> obj_name;
-camel_to_erl(<<"srvId">>) -> srv_id;
-camel_to_erl(<<"subTypes">>) -> subtypes;
-camel_to_erl(<<"updatedById">>) -> updated_by;
-camel_to_erl(<<"updatedTime">>) -> updated_time;
-camel_to_erl(Atom) when is_atom(Atom) -> Atom;
-camel_to_erl(Erl) -> binary_to_existing_atom(Erl, utf8).
+get_filter_field(Field, Fields) ->
+    case maps:find(Field, Fields) of
+        {ok, ObjField} when is_binary(ObjField) ->
+            {ok, ObjField};
+        {ok, ObjField} when is_atom(ObjField) ->
+            {ok, to_bin(ObjField)};
+        {ok, List} when is_list(List) ->
+            {ok, nklib_util:bjoin(List, <<".">>)};
+        {ok, {norm, ObjField}} when is_binary(ObjField) ->
+            {norm, ObjField};
+        {ok, {norm, ObjField}} when is_atom(ObjField) ->
+            {norm, to_bin(ObjField)};
+        {ok, {norm, List}} when is_list(List) ->
+            {norm, nklib_util:bjoin(List, <<".">>)};
+        error ->
+            {ok, to_bin(Field)}
+    end.
 
+
+%% @private
+get_sort_field(Field, Fields) ->
+    case maps:find({sort, Field}, Fields) of
+        {ok, ObjField} when is_binary(ObjField) ->
+            {ok, ObjField};
+        {ok, ObjField} when is_atom(ObjField) ->
+            {ok, to_bin(ObjField)};
+        {ok, List} when is_list(List) ->
+            {ok, nklib_util:bjoin(List, <<".">>)};
+        error ->
+            {_, ObjField} = get_filter_field(Field, Fields),
+            {ok, ObjField}
+    end.
 
 
 %% @private

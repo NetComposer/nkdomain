@@ -22,8 +22,7 @@
 -module(nkdomain_user_obj_schema).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([object_execute/2, object_schema_types/0, object_schema_queries/0, object_schema_mutations/0,
-         object_mutation/3]).
+-export([object_execute/2, object_schema/1, object_query/3, object_mutation/3]).
 
 -include("nkdomain.hrl").
 
@@ -36,7 +35,7 @@
 %% ===================================================================
 
 
-
+%% @doc 
 object_execute(Field, User) ->
     case Field of
         <<"userName">> -> {ok, maps:get(name, User, null)};
@@ -47,15 +46,15 @@ object_execute(Field, User) ->
     end.
 
 
-%% @doc
-object_schema_types() ->
+%%  @doc Generates new schema entries
+object_schema(types) ->
     #{
         'User' => #{
             fields => #{
                 userName => {string, #{comment=>"User family name"}},
                 userSurname => {string, #{comment=>"User surname"}},
                 email => string,
-                phoneTwo => string,
+                phone => string,
                 address => string,
                 status => {connection, 'UserStatus', #{comment => "User current statuses"}}
             },
@@ -69,23 +68,41 @@ object_schema_types() ->
                 updatedTime => time
             },
             is_connection => true
+        },
+        'UserSearchResult' => #{
+            fields => #{
+                objects => {list_no_null, 'User', #{comment => "My Objects"}},
+                pageInfo => {no_null, 'PageInfo'},
+                totalCount => int
+            }
         }
-    }.
+    };
 
-
-object_schema_queries() ->
+object_schema(inputs) ->
     #{
-        allUsers => {'SearchResult', #{
-            params => #{
-                filter => {list, objectFilter, #{default => "[]"}},
-                sort => {list, objectSortBy},
-                from => {int, #{default => 0}},
-                size => {int, #{default => 10}}
-            }}}
-    }.
+        objectUserFilter => #{
+            fields => nkdomain_graphql_obj:object_fields_filter(#{
+                userName => {objectFilterNorm, #{comment => "User name"}},
+                userSurname => {objectFilterNorm, #{comment => "User surname"}},
+                email => {objectFilterKeyword, #{comment => "User email"}},
+                phone => {objectFilterKeyword, #{comment => "User phone"}},
+                address => {objectFilterKeyword, #{comment => "User address"}}
+            }),
+            comment => "Filter values to sort on"
+        },
+        objectUserSort => #{
+            fields => nkdomain_graphql_obj:object_fields_sort([userName, userSurname, email, phone]),
+            comment => "Fields to sort on"
+        }
+    };
+
+object_schema(queries) ->
+    #{
+        allUsers => nkdomain_graphql_obj:query_all_objs('User')
+    };
 
 
-object_schema_mutations() ->
+object_schema(mutations) ->
     #{
         introduceUser => #{
             input => #{
@@ -108,7 +125,28 @@ object_schema_mutations() ->
             },
             comment => "Creates a new user"
         }
-    }.
+    };
+
+object_schema(_) ->
+    #{}.
+
+
+%% @doc
+object_query(<<"allUsers">>, Params, _Ctx) ->
+    Opts = #{
+        fields => #{
+            <<"userName">> => {norm, [?DOMAIN_USER, name]},
+            <<"userSurname">> => {norm, [?DOMAIN_USER, surname]},
+            <<"email">> => [?DOMAIN_USER, email],
+            <<"phone">> => [?DOMAIN_USER, phone],
+            <<"address">> => [?DOMAIN_USER, address_t]
+        },
+        filters => [
+            #{<<"type">> => #{<<"eq">> => {enum, <<"User">>}}}
+        ]
+    },
+    nkdomain_graphql_util:search(Params, Opts).
+
 
 
 %% Sample:

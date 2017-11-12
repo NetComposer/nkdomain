@@ -27,7 +27,7 @@
 -export([search/2, search_all/2, search_type/2, search_all_types/2, search_childs/2, search_all_childs/2]).
 -export([find_path/1, find_path/2, unload_childs/1, get_childs_type/2]).
 -export([get_all_counters/1, get_counter/2, make_path/3]).
--export([object_schema_types/0]).
+-export([object_schema/1]).
 -export([object_info/0, object_admin_info/0, object_parse/2, object_es_mapping/0,
          object_api_syntax/2, object_send_event/2, object_api_cmd/2]).
 -export([object_init/1, object_sync_op/3, object_async_op/2, object_enabled/2, object_link_down/2,
@@ -212,14 +212,17 @@ object_admin_info() ->
     }.
 
 
-object_schema_types() ->
+object_schema(types) ->
     #{
         'Domain' => #{
             fields => #{},
             is_object => true,
             comment => "A Domain"
         }
-    }.
+    };
+
+object_schema(_) ->
+   #{}.
 
 
 %% @private
