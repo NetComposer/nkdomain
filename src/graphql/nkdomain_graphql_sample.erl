@@ -79,17 +79,17 @@ all_objs() ->
                 size: 3
                 filter: [
                     {
-                        #type: {values: [User, Domain]},
+                        type: {values: [User, Domain]},
                         name: {fuzzy: \"carlos last\"}
                     }
-                    #{
-                    #    op: AND
-                    #    path: {childsOf: \"/sphera\"}
-                    #}
-                    #{
-                    #    op: OR
-                    #    objId: {eq: \"root\"}
-                    #}
+                    {
+                        op: AND
+                        path: {childsOf: \"/sipstorm\"}
+                    }
+                    {
+                        op: OR
+                        createdTime: {gt: 0, lte: 9999999}
+                    }
                 ]
                 sort: [
                     {
