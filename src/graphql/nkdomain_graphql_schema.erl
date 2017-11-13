@@ -122,6 +122,18 @@ make_schema_types(Modules) ->
                                                  cursor => {no_null, string}
                                              }), "}\n\n"
                             ];
+                        #{is_connection:=only_last} ->
+                            [
+                                "type ", to_bin(Name), "Connection {\n",
+                                parse_fields(#{
+                                                 edges => {list, <<(to_bin(Name))/binary, "Edge">>},
+                                                 totalCount => int
+                                             }), "}\n\n",
+                                "type ", to_bin(Name), "Edge {\n",
+                                parse_fields(#{
+                                                 node => to_bin(Name)
+                                             }), "}\n\n"
+                            ];
                         _ ->
                             []
                     end
@@ -281,6 +293,10 @@ parse_fields([{Field, Value}|Rest], Acc) ->
             [field(Field), connection(), " : ", to_bin(V), "Connection"];
         {connection, V, Opts} ->
             [comment(Opts), field(Field, Opts), connection(), " : ", to_bin(V), "Connection"];
+        {connection_last, V} ->
+            [field(Field), connection_last(), " : ", to_bin(V), "Connection"];
+        {connection_last, V, Opts} ->
+            [comment(Opts), field(Field, Opts), connection_last(), " : ", to_bin(V), "Connection"];
         {V, Opts} ->
             [comment(Opts), field(Field, Opts), " : ", value(V), default(Opts)];
         _ ->
@@ -308,9 +324,15 @@ field(F) ->
 field(F, Opts) ->
     [sp(), to_bin(F), params(Opts)].
 
+
 %% @private
 connection() ->
     ["Connection", params(#{params=>#{'after'=>string, first=>int, before=>string, last=>int}})].
+
+
+%% @private
+connection_last() ->
+    ["Connection", params(#{params=>#{last=>int}})].
 
 
 %% @private

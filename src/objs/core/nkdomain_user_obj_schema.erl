@@ -36,26 +36,56 @@
 
 
 %% @doc 
-object_execute(Field, _ObjIdExt, User, _Args) ->
+object_execute(Field, _ObjIdExt, User, Args) ->
     case Field of
         <<"userName">> -> {ok, maps:get(name, User, null)};
         <<"userSurname">> -> {ok, maps:get(surname, User, null)};
         <<"email">> -> {ok, maps:get(email, User, null)};
         <<"phone">> -> {ok, maps:get(phone_t, User, null)};
         <<"address">> -> {ok, maps:get(address_t, User, null)};
-        <<"statusConnection">> -> {ok, get_status(User)}
+        <<"statusConnection">> -> {ok, get_status(User, Args)};
+        <<"pushConnection">> -> {ok, get_push(User, Args)}
     end.
 
 
-get_status(User) ->
+
+get_status(User, Args) ->
     StatusList1 = maps:get(status, User, []),
     StatusList2 = [
         #{<<"domainPath">>=>Path, <<"userStatus">>=>nklib_json:encode(US), <<"updatedTime">>=>Time} ||
         #{domain_path:=Path, user_status:=US, updated_time:=Time} <- StatusList1
     ],
+    StatusList3 = [{ok, #{<<"cursor">>=><<>>, <<"node">>=>Node}} || Node <-StatusList2],
+    StatusList4 = case Args of
+        #{<<"last">>:=N} when N > 0, N < 99 ->
+            lists:sublist(StatusList3, N);
+        _ ->
+            StatusList3
+    end,
     #{
-        <<"edges">> => [{ok, #{<<"cursor">>=><<>>, <<"node">>=>Node}} ||Node <-StatusList2],
+        <<"edges">> => StatusList4,
         <<"totalCount">> => length(StatusList2)
+    }.
+
+
+get_push(User, Args) ->
+    PushList1 = maps:get(push, User, []),
+    PushList2 = [
+        #{<<"domainPath">>=>Path, <<"pushData">>=>nklib_json:encode(Data),
+          <<"deviceId">>=>DeviceId, <<"updatedTime">>=>Time}
+        ||
+        #{domain_path:=Path, device_id:=DeviceId, push_data:=Data, updated_time:=Time} <- PushList1
+    ],
+    PushList3 = [{ok, #{<<"cursor">>=><<>>, <<"node">>=>Node}} || Node <-PushList2],
+    PushList4 = case Args of
+        #{<<"last">>:=N} when N > 0, N < 99 ->
+            lists:sublist(PushList3, N);
+        _ ->
+            PushList3
+    end,
+    #{
+        <<"edges">> => PushList4,
+        <<"totalCount">> => length(PushList2)
     }.
 
 
@@ -69,7 +99,8 @@ object_schema(types) ->
                 email => string,
                 phone => string,
                 address => string,
-                status => {connection, 'UserStatus', #{comment => "User current statuses"}}
+                status => {connection_last, 'UserStatus', #{comment => "User current statuses"}},
+                push => {connection_last, 'UserPush', #{comment => "User current statuses"}}
             },
             is_object => true,
             comment => "An User"
@@ -82,6 +113,15 @@ object_schema(types) ->
             },
             is_connection => true
         },
+        'UserPush' => #{
+            fields => #{
+                domainPath => {no_null, string, #{comment=>"Domain this push data belongs to"}},
+                deviceId => {no_null, string},
+                pushData => string,
+                updatedTime => time
+            },
+            is_connection => true
+        },
         'UserSearchResult' => #{
             fields => #{
                 objects => {list_no_null, 'User', #{comment => "My Objects"}},
@@ -90,6 +130,8 @@ object_schema(types) ->
             }
         }
     };
+
+
 
 object_schema(inputs) ->
     #{

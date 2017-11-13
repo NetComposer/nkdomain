@@ -142,5 +142,38 @@ all_users() ->
     request(Query).
 
 
+user_info1() ->
+    Q = <<"
+        query {
+            node(id: \"carlos@mail\") {
+            id
+            ... on User {
+                userName
+                statusConnection(last:1) {
+                    totalCount
+                    edges {
+                        node {
+                            domainPath
+                            updatedTime
+                            userStatus
+                        }
+                    }
+                }
+                pushConnection(last: 2) {
+                    totalCount
+                    edges {
+                        node {
+                            deviceId
+                        }
+                    }
+                }
+            }
+        }
+    }">>,
+    request(Q).
+
+
+
+
 request(Query) ->
     nkdomain_graphql:request(?NKROOT, Query, #{}).
