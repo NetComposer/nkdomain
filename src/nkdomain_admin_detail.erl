@@ -288,7 +288,7 @@ get_dash_detail_test() ->
                     #{
                         type => <<"clean">>,
                         rows => [#{
-                            height => 220,
+                            height => 300,
                             type => <<"clean">>,
                             cols => [
                                 get_series_chart_json(#{
@@ -325,7 +325,7 @@ get_dash_detail_test() ->
                                 })
                             ]
                         }, #{
-                            height => 220,
+                            height => 300,
                             type => <<"clean">>,
                             cols => [
                                 get_chart_json(#{
@@ -335,6 +335,7 @@ get_dash_detail_test() ->
                                         css => <<"chart_header">>
                                     },
                                     type => <<"barH">>,
+                                    units => <<"(mins)">>,
                                     x => #{
                                         value => <<"minutes">>
                                     },
@@ -350,6 +351,7 @@ get_dash_detail_test() ->
                                         css => <<"chart_header">>
                                     },
                                     type => <<"barH">>,
+                                    units => <<"(Q)">>,
                                     x => #{
                                         value => <<"number">>
                                     },
@@ -365,6 +367,7 @@ get_dash_detail_test() ->
                                         css => <<"chart_header">>
                                     },
                                     type => <<"barH">>,
+                                    units => <<"(Q)">>,
                                     x => #{
                                         value => <<"number">>
                                     },
@@ -734,18 +737,7 @@ get_series_chart_json(#{id := ChartId, x := X, y := Y}=Opts) ->
         },
         y_axis => #{
             start => 0,
-            template => #{
-                nkParseFunction => <<"
-                    function(obj) {
-                        if (obj > 1000000)  {
-                            return (obj/1000000 + 'M');
-                        } else if (obj > 1000)  {
-                            return (obj/1000 + 'K');
-                        }
-                        return obj;
-                    }
-                ">>
-            }
+            template => nkadmin_webix_chart:parse_number_template()
         },
         legend => #{
             values => [
@@ -805,6 +797,8 @@ get_chart_json(#{id := ChartId, x := X, y := Y}=Opts) ->
     YValue = maps:get(value, Y),
     NKCharts = [XValue|YValue],
     IsDynamic = maps:get(dynamic, Opts, false),
+    Color = maps:get(color, Opts, <<>>),
+    Units = maps:get(units, Opts, <<>>),
     Spec = case HeaderValue of
         <<>> ->
             #{};
@@ -816,12 +810,20 @@ get_chart_json(#{id := ChartId, x := X, y := Y}=Opts) ->
                 }
             }
     end,
+    Spec1 = case Color of
+        <<>> ->
+            Spec;
+        _ ->
+            Spec#{
+                color => nkadmin_webix_chart:parse_color_template(Color)
+            }
+    end,
     {XAxis, YAxis, Value, Label} = case nkadmin_webix_chart:is_horizontal(Type) of
         true ->
             {
                 #{
                     start => 0,
-                    template => nkadmin_webix_chart:parse_number_template()
+                    template => nkadmin_webix_chart:parse_number_template(Units)
                 },
                 #{
                     template => #{
@@ -837,7 +839,7 @@ get_chart_json(#{id := ChartId, x := X, y := Y}=Opts) ->
                 },
                 <<"#", XValue/binary, "#">>,
                 %<<"#", XValue/binary, "#">>
-                nkadmin_webix_chart:parse_number_template(XValue)
+                nkadmin_webix_chart:parse_number_template(XValue, <<>>)
             };
         false ->
             {
@@ -855,14 +857,14 @@ get_chart_json(#{id := ChartId, x := X, y := Y}=Opts) ->
                 },
                 #{
                     start => 0,
-                    template => nkadmin_webix_chart:parse_number_template()
+                    template => nkadmin_webix_chart:parse_number_template(Units)
                 },
                 <<"#", YValue/binary, "#">>,
                 %<<"#", YValue/binary, "#">>
-                nkadmin_webix_chart:parse_number_template(YValue)
+                nkadmin_webix_chart:parse_number_template(YValue, <<>>)
             }
     end,
-    Spec2 = Spec#{
+    Spec2 = Spec1#{
         chart_id => ChartId,
         chart_type => Type,
         is_subchart => true,
@@ -874,7 +876,10 @@ get_chart_json(#{id := ChartId, x := X, y := Y}=Opts) ->
         offset => 0,
         origin => 0,
         charts => [],
-        dynamic => IsDynamic
+        dynamic => IsDynamic,
+        padding => #{
+            left => 80
+        }
     },
     nkadmin_webix_chart:chart(Spec2, #{}).
 
