@@ -24,7 +24,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([start/3]).
--export([switch_domain/3, element_action/4, get_data/3]).
+-export([switch_domain/3, element_action/4, get_data/3, get_chart_data/3]).
 -export([find_all/0]).
 -export([object_info/0, object_parse/2, object_es_mapping/0,
          object_api_syntax/2, object_api_cmd/2]).
@@ -112,6 +112,9 @@ element_action(Id, ElementId, Action, Value) ->
 get_data(Id, ElementId, Data) ->
     nkdomain_obj:sync_op(Id, {?MODULE, get_data, ElementId, Data}).
 
+%% @doc
+get_chart_data(Id, ElementId, Data) ->
+        nkdomain_obj:sync_op(Id, {?MODULE, get_chart_data, ElementId, Data}).    
 
 %% @private
 find_all() ->
@@ -268,6 +271,14 @@ object_sync_op({?MODULE, element_action, ElementId, Action, Value}, _From, State
 
 object_sync_op({?MODULE, get_data, ElementId, Data}, _From, State) ->
     case do_get_data(get_id_parts(ElementId), Data, State) of
+        {ok, Reply, State2} ->
+            {reply, {ok, Reply}, State2};
+        {error, Error, State2} ->
+            {reply, {error, Error}, State2}
+    end;
+
+object_sync_op({?MODULE, get_chart_data, ElementId, Data}, _From, State) ->
+    case do_get_chart_data(ElementId, Data, State) of
         {ok, Reply, State2} ->
             {reply, {ok, Reply}, State2};
         {error, Error, State2} ->
@@ -445,6 +456,273 @@ do_get_data(Parts, Spec, State) ->
             State2 = State#obj_state{session=Session2},
             {error, Error, State2}
     end.
+
+
+%% @private
+do_get_chart_data(<<"total_users">>, _Spec, State) ->
+    {ok, Opts} = nkdomain_store_es_util:get_opts(),
+    Query = #{
+        <<"size">> => 0,
+        <<"query">> => #{
+            <<"bool">> => #{
+                <<"filter">> => [#{ 
+                    <<"term">> => #{
+                        <<"type">> => <<"user">>
+                    }
+                }]
+            }
+        }
+        %"aggs" => #{
+        %}
+    },
+    case nkelastic:search(Query, Opts) of
+        {ok, Hits, _, _, _} ->
+            %lager:info("RESPONSE: ~p~n", [Hits]),
+            {ok, #{<<"total_users">> => #{value => Hits, delta => 10}}, State};
+        _ ->
+            {error, error, State}
+    end;
+
+do_get_chart_data(<<"total_messages">>, _Spec, State) ->
+    {ok, Opts} = nkdomain_store_es_util:get_opts(),
+    Query = #{
+        <<"size">> => 0,
+        <<"query">> => #{
+            <<"bool">> => #{
+                <<"filter">> => [#{ 
+                    <<"term">> => #{
+                        <<"type">> => <<"message">>
+                    }
+                }]
+            }
+        }
+        %"aggs" => #{
+        %}
+    },
+    case nkelastic:search(Query, Opts) of
+        {ok, Hits, _, _, _} ->
+            %lager:info("RESPONSE: ~p~n", [Hits]),
+            {ok, #{<<"total_messages">> => #{value => Hits, delta => 20}}, State};
+        _ ->
+            {error, error, State}
+    end;
+
+do_get_chart_data(<<"total_files">>, _Spec, State) ->
+    {ok, Opts} = nkdomain_store_es_util:get_opts(),
+    Query = #{
+        <<"size">> => 0,
+        <<"query">> => #{
+            <<"bool">> => #{
+                <<"filter">> => [#{ 
+                    <<"term">> => #{
+                        <<"type">> => <<"file">>
+                    }
+                }]
+            }
+        }
+        %"aggs" => #{
+        %}
+    },
+    case nkelastic:search(Query, Opts) of
+        {ok, Hits, _, _, _} ->
+            %lager:info("RESPONSE: ~p~n", [Hits]),
+            {ok, #{<<"total_files">> => #{value => Hits, delta => 15}}, State};
+        _ ->
+            {error, error, State}
+    end;
+
+do_get_chart_data(<<"activity_stats_line_chart">>, _Spec, State) ->
+    {ok, Opts} = nkdomain_store_es_util:get_opts(),
+    Query = #{
+        <<"size">> => 0,
+        <<"query">> => #{
+            <<"bool">> => #{
+                <<"filter">> => [#{ 
+                    <<"term">> => #{
+                        <<"type">> => <<"file">>
+                    }
+                }]
+            }
+        }
+        %"aggs" => #{
+        %}
+    },
+    case nkelastic:search(Query, Opts) of
+        {ok, _Hits, _, _, _} ->
+            %lager:info("RESPONSE: ~p~n", [Hits]),
+            %{ok, #{<<"total_files">> => #{value => Hits, delta => 15}}, State};
+            Data = [
+                #{ messages => 17500, audio =>  2500, video =>  7500, month => <<"jan.">> },
+                #{ messages => 18000, audio =>  7500, video => 12500, month => <<"feb.">> },
+                #{ messages => 21500, audio =>  5000, video => 15000, month => <<"mar.">> },
+                #{ messages => 20000, audio => 12500, video =>  7500, month => <<"apr.">> },
+                #{ messages => 18250, audio => 15000, video =>  7500, month => <<"may.">> },
+                #{ messages => 16000, audio => 10000, video => 12000, month => <<"jun.">> },
+                #{ messages => 18000, audio => 12500, video =>  7500, month => <<"jul.">> },
+                #{ messages => 18000, audio => 15000, video =>  7500, month => <<"aug.">> },
+                #{ messages => 22500, audio => 20000, video => 11500, month => <<"sep.">> },
+                #{ messages => 23000, audio => 17500, video => 11000, month => <<"oct.">> },
+                #{ messages => 23000, audio => 15000, video => 11000, month => <<"nov.">> },
+                #{ messages => 25000, audio => 20000, video => 12000, month => <<"dec.">> }
+            ],
+            {ok, #{data => Data}, State};
+        _ ->
+            {error, error, State}
+    end;
+
+do_get_chart_data(<<"video_calls_barh_chart">>, _Spec, State) ->
+    {ok, Opts} = nkdomain_store_es_util:get_opts(),
+    Query = #{
+        <<"size">> => 0,
+        <<"query">> => #{
+            <<"bool">> => #{
+                <<"filter">> => [#{ 
+                    <<"term">> => #{
+                        <<"type">> => <<"file">>
+                    }
+                }]
+            }
+        }
+        %"aggs" => #{
+        %}
+    },
+    case nkelastic:search(Query, Opts) of
+        {ok, Hits, _, _, _} ->
+            %lager:info("RESPONSE: ~p~n", [Hits]),
+            %{ok, #{<<"total_files">> => #{value => Hits, delta => 15}}, State};
+            Data = [
+                #{ minutes => 2050, type => <<"Total">> },
+                #{ minutes => 700, type => <<"VideoC.">> },
+                #{ minutes => 1400, type => <<"Calls">> }
+            ],
+            {ok, #{data => Data}, State};
+        _ ->
+            {error, error, State}
+    end;
+
+do_get_chart_data(<<"sent_files_barh_chart">>, _Spec, State) ->
+    {ok, Opts} = nkdomain_store_es_util:get_opts(),
+    Query = #{
+        <<"size">> => 0,
+        <<"query">> => #{
+            <<"bool">> => #{
+                <<"filter">> => [#{ 
+                    <<"term">> => #{
+                        <<"type">> => <<"file">>
+                    }
+                }]
+            }
+        },
+        <<"aggs">> => #{
+            <<"file_types">> => #{
+                <<"terms">> => #{
+                    <<"field">> => <<"file.content_type">>
+                }
+            }
+        }
+    },
+    case nkelastic:search(Query, Opts) of
+        {ok, _Total, _Hits, Aggs, _Meta} ->
+            Aggs2 = maps:get(<<"file_types">>, Aggs),
+            Buckets = maps:get(<<"buckets">>, Aggs2),
+%            Data = [
+%                #{ number => 140000, type => <<"Images">> },
+%                #{ number => 40000, type => <<"Videos">> },
+%                #{ number => 25000, type => <<"Audios">> },
+%                #{ number => 30000, type => <<"Text">> },
+%                #{ number => 35000, type => <<"PDF">> },
+%                #{ number => 5000, type => <<"Other">> }
+%            ],
+            Data = [
+                #{ number => maps:get(<<"doc_count">>, Bucket), type => maps:get(<<"key">>, Bucket) }
+                || Bucket <- Buckets
+            ],
+            {ok, #{data => Data}, State};
+        _ ->
+            {error, error, State}
+    end;
+
+do_get_chart_data(<<"conversations_barh_chart">>, _Spec, State) ->
+    {ok, Opts} = nkdomain_store_es_util:get_opts(),
+    Query = #{
+        <<"size">> => 0,
+        <<"query">> => #{
+            <<"bool">> => #{
+                <<"filter">> => [#{ 
+                    <<"terms">> => #{
+                        <<"conversation.type">> => [<<"one2one">>, <<"channel">>, <<"private">>]
+                    }
+                }, #{
+                    <<"term">> => #{
+                        <<"type">> => <<"conversation">>
+                    }
+                }]
+            }
+        },
+        <<"aggs">> => #{
+            <<"conversation_types">> => #{
+                <<"terms">> => #{
+                    <<"field">> => <<"conversation.type">>
+                }
+            }
+        }
+    },
+    case nkelastic:search(Query, Opts) of
+        {ok, _Total, _Hits, Aggs, _Meta} ->
+            Aggs2 = maps:get(<<"conversation_types">>, Aggs),
+            Buckets = maps:get(<<"buckets">>, Aggs2),
+%            Data = [
+%                #{ number => 73000, type => <<"P2P">> },
+%                #{ number => 45000, type => <<"Groups">> },
+%                #{ number => 9000, type => <<"Channels">> }
+%            ],
+            Data = [
+                #{ number => maps:get(<<"doc_count">>, Bucket), type => maps:get(<<"key">>, Bucket) }
+                || Bucket <- Buckets
+            ],
+            {ok, #{data => Data}, State};
+        _ ->
+            {error, error, State}
+    end;
+
+do_get_chart_data(ElementId, _Spec, State) ->
+    lager:info("Unknown element id: ~p~n", [ElementId]),
+    {ok, #{ElementId => #{value => 0, delta => 0}}, State}.
+
+
+%Query #{
+%    '_source' => [<<"path">>,<<"obj_name">>,<<"srv_id">>,<<"created_time">>,<<"created_by">>,<<"enabled">>,<<"user.name">>,<<"user.surname">>,<<"user.email">>],
+%    from => 0,
+%    query => #{
+%        bool => #{
+%            filter => [#{
+%                term => #{
+%                    type => <<"user">>
+%                }
+%            }, #{
+%                wildcard => #{
+%                    path => <<"/?*">>
+%                }
+%            }]
+%        }
+%    },
+%    size => 50,
+%    sort => [#{
+%        <<"path">> => #{
+%            order => desc
+%        }
+%    }]
+%}
+
+%    #obj_state{session=Session} = State,
+%    case handle(admin_get_data, [Parts, Spec], Session) of
+%        {ok, Reply, Session2} ->
+%            State2 = State#obj_state{session=Session2},
+%            {ok, Reply, State2};
+%        {error, Error, Session2} ->
+%            State2 = State#obj_state{session=Session2},
+%            {error, Error, State2}
+%    end.
 
 
 %% @private
