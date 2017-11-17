@@ -328,6 +328,56 @@ get_dash_detail_test() ->
                             height => 220,
                             type => <<"clean">>,
                             cols => [
+                                get_chart_json(#{
+                                    id => <<"video_calls_barh_chart">>,
+                                    header => #{
+                                        text => <<"Video Calls & Calls">>,
+                                        css => <<"chart_header">>
+                                    },
+                                    type => <<"barH">>,
+                                    x => #{
+                                        value => <<"minutes">>
+                                    },
+                                    y => #{
+                                        value => <<"type">>
+                                    },
+                                    dynamic => false
+                                }),
+                                get_chart_json(#{
+                                    id => <<"sent_files_barh_chart">>,
+                                    header => #{
+                                        text => <<"Sent Files">>,
+                                        css => <<"chart_header">>
+                                    },
+                                    type => <<"barH">>,
+                                    x => #{
+                                        value => <<"number">>
+                                    },
+                                    y => #{
+                                        value => <<"type">>
+                                    },
+                                    dynamic => false
+                                }),
+                                get_chart_json(#{
+                                    id => <<"conversations_barh_chart">>,
+                                    header => #{
+                                        text => <<"Conversations">>,
+                                        css => <<"chart_header">>
+                                    },
+                                    type => <<"barH">>,
+                                    x => #{
+                                        value => <<"number">>
+                                    },
+                                    y => #{
+                                        value => <<"type">>
+                                    },
+                                    dynamic => false
+                                })
+                            ]
+                        }, #{
+                            height => 220,
+                            type => <<"clean">>,
+                            cols => [
                                 get_chart_json(<<"chart_id1">>, <<"spline">>, <<"Spline">>, false),
                                 get_chart_json(<<"chart_id2">>, <<"line">>, <<"Line">>, false)
                             ]
@@ -358,7 +408,7 @@ get_dash_detail_test() ->
                             cols => [
                                 get_chart_json(<<"chart_id9">>, <<"bar">>, <<"Bar">>, false),
                                 get_chart_json(<<"chart_id10">>, <<"barH">>, <<"Bar H">>, false)
-                            ]                            
+                            ]
                         }, #{
                             height => 220,
                             type => <<"clean">>,
@@ -645,7 +695,7 @@ get_dashline_old() ->
     }.
 
 get_series_chart_json(#{id := ChartId, x := X, y := Y}=Opts) ->
-    Type = maps:get(type, Opts, line),
+    Type = maps:get(type, Opts, <<"line">>),
     Header = maps:get(header, Opts, #{}),
     HeaderValue = maps:get(text, Header, <<>>),
     HeaderCss = maps:get(css, Header, <<>>),
@@ -745,6 +795,89 @@ get_series_chart_json(#{id := ChartId, x := X, y := Y}=Opts) ->
         dynamic => IsDynamic
     },
     nkadmin_webix_chart:chart(Spec2, #{}).
+
+get_chart_json(#{id := ChartId, x := X, y := Y}=Opts) ->
+    Type = maps:get(type, Opts, <<"line">>),
+    Header = maps:get(header, Opts, #{}),
+    HeaderValue = maps:get(text, Header, <<>>),
+    HeaderCss = maps:get(css, Header, <<>>),
+    XValue = maps:get(value, X),
+    YValue = maps:get(value, Y),
+    NKCharts = [XValue|YValue],
+    IsDynamic = maps:get(dynamic, Opts, false),
+    Spec = case HeaderValue of
+        <<>> ->
+            #{};
+        _ ->
+            #{
+                header => #{
+                    text => HeaderValue,
+                    css => HeaderCss
+                }
+            }
+    end,
+    {XAxis, YAxis, Value, Label} = case nkadmin_webix_chart:is_horizontal(Type) of
+        true ->
+            {
+                #{
+                    start => 0,
+                    template => nkadmin_webix_chart:parse_number_template()
+                },
+                #{
+                    template => #{
+                        nkParseFunction => <<"
+                            function(obj) {
+                                if (obj && obj.", YValue/binary, ") {
+                                    return obj.", YValue/binary, ";
+                                }
+                                return "";
+                            }
+                        ">>
+                    }
+                },
+                <<"#", XValue/binary, "#">>,
+                %<<"#", XValue/binary, "#">>
+                nkadmin_webix_chart:parse_number_template(XValue)
+            };
+        false ->
+            {
+                #{
+                    template => #{
+                        nkParseFunction => <<"
+                            function(obj) {
+                                if (obj && obj.", XValue/binary, ") {
+                                    return obj.", XValue/binary, ";
+                                }
+                                return "";
+                            }
+                        ">>
+                    }
+                },
+                #{
+                    start => 0,
+                    template => nkadmin_webix_chart:parse_number_template()
+                },
+                <<"#", YValue/binary, "#">>,
+                %<<"#", YValue/binary, "#">>
+                nkadmin_webix_chart:parse_number_template(YValue)
+            }
+    end,
+    Spec2 = Spec#{
+        chart_id => ChartId,
+        chart_type => Type,
+        is_subchart => true,
+        nk_charts => NKCharts,
+        value => Value,
+        label => Label,
+        x_axis => XAxis,
+        y_axis => YAxis,
+        offset => 0,
+        origin => 0,
+        charts => [],
+        dynamic => IsDynamic
+    },
+    nkadmin_webix_chart:chart(Spec2, #{}).
+
 
 get_chart_json(ChartId, <<"scatter">>, Title, Dynamic) ->
     Spec = #{

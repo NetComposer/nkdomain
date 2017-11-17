@@ -570,6 +570,99 @@ do_get_chart_data(<<"activity_stats_line_chart">>, _Spec, State) ->
             {error, error, State}
     end;
 
+do_get_chart_data(<<"video_calls_barh_chart">>, _Spec, State) ->
+    {ok, Opts} = nkdomain_store_es_util:get_opts(),
+    Query = #{
+        <<"size">> => 0,
+        <<"query">> => #{
+            <<"bool">> => #{
+                <<"filter">> => [#{ 
+                    <<"term">> => #{
+                        <<"type">> => <<"file">>
+                    }
+                }]
+            }
+        }
+        %"aggs" => #{
+        %}
+    },
+    case nkelastic:search(Query, Opts) of
+        {ok, Hits, _, _, _} ->
+            %lager:info("RESPONSE: ~p~n", [Hits]),
+            %{ok, #{<<"total_files">> => #{value => Hits, delta => 15}}, State};
+            Data = [
+                #{ minutes => 2050, type => <<"Total">> },
+                #{ minutes => 700, type => <<"VideoC.">> },
+                #{ minutes => 1400, type => <<"Calls">> }
+            ],
+            {ok, #{data => Data}, State};
+        _ ->
+            {error, error, State}
+    end;
+
+do_get_chart_data(<<"sent_files_barh_chart">>, _Spec, State) ->
+    {ok, Opts} = nkdomain_store_es_util:get_opts(),
+    Query = #{
+        <<"size">> => 0,
+        <<"query">> => #{
+            <<"bool">> => #{
+                <<"filter">> => [#{ 
+                    <<"term">> => #{
+                        <<"type">> => <<"file">>
+                    }
+                }]
+            }
+        }
+        %"aggs" => #{
+        %}
+    },
+    case nkelastic:search(Query, Opts) of
+        {ok, Hits, _, _, _} ->
+            %lager:info("RESPONSE: ~p~n", [Hits]),
+            %{ok, #{<<"total_files">> => #{value => Hits, delta => 15}}, State};
+            Data = [
+                #{ number => 140000, type => <<"Images">> },
+                #{ number => 40000, type => <<"Videos">> },
+                #{ number => 25000, type => <<"Audios">> },
+                #{ number => 30000, type => <<"Text">> },
+                #{ number => 35000, type => <<"PDF">> },
+                #{ number => 5000, type => <<"Other">> }
+            ],
+            {ok, #{data => Data}, State};
+        _ ->
+            {error, error, State}
+    end;
+
+do_get_chart_data(<<"conversations_barh_chart">>, _Spec, State) ->
+    {ok, Opts} = nkdomain_store_es_util:get_opts(),
+    Query = #{
+        <<"size">> => 0,
+        <<"query">> => #{
+            <<"bool">> => #{
+                <<"filter">> => [#{ 
+                    <<"term">> => #{
+                        <<"type">> => <<"file">>
+                    }
+                }]
+            }
+        }
+        %"aggs" => #{
+        %}
+    },
+    case nkelastic:search(Query, Opts) of
+        {ok, Hits, _, _, _} ->
+            %lager:info("RESPONSE: ~p~n", [Hits]),
+            %{ok, #{<<"total_files">> => #{value => Hits, delta => 15}}, State};
+            Data = [
+                #{ number => 73000, type => <<"P2P">> },
+                #{ number => 45000, type => <<"Groups">> },
+                #{ number => 9000, type => <<"Channels">> }
+            ],
+            {ok, #{data => Data}, State};
+        _ ->
+            {error, error, State}
+    end;
+
 do_get_chart_data(ElementId, _Spec, State) ->
     lager:info("Unknown element id: ~p~n", [ElementId]),
     {ok, #{ElementId => #{value => 0, delta => 0}}, State}.
