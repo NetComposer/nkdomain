@@ -79,5 +79,11 @@ api(<<"get_data">>, Syntax) ->
         '__mandatory' => [element_id]
     };
 
+api(<<"get_chart_data">>, Syntax) ->
+    Syntax#{
+        element_id => binary,
+        '__mandatory' => [element_id]
+    };
+
 api(Cmd, Syntax) ->
     nkdomain_obj_syntax:syntax(Cmd, ?DOMAIN_ADMIN_SESSION, Syntax).
