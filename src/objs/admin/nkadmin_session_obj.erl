@@ -640,23 +640,36 @@ do_get_chart_data(<<"conversations_barh_chart">>, _Spec, State) ->
         <<"query">> => #{
             <<"bool">> => #{
                 <<"filter">> => [#{ 
+                    <<"terms">> => #{
+                        <<"conversation.type">> => [<<"one2one">>, <<"channel">>, <<"private">>]
+                    }
+                }, #{
                     <<"term">> => #{
-                        <<"type">> => <<"file">>
+                        <<"type">> => <<"conversation">>
                     }
                 }]
             }
+        },
+        <<"aggs">> => #{
+            <<"conversation_types">> => #{
+                <<"terms">> => #{
+                    <<"field">> => <<"conversation.type">>
+                }
+            }
         }
-        %"aggs" => #{
-        %}
     },
     case nkelastic:search(Query, Opts) of
-        {ok, Hits, _, _, _} ->
-            %lager:info("RESPONSE: ~p~n", [Hits]),
-            %{ok, #{<<"total_files">> => #{value => Hits, delta => 15}}, State};
+        {ok, _Total, _Hits, Aggs, _Meta} ->
+            Aggs2 = maps:get(<<"conversation_types">>, Aggs),
+            Buckets = maps:get(<<"buckets">>, Aggs2),
+%            Data = [
+%                #{ number => 73000, type => <<"P2P">> },
+%                #{ number => 45000, type => <<"Groups">> },
+%                #{ number => 9000, type => <<"Channels">> }
+%            ],
             Data = [
-                #{ number => 73000, type => <<"P2P">> },
-                #{ number => 45000, type => <<"Groups">> },
-                #{ number => 9000, type => <<"Channels">> }
+                #{ number => maps:get(<<"doc_count">>, Bucket), type => maps:get(<<"key">>, Bucket) }
+                || Bucket <- Buckets
             ],
             {ok, #{data => Data}, State};
         _ ->
