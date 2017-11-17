@@ -149,7 +149,7 @@ unparse(#{type:=Type}=Obj) ->
     end,
     BaseMap4 = case BaseMap3 of
         #{description:=Desc} ->
-            BaseMap3#{description_norm=>normalize_multi(Desc)};
+            BaseMap3#{description_norm=>normalize_multi(Desc, #{unrecognized=>skip})};
         _ ->
             BaseMap3
     end,
@@ -300,31 +300,41 @@ normalize(Text) ->
     nklib_parse:normalize(Text, #{unrecognized=>keep}).
 
 
+%% @private
+normalize(Text, Opts) ->
+    nklib_parse:normalize(Text, Opts).
+
+
 %% @doc
 normalize_multi(Text) ->
-    norm_multi(nklib_util:to_list(Text), [], []).
+    norm_multi(nklib_util:to_list(Text), [], [], #{unrecognized=>keep}).
 
+
+%% @doc
+normalize_multi(Text, Opts) ->
+    norm_multi(nklib_util:to_list(Text), [], [], Opts).
+    
 
 %% @private
-norm_multi([Ch|Rest], Chars, Words) when Ch==32; Ch==$-; Ch==$_; Ch==$/;
+norm_multi([Ch|Rest], Chars, Words, Opts) when Ch==32; Ch==$-; Ch==$_; Ch==$/;
                                         Ch==$(; Ch==$); Ch==$,; Ch==$;; Ch==$: ->
     case Chars of
         [] ->
-            norm_multi(Rest, [], Words);
+            norm_multi(Rest, [], Words, Opts);
         _ ->
-            Word = normalize(lists:reverse(Chars)),
-            norm_multi(Rest, [], [Word|Words])
+            Word = normalize(lists:reverse(Chars), Opts),
+            norm_multi(Rest, [], [Word|Words], Opts)
     end;
 
-norm_multi([Ch|Rest], Chars, Words) ->
-    norm_multi(Rest, [Ch|Chars], Words);
+norm_multi([Ch|Rest], Chars, Words, Opts) ->
+    norm_multi(Rest, [Ch|Chars], Words, Opts);
 
-norm_multi([], Chars, Words) ->
+norm_multi([], Chars, Words, Opts) ->
     case Chars of
         [] ->
             lists:reverse(Words);
         _ ->
-            Word = normalize(lists:reverse(Chars)),
+            Word = normalize(lists:reverse(Chars), Opts),
             lists:reverse([Word|Words])
     end.
 

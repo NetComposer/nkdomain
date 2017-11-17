@@ -395,7 +395,7 @@ sync_op({get_info, Opts}, _From, #obj_state{obj=Obj}=State) ->
     Data = Base#{
         name => UserName,
         surname => UserSurName,
-        fullname => maps:get(name, Obj, UserName),
+        fullname => <<UserName/binary, " ", UserSurName/binary>>,
         email => maps:get(email, User, <<>>),
         phone_t => maps:get(phone_t, User, <<>>),
         address_t => maps:get(address_t, User, <<>>),
