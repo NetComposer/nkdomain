@@ -612,21 +612,30 @@ do_get_chart_data(<<"sent_files_barh_chart">>, _Spec, State) ->
                     }
                 }]
             }
+        },
+        <<"aggs">> => #{
+            <<"file_types">> => #{
+                <<"terms">> => #{
+                    <<"field">> => <<"file.content_type">>
+                }
+            }
         }
-        %"aggs" => #{
-        %}
     },
     case nkelastic:search(Query, Opts) of
-        {ok, Hits, _, _, _} ->
-            %lager:info("RESPONSE: ~p~n", [Hits]),
-            %{ok, #{<<"total_files">> => #{value => Hits, delta => 15}}, State};
+        {ok, _Total, _Hits, Aggs, _Meta} ->
+            Aggs2 = maps:get(<<"file_types">>, Aggs),
+            Buckets = maps:get(<<"buckets">>, Aggs2),
+%            Data = [
+%                #{ number => 140000, type => <<"Images">> },
+%                #{ number => 40000, type => <<"Videos">> },
+%                #{ number => 25000, type => <<"Audios">> },
+%                #{ number => 30000, type => <<"Text">> },
+%                #{ number => 35000, type => <<"PDF">> },
+%                #{ number => 5000, type => <<"Other">> }
+%            ],
             Data = [
-                #{ number => 140000, type => <<"Images">> },
-                #{ number => 40000, type => <<"Videos">> },
-                #{ number => 25000, type => <<"Audios">> },
-                #{ number => 30000, type => <<"Text">> },
-                #{ number => 35000, type => <<"PDF">> },
-                #{ number => 5000, type => <<"Other">> }
+                #{ number => maps:get(<<"doc_count">>, Bucket), type => maps:get(<<"key">>, Bucket) }
+                || Bucket <- Buckets
             ],
             {ok, #{data => Data}, State};
         _ ->
