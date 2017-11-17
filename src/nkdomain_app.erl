@@ -101,25 +101,11 @@ maybe_start_nkroot() ->
 
 %% @doc Register our types
 register_types() ->
-    ok = nkdomain_reg:register_module(nkdomain_domain_obj),
-    ok = nkdomain_reg:register_module(nkdomain_user_obj),
-    ok = nkdomain_reg:register_module(nkdomain_session_obj),
-    ok = nkdomain_reg:register_module(nkdomain_config_obj),
-    ok = nkdomain_reg:register_module(nkdomain_token_obj),
-    ok = nkdomain_reg:register_module(nkdomain_service_obj),
-    ok = nkdomain_reg:register_module(nkdomain_task_obj),
-    ok = nkdomain_reg:register_module(nkdomain_alert_obj),
-    ok = nkdomain_reg:register_module(nkdomain_device_obj),
-    ok = nkdomain_reg:register_module(nkdomain_node_obj),
-    ok = nkdomain_reg:register_module(nkdomain_location_obj),
-
-    ok = nkdomain_reg:register_module(nkdomain_mail_obj),
-    ok = nkdomain_reg:register_module(nkdomain_mail_provider_obj),
-
-    ok = nkdomain_reg:register_module(nkdomain_file_store_obj),
-    ok = nkdomain_reg:register_module(nkdomain_file_obj),
-
-    ok = nkdomain_reg:register_module(nkadmin_session_obj).
+    nkdomain_reg:register_modules([
+        nkdomain_domain_obj, nkdomain_user_obj, nkdomain_session_obj, nkdomain_config_obj,
+        nkdomain_token_obj, nkdomain_service_obj, nkdomain_task_obj, nkdomain_alert_obj,
+        nkdomain_device_obj, nkdomain_node_obj, nkdomain_location_obj, nkdomain_mail_obj, nkdomain_mail_provider_obj,
+        nkdomain_file_store_obj, nkdomain_file_obj, nkadmin_session_obj]).
 
 
 

@@ -24,7 +24,7 @@
 
 -export([get_type_module/1, get_all_type_modules/0, get_module_type/1, get_all_types/0]).
 -export([get_schema_type_module/1, get_all_schema_types/0]).
--export([register_module/1]).
+-export([register_modules/1]).
 
 -include("nkdomain.hrl").
 -include_lib("nkevent/include/nkevent.hrl").
@@ -88,13 +88,15 @@ get_all_schema_types() ->
     nklib_types:get_all_types(nkdomain_schema_type).
 
 
-
-%% @doc Gets the obj module for a type
--spec register_module(module()) ->
+%% @doc Gets the obj modules and reload schema
+-spec register_modules([module()]) ->
     ok.
 
 %% @doc Registers a module
-register_module(Module) ->
+register_modules([]) ->
+    nkdomain_graphql:load_schema();
+
+register_modules([Module|Rest]) ->
     #{type:=Type} = Info = Module:object_info(),
     Type2 = to_bin(Type),
     _ = binary_to_atom(Type2, utf8),
@@ -108,8 +110,8 @@ register_module(Module) ->
             nklib_types:register_type(nkdomain_schema_type, SchemaType2, Module);
         _ ->
             ok
-    end.
-
+    end,
+    register_modules(Rest).
 
 
 %% @private

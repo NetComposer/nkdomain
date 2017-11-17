@@ -152,19 +152,15 @@ user_info1() ->
                 statusConnection(last:1) {
                     totalCount
                     edges {
-                        node {
-                            domainPath
-                            updatedTime
-                            userStatus
-                        }
+                        domainPath
+                        updatedTime
+                        userStatus
                     }
                 }
                 pushConnection(last: 2) {
                     totalCount
                     edges {
-                        node {
-                            deviceId
-                        }
+                        deviceId
                     }
                 }
             }

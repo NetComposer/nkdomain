@@ -126,12 +126,8 @@ make_schema_types(Modules) ->
                             [
                                 "type ", to_bin(Name), "Connection {\n",
                                 parse_fields(#{
-                                                 edges => {list, <<(to_bin(Name))/binary, "Edge">>},
+                                                 edges => {list, <<(to_bin(Name))/binary>>},
                                                  totalCount => int
-                                             }), "}\n\n",
-                                "type ", to_bin(Name), "Edge {\n",
-                                parse_fields(#{
-                                                 node => to_bin(Name)
                                              }), "}\n\n"
                             ];
                         _ ->
@@ -255,6 +251,7 @@ make_schema_mutations(Modules) ->
 
 %% @private
 get_module_schema(Type, Module) ->
+    code:ensure_loaded(Module),
     case nkdomain_lib:type_apply(Module, object_schema, [Type]) of
         not_exported ->
             #{};
@@ -332,7 +329,7 @@ connection() ->
 
 %% @private
 connection_last() ->
-    ["Connection", params(#{params=>#{last=>int}})].
+    ["Connection", params(#{params=>#{last=>{int, #{default=>5}}}})].
 
 
 %% @private
