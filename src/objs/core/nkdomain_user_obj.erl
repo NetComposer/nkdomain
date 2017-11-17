@@ -148,6 +148,46 @@ object_mutation(MutationName, Params, Ctx) ->
     nkdomain_user_obj_schema:object_mutation(MutationName, Params, Ctx).
 
 
+%% @private
+object_parse(update, _Obj) ->
+    #{
+        name => binary,
+        surname => binary,
+        password => fun ?MODULE:fun_user_pass/1,
+        email => lower,
+        phone_t => binary,
+        address_t => binary,
+        push => {list,
+            #{
+                domain_path => binary,
+                srv_id => binary,
+                device_id => binary,
+                push_data => map,
+                updated_time => integer,
+                '__mandatory' => [srv_id, device_id, push_data, updated_time],
+                '__defaults' => #{domain_path => <<>>}
+                % add domain_path when all objects are updated
+                %'__mandatory' => [domain_path, app_id, device_id, push_data, updated_time]
+             }
+        },
+        status => {list,
+             #{
+                 domain_path => binary,
+                 srv_id => binary,
+                 user_status => map,
+                 updated_time => integer,
+                 '__mandatory' => [srv_id, user_status, updated_time],
+                 '__defaults' => #{domain_path => <<>>}
+                 % add domain_path when all objects are updated
+                 % '__mandatory' => [domain_path, app_id, user_status, updated_time]
+             }
+        }
+    };
+
+object_parse(_Mode, Obj) ->
+    Base = object_parse(update, Obj),
+    Base#{'__mandatory' => [name, surname]}.
+
 
 %% @private
 object_es_mapping() ->
@@ -203,46 +243,6 @@ object_es_unparse(Obj, Base) ->
         ?DOMAIN_USER => UserMap2
     }.
 
-
-%% @private
-object_parse(update, _Obj) ->
-    #{
-        name => binary,
-        surname => binary,
-        password => fun ?MODULE:fun_user_pass/1,
-        email => lower,
-        phone_t => binary,
-        address_t => binary,
-        push => {list,
-            #{
-                domain_path => binary,
-                srv_id => binary,
-                device_id => binary,
-                push_data => map,
-                updated_time => integer,
-                '__mandatory' => [srv_id, device_id, push_data, updated_time],
-                '__defaults' => #{domain_path => <<>>}
-                % add domain_path when all objects are updated
-                %'__mandatory' => [domain_path, app_id, device_id, push_data, updated_time]
-             }
-        },
-        status => {list,
-             #{
-                 domain_path => binary,
-                 srv_id => binary,
-                 user_status => map,
-                 updated_time => integer,
-                 '__mandatory' => [srv_id, user_status, updated_time],
-                 '__defaults' => #{domain_path => <<>>}
-                 % add domain_path when all objects are updated
-                 % '__mandatory' => [domain_path, app_id, user_status, updated_time]
-             }
-        }
-    };
-
-object_parse(_Mode, Obj) ->
-    Base = object_parse(update, Obj),
-    Base#{'__mandatory' => [name, surname]}.
 
 
 %% @doc

@@ -48,44 +48,43 @@ object_execute(Field, _ObjIdExt, User, Args) ->
     end.
 
 
-
+%% @doc 
 get_status(User, Args) ->
-    StatusList1 = maps:get(status, User, []),
-    StatusList2 = [
+    Status = maps:get(status, User, []),
+    Edges1 = [
         #{<<"domainPath">>=>Path, <<"userStatus">>=>nklib_json:encode(US), <<"updatedTime">>=>Time} ||
-        #{domain_path:=Path, user_status:=US, updated_time:=Time} <- StatusList1
+        #{domain_path:=Path, user_status:=US, updated_time:=Time} <- Status
     ],
-    StatusList3 = [{ok, #{<<"cursor">>=><<>>, <<"node">>=>Node}} || Node <-StatusList2],
-    StatusList4 = case Args of
+    Edges2 = case Args of
         #{<<"last">>:=N} when N > 0, N < 99 ->
-            lists:sublist(StatusList3, N);
+            lists:sublist(Edges1, N);
         _ ->
-            StatusList3
+            Edges1
     end,
     #{
-        <<"edges">> => StatusList4,
-        <<"totalCount">> => length(StatusList2)
+        <<"edges">> => [{ok, E} || E <- Edges2],
+        <<"totalCount">> => length(Edges1)
     }.
 
 
+%% @doc 
 get_push(User, Args) ->
-    PushList1 = maps:get(push, User, []),
-    PushList2 = [
+    Push = maps:get(push, User, []),
+    Edges1 = [
         #{<<"domainPath">>=>Path, <<"pushData">>=>nklib_json:encode(Data),
           <<"deviceId">>=>DeviceId, <<"updatedTime">>=>Time}
         ||
-        #{domain_path:=Path, device_id:=DeviceId, push_data:=Data, updated_time:=Time} <- PushList1
+        #{domain_path:=Path, device_id:=DeviceId, push_data:=Data, updated_time:=Time} <- Push
     ],
-    PushList3 = [{ok, #{<<"cursor">>=><<>>, <<"node">>=>Node}} || Node <-PushList2],
-    PushList4 = case Args of
+    Edges2 = case Args of
         #{<<"last">>:=N} when N > 0, N < 99 ->
-            lists:sublist(PushList3, N);
+            lists:sublist(Edges1, N);
         _ ->
-            PushList3
+            Edges1
     end,
     #{
-        <<"edges">> => PushList4,
-        <<"totalCount">> => length(PushList2)
+        <<"edges">> => [{ok, E} || E <- Edges2],
+        <<"totalCount">> => length(Edges1)
     }.
 
 
@@ -111,7 +110,7 @@ object_schema(types) ->
                 userStatus => string,
                 updatedTime => time
             },
-            is_connection => true
+            is_connection => only_last
         },
         'UserPush' => #{
             fields => #{
@@ -120,7 +119,7 @@ object_schema(types) ->
                 pushData => string,
                 updatedTime => time
             },
-            is_connection => true
+            is_connection => only_last
         },
         'UserSearchResult' => #{
             fields => #{
