@@ -80,7 +80,7 @@ session_login(#nkreq{srv_id=SrvId, data=Data, session_meta=SessMeta}=Req) ->
             SessData3 = maps:merge(SessData1, SessData2#{login_meta => LoginMeta}),
             SessOpts1 = maps:with([session_id, session_link], SessMeta),
             SessOpts2 = SessOpts1#{data=>SessData3},
-            case nkdomain_session_obj:start(SrvId, DomainId, UserId, SessOpts2) of
+            case nkdomain_session:start(SrvId, DomainId, UserId, SessOpts2) of
                 {ok, SessId, Pid} ->
                     Req2 = add_meta(login_meta, LoginMeta, Req),
                     Req3 = add_id(?DOMAIN_DOMAIN, DomainId, Req2),

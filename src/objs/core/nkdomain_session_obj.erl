@@ -24,65 +24,15 @@
 -behavior(nkdomain_obj).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([start/4]).
--export([object_info/0, object_schema_types/0, object_es_mapping/0, object_parse/2,
-         object_api_syntax/2, object_api_cmd/2,
+-export([object_info/0, object_es_mapping/0, object_parse/2, object_api_syntax/2, object_api_cmd/2,
          object_init/1, object_stop/2, object_event/2]).
 -export([object_admin_info/0]).
+-export([object_execute/5, object_schema/1, object_query/3, object_mutation/3]).
 -export([object_do_active/1]).
 
 -include("nkdomain.hrl").
 -include("nkdomain_debug.hrl").
 -include_lib("nkservice/include/nkservice.hrl").
-
-
-%% ===================================================================
-%% Type
-%% ===================================================================
-
--type create_opts() ::
-    #{
-        session_link => {module(), pid()},
-        session_id => binary(),
-        data => #{
-            login_meta => map(),
-            local => binary(),
-            remote => binary()
-        }
-    }.
-
-
-%% ===================================================================
-%% Public
-%% ===================================================================
-
-%% @doc Creates a new session
--spec start(nkservice:id(), nkdomain:id(), nkdomain:id(), create_opts()) ->
-    {ok, nkdomain:obj_id(), pid()} | {error, term()}.
-
-start(SrvId, DomainId, UserId, Opts) ->
-        Obj1 = #{
-            type => ?DOMAIN_SESSION,
-            domain_id => DomainId,
-            parent_id => UserId,
-            srv_id => SrvId,
-            created_by => UserId,
-            active => true,
-            ?DOMAIN_SESSION => maps:get(data, Opts, #{})
-        },
-        Obj2 = case Opts of
-            #{session_id:=SessId} ->
-                Obj1#{obj_id => SessId};
-            _ ->
-                Obj1
-        end,
-        CreateOpts = maps:with([session_link], Opts),
-        case nkdomain_obj_make:create(Obj2, CreateOpts) of
-            {ok, #obj_id_ext{obj_id=SessId2, pid=Pid}, _} ->
-                {ok, SessId2, Pid};
-            {error, Error} ->
-                {error, Error}
-        end.
 
 
 %% ===================================================================
@@ -110,14 +60,31 @@ object_admin_info() ->
 
 
 %% @doc
-object_schema_types() ->
+object_schema(Type) ->
+    nkdomain_session_obj_schema:object_schema(Type).
+
+
+%% @doc
+object_execute(Field, ObjIdExt, Session, Args, _Ctx) ->
+    nkdomain_session_obj_schema:object_execute(Field, ObjIdExt, Session, Args).
+
+
+%% @doc
+object_query(QueryName, Params, Ctx) ->
+    nkdomain_session_obj_schema:object_query(QueryName, Params, Ctx).
+
+
+%% @doc
+object_mutation(_MutationName, _Params, _Ctx) ->
+    #{}.
+
+
+%% @private
+object_parse(_Mode, _Obj) ->
     #{
-        'Session' => #{
-            fields => #{
-            },
-            is_object => true,
-            comment => "An User Session"
-        }
+        local => binary,
+        remote => binary,
+        login_meta => any
     }.
 
 
@@ -128,15 +95,6 @@ object_es_mapping() ->
         local => #{type => keyword},
         remote => #{type => keyword},
         login_meta => #{enabled => false}
-    }.
-
-
-%% @private
-object_parse(_Mode, _Obj) ->
-    #{
-        local => binary,
-        remote => binary,
-        login_meta => any
     }.
 
 
