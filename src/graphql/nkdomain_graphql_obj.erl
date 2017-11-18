@@ -25,7 +25,7 @@
 -export([execute/4]).
 -export([object_schema/1]).
 -export([object_query/3]).
--export([object_fields/0, object_fields_filter/1, object_fields_sort/1, query_all_objs/1]).
+-export([object_fields/0, object_fields_filter/1, schema_object_fields_sort/1, schema_query_all_objs/1]).
 
 -include("nkdomain.hrl").
 -include("nkdomain_graphql.hrl").
@@ -210,7 +210,7 @@ object_schema(inputs) ->
             }
         },
         objectSort => #{
-            fields => object_fields_sort([]),
+            fields => schema_object_fields_sort([]),
             comment => "Fields to sort on"
         }
     };
@@ -233,7 +233,7 @@ object_schema(queries) ->
                      params => #{id => {no_null, id}},
                      comment => "Relay Modern specification Node fetcher"
                  }},
-        allObjects => query_all_objs(<<>>)
+        allObjects => schema_query_all_objs(<<>>)
     };
 
 object_schema(_) ->
@@ -273,7 +273,7 @@ object_query(<<"allObjects">>, Params, Ctx) ->
 %% @private
 object_fields() ->
     #{
-        aliases => {list, string, #{comment => "List of object aliases"}},
+        % aliases => {list, string, #{comment => "List of object aliases"}},
         createdBy => {no_null, 'User', #{comment => "User that created the object"}},
         createdById => {no_null, string, #{comment => "UserId that created the object"}},
         createdTime => {no_null, time, #{comment => "Object creation time"}},
@@ -294,8 +294,8 @@ object_fields() ->
         objName => {no_null, string, #{comment => "Object's short name"}},
         path => {no_null, string, #{comment => "Object's directory path"}},
         srvId => {string, #{comment => "Object's service"}},
-        subtypes => {list, string, #{comment => "Object's subtypes"}},
-        tags => {list, string, #{comment => "Object's tags"}},
+        % subtypes => {list, string, #{comment => "Object's subtypes"}},
+        % tags => {list, string, #{comment => "Object's tags"}},
         type => {no_null, objectType, #{comment => "Object's type"}},
         updatedBy => {no_null, 'User', #{comment => "User that updated the object"}},
         updatedById => {no_null, string, #{comment => "UserId that updated the object"}},
@@ -308,7 +308,7 @@ object_fields() ->
 object_fields_filter(Fields) ->
     Base = #{
         op => {filterOp, #{comment => "Operation Type"}},
-        aliases => {objectFilterKeyword, #{comment => "Object has an alias"}},
+        % aliases => {objectFilterKeyword, #{comment => "Object has an alias"}},
         createdById => {objectFilterId, #{comment => "Objects created by this user"}},
         createdTime => {objectFilterInt, #{comment => "Object creation time"}},
         description => {objectFilterNorm, #{comment => "Words in description"}},
@@ -323,8 +323,8 @@ object_fields_filter(Fields) ->
         objName => {objectFilterKeyword, #{comment => "Object's with this short name"}},
         path => {objectFilterPath, #{comment => "Filter on this path"}},
         srvId => {objectFilterId, #{comment => "Object's service"}},
-        subTypes => {list, objectFilterId, #{comment => "Object's subtypes"}},
-        tags => {list, objectFilterId, #{comment => "Object's tags"}},
+        % subTypes => {list, objectFilterId, #{comment => "Object's subtypes"}},
+        % tags => {list, objectFilterId, #{comment => "Object's tags"}},
         type => {objectFilterType, #{comment => "Object's type"}},
         updatedById => {objectFilterId, #{comment => "User that updated the object"}},
         updatedTime => {objectFilterInt, #{comment => "Object updation time"}},
@@ -334,24 +334,25 @@ object_fields_filter(Fields) ->
 
 
 %% @private
-object_fields_sort(Fields) ->
+schema_object_fields_sort(Fields) ->
     Base = [domainId, createdById, createdTime, enabled, expiresTime, objName, path, srvId],
     List = [{Field, objectSortField} || Field <- lists:usort(Base++Fields)],
     maps:from_list(List).
 
 
 %% @private
-query_all_objs(Type) ->
+%% Object must define 'TypeSearchResult', 'objectTypeFilter' and 'objectTypeSort'
+schema_query_all_objs(Type) ->
     Type2 = to_bin(Type),
     Result = binary_to_atom(<<Type2/binary, "SearchResult">>, latin1),
     Filter = binary_to_atom(<<"object", Type2/binary, "Filter">>, latin1),
     Sort = binary_to_atom(<<"object", Type2/binary, "Sort">>, latin1),
     {Result, #{
         params => #{
-        filter => {list, Filter, #{default => "[]"}},
-        sort => {list, Sort, #{default => "[]"}},
-        from => {int, #{default => 0}},
-        size => {int, #{default => 10}}
+            filter => {list, Filter, #{default => "[]"}},
+            sort => {list, Sort, #{default => "[]"}},
+            from => {int, #{default => 0}},
+            size => {int, #{default => 10}}
     }}}.
 
 

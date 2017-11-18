@@ -27,7 +27,6 @@
 
 -export([object_execute/5, object_schema/1, object_query/3, object_mutation/3]).
 -export([object_info/0, object_admin_info/0, object_create/1, object_update/1, object_es_mapping/0, object_es_unparse/2,
-
          object_parse/2, object_api_syntax/2, object_api_cmd/2, object_send_event/2]).
 -export([object_init/1, object_save/1, object_event/2,
          object_sync_op/3, object_async_op/2, object_link_down/2, object_handle_info/2]).
@@ -381,7 +380,7 @@ sync_op({check_device, _Pass}, _From, #obj_state{is_enabled=false}=State) ->
 
 sync_op({check_device, DeviceId}, _From, #obj_state{id=Id, obj=Obj}=State) ->
     #obj_id_ext{obj_id=UserId} = Id,
-    case nkdomain_device_obj:find_sso(DeviceId) of
+    case nkdomain_device:find_sso(DeviceId) of
         {ok, UserId} ->
             #{domain_id:=DomainId} = Obj,
             {reply, {ok, {true, UserId, DomainId}}, State};
@@ -395,7 +394,7 @@ sync_op({get_info, Opts}, _From, #obj_state{obj=Obj}=State) ->
     Data = Base#{
         name => UserName,
         surname => UserSurName,
-        fullname => <<UserName/binary, " ", UserSurName/binary>>,
+        fullname => maps:get(name, Obj, UserName),
         email => maps:get(email, User, <<>>),
         phone_t => maps:get(phone_t, User, <<>>),
         address_t => maps:get(address_t, User, <<>>),

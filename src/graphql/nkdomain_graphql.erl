@@ -188,10 +188,10 @@ run_execute(ReqCtx) ->
     Res = graphql:execute(Ctx, AST),
     % lager:error("NKLOG L ~p", [Res]),
     case Res of
-        #{errors:=[Error1|_], data:=_Data} ->
-            make_error(Error1, ReqCtx);
-        #{data:=Data} ->
-            {ok, Data};
+%%        #{errors:=[Error1|_], data:=_Data} ->
+%%            make_error(Error1, ReqCtx);
+        #{data:=_} ->
+            {ok, Res};
         {error, {error, Error}} ->
             {error, Error};
         {error, Error} ->

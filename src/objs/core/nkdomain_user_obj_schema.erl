@@ -145,14 +145,14 @@ object_schema(inputs) ->
             comment => "Filter values to sort on"
         },
         objectUserSort => #{
-            fields => nkdomain_graphql_obj:object_fields_sort([userName, userSurname, email, phone]),
+            fields => nkdomain_graphql_obj:schema_object_fields_sort([userName, userSurname, email, phone]),
             comment => "Fields to sort on"
         }
     };
 
 object_schema(queries) ->
     #{
-        allUsers => nkdomain_graphql_obj:query_all_objs('User')
+        allUsers => nkdomain_graphql_obj:schema_query_all_objs('User')
     };
 
 
@@ -160,10 +160,10 @@ object_schema(mutations) ->
     #{
         introduceUser => #{
             input => #{
-                userName => {no_null, string},
-                userSurname => {no_null, string},
                 domain => string,
                 objName => string,
+                userName => {no_null, string},
+                userSurname => {no_null, string},
                 password => string,
                 email => {no_null, string},
                 phone => string,
@@ -171,8 +171,11 @@ object_schema(mutations) ->
             },
             output => #{
                 objId => {no_null, string},
+                domain => {no_null, string},
                 objName => {no_null, string},
                 path => {no_null, string},
+                userName => {no_null, string},
+                userSurname => {no_null, string},
                 email => {no_null, string},
                 phone => string,
                 address => string
