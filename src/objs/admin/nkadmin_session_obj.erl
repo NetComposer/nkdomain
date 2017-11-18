@@ -587,7 +587,7 @@ do_get_chart_data(<<"video_calls_barh_chart">>, _Spec, State) ->
         %}
     },
     case nkelastic:search(Query, Opts) of
-        {ok, Hits, _, _, _} ->
+        {ok, _Hits, _, _, _} ->
             %lager:info("RESPONSE: ~p~n", [Hits]),
             %{ok, #{<<"total_files">> => #{value => Hits, delta => 15}}, State};
             Data = [
