@@ -187,13 +187,13 @@ object_admin_info() ->
 object_schema(types) ->
     #{
         'File' => #{
+            type_class => nkobject,
             fields => #{
                 contentType => string,
                 size => int,
                 storeId => {no_null, string},
                 password => string
             },
-            is_object => true,
             comment => "A File"
         }
     };

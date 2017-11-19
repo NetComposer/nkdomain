@@ -73,34 +73,27 @@ get_user(_) ->
 object_schema(types) ->
     #{
         'Device' => #{
+            type_class => nkobject,
             fields => #{
                 deviceUUID => string,
                 deviceSSODeviceIds => {list, string},
                 deviceSSODevices => {list, 'Device'},
                 deviceCurrentUser => {'User', #{comment => "User currently associated to this device"}}
             },
-            is_object => true,
             comment => "A Device"
-        },
-        'DeviceSearchResult' => #{
-            fields => #{
-                objects => {list_no_null, 'Device', #{comment => "My Objects"}},
-                pageInfo => {no_null, 'PageInfo'},
-                totalCount => int
-            }
         }
     };
 
 object_schema(inputs) ->
     #{
-        objectDeviceFilter => #{
+        'DeviceFilter' => #{
             fields => nkdomain_graphql_obj:object_fields_filter(#{
-                deviceUUID => objectFilterKeyword,
-                deviceSSODeviceId => objectFilterKeyword
+                deviceUUID => 'FilterKeyword',
+                deviceSSODeviceId => 'FilterKeyword'
             }),
             comment => "Filter values to sort on"
         },
-        objectDeviceSort => #{
+        'DeviceSort' => #{
             fields => nkdomain_graphql_obj:schema_object_fields_sort([]),
             comment => "Fields to sort on"
         }

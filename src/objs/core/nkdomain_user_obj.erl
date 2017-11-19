@@ -133,8 +133,8 @@ object_schema(Type) ->
 
 
 %% @doc
-object_execute(Field, ObjIdExt, #{?DOMAIN_USER:=User}, Args, _Ctx) ->
-    nkdomain_user_obj_schema:object_execute(Field, ObjIdExt, User, Args).
+object_execute(Field, ObjIdExt, #{?DOMAIN_USER:=User}, Args, Ctx) ->
+    nkdomain_user_obj_schema:object_execute(Field, ObjIdExt, User, Args, Ctx).
 
 
 %% @doc

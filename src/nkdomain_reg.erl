@@ -94,7 +94,12 @@ get_all_schema_types() ->
 
 %% @doc Registers a module
 register_modules([]) ->
-    nkdomain_graphql:load_schema();
+    case nkdomain_app:get(load_schema) of
+        true ->
+            nkdomain_graphql:load_schema();
+        false ->
+            ok
+    end;
 
 register_modules([Module|Rest]) ->
     #{type:=Type} = Info = Module:object_info(),

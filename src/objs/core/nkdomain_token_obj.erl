@@ -27,8 +27,9 @@
 -export([create/3]).
 -export([object_info/0, object_es_mapping/0, object_parse/2, object_send_event/2,
          object_sync_op/3, object_async_op/2]).
--export([object_admin_info/0, object_schema_types/0]).
+-export([object_admin_info/0]).
 -export([get_token_data/1, consume_token/2]).
+-export([object_execute/5, object_schema/1, object_query/3, object_mutation/3]).
 
 -include("nkdomain.hrl").
 -include("nkdomain_debug.hrl").
@@ -139,15 +140,23 @@ object_admin_info() ->
 
 
 %% @doc
-object_schema_types() ->
-    #{
-        'Token' => #{
-            fields => #{
-            },
-            is_object => true,
-            comment => "A Token"
-        }
-    }.
+object_schema(Type) ->
+    nkdomain_token_obj_schema:object_schema(Type).
+
+
+%% @doc
+object_execute(Field, ObjIdExt, #{?DOMAIN_USER:=User}, Args, _Ctx) ->
+    nkdomain_token_obj_schema:object_execute(Field, ObjIdExt, User, Args).
+
+
+%% @doc
+object_query(QueryName, Params, Ctx) ->
+    nkdomain_token_obj_schema:object_query(QueryName, Params, Ctx).
+
+
+%% @doc
+object_mutation(MutationName, Params, Ctx) ->
+    nkdomain_token_obj_schema:object_mutation(MutationName, Params, Ctx).
 
 
 %% @private

@@ -27,7 +27,7 @@
 -export([search/2, search_all/2, search_type/2, search_all_types/2, search_childs/2, search_all_childs/2]).
 -export([find_path/1, find_path/2, unload_childs/1, get_childs_type/2]).
 -export([get_all_counters/1, get_counter/2, make_path/3]).
--export([object_schema/1]).
+-export([object_execute/5, object_schema/1, object_query/3, object_mutation/3]).
 -export([object_info/0, object_admin_info/0, object_parse/2, object_es_mapping/0,
          object_api_syntax/2, object_send_event/2, object_api_cmd/2]).
 -export([object_init/1, object_sync_op/3, object_async_op/2, object_enabled/2, object_link_down/2,
@@ -212,17 +212,24 @@ object_admin_info() ->
     }.
 
 
-object_schema(types) ->
-    #{
-        'Domain' => #{
-            fields => #{},
-            is_object => true,
-            comment => "A Domain"
-        }
-    };
+%% @doc
+object_schema(Type) ->
+    nkdomain_domain_obj_schema:object_schema(Type).
 
-object_schema(_) ->
-   #{}.
+
+%% @doc
+object_execute(Field, ObjIdExt, #{?DOMAIN_USER:=User}, Args, _Ctx) ->
+    nkdomain_domain_obj_schema:object_execute(Field, ObjIdExt, User, Args).
+
+
+%% @doc
+object_query(QueryName, Params, Ctx) ->
+    nkdomain_domain_obj_schema:object_query(QueryName, Params, Ctx).
+
+
+%% @doc
+object_mutation(MutationName, Params, Ctx) ->
+    nkdomain_domain_obj_schema:object_mutation(MutationName, Params, Ctx).
 
 
 %% @private

@@ -69,26 +69,6 @@ object_execute(Field, {#obj_id_ext{}, Obj}, _Args, _Ctx) ->
         _ -> obj_type_field
     end;
 
-object_execute(Field, #search_results{}=SR, _, _) ->
-    case Field of
-        <<"objects">> ->
-            {ok, [{ok, Obj} || Obj <- SR#search_results.objects]};
-        <<"totalCount">> ->
-            {ok, SR#search_results.total_count};
-        <<"pageInfo">> ->
-            {ok, SR#search_results.page_info};
-        <<"cursor">> ->
-            {ok, SR#search_results.cursor}
-    end;
-
-object_execute(Field, #page_info{}=PI, _, _) ->
-    case Field of
-        <<"hasNextPage">> ->
-            {ok, PI#page_info.has_next_page};
-        <<"hasPreviousPage">> ->
-            {ok, PI#page_info.has_previous_page}
-    end;
-
 object_execute(Field, Obj, _Args, _Ctx) when is_map(Obj) ->
     {ok, maps:get(Field, Obj, null)};
 
@@ -113,10 +93,9 @@ object_execute(_Field, _Obj, _Args, _Ctx) ->
     }.
 
 -spec search(map(), search_opts()) ->
-    {ok, #search_results{}} | {error, term()}.
+    {ok, map()} | {error, term()}.
 
-
-%% @doc 
+%% @doc
 search(Params, Opts) ->
     Fields = get_obj_fields(Opts),
     #{
@@ -141,13 +120,10 @@ search(Params, Opts) ->
     lager:error("Spec2: ~p", [Spec2]),
     case read_objs(From, Size, Spec2) of
         {ok, Total, Data2} ->
-            Result = #search_results{
-                objects = Data2,
-                total_count = Total,
-                page_info = #page_info{
-                    has_next_page = false,
-                    has_previous_page = false
-                }
+            lager:error("NKLOG OBJS2 ~p", [Data2]),
+            Result = #{
+                <<"objects">> => Data2,
+                <<"totalCount">> => Total
             },
             {ok, Result};
         {error, Error} ->
@@ -335,6 +311,7 @@ add_filter_norm(Field, <<"fuzzy">>, Value, Acc) ->
             [{Field, fuzzy, W} || W <-Words] ++ Acc
     end.
 
+
 %% @private
 read_objs(From, Size, Spec) ->
     do_read_objs(From, Size, Spec, []).
@@ -350,7 +327,7 @@ do_read_objs(Start, Size, Spec, Acc) ->
                 fun(#{<<"obj_id">>:=ObjId}, FunAcc) ->
                     case nkdomain_lib:read(ObjId) of
                         {ok, ObjIdExt, Obj} ->
-                            [{ObjIdExt, Obj}|FunAcc];
+                            [{ok, {ObjIdExt, Obj}}|FunAcc];
                         {error, Error} ->
                             lager:warning("could not read object ~s: ~p", [ObjId, Error]),
                             FunAcc

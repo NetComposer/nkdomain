@@ -74,7 +74,7 @@
 -type mutation_name() :: atom().
 
 -type object() ::
-    {#obj_id_ext{}, nkdomain:obj()} | #page_info{} | #search_results{}.
+    {#obj_id_ext{}, nkdomain:obj()} | map().
 
 
 %% ===================================================================

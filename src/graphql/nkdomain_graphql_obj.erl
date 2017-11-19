@@ -25,7 +25,7 @@
 -export([execute/4]).
 -export([object_schema/1]).
 -export([object_query/3]).
--export([object_fields/0, object_fields_filter/1, schema_object_fields_sort/1, schema_query_all_objs/1]).
+-export([object_fields/1, object_fields_filter/1, schema_object_fields_sort/1, schema_query_all_objs/1, schema_query_all_objs2/1]).
 
 -include("nkdomain.hrl").
 -include("nkdomain_graphql.hrl").
@@ -39,8 +39,9 @@
 %% @doc Called from GraphQL to extract fields on any type
 execute(Ctx, Obj, Field, Args) ->
     #{nkmeta:=#{srv_id:=SrvId}} = Ctx,
+    lager:notice("NKLOG GraphQL Obj Execute: ~p ~p", [Field, Obj]),
     Res = ?CALL_SRV(SrvId, object_graphql_execute, [Field, Obj, Args, Ctx]),
-    % lager:notice("NKLOG RES: ~p", [Res]),
+    lager:notice("NKLOG RES: ~p", [Res]),
     Res.
 
 
@@ -120,37 +121,30 @@ object_schema(enums) ->
 
 object_schema(types) ->
     #{
-        'SearchResult' => #{
+        'ObjectSearchResult' => #{
             fields => #{
                 objects => {list_no_null, 'Object', #{comment => "My Objects"}},
-                pageInfo => {no_null, 'PageInfo'},
                 totalCount => int
-            }
-        },
-        'PageInfo' => #{
-            fields => #{
-                hasNextPage => {no_null, boolean},
-                hasPreviousPage => {no_null, boolean}
             }
         }
     };
 
 object_schema(inputs) ->
     #{
-        objectFilterId => #{
+        'FilterId' => #{
             fields => #{
                 eq => string,
                 values => {list, string},
                 exists => bool
             }
         },
-        objectFilterType => #{
+        'FilterType' => #{
             fields => #{
                 eq => objectType,
                 values => {list, objectType}
             }
         },
-        objectFilterKeyword => #{
+        'FilterKeyword' => #{
             fields => #{
                 eq => string,
                 values => {list, string},
@@ -162,7 +156,7 @@ object_schema(inputs) ->
                 exists => bool
             }
         },
-        objectFilterNorm => #{
+        'FilterNormalizedString' => #{
             fields => #{
                 eq => string,
                 prefix => string,
@@ -170,7 +164,7 @@ object_schema(inputs) ->
                 fuzzy => string
             }
         },
-        objectFilterPath => #{
+        'FilterPath' => #{
             fields => #{
                 eq => string,
                 values => {list, string},
@@ -182,7 +176,7 @@ object_schema(inputs) ->
                 exists => bool
             }
         },
-        objectFilterInt => #{
+        'FilterInt' => #{
             fields => #{
                 values => {list, int},
                 eq => int,
@@ -194,22 +188,22 @@ object_schema(inputs) ->
                 exists => bool
             }
         },
-        objectFilterBoolean => #{
+        'FilterBoolean'=> #{
             fields => #{
                 eq => boolean,
                 exists => bool
             }
         },
-        objectFilter => #{
+        'ObjectFilter' => #{
             fields => object_fields_filter(#{}),
             comment => "Filter values to sort on"
         },
-        objectSortField => #{
+        'SortParams' => #{
             fields => #{
                 order => {sortOrder, #{default => <<"ASC">>}}
             }
         },
-        objectSort => #{
+        'ObjectSort' => #{
             fields => schema_object_fields_sort([]),
             comment => "Fields to sort on"
         }
@@ -222,7 +216,7 @@ object_schema(interfaces) ->
             comment => "Relay Modern Node Interface"
         },
         'Object'=> #{
-            fields => object_fields(),
+            fields => object_fields(#{}),
             comment => "Standard NetComposer Object"
         }
     };
@@ -233,7 +227,7 @@ object_schema(queries) ->
                      params => #{id => {no_null, id}},
                      comment => "Relay Modern specification Node fetcher"
                  }},
-        allObjects => schema_query_all_objs(<<>>)
+        allObjects => schema_query_all_objs('Object')
     };
 
 object_schema(_) ->
@@ -271,8 +265,8 @@ object_query(<<"allObjects">>, Params, Ctx) ->
 
 
 %% @private
-object_fields() ->
-    #{
+object_fields(Base) ->
+    Base#{
         % aliases => {list, string, #{comment => "List of object aliases"}},
         createdBy => {no_null, 'User', #{comment => "User that created the object"}},
         createdById => {no_null, string, #{comment => "UserId that created the object"}},
@@ -308,27 +302,27 @@ object_fields() ->
 object_fields_filter(Fields) ->
     Base = #{
         op => {filterOp, #{comment => "Operation Type"}},
-        % aliases => {objectFilterKeyword, #{comment => "Object has an alias"}},
-        createdById => {objectFilterId, #{comment => "Objects created by this user"}},
-        createdTime => {objectFilterInt, #{comment => "Object creation time"}},
-        description => {objectFilterNorm, #{comment => "Words in description"}},
-        destroyed => {objectFilterBoolean, #{comment => "Filter by destroyed objects"}},
-        destroyedTime => {objectFilterInt, #{comment => "Destruction time"}},
-        domainId => {objectFilterId, #{comment => "Filter objects belonging to this domain"}},
-        enabled => {objectFilterBoolean, #{comment => "Filter enabled or disabled objects"}},
-        expiresTime => {objectFilterInt, #{comment => "Time this object will expire"}},
-        iconId => {objectFilterId, #{comment => "Objects hanving this iconId"}},
-        name => {objectFilterNorm, #{comment => "Words in name"}},
-        objId => {objectFilterId, #{comment => "Object's ID"}},
-        objName => {objectFilterKeyword, #{comment => "Object's with this short name"}},
-        path => {objectFilterPath, #{comment => "Filter on this path"}},
-        srvId => {objectFilterId, #{comment => "Object's service"}},
-        % subTypes => {list, objectFilterId, #{comment => "Object's subtypes"}},
-        % tags => {list, objectFilterId, #{comment => "Object's tags"}},
-        type => {objectFilterType, #{comment => "Object's type"}},
-        updatedById => {objectFilterId, #{comment => "User that updated the object"}},
-        updatedTime => {objectFilterInt, #{comment => "Object updation time"}},
-        vsn => {objectFilterKeyword, #{comment => "Object's current version"}}
+        % aliases => {'FilterKeyword' => #{comment => "Object has an alias"}},
+        createdById => {'FilterId', #{comment => "Objects created by this user"}},
+        createdTime => {'FilterInt', #{comment => "Object creation time"}},
+        description => {'FilterNormalizedString', #{comment => "Words in description"}},
+        destroyed => {'FilterBoolean', #{comment => "Filter by destroyed objects"}},
+        destroyedTime => {'FilterInt', #{comment => "Destruction time"}},
+        domainId => {'FilterId', #{comment => "Filter objects belonging to this domain"}},
+        enabled => {'FilterBoolean', #{comment => "Filter enabled or disabled objects"}},
+        expiresTime => {'FilterInt', #{comment => "Time this object will expire"}},
+        iconId => {'FilterId', #{comment => "Objects hanving this iconId"}},
+        name => {'FilterNormalizedString', #{comment => "Words in name"}},
+        objId => {'FilterId', #{comment => "Object's ID"}},
+        objName => {'FilterKeyword', #{comment => "Object's with this short name"}},
+        path => {'FilterPath', #{comment => "Filter on this path"}},
+        srvId => {'FilterId', #{comment => "Object's service"}},
+        % subTypes => {list, 'FilterId', #{comment => "Object's subtypes"}},
+        % tags => {list, 'FilterId', #{comment => "Object's tags"}},
+        type => {'FilterType', #{comment => "Object's type"}},
+        updatedById => {'FilterId', #{comment => "User that updated the object"}},
+        updatedTime => {'FilterInt', #{comment => "Object updation time"}},
+        vsn => {'FilterKeyword', #{comment => "Object's current version"}}
     },
     maps:merge(Base, Fields).
 
@@ -336,7 +330,7 @@ object_fields_filter(Fields) ->
 %% @private
 schema_object_fields_sort(Fields) ->
     Base = [domainId, createdById, createdTime, enabled, expiresTime, objName, path, srvId],
-    List = [{Field, objectSortField} || Field <- lists:usort(Base++Fields)],
+    List = [{Field, 'SortParams'} || Field <- lists:usort(Base++Fields)],
     maps:from_list(List).
 
 
@@ -345,8 +339,8 @@ schema_object_fields_sort(Fields) ->
 schema_query_all_objs(Type) ->
     Type2 = to_bin(Type),
     Result = binary_to_atom(<<Type2/binary, "SearchResult">>, latin1),
-    Filter = binary_to_atom(<<"object", Type2/binary, "Filter">>, latin1),
-    Sort = binary_to_atom(<<"object", Type2/binary, "Sort">>, latin1),
+    Filter = binary_to_atom(<<Type2/binary, "Filter">>, latin1),
+    Sort = binary_to_atom(<<Type2/binary, "Sort">>, latin1),
     {Result, #{
         params => #{
             filter => {list, Filter, #{default => "[]"}},
@@ -354,6 +348,20 @@ schema_query_all_objs(Type) ->
             from => {int, #{default => 0}},
             size => {int, #{default => 10}}
     }}}.
+
+
+%% Object must define 'TypeSearchResult', 'objectTypeFilter' and 'objectTypeSort'
+schema_query_all_objs2(Type) ->
+    Type2 = to_bin(Type),
+    Result = binary_to_atom(<<Type2/binary, "SearchResult">>, latin1),
+    {Result, #{
+        params => #{
+            filter => {list, 'ObjectFilter', #{default => "[]"}},
+            sort => {list, 'ObjectSort', #{default => "[]"}},
+            from => {int, #{default => 0}},
+            size => {int, #{default => 10}}
+        }}}.
+
 
 
 

@@ -24,6 +24,7 @@
 
 -export([object_execute/4, object_schema/1, object_query/3]).
 -export([sample_all/0]).
+-export([filter_fields/0]).
 
 -include("nkdomain.hrl").
 
@@ -50,35 +51,27 @@ object_execute(Field, _ObjIdExt, #{?DOMAIN_SESSION:=SessObj}=Session, _Args) ->
 object_schema(types) ->
     #{
         'Session' => #{
+            type_class => nkobject,
             fields => #{
                 sessionLocal => string,
                 sessionRemote => string,
                 sessionUserId => {no_null, string},
                 sessionUser => {no_null, 'User'}
             },
-            is_object => true,
             comment => "An User Session"
         },
-        'SessionSearchResult' => #{
-            fields => #{
-                objects => {list_no_null, 'Session', #{comment => "My Objects"}},
-                pageInfo => {no_null, 'PageInfo'},
-                totalCount => int
-            }
+        'SessionConnection' => #{
+            type_class => connection
         }
     };
 
 object_schema(inputs) ->
     #{
-        objectSessionFilter => #{
-            fields => nkdomain_graphql_obj:object_fields_filter(#{
-                sessionLocal => objectFilterKeyword,
-                sessionRemote => objectFilterKeyword,
-                sessionUserId => objectFilterKeyword
-            }),
+        'SessionFilter' => #{
+            fields => filter_fields(),
             comment => "Filter values to sort on"
         },
-        objectSessionSort => #{
+        'SessionSort' => #{
             fields => nkdomain_graphql_obj:schema_object_fields_sort([]),
             comment => "Fields to sort on"
         }
@@ -95,6 +88,20 @@ object_schema(_) ->
 
 
 %% @doc
+object_query({connection, #obj_id_ext{type=?DOMAIN_USER, obj_id=UserObjId}}, Params, _Ctx) ->
+    Opts = #{
+        fields => #{
+            <<"sessionLocal">> => [?DOMAIN_SESSION, local],
+            <<"sessionRemote">> => [?DOMAIN_SESSION, remote],
+            <<"sessionUserId">> => parent_id
+        },
+        filters => [
+            #{<<"parent_id">> => #{<<"eq">> => UserObjId}},
+            #{<<"type">> => #{<<"eq">> => {enum, <<"Session">>}}}
+        ]
+    },
+    nkdomain_graphql_util:search(Params, Opts);
+
 object_query(<<"allSessions">>, Params, _Ctx) ->
     Opts = #{
         fields => #{
@@ -108,6 +115,15 @@ object_query(<<"allSessions">>, Params, _Ctx) ->
     },
     nkdomain_graphql_util:search(Params, Opts).
 
+
+
+%% @private
+filter_fields() ->
+    nkdomain_graphql_obj:object_fields_filter(#{
+          sessionLocal => 'FilterKeyword',
+          sessionRemote => 'FilterKeyword',
+          sessionUserId => 'FilterKeyword'
+      }).
 
 
 %% @private

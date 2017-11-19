@@ -93,48 +93,34 @@ make_schema_types(Modules) ->
         fun(Module, Acc) ->
             Map = get_module_schema(types, Module),
             Acc ++ [
-                [
-                    comment(Opts#{no_margin=>true}),
-                    "type ",to_bin(Name),
-                    case Opts of
-                        #{is_object:=true}  ->
-                            [
-                                " implements Node, Object {\n",
-                                parse_fields(nkdomain_graphql_obj:object_fields()), "\n"
-                            ];
-                        _ ->
-                            " {\n"
-                    end,
-                    parse_fields(Fields),
-                    "}\n\n",
-                    case Opts of
-                        #{is_connection:=true} ->
-                            [
-                                "type ", to_bin(Name), "Connection {\n",
-                                parse_fields(#{
-                                                 pageInfo => {no_null, 'PageInfo'},
-                                                 edges => {list, <<(to_bin(Name))/binary, "Edge">>},
-                                                 totalCount => int
-                                             }), "}\n\n",
-                                "type ", to_bin(Name), "Edge {\n",
-                                parse_fields(#{
-                                                 node => to_bin(Name),
-                                                 cursor => {no_null, string}
-                                             }), "}\n\n"
-                            ];
-                        #{is_connection:=only_last} ->
-                            [
-                                "type ", to_bin(Name), "Connection {\n",
-                                parse_fields(#{
-                                                 edges => {list, <<(to_bin(Name))/binary>>},
-                                                 totalCount => int
-                                             }), "}\n\n"
-                            ];
-                        _ ->
-                            []
-                    end
-                ]
-                || {Name, #{fields:=Fields}=Opts} <- maps:to_list(Map)
+                case maps:get(type_class, Opts, none) of
+                    none ->
+                        [
+                            comment(Opts#{no_margin=>true}),
+                            "type ",to_bin(Name), " {\n",
+                            parse_fields(maps:get(fields, Opts, #{})), "}\n\n"
+                        ];
+                    nkobject ->
+                        [
+                            comment(Opts#{no_margin=>true}),
+                            "type ", to_bin(Name), " implements Node, Object {\n",
+                            parse_fields(nkdomain_graphql_obj:object_fields(#{})), "\n",
+                            parse_fields(maps:get(fields, Opts, #{})), "}\n\n",
+                            "type ", to_bin(Name), "SearchResult {\n",
+                            parse_fields(#{objects=>{list_no_null, Name}, totalCount=>{no_null, int}}),
+                            "}\n\n"
+                        ];
+                    connection ->
+                        Name2 = get_base_type(Name, <<"Connection">>),
+                        [
+                            "type ", Name2, "Connection {\n",
+                            parse_fields(#{
+                                 objects => {list, Name2},
+                                 totalCount => int
+                            }), "}\n\n"
+                        ]
+                end
+                || {Name, Opts} <- maps:to_list(Map)
             ]
         end,
         [],
@@ -261,6 +247,13 @@ get_module_schema(Type, Module) ->
 
 
 %% @private
+get_base_type(Name, Bin) ->
+    [Name2, _] = binary:split(to_bin(Name), Bin),
+    Name2.
+
+
+
+%% @private
 parse_fields(Map) when is_map(Map) ->
     parse_fields(maps:to_list(Map), []);
 
@@ -287,13 +280,9 @@ parse_fields([{Field, Value}|Rest], Acc) ->
         {list, V, Opts} ->
             [comment(Opts), field(Field, Opts), " : [", value(V), "]", default(Opts)];
         {connection, V} ->
-            [field(Field), connection(), " : ", to_bin(V), "Connection"];
+            [field(Field), connection(#{}), " : ", to_bin(V), "Connection"];
         {connection, V, Opts} ->
-            [comment(Opts), field(Field, Opts), connection(), " : ", to_bin(V), "Connection"];
-        {connection_last, V} ->
-            [field(Field), connection_last(), " : ", to_bin(V), "Connection"];
-        {connection_last, V, Opts} ->
-            [comment(Opts), field(Field, Opts), connection_last(), " : ", to_bin(V), "Connection"];
+            [comment(Opts), field(Field, Opts), connection(Opts), " : ", to_bin(V), "Connection"];
         {V, Opts} ->
             [comment(Opts), field(Field, Opts), " : ", value(V), default(Opts)];
         _ ->
@@ -323,13 +312,14 @@ field(F, Opts) ->
 
 
 %% @private
-connection() ->
-    ["Connection", params(#{params=>#{'after'=>string, first=>int, before=>string, last=>int}})].
+connection(Opts) ->
+    Params = maps:with([from, size, filter, sort, last], Opts),
+    ["Connection", params(#{params=>Params})].
 
 
-%% @private
-connection_last() ->
-    ["Connection", params(#{params=>#{last=>{int, #{default=>5}}}})].
+%%%% @private
+%%connection_last() ->
+%%    ["Connection", params(#{params=>#{last=>{int, #{default=>5}}}})].
 
 
 %% @private

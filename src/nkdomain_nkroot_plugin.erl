@@ -85,6 +85,7 @@ plugin_listen(_Config, #{id:=_SrvId}) ->
 syntax() ->
     #{
         start_nkroot => boolean,
+        load_schema => boolean,
         listen_ip => host,
         listen_port => {integer, 1, 65535},
         listen_path => basepath,
@@ -100,6 +101,7 @@ syntax() ->
         start_services => {list, binary},
         '__defaults' => #{
             start_nkroot => false,
+            load_schema => false,
             listen_ip => <<"127.0.0.1">>,
             listen_port => 9301,
             listen_path => <<"/">>,

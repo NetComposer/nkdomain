@@ -35,7 +35,7 @@ get1() ->
             }
         }
     ">>,
-    {ok, #{<<"node">> := #{<<"id">> := <<"root">>}}} = request(Query),
+    {ok, #{data := #{<<"node">> := #{<<"id">> := <<"root">>}}}} = request(Query),
     ok.
 
 get2() ->

@@ -26,8 +26,9 @@
 
 -include("nkdomain.hrl").
 
--export([object_info/0, object_admin_info/0, object_schema_types/0,
-         object_parse/2, object_api_syntax/2, object_api_cmd/2, object_send_event/2]).
+-export([object_info/0, object_admin_info/0, object_parse/2, object_api_syntax/2,
+         object_api_cmd/2, object_send_event/2]).
+-export([object_execute/5, object_schema/1, object_query/3, object_mutation/3]).
 -export_type([events/0]).
 
 -define(LLOG(Type, Txt, Args),
@@ -68,17 +69,27 @@ object_admin_info() ->
         weight => 100
     }.
 
+%% @doc
+object_schema(Type) ->
+    nkdomain_location_obj_schema:object_schema(Type).
+
 
 %% @doc
-object_schema_types() ->
-    #{
-        'Location' => #{
-            fields => #{
-            },
-            is_object => true,
-            comment => "A Location"
-        }
-    }.
+object_execute(Field, ObjIdExt, #{?DOMAIN_USER:=User}, Args, _Ctx) ->
+    nkdomain_location_obj_schema:object_execute(Field, ObjIdExt, User, Args).
+
+
+%% @doc
+object_query(QueryName, Params, Ctx) ->
+    nkdomain_location_obj_schema:object_query(QueryName, Params, Ctx).
+
+
+%% @doc
+object_mutation(MutationName, Params, Ctx) ->
+    nkdomain_location_obj_schema:object_mutation(MutationName, Params, Ctx).
+
+
+
 
 
 object_parse(_Type, _Obj) ->
