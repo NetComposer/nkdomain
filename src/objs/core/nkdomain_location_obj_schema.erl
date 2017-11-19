@@ -50,7 +50,7 @@ object_schema(types) ->
 
 object_schema(queries) ->
     #{
-        allLocations => nkdomain_graphql_obj:schema_query_all_objs2('Location')
+        allLocations => nkdomain_graphql_obj:schema_query_all_objs('Location')
     };
 
 

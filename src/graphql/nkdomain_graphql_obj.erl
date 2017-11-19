@@ -25,7 +25,8 @@
 -export([execute/4]).
 -export([object_schema/1]).
 -export([object_query/3]).
--export([object_fields/1, object_fields_filter/1, schema_object_fields_sort/1, schema_query_all_objs/1, schema_query_all_objs2/1]).
+-export([object_fields/1, object_fields_filter/1, schema_object_fields_sort/1]).
+-export([schema_query_all_objs/1, schema_query_all_objs/2, schema_query_all_objs/3]).
 
 -include("nkdomain.hrl").
 -include("nkdomain_graphql.hrl").
@@ -39,9 +40,9 @@
 %% @doc Called from GraphQL to extract fields on any type
 execute(Ctx, Obj, Field, Args) ->
     #{nkmeta:=#{srv_id:=SrvId}} = Ctx,
-    lager:notice("NKLOG GraphQL Obj Execute: ~p ~p", [Field, Obj]),
+    % lager:notice("NKLOG GraphQL Obj Execute: ~p ~p", [Field, Obj]),
     Res = ?CALL_SRV(SrvId, object_graphql_execute, [Field, Obj, Args, Ctx]),
-    lager:notice("NKLOG RES: ~p", [Res]),
+    % lager:notice("NKLOG RES: ~p", [Res]),
     Res.
 
 
@@ -335,34 +336,30 @@ schema_object_fields_sort(Fields) ->
 
 
 %% @private
-%% Object must define 'TypeSearchResult', 'objectTypeFilter' and 'objectTypeSort'
-schema_query_all_objs(Type) ->
-    Type2 = to_bin(Type),
-    Result = binary_to_atom(<<Type2/binary, "SearchResult">>, latin1),
-    Filter = binary_to_atom(<<Type2/binary, "Filter">>, latin1),
-    Sort = binary_to_atom(<<Type2/binary, "Sort">>, latin1),
-    {Result, #{
-        params => #{
-            filter => {list, Filter, #{default => "[]"}},
-            sort => {list, Sort, #{default => "[]"}},
-            from => {int, #{default => 0}},
-            size => {int, #{default => 10}}
-    }}}.
+%% Object must define 'TypeSearchResult', 'TypeFilter' and 'TypeSort'
+schema_query_all_objs(ResultType) ->
+    schema_query_all_objs(ResultType, 'Object', 'Object').
 
 
-%% Object must define 'TypeSearchResult', 'objectTypeFilter' and 'objectTypeSort'
-schema_query_all_objs2(Type) ->
-    Type2 = to_bin(Type),
-    Result = binary_to_atom(<<Type2/binary, "SearchResult">>, latin1),
+%% @private
+%% Object must define 'TypeSearchResult', 'TypeFilter' and 'TypeSort'
+schema_query_all_objs(ResultType, FilterType) ->
+    schema_query_all_objs(ResultType, FilterType, 'Object').
+
+
+%% @private
+%% Object must define 'TypeSearchResult', 'FilterTypeFilter' and 'SortTypeSort'
+schema_query_all_objs(ResultType, FilterType, SortType) ->
+    Result = binary_to_atom(<<(to_bin(ResultType))/binary, "SearchResult">>, latin1),
+    Filter = binary_to_atom(<<(to_bin(FilterType))/binary, "Filter">>, latin1),
+    Sort = binary_to_atom(<<(to_bin(SortType))/binary, "Sort">>, latin1),
     {Result, #{
         params => #{
-            filter => {list, 'ObjectFilter', #{default => "[]"}},
-            sort => {list, 'ObjectSort', #{default => "[]"}},
-            from => {int, #{default => 0}},
-            size => {int, #{default => 10}}
+            filter => {list, Filter},
+            sort => {list, Sort},
+            from => int,
+            size => int
         }}}.
-
-
 
 
 %% @private

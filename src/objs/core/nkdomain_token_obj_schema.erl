@@ -57,7 +57,7 @@ object_schema(types) ->
 
 object_schema(queries) ->
     #{
-        allTokens=> nkdomain_graphql_obj:schema_query_all_objs2('Token')
+        allTokens=> nkdomain_graphql_obj:schema_query_all_objs('Token')
     };
 
 

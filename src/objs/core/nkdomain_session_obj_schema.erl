@@ -70,16 +70,12 @@ object_schema(inputs) ->
         'SessionFilter' => #{
             fields => filter_fields(),
             comment => "Filter values to sort on"
-        },
-        'SessionSort' => #{
-            fields => nkdomain_graphql_obj:schema_object_fields_sort([]),
-            comment => "Fields to sort on"
         }
     };
 
 object_schema(queries) ->
     #{
-        allSessions=> nkdomain_graphql_obj:schema_query_all_objs('Session')
+        allSessions=> nkdomain_graphql_obj:schema_query_all_objs('Session', 'Session', 'Object')
     };
 
 

@@ -104,23 +104,34 @@ search(Params, Opts) ->
         <<"filter">> := Filters,
         <<"sort">> := Sort
     } = Params,
-    Filters2 = maps:get(filters, Opts, []) ++ Filters,
+    Filters1 = case Filters of null -> []; _ -> Filters end,
+    Filters2 = maps:get(filters, Opts, []) ++ Filters1,
     Spec1 = case add_filters(Filters2, Fields, []) of
         [] ->
             #{};
         FilterList ->
             #{filter_list => FilterList}
     end,
-    Spec2 = case add_sort(Sort, Fields, []) of
+    Sort1 = case Sort of null -> []; _ -> Sort end,
+    Spec2 = case add_sort(Sort1, Fields, []) of
         [] ->
             Spec1;
         SortList ->
             Spec1#{sort => SortList}
     end,
     lager:error("Spec2: ~p", [Spec2]),
-    case read_objs(From, Size, Spec2) of
+    From2 = case From of
+        null -> 0;
+        _ when is_integer(From), From >= 0 -> From;
+        _ -> error(invalid_size)
+    end,
+    Size2 = case Size of
+        null -> 10;
+        _ when is_integer(Size), From >= 0, Size < 50 -> Size;
+        _ -> error(invalid_size)
+    end,
+    case read_objs(From2, Size2, Spec2) of
         {ok, Total, Data2} ->
-            lager:error("NKLOG OBJS2 ~p", [Data2]),
             Result = #{
                 <<"objects">> => Data2,
                 <<"totalCount">> => Total

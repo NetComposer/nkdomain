@@ -23,7 +23,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -behaviour(application).
 
--export([start/0, start/1, start/2, stop/1, maybe_start_nkroot/0]).
+-export([start/0, start/1, start/2, stop/1, maybe_start_nkroot/0, reload/0]).
 -export([get/1, put/2, del/1]).
 -export([register_types/0]).
 
@@ -70,6 +70,7 @@ start(_Type, _Args) ->
             lager:info("NkDOMAIN v~s has started.", [Vsn]),
             nkdomain_i18n:reload(),
             register_types(),
+            reload(),
             {ok, Pid};
         {error, Error} ->
             lager:error("Error parsing config: ~p", [Error]),
@@ -108,6 +109,9 @@ register_types() ->
         nkdomain_file_store_obj, nkdomain_file_obj, nkadmin_session_obj]).
 
 
+%% @doc
+reload() ->
+    nklib_reloader:reload_app(?APP).
 
 
 %% @doc gets a configuration value

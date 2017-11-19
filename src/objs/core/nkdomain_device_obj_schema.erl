@@ -101,7 +101,7 @@ object_schema(inputs) ->
 
 object_schema(queries) ->
     #{
-        allDevices=> nkdomain_graphql_obj:schema_query_all_objs('Device')
+        allDevices=> nkdomain_graphql_obj:schema_query_all_objs('Device', 'Device', 'Device')
     };
 
 

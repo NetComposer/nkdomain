@@ -46,7 +46,7 @@ get2() ->
                 ... on User {
                     userName
                     domain {
-                        name
+                        path
                     }
                 }
             }
@@ -149,18 +149,31 @@ user_info1() ->
             id
             ... on User {
                 userName
-                statusConnection(last:1) {
+                userStatusConnection(last:1) {
                     totalCount
-                    edges {
+                    objects {
                         domainPath
                         updatedTime
                         userStatus
                     }
                 }
-                pushConnection(last: 2) {
+                userPushConnection(last: 2) {
                     totalCount
-                    edges {
+                    objects {
                         deviceId
+                    }
+                }
+                sessionConnection(
+                    filter: [
+                        {
+                            createdTime: {gt: 0},
+                            sessionLocal: {prefix: \"wss\"}
+                        }
+                    ]
+                ) {
+                    totalCount
+                    objects {
+                        sessionLocal
                     }
                 }
             }

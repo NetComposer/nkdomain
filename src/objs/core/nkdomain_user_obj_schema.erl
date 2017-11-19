@@ -107,10 +107,10 @@ object_schema(types) ->
                                 last => {int, #{default=>10}},
                                 comment => "User current statuses"}},
                 session => {connection, 'Session', #{
-                                from => {int, #{default=>0}},
-                                size => {int, #{default=>10}},
-                                filter => 'SessionFilter',
-                                sort => 'ObjectSort'}}
+                                from => int,
+                                size => int,
+                                filter => {list, 'SessionFilter'},
+                                sort => {list, 'ObjectSort'}}}
             },
             comment => "An User"
         },
@@ -158,7 +158,7 @@ object_schema(inputs) ->
 
 object_schema(queries) ->
     #{
-        allUsers => nkdomain_graphql_obj:schema_query_all_objs('User')
+        allUsers => nkdomain_graphql_obj:schema_query_all_objs('User', 'Device', 'Device')
     };
 
 

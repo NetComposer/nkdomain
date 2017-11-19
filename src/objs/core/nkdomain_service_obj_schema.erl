@@ -57,7 +57,7 @@ object_schema(types) ->
 
 object_schema(queries) ->
     #{
-        allServices=> nkdomain_graphql_obj:schema_query_all_objs2('Service')
+        allServices=> nkdomain_graphql_obj:schema_query_all_objs('Service')
     };
 
 
