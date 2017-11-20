@@ -101,11 +101,13 @@ make_schema_types(Modules) ->
                             parse_fields(maps:get(fields, Opts, #{})), "}\n\n"
                         ];
                     nkobject ->
+                        Fields1 = maps:get(fields, Opts, #{}),
+                        Fields2 = add_type_connections(Modules, Name, Fields1),
                         [
                             comment(Opts#{no_margin=>true}),
                             "type ", to_bin(Name), " implements Node, Object {\n",
                             parse_fields(nkdomain_graphql_obj:object_fields(#{})), "\n",
-                            parse_fields(maps:get(fields, Opts, #{})), "}\n\n",
+                            parse_fields(Fields2), "}\n\n",
                             "type ", to_bin(Name), "SearchResult {\n",
                             parse_fields(#{objects=>{list_no_null, Name}, totalCount=>{no_null, int}}),
                             "}\n\n"
@@ -251,6 +253,20 @@ get_base_type(Name, Bin) ->
     [Name2, _] = binary:split(to_bin(Name), Bin),
     Name2.
 
+
+%% @private
+add_type_connections([], _Type, Fields) ->
+    Fields;
+
+add_type_connections([Module|Rest], Type, Fields) ->
+    Map = get_module_schema({connections, Type}, Module),
+    Fields2 = case map_size(Map) of
+        0 ->
+            Fields;
+        _ ->
+            maps:merge(Fields, Map)
+    end,
+    add_type_connections(Rest, Type, Fields2).
 
 
 %% @private

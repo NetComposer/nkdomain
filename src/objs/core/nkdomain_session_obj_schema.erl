@@ -65,6 +65,15 @@ object_schema(types) ->
         }
     };
 
+object_schema({connections, 'User'}) ->
+    #{
+        session => {connection, 'Session', #{
+            from => int,
+            size => int,
+            filter => {list, 'SessionFilter'},
+            sort => {list, 'ObjectSort'}}}
+    };
+
 object_schema(inputs) ->
     #{
         'SessionFilter' => #{

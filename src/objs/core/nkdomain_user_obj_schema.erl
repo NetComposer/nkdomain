@@ -105,12 +105,7 @@ object_schema(types) ->
                                 comment => "User current statuses"}},
                 userPush => {connection, 'UserPush', #{
                                 last => {int, #{default=>10}},
-                                comment => "User current statuses"}},
-                session => {connection, 'Session', #{
-                                from => int,
-                                size => int,
-                                filter => {list, 'SessionFilter'},
-                                sort => {list, 'ObjectSort'}}}
+                                comment => "User current statuses"}}
             },
             comment => "An User"
         },
