@@ -559,6 +559,13 @@ do_get_chart_data(<<"activity_stats_line_chart">>, _Spec, State) ->
                         <<"min">> => <<"2017-01-01">>,
                         <<"max">> => <<"2017-12-31">>
                     }
+                },
+                <<"aggs">> => #{
+                    <<"types">> => #{
+                        <<"terms">> => #{
+                            <<"field">> => <<"message.type">>
+                        }
+                    }
                 }
             }
         }
@@ -582,15 +589,26 @@ do_get_chart_data(<<"activity_stats_line_chart">>, _Spec, State) ->
 %                #{ messages => 23000, audio => 15000, video => 11000, month => <<"nov.">> },
 %                #{ messages => 25000, audio => 20000, video => 12000, month => <<"dec.">> }
 %            ],
-            Data = [
-                #{
-                    messages => maps:get(<<"doc_count">>, Bucket),
-                    audio => 0,
-                    video => 0,
-                    month => maps:get(<<"key_as_string">>, Bucket)
-                }
-                || Bucket <- Buckets
-            ],
+            Data = lists:map(
+                fun(Bucket) ->
+                    Aggs3 = maps:get(<<"types">>, Bucket),
+                    Buckets2 = maps:get(<<"buckets">>, Aggs3),
+                    Map1 = lists:foldl(
+                        fun(SubBucket, MapIn) ->
+                            MapIn#{
+                                maps:get(<<"key">>, SubBucket) => maps:get(<<"doc_count">>, SubBucket)
+                            }
+                        end,
+                        #{},
+                        Buckets2),
+                    #{
+                        <<"month">> => maps:get(<<"key">>, Bucket),
+                        <<"messages">> => maps:get(<<"text">>, Map1, 0),
+                        <<"audio">> => maps:get(<<"media.call">>, Map1, 0),
+                        <<"video">> => maps:get(<<"media.call">>, Map1, 0)
+                    }
+                end,
+                Buckets),
             {ok, #{data => Data}, State};
         _ ->
             {error, error, State}
