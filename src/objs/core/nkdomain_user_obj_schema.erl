@@ -23,7 +23,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([object_execute/5, object_schema/1, object_query/3, object_mutation/3]).
--export([test_all_users/0, test_1/0, test_2/0]).
+-export([test_all_users/0, test_1/0, test_2/0, test_3/0]).
 
 -include("nkdomain.hrl").
 
@@ -380,6 +380,35 @@ test_2() ->
         }
     }">>,
     request(Q).
+
+
+test_3() ->
+    Q = <<"
+        query {
+            node(id: \"carlos@mail\") {
+                ... on User {
+                    path
+                    chatConversationConnection {
+                        totalCount
+                        objects {
+                            path
+                        }
+                    }
+                    chatMessageConnection(
+                        size: 10
+                        filter: [{createdTime: {gt: 1509443473886}}]
+                    ) {
+                        totalCount
+                        objects {
+                            messageText
+                            createdTime
+                        }
+                    }
+                }
+            }
+        }">>,
+    request(Q).
+
 
 
 request(Query) ->
