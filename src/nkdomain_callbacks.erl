@@ -210,7 +210,7 @@ object_graphql_execute(Field, SchObj, Args, Ctx) ->
     case nkdomain_graphql_util:object_execute(Field, SchObj, Args, Ctx) of
         {ok, Res} ->
             {ok, Res};
-        obj_type_field ->
+        unknown_field ->
             {#obj_id_ext{type=Type}=ObjIdExt, Obj} = SchObj,
             case nkdomain_reg:get_type_module(Type) of
                 undefined ->
@@ -218,7 +218,21 @@ object_graphql_execute(Field, SchObj, Args, Ctx) ->
                 Module ->
                     case erlang:function_exported(Module, object_execute, 5) of
                         true ->
-                            Module:object_execute(Field, ObjIdExt, Obj, Args, Ctx);
+                            case Module:object_execute(Field, ObjIdExt, Obj, Args, Ctx) of
+                                unknown_field ->
+                                    case binary:split(Field, <<"Connection">>) of
+                                        [BaseType1, _] ->
+                                            BaseType2 = nklib_util:to_capital(BaseType1),
+                                            case nkdomain_reg:get_schema_type_module(BaseType2) of
+                                                undefined ->
+                                                    null;
+                                                Module ->
+                                                    Module:object_query({connection, ObjIdExt}, Args, Ctx)
+                                            end
+                                    end;
+                                Value ->
+                                    Value
+                            end;
                         false ->
                             null
                     end

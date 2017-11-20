@@ -39,7 +39,8 @@
 %% @doc 
 object_execute(Field, _ObjIdExt, Token, _Args) ->
     case Field of
-        <<"data">> -> {ok, maps:get(data, Token)}
+        <<"data">> -> {ok, maps:get(data, Token)};
+        _ -> unknown_field
     end.
 
 

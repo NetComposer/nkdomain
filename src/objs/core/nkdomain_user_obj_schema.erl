@@ -23,6 +23,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([object_execute/5, object_schema/1, object_query/3, object_mutation/3]).
+-export([test_all_users/0, test_1/0, test_2/0]).
 
 -include("nkdomain.hrl").
 
@@ -45,6 +46,7 @@ object_execute(Field, ObjIdExt, User, Args, Ctx) ->
         <<"address">> -> {ok, maps:get(address_t, User, null)};
         <<"userStatusConnection">> -> {ok, get_status(User, Args)};
         <<"userPushConnection">> -> {ok, get_push(User, Args)};
+        <<"createdConnection">> -> get_created(ObjIdExt, Args);
         _ ->
             case binary:split(Field, <<"Connection">>) of
                 [BaseType1, _] ->
@@ -57,36 +59,6 @@ object_execute(Field, ObjIdExt, User, Args, Ctx) ->
                     end
             end
     end.
-
-
-%% @doc 
-get_status(User, #{<<"last">>:=Last}) when Last > 0, Last < 99 ->
-    Status = maps:get(status, User, []),
-    Objs1 = [
-        #{<<"domainPath">>=>Path, <<"userStatus">>=>nklib_json:encode(US), <<"updatedTime">>=>Time} ||
-        #{domain_path:=Path, user_status:=US, updated_time:=Time} <- Status
-    ],
-    Objs2 = lists:sublist(Objs1, Last),
-    #{
-        <<"objects">> => [{ok, E} || E <- Objs2],
-        <<"totalCount">> => length(Objs1)
-    }.
-
-
-%% @doc 
-get_push(User, #{<<"last">>:=Last}) when Last > 0, Last < 99 ->
-    Push = maps:get(push, User, []),
-    Objs1 = [
-        #{<<"domainPath">>=>Path, <<"pushData">>=>nklib_json:encode(Data),
-          <<"deviceId">>=>DeviceId, <<"updatedTime">>=>Time}
-        ||
-        #{domain_path:=Path, device_id:=DeviceId, push_data:=Data, updated_time:=Time} <- Push
-    ],
-    Objs2 = lists:sublist(Objs1, Last),
-    #{
-        <<"objects">> => [{ok, E} || E <- Objs2],
-        <<"totalCount">> => length(Objs1)
-    }.
 
 
 %%  @doc Generates new schema entries
@@ -105,7 +77,13 @@ object_schema(types) ->
                                 comment => "User current statuses"}},
                 userPush => {connection, 'UserPush', #{
                                 last => {int, #{default=>10}},
-                                comment => "User current statuses"}}
+                                comment => "User current statuses"}},
+                created => {connection, 'Object', #{
+                                from => int,
+                                size => int,
+                                filter => {list, 'ObjectFilter'},
+                                sort => {list, 'ObjectSort'},
+                                comment => "Objects created by me"}}
             },
             comment => "An User"
         },
@@ -130,6 +108,9 @@ object_schema(types) ->
         },
         'UserPushConnection' => #{
             type_class => connection
+        },
+        'ObjectConnection' => #{
+            type_class => connection
         }
     };
 
@@ -153,7 +134,7 @@ object_schema(inputs) ->
 
 object_schema(queries) ->
     #{
-        allUsers => nkdomain_graphql_obj:schema_query_all_objs('User', 'Device', 'Device')
+        allUsers => nkdomain_graphql_obj:schema_query_all_objs('User', 'User', 'User')
     };
 
 
@@ -241,3 +222,165 @@ object_mutation(<<"introduceUser">>, Params, _Ctx) ->
             {error, Error}
     end.
 
+
+
+%% ===================================================================
+%% Internal
+%% ===================================================================
+
+
+
+%% @doc
+get_status(User, #{<<"last">>:=Last}) when Last > 0, Last < 99 ->
+    Status = maps:get(status, User, []),
+    Objs1 = [
+        #{<<"domainPath">>=>Path, <<"userStatus">>=>nklib_json:encode(US), <<"updatedTime">>=>Time} ||
+        #{domain_path:=Path, user_status:=US, updated_time:=Time} <- Status
+    ],
+    Objs2 = lists:sublist(Objs1, Last),
+    #{
+        <<"objects">> => [{ok, E} || E <- Objs2],
+        <<"totalCount">> => length(Objs1)
+    }.
+
+
+%% @doc
+get_push(User, #{<<"last">>:=Last}) when Last > 0, Last < 99 ->
+    Push = maps:get(push, User, []),
+    Objs1 = [
+        #{<<"domainPath">>=>Path, <<"pushData">>=>nklib_json:encode(Data),
+          <<"deviceId">>=>DeviceId, <<"updatedTime">>=>Time}
+        ||
+        #{domain_path:=Path, device_id:=DeviceId, push_data:=Data, updated_time:=Time} <- Push
+    ],
+    Objs2 = lists:sublist(Objs1, Last),
+    #{
+        <<"objects">> => [{ok, E} || E <- Objs2],
+        <<"totalCount">> => length(Objs1)
+    }.
+
+
+%% @private
+get_created(#obj_id_ext{obj_id=ObjId}, Params) ->
+    Opts = #{
+        fields => #{
+            <<"userName">> => {norm, [?DOMAIN_USER, name]},
+            <<"userSurname">> => {norm, [?DOMAIN_USER, surname]},
+            <<"email">> => [?DOMAIN_USER, email],
+            <<"phone">> => [?DOMAIN_USER, phone],
+            <<"address">> => [?DOMAIN_USER, address_t]
+        },
+        filters => [
+            #{<<"created_by">> => #{<<"eq">> => ObjId}}
+        ]
+    },
+    nkdomain_graphql_util:search(Params, Opts).
+
+
+
+
+%% ===================================================================
+%% Tests
+%% ===================================================================
+
+%% @private
+test_all_users() ->
+    Query = <<"
+        query {
+            allUsers(
+                from: 0
+                size: 3
+                sort: [{path: {}}]
+                filter: [{path: {childsOf: \"/sipstorm\"}}]
+            ) {
+                totalCount
+                objects {
+                    type
+                    objId
+                    path
+                    userName
+                    sessionConnection {
+                        totalCount
+                    }
+                }
+            }
+        }
+    ">>,
+    request(Query).
+
+
+%% @private
+test_1() ->
+    Q = <<"
+        query {
+            node(id: \"carlos@mail\") {
+            id
+            ... on User {
+                userName
+                userStatusConnection(last:1) {
+                    totalCount
+                    objects {
+                        domainPath
+                        updatedTime
+                        userStatus
+                    }
+                }
+                userPushConnection(last: 2) {
+                    totalCount
+                    objects {
+                        deviceId
+                    }
+                }
+                sessionConnection(
+                    filter: [
+                        {
+                            createdTime: {gt: 0},
+                            sessionLocal: {prefix: \"wss\"}
+                        }
+                    ]
+                ) {
+                    totalCount
+                    objects {
+                        sessionLocal
+                    }
+                }
+                chatConversationConnection {
+                    totalCount
+                    objects {
+                        path
+                        conversationMemberIds
+                    }
+                }
+            }
+        }
+    }">>,
+    request(Q).
+
+
+%% @private
+test_2() ->
+    Q = <<"
+        query {
+            node(id: \"admin\") {
+            id
+            ... on User {
+                objId
+                createdConnection(
+                    size:3
+                    filter: [{type: {eq: User}}]
+                ) {
+                    totalCount
+                    objects {
+                        objId
+                        path
+                    }
+                }
+            }
+
+        }
+    }">>,
+    request(Q).
+
+
+request(Query) ->
+    nkdomain_graphql:request(?NKROOT, Query, #{}).

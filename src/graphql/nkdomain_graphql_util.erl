@@ -34,12 +34,12 @@
 
 %% @doc GraphQL execute
 -spec object_execute(binary(), nkdomain_graphql:object(), map(), map()) ->
-    {ok, term()} | null | {error, term()} | obj_type_field.
+    {ok, term()} | null | {error, term()} | unknown_field.
 
 object_execute(Field, {#obj_id_ext{}, Obj}, _Args, _Ctx) ->
     case Field of
         <<"aliases">> -> {ok, maps:get(aliases, Obj, [])};
-        <<"createdBy">> -> nkdomain_graphql_util:get_obj(maps:get(created_by, Obj));
+        <<"createdBy">> -> get_obj(maps:get(created_by, Obj));
         <<"createdById">> -> {ok, maps:get(created_by, Obj)};
         <<"createdTime">> -> {ok, maps:get(created_time, Obj, null)};
         <<"description">> -> {ok, maps:get(description, Obj, null)};
@@ -47,11 +47,11 @@ object_execute(Field, {#obj_id_ext{}, Obj}, _Args, _Ctx) ->
         <<"destroyedCode">> -> {ok, maps:get(destroyed_code, Obj, null)};
         <<"destroyedReason">> -> {ok, maps:get(destroyed_reason, Obj, null)};
         <<"destroyedTime">> -> {ok, maps:get(destroyed_time, Obj, null)};
-        <<"domain">> -> nkdomain_graphql_util:get_obj(maps:get(domain_id, Obj));
+        <<"domain">> -> get_obj(maps:get(domain_id, Obj));
         <<"domainId">> -> {ok, maps:get(domain_id, Obj)};
         <<"enabled">> -> {ok, maps:get(enabled, Obj, true)};
         <<"expiresTime">> -> {ok, maps:get(expires_time, Obj, null)};
-        <<"icon">> -> nkdomain_graphql_util:get_obj(maps:get(icon_id, Obj, null));
+        <<"icon">> -> get_obj(maps:get(icon_id, Obj, null));
         <<"iconId">> -> {ok, maps:get(icon_id, Obj, null)};
         <<"id">> -> {ok, maps:get(obj_id, Obj)};
         <<"name">> -> {ok, maps:get(name, Obj, null)};
@@ -61,12 +61,12 @@ object_execute(Field, {#obj_id_ext{}, Obj}, _Args, _Ctx) ->
         <<"srvId">> -> {ok, maps:get(srv_id, Obj, null)};
         <<"subtypes">> -> {ok, maps:get(subtype, Obj, [])};
         <<"tags">> -> {ok, maps:get(tags, Obj, [])};
-        <<"type">> -> nkdomain_graphql_util:get_type(Obj);
-        <<"updatedBy">> -> nkdomain_graphql_util:get_obj(maps:get(updated_by, Obj, null));
+        <<"type">> -> get_type(Obj);
+        <<"updatedBy">> -> get_obj(maps:get(updated_by, Obj, null));
         <<"updatedById">> -> {ok, maps:get(updated_by, Obj, null)};
         <<"updatedTime">> -> {ok, maps:get(updated_time, Obj, null)};
         <<"vsn">> -> {ok, maps:get(vsn, Obj, null)};
-        _ -> obj_type_field
+        _ -> unknown_field
     end;
 
 object_execute(Field, Obj, _Args, _Ctx) when is_map(Obj) ->
@@ -97,14 +97,10 @@ object_execute(_Field, _Obj, _Args, _Ctx) ->
 
 %% @doc
 search(Params, Opts) ->
+    Params2 = nkdomain_util:remove_nulls(Params),
+    % lager:error("NKLOG Search Params ~p", [Params2]),
     Fields = get_obj_fields(Opts),
-    #{
-        <<"from">> := From,
-        <<"size">> := Size,
-        <<"filter">> := Filters,
-        <<"sort">> := Sort
-    } = Params,
-    Filters1 = case Filters of null -> []; _ -> Filters end,
+    Filters1 = maps:get(<<"filter">>, Params2, []),
     Filters2 = maps:get(filters, Opts, []) ++ Filters1,
     Spec1 = case add_filters(Filters2, Fields, []) of
         [] ->
@@ -112,25 +108,25 @@ search(Params, Opts) ->
         FilterList ->
             #{filter_list => FilterList}
     end,
-    Sort1 = case Sort of null -> []; _ -> Sort end,
-    Spec2 = case add_sort(Sort1, Fields, []) of
+    Sort = maps:get(<<"sort">>, Params2, []),
+    Spec2 = case add_sort(Sort, Fields, []) of
         [] ->
             Spec1;
         SortList ->
             Spec1#{sort => SortList}
     end,
-    lager:error("Spec2: ~p", [Spec2]),
-    From2 = case From of
-        null -> 0;
-        _ when is_integer(From), From >= 0 -> From;
+    % lager:error("Spec2: ~p", [Spec2]),
+    From = case maps:get(<<"from">>, Params2, 0) of
+        % null -> 0;
+        F when is_integer(F), F >= 0 -> F;
         _ -> error(invalid_size)
     end,
-    Size2 = case Size of
-        null -> 10;
-        _ when is_integer(Size), From >= 0, Size < 50 -> Size;
+    Size = case maps:get(<<"size">>, Params2, 10) of
+        % null -> 10;
+        S when is_integer(S), S >= 0, S < 50 -> S;
         _ -> error(invalid_size)
     end,
-    case read_objs(From2, Size2, Spec2) of
+    case read_objs(From, Size, Spec2) of
         {ok, Total, Data2} ->
             Result = #{
                 <<"objects">> => Data2,
@@ -151,26 +147,35 @@ get_obj(<<>>) ->
 
 get_obj(ObjId) ->
     case nkdomain_lib:read(ObjId) of
-        {ok, #obj_id_ext{}=ObjIdExt, Obj} ->
-            {ok, {ObjIdExt, Obj}};
+        {ok, ObjIdExt, Obj} ->
+            case get_type(ObjIdExt) of
+                {ok, _} ->
+                    {ok, {ObjIdExt, Obj}};
+                {error, _} ->
+                    lager:notice("NKLOG Invalid Type ~p", [ObjIdExt#obj_id_ext.type]),
+                    {error, invalid_type}
+            end;
         {error, Error} ->
             {error, Error}
     end.
 
 
 %% @private
-get_type(#{type:=Type}) ->
+get_type(#obj_id_ext{type=Type}) ->
     Module = nkdomain_reg:get_type_module(Type),
     case Module:object_info() of
         #{schema_type:=SchemaType} ->
             {ok, nklib_util:to_binary(SchemaType)};
         _ ->
-            lager:error("NKLOG Unknown type ~p", [Type]),
+            %lager:error("NKLOG Unknown type ~p", [Type]),
             {error, unknown_type}
     end;
 
-get_type(Obj) ->
-    lager:error("NKLOG Unknown type ~p", [Obj]),
+get_type(#{type:=Type}) ->
+    get_type(#obj_id_ext{type=Type});
+
+get_type(_Obj) ->
+    %lager:error("NKLOG Unknown type ~p", [Obj]),
     {error, unknown_type}.
 
 
@@ -336,9 +341,9 @@ do_read_objs(Start, Size, Spec, Acc) ->
         {ok, Total, Data, _Meta} ->
             Acc2 = lists:foldl(
                 fun(#{<<"obj_id">>:=ObjId}, FunAcc) ->
-                    case nkdomain_lib:read(ObjId) of
-                        {ok, ObjIdExt, Obj} ->
-                            [{ok, {ObjIdExt, Obj}}|FunAcc];
+                    case get_obj(ObjId) of
+                        {ok, SchObj} ->
+                            [{ok, SchObj}|FunAcc];
                         {error, Error} ->
                             lager:warning("could not read object ~s: ~p", [ObjId, Error]),
                             FunAcc

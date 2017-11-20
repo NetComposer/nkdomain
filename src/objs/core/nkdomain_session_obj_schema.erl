@@ -43,7 +43,8 @@ object_execute(Field, _ObjIdExt, #{?DOMAIN_SESSION:=SessObj}=Session, _Args) ->
         <<"sessionLocal">> -> {ok, maps:get(local, SessObj, null)};
         <<"sessionRemote">> -> {ok, maps:get(remote, SessObj, null)};
         <<"sessionUserId">> -> {ok, maps:get(parent_id, Session)};
-        <<"sessionUser">> -> nkdomain_graphql_util:get_obj(maps:get(parent_id, Session))
+        <<"sessionUser">> -> nkdomain_graphql_util:get_obj(maps:get(parent_id, Session));
+        _ -> unknown_field
     end.
 
 

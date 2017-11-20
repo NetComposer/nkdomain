@@ -25,7 +25,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([find/0, delete_all/0]).
--export([object_info/0, object_admin_info/0, object_schema_types/0, object_parse/2, object_es_mapping/0]).
+-export([object_info/0, object_admin_info/0, object_parse/2, object_es_mapping/0]).
 
 -include("nkdomain.hrl").
 -include_lib("nkapi/include/nkapi.hrl").
@@ -65,7 +65,7 @@ delete_all() ->
 object_info() ->
     #{
         type => ?DOMAIN_FILE_STORE,
-        schema_type => 'FileStore',
+        % schema_type => 'FileStore',
         subtype => [?DOMAIN_CONFIG]
     }.
 
@@ -75,18 +75,6 @@ object_admin_info() ->
     #{
         class => resource,
         weight => 9000
-    }.
-
-
-%% @doc
-object_schema_types() ->
-    #{
-        'FileStore' => #{
-            fields => #{
-            },
-            is_object => true,
-            comment => "A File Store"
-        }
     }.
 
 

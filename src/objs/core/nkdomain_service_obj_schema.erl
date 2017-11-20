@@ -39,7 +39,8 @@
 %% @doc 
 object_execute(Field, _ObjIdExt, Service, _Args) ->
     case Field of
-        <<"spec">> -> {ok, maps:get(spec, Service)}
+        <<"spec">> -> {ok, maps:get(spec, Service)};
+       _ -> unknown_field
     end.
 
 

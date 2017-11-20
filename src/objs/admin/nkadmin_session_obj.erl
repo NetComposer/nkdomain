@@ -30,7 +30,7 @@
          object_api_syntax/2, object_api_cmd/2]).
 -export([object_init/1, object_stop/2, object_send_event/2,
          object_sync_op/3, object_async_op/2, object_handle_info/2]).
--export([object_admin_info/0, object_schema_types/0]).
+-export([object_admin_info/0]).
 -export([find_url_class/1]).
 -export_type([session/0]).
 
@@ -132,7 +132,7 @@ find_all() ->
 object_info() ->
     #{
         type => ?DOMAIN_ADMIN_SESSION,
-        schema_type => 'AdminSession',
+        % schema_type => 'AdminSession',
         stop_after_disabled => true,
         remove_after_stop => true
     }.
@@ -147,17 +147,6 @@ object_admin_info() ->
 %        tree_id => <<"domain_tree_sessions_admin.sessions">>
     }.
 
-
-%% @doc
-object_schema_types() ->
-    #{
-        'AdminSession' => #{
-            fields => #{
-            },
-            is_object => true,
-            comment => "An Admin Session"
-        }
-    }.
 
 
 %% @private

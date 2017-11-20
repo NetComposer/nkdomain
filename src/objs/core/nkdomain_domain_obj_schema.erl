@@ -36,7 +36,8 @@
 %% @doc 
 object_execute(Field, _ObjIdExt, Domain, _Args) ->
     case Field of
-        <<"config">> -> {ok, maps:get(config, Domain, #{})}
+        <<"config">> -> {ok, maps:get(config, Domain, #{})};
+         _ -> unknown_field
     end.
 
 

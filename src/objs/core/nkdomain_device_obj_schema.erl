@@ -42,7 +42,8 @@ object_execute(Field, ObjIdExt, Device, _Args) ->
         <<"deviceUUID">> -> {ok, maps:get(device_uuid, Device, null)};
         <<"deviceSSODeviceIds">> -> {ok, get_sso_device_ids(Device)};
         <<"deviceSSODevices">> -> {ok, get_sso_devices(Device)};
-        <<"deviceCurrentUser">> -> get_user(ObjIdExt)
+        <<"deviceCurrentUser">> -> get_user(ObjIdExt);
+        _ -> unknown_field
     end.
 
 
