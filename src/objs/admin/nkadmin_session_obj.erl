@@ -538,33 +538,77 @@ do_get_chart_data(<<"activity_stats_line_chart">>, _Spec, State) ->
         <<"query">> => #{
             <<"bool">> => #{
                 <<"filter">> => [#{ 
+                    <<"terms">> => #{
+                        <<"message.type">> => [<<"text">>, <<"media.call">>]
+                    }
+                }, #{
                     <<"term">> => #{
-                        <<"type">> => <<"file">>
+                        <<"type">> => <<"message">>
                     }
                 }]
             }
+        },
+        <<"aggs">> => #{
+            <<"messages">> => #{
+                <<"date_histogram">> => #{
+                    <<"field">> => <<"created_time">>,
+                    <<"interval">> => <<"month">>,
+                    <<"min_doc_count">> => <<"0">>,
+                    <<"format">> => <<"yyyy-MM-dd">>,
+                    <<"extended_bounds">> => #{
+                        <<"min">> => <<"2017-01-01">>,
+                        <<"max">> => <<"2017-12-31">>
+                    }
+                },
+                <<"aggs">> => #{
+                    <<"types">> => #{
+                        <<"terms">> => #{
+                            <<"field">> => <<"message.type">>
+                        }
+                    }
+                }
+            }
         }
-        %"aggs" => #{
-        %}
     },
     case nkelastic:search(Query, Opts) of
-        {ok, _Hits, _, _, _} ->
-            %lager:info("RESPONSE: ~p~n", [Hits]),
-            %{ok, #{<<"total_files">> => #{value => Hits, delta => 15}}, State};
-            Data = [
-                #{ messages => 17500, audio =>  2500, video =>  7500, month => <<"jan.">> },
-                #{ messages => 18000, audio =>  7500, video => 12500, month => <<"feb.">> },
-                #{ messages => 21500, audio =>  5000, video => 15000, month => <<"mar.">> },
-                #{ messages => 20000, audio => 12500, video =>  7500, month => <<"apr.">> },
-                #{ messages => 18250, audio => 15000, video =>  7500, month => <<"may.">> },
-                #{ messages => 16000, audio => 10000, video => 12000, month => <<"jun.">> },
-                #{ messages => 18000, audio => 12500, video =>  7500, month => <<"jul.">> },
-                #{ messages => 18000, audio => 15000, video =>  7500, month => <<"aug.">> },
-                #{ messages => 22500, audio => 20000, video => 11500, month => <<"sep.">> },
-                #{ messages => 23000, audio => 17500, video => 11000, month => <<"oct.">> },
-                #{ messages => 23000, audio => 15000, video => 11000, month => <<"nov.">> },
-                #{ messages => 25000, audio => 20000, video => 12000, month => <<"dec.">> }
-            ],
+        {ok, _Total, _Hits, Aggs, _Meta} ->
+            %lager:error("ES RESPONSE: ~n~p~n~p~n~p~n~p~n", [_Total, _Hits, Aggs, _Meta]),
+            Aggs2 = maps:get(<<"messages">>, Aggs),
+            Buckets = maps:get(<<"buckets">>, Aggs2),
+%            Data = [
+%                #{ messages => 17500, audio =>  2500, video =>  7500, month => <<"jan.">> },
+%                #{ messages => 18000, audio =>  7500, video => 12500, month => <<"feb.">> },
+%                #{ messages => 21500, audio =>  5000, video => 15000, month => <<"mar.">> },
+%                #{ messages => 20000, audio => 12500, video =>  7500, month => <<"apr.">> },
+%                #{ messages => 18250, audio => 15000, video =>  7500, month => <<"may.">> },
+%                #{ messages => 16000, audio => 10000, video => 12000, month => <<"jun.">> },
+%                #{ messages => 18000, audio => 12500, video =>  7500, month => <<"jul.">> },
+%                #{ messages => 18000, audio => 15000, video =>  7500, month => <<"aug.">> },
+%                #{ messages => 22500, audio => 20000, video => 11500, month => <<"sep.">> },
+%                #{ messages => 23000, audio => 17500, video => 11000, month => <<"oct.">> },
+%                #{ messages => 23000, audio => 15000, video => 11000, month => <<"nov.">> },
+%                #{ messages => 25000, audio => 20000, video => 12000, month => <<"dec.">> }
+%            ],
+            Data = lists:map(
+                fun(Bucket) ->
+                    Aggs3 = maps:get(<<"types">>, Bucket),
+                    Buckets2 = maps:get(<<"buckets">>, Aggs3),
+                    Map1 = lists:foldl(
+                        fun(SubBucket, MapIn) ->
+                            MapIn#{
+                                maps:get(<<"key">>, SubBucket) => maps:get(<<"doc_count">>, SubBucket)
+                            }
+                        end,
+                        #{},
+                        Buckets2),
+                    #{
+                        <<"month">> => maps:get(<<"key">>, Bucket),
+                        <<"messages">> => maps:get(<<"text">>, Map1, 0),
+                        <<"audio">> => maps:get(<<"media.call">>, Map1, 0),
+                        <<"video">> => maps:get(<<"media.call">>, Map1, 0)
+                    }
+                end,
+                Buckets),
             {ok, #{data => Data}, State};
         _ ->
             {error, error, State}
