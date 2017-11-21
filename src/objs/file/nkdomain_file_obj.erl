@@ -242,6 +242,9 @@ object_execute(Field, _ObjId, #{?DOMAIN_FILE:=File}, _Args, _Ctx) ->
 
 
 %% @private
+%%
+%% TODO: uncomment this -- temporarily commented
+%% out in order to make "link" work
 %%object_es_mapping() ->
 %%    #{
 %%        content_type => #{type => keyword},
@@ -249,7 +252,9 @@ object_execute(Field, _ObjId, #{?DOMAIN_FILE:=File}, _Args, _Ctx) ->
 %%        size => #{type => long},
 %%        password => #{type => keyword}
 %%    }.
-
+%% TODO: remove this once links (as a list)
+%% are supported in object_es_mapping/0.
+%%
 object_es_mapping() -> 
     not_indexed.
 
