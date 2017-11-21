@@ -27,8 +27,9 @@
 -include("nkdomain.hrl").
 
 -export([create/0]).
--export([object_info/0, object_admin_info/0, object_schema_types/0, object_parse/2]).
+-export([object_info/0, object_admin_info/0, object_parse/2]).
 -export([object_api_syntax/2, object_api_cmd/2, object_send_event/2]).
+-export([object_execute/5, object_schema/1, object_query/3, object_mutation/3]).
 -export_type([events/0]).
 
 -define(LLOG(Type, Txt, Args),
@@ -92,16 +93,25 @@ object_admin_info() ->
 %%        tree_id => <<"domain_tree_sessions_node">>
     }.
 
+
 %% @doc
-object_schema_types() ->
-    #{
-        'Server' => #{
-            fields => #{
-            },
-            is_object => true,
-            comment => "A NetComposer Server"
-        }
-    }.
+object_schema(Type) ->
+    nkdomain_node_obj_schema:object_schema(Type).
+
+
+%% @doc
+object_execute(Field, ObjIdExt, #{?DOMAIN_USER:=User}, Args, _Ctx) ->
+    nkdomain_node_obj_schema:object_execute(Field, ObjIdExt, User, Args).
+
+
+%% @doc
+object_query(QueryName, Params, Ctx) ->
+    nkdomain_node_obj_schema:object_query(QueryName, Params, Ctx).
+
+
+%% @doc
+object_mutation(MutationName, Params, Ctx) ->
+    nkdomain_node_obj_schema:object_mutation(MutationName, Params, Ctx).
 
 
 % @private

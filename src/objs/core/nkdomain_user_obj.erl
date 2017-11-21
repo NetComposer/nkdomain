@@ -25,11 +25,8 @@
 -behavior(nkdomain_obj).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([execute/4]).
--export([object_schema_types/0, object_schema_queries/0, object_schema_mutations/0]).
--export([object_mutation/3]).
+-export([object_execute/5, object_schema/1, object_query/3, object_mutation/3]).
 -export([object_info/0, object_admin_info/0, object_create/1, object_update/1, object_es_mapping/0, object_es_unparse/2,
-
          object_parse/2, object_api_syntax/2, object_api_cmd/2, object_send_event/2]).
 -export([object_init/1, object_save/1, object_event/2,
          object_sync_op/3, object_async_op/2, object_link_down/2, object_handle_info/2]).
@@ -51,18 +48,6 @@
 %% ===================================================================
 %% API
 %% ===================================================================
-
-
-
-%% @%% @private GraphQL execute
-execute(_Ctx, #{?DOMAIN_USER:=User}, Field, _Args) ->
-    case Field of
-        <<"userName">> -> {ok, maps:get(name, User, null)};
-        <<"userSurname">> -> {ok, maps:get(surname, User, null)};
-        <<"email">> -> {ok, maps:get(email, User, null)};
-        <<"phone">> -> {ok, maps:get(phone_t, User, null)};
-        <<"address">> -> {ok, maps:get(address_t, User, null)}
-    end.
 
 
 
@@ -142,109 +127,65 @@ object_create(Obj) ->
     end.
 
 
-object_schema_types() ->
+%% @doc
+object_schema(Type) ->
+    nkdomain_user_obj_schema:object_schema(Type).
+
+
+%% @doc
+object_execute(Field, ObjIdExt, #{?DOMAIN_USER:=User}, Args, Ctx) ->
+    nkdomain_user_obj_schema:object_execute(Field, ObjIdExt, User, Args, Ctx).
+
+
+%% @doc
+object_query(QueryName, Params, Ctx) ->
+    nkdomain_user_obj_schema:object_query(QueryName, Params, Ctx).
+
+
+%% @doc
+object_mutation(MutationName, Params, Ctx) ->
+    nkdomain_user_obj_schema:object_mutation(MutationName, Params, Ctx).
+
+
+%% @private
+object_parse(update, _Obj) ->
     #{
-        'User' => #{
-            fields => #{
-                userName => {string, #{comment=>"User family name"}},
-                userSurname => {string, #{comment=>"User surname"}},
-                email => string,
-                phoneTwo => string,
-                address => string,
-                status => {connection, 'UserStatus', #{comment => "User current statuses"}}
-            },
-            is_object => true,
-            comment => "An User"
+        name => binary,
+        surname => binary,
+        password => fun ?MODULE:fun_user_pass/1,
+        email => lower,
+        phone_t => binary,
+        address_t => binary,
+        push => {list,
+            #{
+                domain_path => binary,
+                srv_id => binary,
+                device_id => binary,
+                push_data => map,
+                updated_time => integer,
+                '__mandatory' => [srv_id, device_id, push_data, updated_time],
+                '__defaults' => #{domain_path => <<>>}
+                % add domain_path when all objects are updated
+                %'__mandatory' => [domain_path, app_id, device_id, push_data, updated_time]
+             }
         },
-        'UserStatus' => #{
-            fields => #{
-                domainPath => {no_null, string, #{comment=>"Domain this status belongs to"}},
-                userStatus => string,
-                updatedTime => time
-            },
-            is_connection => true
+        status => {list,
+             #{
+                 domain_path => binary,
+                 srv_id => binary,
+                 user_status => map,
+                 updated_time => integer,
+                 '__mandatory' => [srv_id, user_status, updated_time],
+                 '__defaults' => #{domain_path => <<>>}
+                 % add domain_path when all objects are updated
+                 % '__mandatory' => [domain_path, app_id, user_status, updated_time]
+             }
         }
-    }.
+    };
 
-
-object_schema_queries() ->
-    #{
-    }.
-
-
-
-
-
-object_schema_mutations() ->
-    #{
-        introduceUser => #{
-            input => #{
-                userName => {no_null, string},
-                userSurname => {no_null, string},
-                domain => string,
-                objName => string,
-                password => string,
-                email => {no_null, string},
-                phone => string,
-                address => string
-            },
-            output => #{
-                objId => {no_null, string},
-                objName => {no_null, string},
-                path => {no_null, string},
-                email => {no_null, string},
-                phone => string,
-                address => string
-            },
-            comment => "Creates a new user"
-        }
-    }.
-
-
-%% Sample:
-%% mutation M {
-%%     introduceUser(input: {
-%%         userName: "Name1"
-%%         userSurname: "SurName1"
-%%         email: "g1@test"
-%%     }) {
-%%         objId
-%%     }
-%% }
-
-object_mutation(<<"introduceUser">>, Params, _Ctx) ->
-    {Base, User} = lists:foldl(
-        fun({Key, Val}, {BaseAcc, UserAcc}) ->
-            case Key of
-                <<"userName">> ->
-                    {BaseAcc, UserAcc#{name=>Val}};
-                <<"userSurname">> ->
-                    {BaseAcc, UserAcc#{surname=>Val}};
-                <<"domain">> ->
-                    {BaseAcc#{domain_id=>Val}, UserAcc};
-                <<"objName">> ->
-                    {BaseAcc#{obj_name=>Val}, UserAcc};
-                <<"password">> ->
-                    {BaseAcc, UserAcc#{password=>Val}};
-                <<"email">> ->
-                    {BaseAcc, UserAcc#{email=>Val}};
-                <<"phone">> ->
-                    {BaseAcc, UserAcc#{phone_t=>Val}};
-                <<"address">> ->
-                    {BaseAcc, UserAcc#{address_t=>Val}}
-            end
-        end,
-        {#{}, #{}},
-        maps:to_list(Params)),
-    Obj1 = Base#{?DOMAIN_USER=>User},
-    Obj2 = maps:merge(#{domain_id=>root}, Obj1),
-    case nkdomain_user:create(Obj2) of
-        {ok, #obj_id_ext{pid=Pid}=ObjIdExt, _} ->
-            {ok, Obj} = nkdomain:get_obj(Pid),
-            {ok, ObjIdExt, Obj};
-        {error, Error} ->
-            {error, Error}
-    end.
+object_parse(_Mode, Obj) ->
+    Base = object_parse(update, Obj),
+    Base#{'__mandatory' => [name, surname]}.
 
 
 %% @private
@@ -302,46 +243,6 @@ object_es_unparse(Obj, Base) ->
     }.
 
 
-%% @private
-object_parse(update, _Obj) ->
-    #{
-        name => binary,
-        surname => binary,
-        password => fun ?MODULE:fun_user_pass/1,
-        email => lower,
-        phone_t => binary,
-        address_t => binary,
-        push => {list,
-            #{
-                domain_path => binary,
-                srv_id => binary,
-                device_id => binary,
-                push_data => map,
-                updated_time => integer,
-                '__mandatory' => [srv_id, device_id, push_data, updated_time],
-                '__defaults' => #{domain_path => <<>>}
-                % add domain_path when all objects are updated
-                %'__mandatory' => [domain_path, app_id, device_id, push_data, updated_time]
-             }
-        },
-        status => {list,
-             #{
-                 domain_path => binary,
-                 srv_id => binary,
-                 user_status => map,
-                 updated_time => integer,
-                 '__mandatory' => [srv_id, user_status, updated_time],
-                 '__defaults' => #{domain_path => <<>>}
-                 % add domain_path when all objects are updated
-                 % '__mandatory' => [domain_path, app_id, user_status, updated_time]
-             }
-        }
-    };
-
-object_parse(_Mode, Obj) ->
-    Base = object_parse(update, Obj),
-    Base#{'__mandatory' => [name, surname]}.
-
 
 %% @doc
 object_update(Obj) ->
@@ -364,7 +265,6 @@ object_send_event(Event, State) ->
 %% @private
 object_api_cmd(Cmd, Req) ->
     nkdomain_user_obj_cmd:cmd(Cmd, Req).
-
 
 
 %% @private
@@ -480,7 +380,7 @@ sync_op({check_device, _Pass}, _From, #obj_state{is_enabled=false}=State) ->
 
 sync_op({check_device, DeviceId}, _From, #obj_state{id=Id, obj=Obj}=State) ->
     #obj_id_ext{obj_id=UserId} = Id,
-    case nkdomain_device_obj:find_sso(DeviceId) of
+    case nkdomain_device:find_sso(DeviceId) of
         {ok, UserId} ->
             #{domain_id:=DomainId} = Obj,
             {reply, {ok, {true, UserId, DomainId}}, State};
@@ -627,7 +527,7 @@ async_op({launch_session_notifications, _SessId}=Msg, State) ->
 
 async_op({set_status, SrvId, DomainPath, UserStatus}, State) ->
     State2 = do_set_status(SrvId, DomainPath, UserStatus, State),
-    {noreply, State2};
+    {noreply_and_save, State2};
 
 async_op({loaded_token, TokenId, Pid}, State) ->
     case nkdomain_token_obj:get_token_data(Pid) of

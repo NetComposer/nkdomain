@@ -23,13 +23,14 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([execute/4]).
--export([object_schema_scalars/0, object_schema_enums/0, object_schema_interfaces/0,
-         object_schema_types/0, object_schema_inputs/0, object_schema_queries/0, object_schema_mutations/0]).
+-export([object_schema/1]).
 -export([object_query/3]).
--export([object_fields/0]).
+-export([object_fields/1, object_fields_filter/1, schema_object_fields_sort/1]).
+-export([schema_query_all_objs/1, schema_query_all_objs/2, schema_query_all_objs/3]).
 
 -include("nkdomain.hrl").
 -include("nkdomain_graphql.hrl").
+-include_lib("nkservice/include/nkservice.hrl").
 
 %% ===================================================================
 %% GraphQL Object callback
@@ -37,49 +38,12 @@
 
 
 %% @doc Called from GraphQL to extract fields on any type
-execute(Ctx, {#obj_id_ext{obj_id=ObjId, type=Type}=ObjIdExt, Obj}, Field, Args) ->
-    case object_execute(Field, ObjIdExt, Obj, Args, Ctx) of
-        {ok, Res} ->
-            {ok, Res};
-        unknown ->
-            case nkdomain_reg:get_type_module(Type) of
-                undefined ->
-                    {error, unknown_type};
-                Module ->
-                    case erlang:function_exported(Module, object_execute, 5) of
-                        true ->
-                            Res = Module:object_execute(Field, ObjIdExt, Obj, Args, Ctx),
-                            lager:notice("NKLOG RES: ~p", [Res]),
-                            Res;
-                        false ->
-                            lager:error("NKLOG No execute module ~p", [Module]),
-                            null
-                    end
-            end;
-        {error, Error} ->
-            lager:warning("NKLOG Obj execute error (~p, ~p): ~p", [ObjId, Field, Error]),
-            {error, Error}
-    end;
-
-execute(_Ctx, #search_results{objects=Objects}, <<"objects">>, _) ->
-    {ok, [{ok, Obj} || Obj <-Objects]};
-
-execute(_Ctx, #search_results{total_count=TotalCount}, <<"totalCount">>, _) ->
-    {ok, TotalCount};
-
-execute(_Ctx, #search_results{page_info=PageInfo}, <<"pageInfo">>, _) ->
-    {ok, PageInfo};
-
-execute(_Ctx, #search_results{cursor=Cursor}, <<"cursor">>, _) ->
-    {ok, Cursor};
-
-execute(_Ctx, #page_info{has_next_page=Next}, <<"hasNextPage">>, _) ->
-    {ok, Next};
-
-execute(_Ctx, #page_info{has_previous_page=Previous}, <<"hasPreviousPage">>, _) ->
-    {ok, Previous}.
-
-
+execute(Ctx, Obj, Field, Args) ->
+    #{nkmeta:=#{srv_id:=SrvId}} = Ctx,
+    % lager:notice("NKLOG GraphQL Obj Execute: ~p ~p", [Field, Obj]),
+    Res = ?CALL_SRV(SrvId, object_graphql_execute, [Field, Obj, Args, Ctx]),
+    % lager:notice("NKLOG RES: ~p", [Res]),
+    Res.
 
 
 
@@ -89,42 +53,15 @@ execute(_Ctx, #page_info{has_previous_page=Previous}, <<"hasPreviousPage">>, _) 
 
 
 %% @doc Generates new scalars
--spec object_schema_scalars() ->
-    #{nkdomain_graphql:schema_type() => #{comment => string()}}.
+-spec object_schema(scalars|enums|types|inputs|interfaces|queries|mutations) ->
 
-object_schema_scalars() ->
-    #{
-        'Cursor' => #{comment=>"Pagination cursor"},
-        'UnixTime' => #{comment=>"Standard milisecond-resolution unix time"}
-    }.
+    % Scalars:
+    #{nkdomain_graphql:schema_type() => #{comment => string()}} |
 
+    % Enums:
+    #{nkdomain_graphql:schema_type() => #{opts => [atom()], comment => string()}} |
 
-%% @doc Generates new enums
--spec object_schema_enums() ->
-    #{nkdomain_graphql:schema_type() => #{opts => [atom()], comment => string()}}.
-
-object_schema_enums() ->
-    #{
-        objectType => #{
-            opts => nkdomain_reg:get_all_schema_types(),
-            comment => "Object Types"
-        },
-        objectSortByField => #{
-            opts => [domainId, createdById, createdTime, enabled, expiresTime,
-                     name, objName, path, srvId, type]
-        },
-        sortOrder => #{
-            opts => [asc, desc]
-        },
-        'RangeOperators' => #{
-            opts => [gt, gte, eq, lte, lt],
-            comment => "Range operators for queries"
-        }
-    }.
-
-
-%% @doc Generates new types
--spec object_schema_types() ->
+    % Types
     #{
         nkdomain_graphql:schema_type() => #{
             fields => nkdomain_graphql:schema_fields(),
@@ -132,135 +69,28 @@ object_schema_enums() ->
             is_object => boolean(),         % Generates an Object instance
             is_connection => boolean()      % Generates specific connection types
         }
-    }.
+    } |
 
-object_schema_types() ->
-    #{
-        'SearchResult' => #{
-            fields => #{
-                objects => {list_no_null, 'Object', #{comment => "My Objects"}},
-                pageInfo => {no_null, 'PageInfo'},
-                totalCount => int,
-                cursor => 'Cursor'
-            }
-        },
-        'PageInfo' => #{
-            fields => #{
-                hasNextPage => {no_null, boolean},
-                hasPreviousPage => {no_null, boolean}
-            }
-        }
-    }.
-
-
-%% @doc Generates new inputs
--spec object_schema_inputs() ->
+    % Inputs:
     #{
         nkdomain_graphql:schema_type() => #{
             fields => nkdomain_graphql:schema_fields(),
             comment => string()
         }
-    }.
+    } |
 
-object_schema_inputs() ->
-    #{
-        'Range' => #{
-            fields => #{
-                value => int,
-                min => int,
-                max => int,
-                operator => 'RangeOperators'
-            },
-            comment => "A value to filter against, or a min and a max value"
-        },
-        objectFilterId => #{
-            fields => #{
-                eq => string
-            }
-        },
-        objectFilterString => #{
-            fields => #{
-                eq => string,
-                gt => string,
-                gte => string,
-                lt => string,
-                lte => string,
-                prefix => string
-            }
-        },
-        objectFilterInt => #{
-            fields => #{
-                eq => int,
-                gt => int,
-                gte => int,
-                lt => int,
-                lte => int
-            }
-        },
-        objectFilterBoolean => #{
-            fields => #{
-                eq => boolean
-            }
-        },
-
-        objectFilter => #{
-            fields => object_fields_filter(),
-            comment => "Filter values to sort on"
-        },
-        objectSortBy => #{
-            fields => #{
-                field => {no_null, objectSortByField},
-                sortOrder => {sortOrder, #{default => <<"asc">>}}
-            },
-            comment => "Fields to sort on"
-        }
-    }.
-
-
-%% @doc Generates new interfaces
--spec object_schema_interfaces() ->
+    % Interfaces
     #{
         nkdomain_graphql:schema_type() => #{
             fields => nkdomain_graphql:schema_fields(),
             comment => string()
-        }
-    }.
+            }
+    } |
 
-object_schema_interfaces() ->
-    #{
-        'Node' => #{
-            fields => #{id => {no_null, id}},
-            comment => "Relay Modern Node Interface"
-        },
-        'Object'=> #{
-            fields => object_fields(),
-            comment => "Standard NetComposer Object"
-        }
-    }.
+    % Queries
+    #{nkdomain_graphql:query_name() => nkdomain_graphql:field_value()} |
 
-
-%% @doc Generates new queries
--spec object_schema_queries() ->
-    #{nkdomain_graphql:query_name() => nkdomain_graphql:field_value()}.
-
-object_schema_queries() ->
-    #{
-        node => {'Node', #{
-                     params => #{id => {no_null, id}},
-                     comment => "Relay Modern specification Node fetcher"
-                 }},
-        allObjects => {'SearchResult', #{
-                           params => #{
-                               filter => {list, objectFilter, #{default => "[]"}},
-                               sort => {list, objectSortBy},
-                               from => {int, #{default => 0}},
-                               size => {int, #{default => 10}}
-                           }}}
-    }.
-
-
-%% @doc Generates new mutations
--spec object_schema_mutations() ->
+    % Mutations
     #{
         nkdomain_graphql:mutation_name() => #{
             inputs => nkdomain_graphql:schema_fields(),
@@ -269,7 +99,139 @@ object_schema_queries() ->
         }
     }.
 
-object_schema_mutations() ->
+object_schema(scalars) ->
+    #{
+        'Cursor' => #{comment=>"Pagination cursor"},
+        'UnixTime' => #{comment=>"Standard milisecond-resolution unix time"}
+    };
+
+object_schema(enums) ->
+    #{
+        objectType => #{
+            opts => nkdomain_reg:get_all_schema_types(),
+            comment => "Object Types"
+        },
+        filterOp => #{
+            opts => ['AND', 'OR', 'NOT'],
+            comment => "Operation mode for a filter"
+        },
+        sortOrder => #{
+            opts => ['ASC', 'DESC']
+        }
+    };
+
+object_schema(types) ->
+    #{
+        'ObjectSearchResult' => #{
+            fields => #{
+                objects => {list_no_null, 'Object', #{comment => "My Objects"}},
+                totalCount => int
+            }
+        }
+    };
+
+object_schema(inputs) ->
+    #{
+        'FilterId' => #{
+            fields => #{
+                eq => string,
+                values => {list, string},
+                exists => bool
+            }
+        },
+        'FilterType' => #{
+            fields => #{
+                eq => objectType,
+                values => {list, objectType}
+            }
+        },
+        'FilterKeyword' => #{
+            fields => #{
+                eq => string,
+                values => {list, string},
+                gt => string,
+                gte => string,
+                lt => string,
+                lte => string,
+                prefix => string,
+                exists => bool
+            }
+        },
+        'FilterNormalizedString' => #{
+            fields => #{
+                eq => string,
+                prefix => string,
+                wordsAndPrefix => string,
+                fuzzy => string
+            }
+        },
+        'FilterPath' => #{
+            fields => #{
+                eq => string,
+                values => {list, string},
+                gt => string,
+                gte => string,
+                lt => string,
+                lte => string,
+                childsOf => string,
+                exists => bool
+            }
+        },
+        'FilterInt' => #{
+            fields => #{
+                values => {list, int},
+                eq => int,
+                ne => int,
+                gt => int,
+                gte => int,
+                lt => int,
+                lte => int,
+                exists => bool
+            }
+        },
+        'FilterBoolean'=> #{
+            fields => #{
+                eq => boolean,
+                exists => bool
+            }
+        },
+        'ObjectFilter' => #{
+            fields => object_fields_filter(#{}),
+            comment => "Filter values to sort on"
+        },
+        'SortParams' => #{
+            fields => #{
+                order => {sortOrder, #{default => <<"ASC">>}}
+            }
+        },
+        'ObjectSort' => #{
+            fields => schema_object_fields_sort([]),
+            comment => "Fields to sort on"
+        }
+    };
+
+object_schema(interfaces) ->
+    #{
+        'Node' => #{
+            fields => #{id => {no_null, id}},
+            comment => "Relay Modern Node Interface"
+        },
+        'Object'=> #{
+            fields => object_fields(#{}),
+            comment => "Standard NetComposer Object"
+        }
+    };
+
+object_schema(queries) ->
+    #{
+        node => {'Node', #{
+                     params => #{id => {no_null, id}},
+                     comment => "Relay Modern specification Node fetcher"
+                 }},
+        allObjects => schema_query_all_objs('Object')
+    };
+
+object_schema(_) ->
     #{
     }.
 
@@ -279,7 +241,7 @@ object_schema_mutations() ->
 %% Queries implementations
 %% ===================================================================
 
-
+%% @doc
 object_query(<<"node">>, #{<<"id">>:=Id}, _Ctx) ->
     case nkdomain_lib:read(Id) of
         {ok, #obj_id_ext{}=ObjIdExt, Obj} ->
@@ -288,126 +250,14 @@ object_query(<<"node">>, #{<<"id">>:=Id}, _Ctx) ->
             {error, Error}
     end;
 
-object_query(<<"allObjects">>, Params, _Ctx) ->
-    #{
-        <<"from">> := From,
-        <<"size">> := Size,
-        <<"filter">> := _Filter,
-        <<"sort">> := PSort
-    } = Params,
-    lager:error("NKLOG Params ~p", [Params]),
-    Spec1 = #{
-        from => From,
-        size => Size
-    },
-    Spec2 = case PSort of
-        null ->
-            Spec1;
-        _ ->
-            Spec1#{sort=> [
-                <<Order/binary, $:, (to_bin(camel_to_erl(Field)))/binary>>
-                || #{<<"field">>:={enum, Field}, <<"sortOrder">>:={enum, Order}} <- PSort
-            ]}
-
-    end,
-    lager:error("Spec1: ~p", [Spec2]),
-
-
-    case nkdomain:search(Spec2#{fields=>[]}) of
-        {ok, Total, Data, _Meta} ->
-            Data2 = lists:foldl(
-                fun(#{<<"obj_id">>:=ObjId}, Acc) ->
-                    {ok, ObjIdExt, Obj} = nkdomain_lib:read(ObjId),
-                    % lager:error("NKLOG OBJ ~p", [Obj]),
-                    [{ObjIdExt, Obj}|Acc]
-                end,
-                [],
-                Data),
-            Result = #search_results{
-                objects = Data2,
-                total_count = Total,
-                page_info = #page_info{
-                    has_next_page = false,
-                    has_previous_page = false
-                },
-                cursor = <<>>
-            },
-            {ok, Result};
-        {error, Error} ->
-            {error, Error}
-    end.
-
+object_query(<<"allObjects">>, Params, Ctx) ->
+    nkdomain_graphql_util:search(Params, Ctx).
 
 
 %% ===================================================================
 %% Queries execute
 %% ===================================================================
 
-
-%% @doc GraphQL execute
--spec object_execute(binary(), #obj_id_ext{}, map(), map(), any()) ->
-    {ok, term()} | {error, term()} | unknown.
-
-object_execute(Field, _ObjIdExt, Obj, _Args, _Ctx) ->
-    case Field of
-        <<"aliases">> -> {ok, maps:get(aliases, Obj, [])};
-        <<"createdBy">> -> get_obj(maps:get(created_by, Obj));
-        <<"createdById">> -> {ok, maps:get(created_by, Obj)};
-        <<"createdTime">> -> {ok, maps:get(created_time, Obj, null)};
-        <<"description">> -> {ok, maps:get(description, Obj, null)};
-        <<"destroyed">> -> {ok, maps:get(destroyed, Obj, false)};
-        <<"destroyedCode">> -> {ok, maps:get(destroyed_code, Obj, null)};
-        <<"destroyedReason">> -> {ok, maps:get(destroyed_reason, Obj, null)};
-        <<"destroyedTime">> -> {ok, maps:get(destroyed_time, Obj, null)};
-        <<"domain">> -> get_obj(case maps:get(domain_id, Obj) of <<>> -> <<"root">>; O -> O end);
-        <<"domainId">> -> {ok, maps:get(domain_id, Obj)};
-        <<"enabled">> -> {ok, maps:get(enabled, Obj, true)};
-        <<"expiresTime">> -> {ok, maps:get(expires_time, Obj, null)};
-        <<"icon">> -> get_obj(maps:get(icon_id, Obj, null));
-        <<"iconId">> -> {ok, maps:get(icon_id, Obj, null)};
-        <<"id">> -> {ok, maps:get(obj_id, Obj)};
-        <<"name">> -> {ok, maps:get(name, Obj, null)};
-        <<"objId">> -> {ok, maps:get(obj_id, Obj)};
-        <<"objName">> -> {ok, maps:get(obj_name, Obj)};
-        <<"path">> -> {ok, maps:get(path, Obj)};
-        <<"srvId">> -> {ok, maps:get(srv_id, Obj, null)};
-        <<"subtypes">> -> {ok, maps:get(subtype, Obj, [])};
-        <<"tags">> -> {ok, maps:get(tags, Obj, [])};
-        <<"type">> -> get_type(Obj);
-        <<"updatedBy">> -> get_obj(maps:get(updated_by, Obj, null));
-        <<"updatedById">> -> {ok, maps:get(updated_by, Obj, null)};
-        <<"updatedTime">> -> {ok, maps:get(updated_time, Obj, null)};
-        <<"vsn">> -> {ok, maps:get(vsn, Obj, null)};
-        _ -> unknown
-    end.
-
-
-%% @private
-get_obj(null) ->
-    {ok, null};
-get_obj(ObjId) ->
-    case nkdomain_lib:read(ObjId) of
-        {ok, #obj_id_ext{}=ObjIdExt, Obj} ->
-            {ok, {ObjIdExt, Obj}};
-        {error, Error} ->
-            {error, Error}
-    end.
-
-
-%% @private
-get_type(#{type:=Type}) ->
-    Module = nkdomain_reg:get_type_module(Type),
-    case Module:object_info() of
-        #{schema_type:=SchemaType} ->
-            {ok, nklib_util:to_binary(SchemaType)};
-        _ ->
-            lager:error("NKLOG Unknown type ~p", [Type]),
-            {error, unknown_type}
-    end;
-
-get_type(Obj) ->
-    lager:error("NKLOG Unknown type ~p", [Obj]),
-    {error, unknown_type}.
 
 
 %% ===================================================================
@@ -416,9 +266,9 @@ get_type(Obj) ->
 
 
 %% @private
-object_fields() ->
-    #{
-        aliases => {list, string, #{comment => "List of object aliases"}},
+object_fields(Base) ->
+    Base#{
+        % aliases => {list, string, #{comment => "List of object aliases"}},
         createdBy => {no_null, 'User', #{comment => "User that created the object"}},
         createdById => {no_null, string, #{comment => "UserId that created the object"}},
         createdTime => {no_null, time, #{comment => "Object creation time"}},
@@ -439,8 +289,8 @@ object_fields() ->
         objName => {no_null, string, #{comment => "Object's short name"}},
         path => {no_null, string, #{comment => "Object's directory path"}},
         srvId => {string, #{comment => "Object's service"}},
-        subtypes => {list, string, #{comment => "Object's subtypes"}},
-        tags => {list, string, #{comment => "Object's tags"}},
+        % subtypes => {list, string, #{comment => "Object's subtypes"}},
+        % tags => {list, string, #{comment => "Object's tags"}},
         type => {no_null, objectType, #{comment => "Object's type"}},
         updatedBy => {no_null, 'User', #{comment => "User that updated the object"}},
         updatedById => {no_null, string, #{comment => "UserId that updated the object"}},
@@ -450,49 +300,66 @@ object_fields() ->
 
 
 %% @private
-object_fields_filter() ->
-    #{
-        aliases => {objectFilterString, #{comment => "Object has an alias"}},
-        createdById => {objectFilterId, #{comment => "Objects created by this user"}},
-        createdTime => {objectFilterInt, #{comment => "Object creation time"}},
-        description => {objectFilterString, #{comment => "Words in description"}},
-        destroyed => {objectFilterBoolean, #{comment => "Filter by destroyed objects"}},
-        destroyedTime => {objectFilterInt, #{comment => "Destruction time"}},
-        domainId => {objectFilterId, #{comment => "Filter objects belonging to this domain"}},
-        enabled => {objectFilterBoolean, #{comment => "Filter enabled or disabled objects"}},
-        expiresTime => {objectFilterInt, #{comment => "Time this object will expire"}},
-        has_icon => {objectFilterBoolean, #{comment => "Objects having an icon"}},
-        iconId => {objectFilterId, #{comment => "Objects hanving this iconId"}},
-        name => {objectFilterString, #{comment => "Words in name"}},
-        objId => {objectFilterId, #{comment => "Object's ID"}},
-        objName => {objectFilterString, #{comment => "Object's with this short name"}},
-        path => {objectFilterString, #{comment => "Filter on this path"}},
-        srvId => {objectFilterId, #{comment => "Object's service"}},
-        subtypes => {list, objectFilterId, #{comment => "Object's subtypes"}},
-        tags => {list, objectFilterId, #{comment => "Object's tags"}},
-        type => {objectFilterId, #{comment => "Object's type"}},
-        updatedById => {objectFilterId, #{comment => "User that updated the object"}},
-        updatedTime => {objectFilterInt, #{comment => "Object updation time"}},
-        vsn => {objectFilterString, #{comment => "Object's current version"}}
-    }.
+object_fields_filter(Fields) ->
+    Base = #{
+        op => {filterOp, #{comment => "Operation Type"}},
+        % aliases => {'FilterKeyword' => #{comment => "Object has an alias"}},
+        createdById => {'FilterId', #{comment => "Objects created by this user"}},
+        createdTime => {'FilterInt', #{comment => "Object creation time"}},
+        description => {'FilterNormalizedString', #{comment => "Words in description"}},
+        destroyed => {'FilterBoolean', #{comment => "Filter by destroyed objects"}},
+        destroyedTime => {'FilterInt', #{comment => "Destruction time"}},
+        domainId => {'FilterId', #{comment => "Filter objects belonging to this domain"}},
+        enabled => {'FilterBoolean', #{comment => "Filter enabled or disabled objects"}},
+        expiresTime => {'FilterInt', #{comment => "Time this object will expire"}},
+        iconId => {'FilterId', #{comment => "Objects hanving this iconId"}},
+        name => {'FilterNormalizedString', #{comment => "Words in name"}},
+        objId => {'FilterId', #{comment => "Object's ID"}},
+        objName => {'FilterKeyword', #{comment => "Object's with this short name"}},
+        path => {'FilterPath', #{comment => "Filter on this path"}},
+        srvId => {'FilterId', #{comment => "Object's service"}},
+        % subTypes => {list, 'FilterId', #{comment => "Object's subtypes"}},
+        % tags => {list, 'FilterId', #{comment => "Object's tags"}},
+        type => {'FilterType', #{comment => "Object's type"}},
+        updatedById => {'FilterId', #{comment => "User that updated the object"}},
+        updatedTime => {'FilterInt', #{comment => "Object updation time"}},
+        vsn => {'FilterKeyword', #{comment => "Object's current version"}}
+    },
+    maps:merge(Base, Fields).
 
 
 %% @private
-camel_to_erl(<<"createdById">>) -> created_by;
-camel_to_erl(<<"createdTime">>) -> created_time;
-camel_to_erl(<<"destroyedCode">>) -> destroyed_code;
-camel_to_erl(<<"destroyedReason">>) -> destroyed_reason;
-camel_to_erl(<<"destroyedTime">>) -> destroyed_time;
-camel_to_erl(<<"domainId">>) -> domain_id;
-camel_to_erl(<<"expiresTime">>) -> expires_time;
-camel_to_erl(<<"iconId">>) -> icon_id;
-camel_to_erl(<<"objId">>) -> obj_id;
-camel_to_erl(<<"objName">>) -> obj_name;
-camel_to_erl(<<"srvId">>) -> srv_id;
-camel_to_erl(<<"updatedById">>) -> updated_by;
-camel_to_erl(<<"updatedTime">>) -> updated_time;
-camel_to_erl(Erl) -> binary_to_existing_atom(Erl, utf8).
+schema_object_fields_sort(Fields) ->
+    Base = [domainId, createdById, createdTime, enabled, expiresTime, objName, path, srvId],
+    List = [{Field, 'SortParams'} || Field <- lists:usort(Base++Fields)],
+    maps:from_list(List).
 
+
+%% @private
+%% Object must define 'TypeSearchResult', 'TypeFilter' and 'TypeSort'
+schema_query_all_objs(ResultType) ->
+    schema_query_all_objs(ResultType, 'Object', 'Object').
+
+
+%% @private
+%% Object must define 'TypeSearchResult', 'TypeFilter' and 'TypeSort'
+schema_query_all_objs(ResultType, FilterType) ->
+    schema_query_all_objs(ResultType, FilterType, 'Object').
+
+
+%% @private
+%% Object must define 'TypeSearchResult', 'FilterTypeFilter' and 'SortTypeSort'
+schema_query_all_objs(ResultType, FilterType, SortType) ->
+    Result = binary_to_atom(<<(to_bin(ResultType))/binary, "SearchResult">>, latin1),
+    Filter = binary_to_atom(<<(to_bin(FilterType))/binary, "Filter">>, latin1),
+    Sort = binary_to_atom(<<(to_bin(SortType))/binary, "Sort">>, latin1),
+    {Result, #{
+        params => #{
+            filter => {list, Filter},
+            sort => {list, Sort},
+            from => int,
+            size => int
+        }}}.
 
 
 %% @private

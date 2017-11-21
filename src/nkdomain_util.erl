@@ -23,7 +23,7 @@
 
 -export([make_path/3, is_path/1, get_parts/1, get_parts/2, class/1, type/1, name/1, field/2, fields/2]).
 -export([append/2, get_srv_id/1, add_destroyed/3]).
--export([timestamp/0]).
+-export([timestamp/0, remove_nulls/1]).
 -export_type([error/0]).
 
 -type error() ::
@@ -248,6 +248,10 @@ add_destroyed(SrvId, Reason, Obj) ->
         }, Obj2).
 
 
+
+%% @private
+remove_nulls(Map) ->
+    maps:filter(fun(_K, V) -> V /= null end, Map).
 
 
 %% @private

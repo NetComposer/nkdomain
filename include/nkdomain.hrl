@@ -61,7 +61,7 @@
     session_events :: [binary()],
     session_link :: nklib_links:link(),
     meta :: map(),                      % Object load metadata
-    session :: term(),                  % Session-specific metadata
+    session :: term(),                  % Session-specific run-time data
     stop_reason = false :: false | nkservice:error(),
     unload_policy :: permanent | {expires, nklib_util:m_timestamp()} | {ttl, integer()},
     timer :: reference(),

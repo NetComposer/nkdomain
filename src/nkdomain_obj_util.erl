@@ -26,7 +26,7 @@
 -export([event/2, search_syntax/1, get_obj_info/1, get_obj_name/1]).
 -export([send_event/1, send_event/3, send_event/4, send_event/5]).
 -export([link_to_session_server/2, unlink_from_session_server/2]).
--export([set_active/2, set_next_status_timer/2]).
+-export([set_active/2, set_next_status_timer/2, do_save_timer/1]).
 -export([get_obj_session/1, set_obj_session/2]).
 -export([get_existing_srv_id/1, get_srv_id/1]).
 
@@ -34,6 +34,7 @@
 -include("nkdomain_debug.hrl").
 -include_lib("nkevent/include/nkevent.hrl").
 
+-define(DEFAULT_SAVE_TIME, 5000).
 
 
 %% ===================================================================
@@ -272,6 +273,16 @@ set_next_status_timer(Time, #obj_state{obj=Obj, next_status_timer=Timer}=State) 
             Timer2 = erlang:send_after(Time, self(), nkdomain_obj_next_status_timer),
             State#obj_state{obj=Obj2, is_dirty=true, next_status_timer=Timer2}
     end.
+
+
+%% @private
+do_save_timer(#obj_state{is_dirty=true, object_info=Info, save_timer=undefined}=State) ->
+    Time = 1000 * maps:get(save_time, Info, ?DEFAULT_SAVE_TIME),
+    Ref = erlang:send_after(Time, self(), nkdomain_obj_save_timer),
+    State#obj_state{timer=Ref};
+
+do_save_timer(State) ->
+    State.
 
 
 %% @doc

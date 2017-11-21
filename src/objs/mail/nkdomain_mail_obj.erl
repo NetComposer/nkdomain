@@ -24,8 +24,8 @@
 -behavior(nkdomain_obj).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([object_info/0, object_admin_info/0, object_parse/2, object_es_mapping/0,
-         object_api_syntax/2, object_api_cmd/2]).
+-export([send_msg/3]).
+-export([object_info/0, object_admin_info/0, object_parse/2, object_es_mapping/0]).
 
 -include_lib("nkdomain.hrl").
 -include_lib("nkservice/include/nkservice.hrl").
@@ -42,6 +42,21 @@
 %% ===================================================================
 %% API
 %% ===================================================================
+
+%% @doc Sends a mail msg
+-spec send_msg(nkservice:id(), nkdomain:id(), nkmail:msg()) ->
+    {ok, Meta::map()} | {error, term()}.
+
+send_msg(SrvId, ProviderId, Msg) ->
+    case nkdomain:get_obj(ProviderId) of
+        {ok, #{?DOMAIN_MAIL_PROVIDER:=Provider}} ->
+            Msg2 = Msg#{provider=>Provider},
+            nkmail:send(SrvId, Msg2);
+        {error, object_not_found} ->
+            {error, provider_not_found};
+        {error, Error} ->
+            {error, Error}
+    end.
 
 
 
@@ -79,68 +94,10 @@ object_parse(_Mode, _Obj) ->
     }.
 
 
-%% @private
-object_api_syntax(<<"send">>, Syntax) ->
-    MailSyntax = nkmail_util:msg_syntax(),
-    maps:merge(Syntax, MailSyntax);
-
-object_api_syntax(_Cmd, Syntax) ->
-    Syntax.
-
-
-%% @private
-object_api_cmd(<<"send">>, #nkreq{data=Data}) ->
-    case get_provider(Data) of
-        {ok, _, Provider} ->
-            case nkmail:send(?NKROOT, Provider, Data) of
-                {ok, Meta} ->
-                    {ok, #{result=>Meta}};
-                {error, Error} ->
-                    {error, Error}
-            end;
-        {error, Error} ->
-            {error, Error}
-    end;
-
-object_api_cmd(_Cmd, _Req) ->
-    {error, not_implemented2}.
-
 
 
 
 %% ===================================================================
 %% Internal
 %% ===================================================================
-
-
-
-%% @private
-get_provider(#{provider_id:=ProviderId}) ->
-    do_get_provider(ProviderId);
-
-get_provider(_Obj) ->
-    case ?CALL_NKROOT(config_nkdomain_nkroot, []) of
-        #nkdomain_config_cache{email_provider=ProviderId} ->
-            do_get_provider(ProviderId);
-        _ ->
-            {error, provider_id_missing}
-    end.
-
-
-%% @private
-do_get_provider(ProviderId) ->
-    case nkdomain_lib:load(ProviderId) of
-        #obj_id_ext{obj_id=ProviderObjId, type = ?DOMAIN_MAIL_PROVIDER} ->
-            case nkdomain:get_obj(ProviderObjId) of
-                {ok, #{?DOMAIN_MAIL_PROVIDER:=Data}} ->
-                    {ok, ProviderObjId, Data};
-                _ ->
-                    {error, provider_id_invalid}
-            end;
-        _ ->
-            {error, provider_id_invalid}
-    end.
-
-
-
 

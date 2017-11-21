@@ -62,7 +62,6 @@
 -define(RELOAD_PARENT_TIME, 5000).
 -define(MOVE_WAIT_TIME, 30000).
 -define(DEF_SYNC_CALL, 5000).
--define(DEFAULT_SAVE_TIME, 5000).
 
 -compile({no_auto_import, [register/2]}).
 
@@ -146,6 +145,7 @@
     get_childs|
     get_domain_id |
     get_parent_id |
+    %{apply_type_field, atom(), fun((term()) -> term())} |
     get_time |
     is_enabled |
     {enable, boolean()} |
@@ -330,12 +330,12 @@ init({Op, Obj, StartOpts}) when Op==loaded; Op==created ->
 handle_call({nkdomain_sync_op, Op}, From, State) ->
     case handle(object_sync_op, [Op, From], State) of
         {reply, Reply, #obj_state{}=State2} ->
-            reply(Reply, do_save_timer(do_refresh(State2)));
+            reply(Reply, nkdomain_obj_util:do_save_timer(do_refresh(State2)));
         {reply_and_save, Reply, #obj_state{}=State2} ->
             {_, State3} = do_save(user_op, State2#obj_state{is_dirty=true}),
             reply(Reply, do_refresh(State3));
         {noreply, #obj_state{}=State2} ->
-            noreply(do_save_timer(do_refresh(State2)));
+            noreply(nkdomain_obj_util:do_save_timer(do_refresh(State2)));
         {noreply_and_save, #obj_state{}=State2} ->
             {_, State3} = do_save(user_op, State2#obj_state{is_dirty=true}),
             noreply(do_refresh(State3));
@@ -368,7 +368,7 @@ handle_call(Msg, From, State) ->
 handle_cast({nkdomain_async_op, Op}, State) ->
     case handle(object_async_op, [Op], State) of
         {noreply, #obj_state{}=State2} ->
-            noreply(do_save_timer(do_refresh(State2)));
+            noreply(nkdomain_obj_util:do_save_timer(do_refresh(State2)));
         {noreply_and_save, #obj_state{}=State2} ->
             {_, State3} = do_save(user_op, State2#obj_state{is_dirty=true}),
             noreply(do_refresh(State3));
@@ -563,6 +563,11 @@ do_sync_op(get_parent_id, _From, #obj_state{parent_id=ParentId}=State) ->
 
 do_sync_op(get_path, _From, #obj_state{id=#obj_id_ext{path=Path}}=State) ->
     reply({ok, Path}, State);
+
+%%do_sync_op({apply_type_field, Field, Fun}, _From, #obj_state{id=#obj_id_ext{type=Type}, obj=Obj}=State) ->
+%%    TypeObj = maps:get(Type, Obj, #{}),
+%%    Value = maps:get(Field, TypeObj, undefined),
+%%    reply({ok, Fun(Value)}, State);
 
 do_sync_op(save, _From, State) ->
     {Reply, State2} = do_save(user_order, State),
@@ -922,16 +927,6 @@ do_refresh(#obj_state{unload_policy={ttl, Time}, timer=Timer}=State) when is_int
     State#obj_state{timer=Ref};
 
 do_refresh(State) ->
-    State.
-
-
-%% @private
-do_save_timer(#obj_state{is_dirty=true, object_info=Info, save_timer=undefined}=State) ->
-    Time = 1000 * maps:get(save_time, Info, ?DEFAULT_SAVE_TIME),
-    Ref = erlang:send_after(Time, self(), nkdomain_obj_save_timer),
-    State#obj_state{timer=Ref};
-
-do_save_timer(State) ->
     State.
 
 

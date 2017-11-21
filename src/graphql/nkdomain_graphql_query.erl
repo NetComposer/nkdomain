@@ -21,21 +21,22 @@
 %% @doc Query processor.
 -module(nkdomain_graphql_query).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
-
 -export([execute/4]).
 
+-include_lib("nkservice/include/nkservice.hrl").
 
 %% @doc Called at the beginning of the query processing
 execute(Ctx, _DummyObj, QueryName, Params) ->
-    %#{nkmeta:=#{start:=Start}} = Ctx,
+    #{nkmeta:=#{start:=Start, srv_id:=SrvId}} = Ctx,
     % Find who is in charge of this query
     case nklib_types:get_module(nkdomain_query, QueryName) of
         undefined ->
             {error, unknown_query};
         Module ->
             try
-                Res = Module:object_query(QueryName, Params, Ctx),
-                %lager:info("Query time: ~p", [nklib_util:l_timestamp()-Start]),
+                Params2 = nkdomain_util:remove_nulls(Params),
+                Res = ?CALL_SRV(SrvId, object_graphql_query, [QueryName, Module, Params2, Ctx]),
+                lager:info("Query time: ~p", [nkdomain_util:timestamp()-Start]),
                 Res
             catch
                 throw:Error ->

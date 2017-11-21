@@ -25,19 +25,6 @@
 %% Defines
 %% ===================================================================
 
--record(page_info, {
-    has_next_page :: boolean(),
-    has_previous_page :: boolean()
-}).
-
-
--record(search_results, {
-    objects = [] :: [{nkdomain:obj_id_ex(), nkdomain:obj()}],
-    total_count = 0 :: integer(),
-    page_info :: #page_info{},
-    cursor :: binary
-}).
-
 
 
 

@@ -23,6 +23,9 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -compile(export_all).
 
+-include("nkdomain.hrl").
+
+
 
 get1() ->
     Query = <<"
@@ -32,10 +35,24 @@ get1() ->
             }
         }
     ">>,
-    {ok, #{<<"node">> := #{<<"id">> := <<"root">>}}} = nkdomain_graphql:request(Query, #{}),
+    {ok, #{data := #{<<"node">> := #{<<"id">> := <<"root">>}}}} = request(Query),
     ok.
 
-
+get2() ->
+    Query = <<"
+        query {
+            node(id: \"carlos@mail\") {
+                id
+                ... on User {
+                    userName
+                    domain {
+                        path
+                    }
+                }
+            }
+        }
+    ">>,
+    request(Query).
 
 
 introduce_user(Num) ->
@@ -50,7 +67,7 @@ introduce_user(Num) ->
                 objId
             }
         }"],
-    {ok, #{<<"introduceUser">>:=#{<<"objId">>:=ObjId}}} = nkdomain_graphql:request(Mutation, #{}),
+    {ok, #{<<"introduceUser">>:=#{<<"objId">>:=ObjId}}} = request(Mutation),
     ObjId.
 
 
@@ -58,13 +75,32 @@ all_objs() ->
     Query = <<"
         query {
             allObjects(
-                from: 2
-                size: 5
+                from: 0
+                size: 3
+                filter: [
+                    {
+                        type: {values: [User, Domain]},
+                        name: {fuzzy: \"carlos last\"}
+                    }
+                    {
+                        op: AND
+                        path: {childsOf: \"/sipstorm\"}
+                    }
+                    {
+                        op: OR
+                        createdTime: {gt: 0, lte: 9999999}
+                    }
+                ]
                 sort: [
                     {
-                        field: path
-                        sortOrder: asc
+                        domainId: {
+                            order: \"DESC\"
+                        }
+                    },
+                    {
+                        path: {}
                     }
+
                 ]
             ) {
                 totalCount
@@ -80,6 +116,9 @@ all_objs() ->
             }
         }
     ">>,
-    nkdomain_graphql:request(Query, #{}).
+    request(Query).
 
 
+
+request(Query) ->
+    nkdomain_graphql:request(?NKROOT, Query, #{}).

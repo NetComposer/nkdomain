@@ -29,7 +29,7 @@
 
 -include("nkdomain.hrl").
 -include_lib("nkmail/include/nkmail.hrl").
--include_lib("nkapi/include/nkapi.hrl").
+-include_lib("nkservice/include/nkservice.hrl").
 
 -define(LLOG(Type, Txt, Args),
     lager:Type("NkMAIL Provider "++Txt, Args)).
@@ -87,7 +87,7 @@ object_es_mapping() ->
 %% @private
 object_parse(_Mode, Obj) ->
     #{?DOMAIN_MAIL_PROVIDER:=Config} = Obj,
-    case nkmail:parse_provider(?NKROOT, Config, #{path=>?DOMAIN_MAIL_PROVIDER}) of
+    case ?CALL_SRV(?NKROOT, nkmail_parse_provider, [Config, #{path=>?DOMAIN_MAIL_PROVIDER}]) of
         {ok, Provider, UnknownFields} ->
             {type_obj, Provider, UnknownFields};
         {error, Error} ->

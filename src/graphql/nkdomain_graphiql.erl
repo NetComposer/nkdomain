@@ -46,25 +46,26 @@ http(get, [<<"assets">>, Name], _Req) ->
     {http, 200, content_type(Path), File};
 
 http(post, [], Req) ->
-    Start = nklib_util:l_timestamp(),
+    NkMeta = #{
+        start => nkdomain_util:timestamp(),
+        srv_id => nkservice_rest_http:get_srv_id(Req)
+    },
     case gather(nkservice_rest_http:get_cowboy_req(Req)) of
         {error, Reason} ->
             err(400, Reason);
         {ok, Decoded} ->
-            run_request(Decoded#{nkmeta=>#{start=>Start}})
+            run_request(Decoded#{nkmeta=>NkMeta})
     end;
 
-http(Method, Path, _Req) ->
-    lager:error("NKLOG GRAPHQL ~p ~p", [Method, Path]),
+http(_Method, _Path, _Req) ->
+    % lager:error("NKLOG GRAPHQL ~p ~p", [_Method, _Path]),
     {http, 404, [], <<>>}.
 
 
+%% @private
 content_type(Path) ->
     {A, B, _C} = cow_mimetypes:all(nklib_util:to_binary(Path)),
     [{<<"content-type">>, <<A/binary, $/, B/binary, ";charset=utf-8">>}].
-
-
-
 
 
 %% @private
@@ -207,6 +208,7 @@ fixup_key(Term) ->
 
 
 err(Code, Msg) ->
+    lager:error("NKLOG GRAPHI ERROR ~p ~p", [Code, Msg]),
     Formatted = iolist_to_binary(io_lib:format("~p", [Msg])),
     Err = #{
         type => error,

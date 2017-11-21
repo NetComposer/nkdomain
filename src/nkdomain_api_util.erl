@@ -23,7 +23,7 @@
 
 -export([session_login/1, token_login/2, check_token/2, check_raw_token/1]).
 -export([search/1, get_id/3, get_id/4, add_id/3, add_meta/3, get_meta/2, remove_meta/2]).
--export([head_type_fields/2]).
+-export([head_type_field/2, head_type_filters/2]).
 -export_type([login_data/0, session_meta/0]).
 
 -include("nkdomain.hrl").
@@ -80,7 +80,7 @@ session_login(#nkreq{srv_id=SrvId, data=Data, session_meta=SessMeta}=Req) ->
             SessData3 = maps:merge(SessData1, SessData2#{login_meta => LoginMeta}),
             SessOpts1 = maps:with([session_id, session_link], SessMeta),
             SessOpts2 = SessOpts1#{data=>SessData3},
-            case nkdomain_session_obj:start(SrvId, DomainId, UserId, SessOpts2) of
+            case nkdomain_session:start(SrvId, DomainId, UserId, SessOpts2) of
                 {ok, SessId, Pid} ->
                     Req2 = add_meta(login_meta, LoginMeta, Req),
                     Req3 = add_id(?DOMAIN_DOMAIN, DomainId, Req2),
@@ -260,16 +260,17 @@ remove_meta(Type, #nkreq{user_state=UserState}=Req) ->
     Req#nkreq{user_state=UserState2}.
 
 
+%% @doc Pre-pends the type to a field
+head_type_field(Type, Field) ->
+    list_to_binary([Type, ".", to_bin(Field)]).
+
 
 %% @doc Pre-pends the type to fields in a map or list
-head_type_fields(Type, Map) when is_map(Map) ->
-    head_type_fields(Type, maps:to_list(Map));
+head_type_filters(Type, Map) when is_map(Map) ->
+    head_type_filters(Type, maps:to_list(Map));
 
-head_type_fields(Type, List) when is_list(List) ->
-    Fields = [
-        {list_to_binary([Type, ".", to_bin(Key)]), Val}
-        || {Key, Val} <- List
-    ],
+head_type_filters(Type, List) when is_list(List) ->
+    Fields = [{head_type_field(Type, Key), Val} || {Key, Val} <- List],
     maps:from_list(Fields).
 
 

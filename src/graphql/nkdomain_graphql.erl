@@ -31,10 +31,12 @@
 
 -module(nkdomain_graphql).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
--export([load_schema/0, request/2]).
--export_type([schema_type/0, field_key/0, field_value/0, field_opts/0]).
+-export([load_schema/0, request/3]).
+-export_type([schema_type/0, field_key/0, field_value/0, field_opts/0, object/0]).
 -export_type([schema_fields/0, query_name/0, mutation_name/0]).
 
+-include("nkdomain.hrl").
+-include("nkdomain_graphql.hrl").
 
 %% ===================================================================
 %% Types
@@ -71,6 +73,8 @@
 
 -type mutation_name() :: atom().
 
+-type object() ::
+    {#obj_id_ext{}, nkdomain:obj()} | map().
 
 
 %% ===================================================================
@@ -80,7 +84,7 @@
 
 %% @doc Generates an loads a new schema
 load_schema() ->
-    ok = graphql_schema:reset(default),
+    ok = graphql_schema:reset(),
     Mapping = mapping_rules(),
     Schema = nkdomain_graphql_schema:make_schema(),
     ok = graphql:load_schema(Mapping, Schema),
@@ -119,14 +123,17 @@ setup_root() ->
 
 
 %% @doc Launches a request
-request(Str, Meta) when is_list(Str) ->
-    request(list_to_binary(Str), Meta);
+request(SrvId, Str, Meta) when is_list(Str) ->
+    request(SrvId, list_to_binary(Str), Meta);
 
-request(Str, Meta) when is_binary(Str) ->
+request(SrvId, Str, Meta) when is_binary(Str) ->
+    Meta2 = Meta#{
+        start => nkdomain_util:timestamp(),
+        srv_id => SrvId
+    },
     case gather(#{<<"query">>=>Str, <<"vaiables">>=>null}, #{}) of
         {ok, Decoded} ->
-            Start = nklib_util:l_timestamp(),
-            run_request(Decoded#{nkmeta=>#{start=>Start}, nkuser=>Meta});
+            run_request(Decoded#{nkmeta=>Meta2});
         {error, Error} ->
             {error, Error}
     end.
@@ -156,7 +163,7 @@ run_preprocess(#{document:=AST}=ReqCtx) ->
         run_execute(ReqCtx#{document := AST2, fun_env => FunEnv})
     catch
         throw:{error, Map} ->
-            make_error(Map);
+            make_error(Map, ReqCtx);
         throw:Err ->
             lager:error("NKLOG RR2 ~p", [Err]),
             {error, Err}
@@ -170,23 +177,21 @@ run_execute(ReqCtx) ->
         fun_env := FunEnv,
         vars := Vars,
         operation_name := OpName,
-        nkmeta := NkMeta,
-        nkuser := NkUser
+        nkmeta := NkMeta
     } = ReqCtx,
     Coerced = graphql:type_check_params(FunEnv, OpName, Vars), % <1>
     Ctx = #{
         params => Coerced,
         operation_name => OpName,
-        nkmeta => NkMeta,
-        nkuser => NkUser
+        nkmeta => NkMeta
     },
     Res = graphql:execute(Ctx, AST),
     % lager:error("NKLOG L ~p", [Res]),
     case Res of
-        #{errors:=[Error1|_], data:=_Data} ->
-            make_error(Error1);
-        #{data:=Data} ->
-            {ok, Data};
+%%        #{errors:=[Error1|_], data:=_Data} ->
+%%            make_error(Error1, ReqCtx);
+        #{data:=_} ->
+            {ok, Res};
         {error, {error, Error}} ->
             {error, Error};
         {error, Error} ->
@@ -248,7 +253,21 @@ operation_name([]) ->
 
 
 %% @private
-make_error(#{key:=Key, message:=Msg, path:=Path}) ->
-    Text = list_to_binary([Msg, " (", nklib_util:bjoin(Path, <<".">>), ")"]),
-    {error, {Key, Text}}.
+make_error(#{key:=Key, message:=Msg, path:=Path}, #{nkmeta:=#{srv_id:=SrvId}}) ->
+    case Key of
+        {resolver_error, Key2} ->
+            case nkservice_util:is_error(SrvId, Key2) of
+                {true, Code, Reason} ->
+                    Text = list_to_binary([Reason, " (", nklib_util:bjoin(Path, <<".">>), ")"]),
+                    {error, {Code, Text}};
+                false ->
+                    Text = list_to_binary([Msg, " (", nklib_util:bjoin(Path, <<".">>), ")"]),
+                    {error, {Key2, Text}}
+            end;
+        {resolver_crash, _} ->
+            {error, {resolver_crash, Msg}};
+        _ ->
+            Text = list_to_binary([Msg, " (", nklib_util:bjoin(Path, <<".">>), ")"]),
+            {error, {Key, Text}}
+    end.
 
