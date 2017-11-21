@@ -77,7 +77,8 @@
 -record(nkdomain_config_cache, {
     db_store :: binary(),
     file_store :: binary,
-    email_provider :: binary()
+    email_provider :: binary(),
+    transcoder_server :: binary()
 }).
 
 

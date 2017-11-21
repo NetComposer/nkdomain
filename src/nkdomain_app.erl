@@ -119,9 +119,10 @@ register_types() ->
     ok = nkdomain_reg:register_module(nkdomain_file_store_obj),
     ok = nkdomain_reg:register_module(nkdomain_file_obj),
 
-    ok = nkdomain_reg:register_module(nkadmin_session_obj).
+    ok = nkdomain_reg:register_module(nkadmin_session_obj),
 
-
+    ok = nkdomain_reg:register_module(nkdomain_transcoder_server_obj),
+    ok = nkdomain_reg:register_module(nkdomain_transcoder_job_obj).
 
 
 %% @doc gets a configuration value

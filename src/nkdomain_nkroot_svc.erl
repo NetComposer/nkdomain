@@ -46,7 +46,8 @@ start() ->
     Spec = #{
         plugins => [
             nkdomain_nkroot, nkdomain_store_es, nkadmin,
-            nkapi, nkmail, nkmail_smtp_client, nkfile_filesystem, nkfile_s3, nkfile_s3_mini, nkservice_rest
+            nkapi, nkmail, nkmail_smtp_client, nkfile_filesystem, nkfile_s3, nkfile_s3_mini, nkservice_rest,
+            nktranscoder_ffmpeg, nkimage_imaginary
         ],
         nkdomain => nklib_config:get_env(nkdomain),
         debug => [

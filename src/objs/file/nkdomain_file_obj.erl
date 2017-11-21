@@ -30,6 +30,8 @@
 -export([object_info/0, object_es_mapping/0, object_parse/2, object_api_syntax/2, object_api_cmd/2]).
 -export([object_admin_info/0]).
 -export([make_file_id/0, upload/4, download/3]).
+-export([get_store/1]).
+-export([create/8, update/2]).
 
 -include("nkdomain.hrl").
 -include("nkdomain_debug.hrl").
@@ -103,6 +105,8 @@ http_post(Domain, StoreId, Name, Req) ->
                                         name => Name,
                                         ?DOMAIN_FILE => maps:merge(File2, FileMeta)
                                     },
+
+                                    io:format("File object: ~p~n", [Obj]),
                                     case nkdomain_obj_make:create(Obj) of
                                         {ok, ExtId, _Unknown} ->
                                             {ok, ExtId, Obj};
@@ -121,6 +125,29 @@ http_post(Domain, StoreId, Name, Req) ->
         {error, Error} ->
             {error, Error}
     end.
+
+
+create(StoreObjId, UserId, DomainId, FileObjId, SrvId, ContentType, Size, Links) -> 
+    Obj = #{ created_by => UserId, 
+              domain_id => DomainId,
+              name => <<>>,
+              obj_id => FileObjId,
+              srv_id => SrvId ,type => <<"file">>,
+              <<"file">> => #{
+                  content_type => ContentType,
+                  size => Size,
+                  store_id => StoreObjId,
+                  links => Links
+            }},
+    case nkdomain_obj_make:create(Obj) of
+        {ok, ExtId, _Unknown} ->
+            {ok, ExtId, Obj};
+        {error, Error} ->
+            {error, Error}
+    end.
+
+update(FileId, Data) -> 
+    nkdomain:update(FileId, #{?DOMAIN_FILE => Data}).
 
 
 %% @doc
@@ -155,6 +182,10 @@ http_get(FileId, Req) ->
         {error, Error} ->
             {error, Error}
     end.
+
+
+
+
 
 
 
@@ -207,18 +238,24 @@ object_schema_types() ->
 
 
 %% @private
-object_es_mapping() ->
-    #{
-        content_type => #{type => keyword},
-        store_id => #{type => keyword},
-        size => #{type => long},
-        password => #{type => keyword}
-    }.
+%%object_es_mapping() ->
+%%    #{
+%%        content_type => #{type => keyword},
+%%        store_id => #{type => keyword},
+%%        size => #{type => long},
+%%        password => #{type => keyword}
+%%    }.
+
+object_es_mapping() -> 
+    not_indexed.
 
 
 %% @private
 object_parse(update, _Obj) ->
-    #{};
+    #{ size => integer,
+       content_type => binary,
+       links => list
+     };
 
 object_parse(_Mode, _Obj) ->
      #{
@@ -227,8 +264,9 @@ object_parse(_Mode, _Obj) ->
         store_id => binary,
         size => integer,
         password => binary,
+        links => list,
         '__mandatory' => [content_type, store_id, size],
-        '__defaults' => #{vsn => <<"1">>}
+        '__defaults' => #{vsn => <<"1">>, links => []}
     }.
 
 

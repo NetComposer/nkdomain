@@ -15,12 +15,12 @@
         nkmail,
         nkfile,
         nkadmin,
+        nktranscoder,
+        nkimage,
         p1_pgsql,
         graphql,
-
         mnesia,
         iso8601
-
     ]},
     {env, [
     ]}

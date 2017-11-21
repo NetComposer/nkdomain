@@ -7,3 +7,5 @@ doc
 erlcinfo
 data
 ebin
+_build
+_checkouts
