@@ -299,7 +299,8 @@ get_dash_detail_test() ->
                                     },
                                     type => <<"line">>,
                                     x => #{
-                                        value => <<"month">>
+                                        value => <<"month">>,
+                                        formatter => nkadmin_webix_chart:parse_date_template(<<"month">>, <<"{month: 'short'}">>)
                                     },
                                     y => #{
                                         values => [#{
@@ -377,55 +378,6 @@ get_dash_detail_test() ->
                                     dynamic => false
                                 })
                             ]
-                        }, #{
-                            height => 220,
-                            type => <<"clean">>,
-                            cols => [
-                                get_chart_json(<<"chart_id1">>, <<"spline">>, <<"Spline">>, false),
-                                get_chart_json(<<"chart_id2">>, <<"line">>, <<"Line">>, false)
-                            ]
-                        }, #{
-                            height => 220,
-                            type => <<"clean">>,
-                            cols => [
-                                get_chart_json(<<"chart_id3">>, <<"area">>, <<"Area">>, false),
-                                get_chart_json(<<"chart_id4">>, <<"stackedArea">>, <<"Stacked Area">>, false)
-                            ]                            
-                        }, #{
-                            height => 220,
-                            type => <<"clean">>,
-                            cols => [
-                                get_chart_json(<<"chart_id5">>, <<"splineArea">>, <<"Spline Area">>, false),
-                                get_chart_json(<<"chart_id6">>, <<"pie">>, <<"Pie">>, false)
-                            ]                            
-                        }, #{
-                            height => 220,
-                            type => <<"clean">>,
-                            cols => [
-                                get_chart_json(<<"chart_id7">>, <<"pie3D">>, <<"Pie 3D">>, false),
-                                get_chart_json(<<"chart_id8">>, <<"donut">>, <<"Donut">>, false)
-                            ]                            
-                        }, #{
-                            height => 220,
-                            type => <<"clean">>,
-                            cols => [
-                                get_chart_json(<<"chart_id9">>, <<"bar">>, <<"Bar">>, false),
-                                get_chart_json(<<"chart_id10">>, <<"barH">>, <<"Bar H">>, false)
-                            ]
-                        }, #{
-                            height => 220,
-                            type => <<"clean">>,
-                            cols => [
-                                get_chart_json(<<"chart_id11">>, <<"stackedBar">>, <<"Stacked Bar">>, false),
-                                get_chart_json(<<"chart_id12">>, <<"stackedBarH">>, <<"Stacked Bar H">>, false)
-                            ]                            
-                        }, #{
-                            height => 220,
-                            type => <<"clean">>,
-                            cols => [
-                                get_chart_json(<<"chart_id13">>, <<"radar">>, <<"Radar">>, false),
-                                get_chart_json(<<"chart_id14">>, <<"scatter">>, <<"Scatter">>, false)
-                            ]                            
                         }]
                     }
                 ]
@@ -703,6 +655,21 @@ get_series_chart_json(#{id := ChartId, x := X, y := Y}=Opts) ->
     HeaderValue = maps:get(text, Header, <<>>),
     HeaderCss = maps:get(css, Header, <<>>),
     XValue = maps:get(value, X),
+    XFormatter = case maps:is_key(formatter, X) of
+        true ->
+            maps:get(formatter, X);
+        false ->
+            #{
+                nkParseFunction => <<"
+                    function(obj) {
+                        if (obj && obj.", XValue/binary, ") {
+                            return obj.", XValue/binary, ";
+                        }
+                        return "";
+                    }
+                ">>
+            }
+    end,
     YValues = maps:get(values, Y),
     NKCharts1 = [maps:get(value, YValue) || YValue <- YValues],
     NKCharts2 = [XValue|NKCharts1],
@@ -724,16 +691,7 @@ get_series_chart_json(#{id := ChartId, x := X, y := Y}=Opts) ->
         is_subchart => true,
         nk_charts => NKCharts2,
         x_axis => #{
-            template => #{
-                nkParseFunction => <<"
-                    function(obj) {
-                        if (obj && obj.", XValue/binary, ") {
-                            return obj.", XValue/binary, ";
-                        }
-                        return "";
-                    }
-                ">>
-            }
+            template => XFormatter
         },
         y_axis => #{
             start => 0,
