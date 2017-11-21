@@ -226,8 +226,8 @@ object_graphql_execute(Field, SchObj, Args, Ctx) ->
                                             case nkdomain_reg:get_schema_type_module(BaseType2) of
                                                 undefined ->
                                                     null;
-                                                Module ->
-                                                    Module:object_query({connection, ObjIdExt}, Args, Ctx)
+                                                Module2 ->
+                                                    Module2:object_query({connection, ObjIdExt}, Args, Ctx)
                                             end
                                     end;
                                 Value ->
