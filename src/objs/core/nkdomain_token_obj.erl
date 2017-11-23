@@ -187,6 +187,7 @@ object_sync_op({?MODULE, get_token_data}, _From, State) ->
     #{?DOMAIN_TOKEN:=#{data:=TokenData}, expires_time:=ExpiresTime, created_time:=CreatedTime} = Obj,
     Reply = #{
         domain_id => DomainId,
+        pid => self(),
         data => TokenData,
         created_time => CreatedTime,
         expires_time => ExpiresTime
