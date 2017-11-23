@@ -22,6 +22,18 @@
 -module(nkdomain).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
+%% Roles
+%%
+%% - User roles will have the format Srv:Role (like <<"company:role">>)
+%% - For personalities, the user object will have a role like "company:doctor" with the obj_id of doctor object,
+%%   and the doctor object will have a role "user" with the obj_id of the doctor
+%%
+%% Standard roles
+%%
+%% - admin: all capabilities over object
+%% - member: membership, whatever it means for any object
+%% - operator: can access the object, unload, delete, etc.
+%% - user: this object "belongs" (it is a personality) of this user
 
 -export([find/1, load/1, unload/1, unload/2, get_obj/1, get_info/1, get_name/1, get_domain_id/1]).
 -export([enable/2, update/2, update_name/2, delete/1, send_info/3]).
