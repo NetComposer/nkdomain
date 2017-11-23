@@ -154,6 +154,9 @@
     delete |
     {register, usage|link, nklib:link()} |
     save |
+    get_roles |
+    {add_roles, nkdomain:role(), nkdomain:role_spec()|[nkdomain:role_spec()]} |
+    {remove_roles, nkdomain:role(), nkdomain:role_spec()|[nkdomain:role_spec()]} |
     term().
 
 -type async_op() ::
@@ -642,6 +645,44 @@ do_sync_op({update_name, ObjName}, _From, #obj_state{is_enabled=IsEnabled, objec
                     reply({error, Error}, State)
             end
     end;
+
+do_sync_op(get_roles, _From, State) ->
+    Roles = nkdomain_obj_roles:get_roles(State),
+    {reply, {ok, Roles}, State};
+
+do_sync_op({add_roles, Role, RoleList}, _From, State) when is_list(RoleList) ->
+    Role2 = nklib_util:to_binary(Role),
+    Roles1 = nkdomain_obj_roles:get_roles(State),
+    RoleData1 = maps:get(Role2, Roles1, []),
+    {RoleData2, State2} = nkdomain_obj_roles:add_roles(RoleList, Role2, RoleData1, State),
+    Roles2 = Roles1#{Role2 => RoleData2},
+    State3 = nkdomain_obj_roles:save_roles(Roles2, State2),
+    case do_save(role_added, State3) of
+        {ok, State4} ->
+            {reply, ok, State4};
+        {{error, Error}, State4} ->
+            {reply, {error, Error}, State4}
+    end;
+
+do_sync_op({add_roles, Role, RoleSpec}, From, State) ->
+    do_sync_op({add_roles, Role, [RoleSpec]}, From, State);
+
+do_sync_op({remove_roles, Role, RoleList}, _From, State) when is_list(RoleList) ->
+    Role2 = nklib_util:to_binary(Role),
+    Roles1 = nkdomain_obj_roles:get_roles(State),
+    RoleData = maps:get(Role2, Roles1, []),
+    {RoleData2, State2} = nkdomain_obj_roles:remove_roles(RoleList, Role2, RoleData, State),
+    Roles2 = Roles1#{Role2 => RoleData2},
+    State3 = nkdomain_obj_roles:save_roles(Roles2, State2),
+    case do_save(role_added, State3) of
+        {ok, State4} ->
+            {reply, ok, State4};
+        {{error, Error}, State4} ->
+            {reply, {error, Error}, State4}
+    end;
+
+do_sync_op({remove_roles, Role, RoleSpec}, From, State) ->
+    do_sync_op({remove_roles, Role, [RoleSpec]}, From, State);
 
 do_sync_op(Op, _From, State) ->
     ?LLOG(notice, "unknown sync op: ~p", [Op], State),

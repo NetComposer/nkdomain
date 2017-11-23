@@ -146,6 +146,8 @@ read(SrvId, Id) ->
                                     {error, object_not_found}
                             end;
                         {error, Error} ->
+                            ?LLOG(notice, "cannot parse object ~s (~p): ~p", [ObjId, Error, Map]),
+                            io:format("Invalid object: ~s\n\n", [nklib_json:encode_pretty(Map)]),
                             {error, Error}
                     end;
                 {error, Error} ->
@@ -191,6 +193,8 @@ load(SrvId, Id) ->
                                     {error, object_not_found}
                             end;
                         {error, Error} ->
+                            ?LLOG(notice, "cannot parse object ~s (~p): ~p", [ObjId, Error, Map]),
+                            io:format("Invalid object: ~s\n\n", [nklib_json:encode_pretty(Map)]),
                             {error, Error}
                     end;
                 {error, Error} ->

@@ -272,6 +272,19 @@ object_syntax(load) ->
         updated_time => integer,
         enabled => boolean,
         active => boolean,                    % Must be loaded to exist
+        roles => {list,
+            #{
+                role => binary,
+                direct => {list, binary},
+                indirect => {list,
+                    #{
+                        role => binary,
+                        obj_id => binary,
+                        '__mandatory' => [role, obj_id]
+                    }},
+                '__mandatory' => [role],
+                '__defaults' => #{direct => [], indirect => []}
+            }},
         expires_time => integer,
         destroyed => boolean,
         destroyed_time => integer,
@@ -296,6 +309,19 @@ object_syntax(update) ->
         enabled => boolean,
         name => binary,
         description => binary,
+        roles => {list,
+                  #{
+                      role => binary,
+                      direct => {list, binary},
+                      indirect => {list,
+                                   #{
+                                       role => binary,
+                                       obj_id => binary,
+                                       '__mandatory' => [role, obj_id]
+                                   }},
+                      '__mandatory' => [role],
+                      '__defaults' => #{direct => [], indirect => []}
+                  }},
         tags => {list, binary},
         aliases => {list, binary},
         icon_id => binary

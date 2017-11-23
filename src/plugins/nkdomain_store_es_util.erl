@@ -107,6 +107,22 @@ base_mappings() ->
         destroyed_time => #{type => date},
         destroyed_code => #{type => keyword},
         destroyed_reason => #{type => keyword},
+        roles => #{
+            type => object,
+            dynamic => false,
+            properties => #{
+                role => #{type => keyword},
+                direct => #{type => keyword},
+                indirect => #{
+                    type => object,
+                    dynamic => false,
+                    properties => #{
+                        role => #{type => keyword},
+                        obj_id => #{type => keyword}
+                    }
+                }
+            }
+        },
         name => #{
             type => text,
             analyzer => standard,
