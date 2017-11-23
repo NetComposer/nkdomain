@@ -25,9 +25,10 @@
 
 -export([find/1, load/1, unload/1, unload/2, get_obj/1, get_info/1, get_name/1, get_domain_id/1]).
 -export([enable/2, update/2, update_name/2, delete/1, send_info/3]).
+-export([get_roles/1, add_roles/3, remove_roles/3]).
 -export([search/1, search/2, search/3, delete_all_childs/1, delete_all_childs_type/2, search_agg_field/4]).
 -export([clean/0]).
--export_type([obj_id/0, obj_name/0, obj/0, path/0, id/0, type/0]).
+-export_type([obj_id/0, obj_name/0, obj/0, path/0, id/0, type/0, role/0, role_spec/0]).
 -export_type([timestamp/0]).
 
 -include("nkdomain.hrl").
@@ -45,6 +46,14 @@
 -type id() :: obj_id() | path().
 
 -type type() :: binary().
+
+-type role() :: binary().
+
+-type role_spec() ::
+    obj_id() |
+    {Role::role(), ObjId::obj_id()}.   % Objects having 'Role' over ObjId
+
+
 
 %% @see nkdomain_callbacks:domain_store_base_mapping/0
 -type obj() :: map().
@@ -178,6 +187,30 @@ unload(Id, Reason) ->
         {error, Error} ->
             {error, Error}
     end.
+
+
+%% @doc
+-spec get_roles(id()) ->
+    {ok, #{role() => {[obj_id()], [{role(), obj_id()}]}}} | {error, term()}.
+
+get_roles(Id) ->
+    nkdomain_obj:sync_op(Id, get_roles).
+
+
+%% @doc
+-spec add_roles(id(), role(), role_spec() | [role_spec()]) ->
+    ok | {error, term()}.
+
+add_roles(Id, Role, RoleSpec) ->
+    nkdomain_obj:sync_op(Id, {add_roles, Role, RoleSpec}).
+
+
+%% @doc
+-spec remove_roles(id(), role(), role_spec() | [role_spec()]) ->
+    ok | {error, term()}.
+
+remove_roles(Id, Role, RoleSpec) ->
+    nkdomain_obj:sync_op(Id, {remove_roles, Role, RoleSpec}).
 
 
 %% @doc

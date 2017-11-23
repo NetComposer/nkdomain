@@ -101,7 +101,7 @@ execute(Ctx, Obj, Field, Args) ->
 
 object_schema(scalars) ->
     #{
-        'Cursor' => #{comment=>"Pagination cursor"},
+        %'Cursor' => #{comment=>"Pagination cursor"},
         'UnixTime' => #{comment=>"Standard milisecond-resolution unix time"}
     };
 
