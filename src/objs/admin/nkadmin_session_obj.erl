@@ -610,18 +610,27 @@ do_get_chart_data(<<"video_calls_barh_chart">>, _Spec, State) ->
         <<"query">> => #{
             <<"bool">> => #{
                 <<"filter">> => [#{ 
+                    <<"terms">> => #{
+                        <<"message.type">> => [<<"media.call">>]
+                    }
+                }, #{
                     <<"term">> => #{
-                        <<"type">> => <<"file">>
+                        <<"type">> => <<"message">>
                     }
                 }]
             }
+        },
+        <<"aggs">> => #{
+            <<"total_duration">> => #{
+                <<"sum">> => #{
+                    <<"field">> => <<"message.body.duration">>
+                }
+            }
         }
-        %"aggs" => #{
-        %}
     },
     case nkelastic:search(Query, Opts) of
-        {ok, _Hits, _, _, _} ->
-            %lager:info("RESPONSE: ~p~n", [Hits]),
+        {ok, _Total, _Hits, Aggs, _Meta} ->
+            lager:error("ES RESPONSE: ~n~p~n~p~n~p~n~p~n", [_Total, _Hits, Aggs, _Meta]),
             %{ok, #{<<"total_files">> => #{value => Hits, delta => 15}}, State};
             Data = [
                 #{ minutes => 2050, type => <<"Total">> },
@@ -714,6 +723,55 @@ do_get_chart_data(<<"conversations_barh_chart">>, _Spec, State) ->
                 || Bucket <- Buckets
             ],
             {ok, #{data => Data}, State};
+        _ ->
+            {error, error, State}
+    end;
+
+do_get_chart_data(<<"top_users_list_chart">>, _Spec, State) ->
+    {ok, Opts} = nkdomain_store_es_util:get_opts(),
+    Query = #{
+        <<"size">> => 0,
+        <<"query">> => #{
+            <<"bool">> => #{
+                <<"filter">> => [#{ 
+                    <<"terms">> => #{
+                        <<"message.type">> => [<<"text">>]
+                    }
+                }, #{
+                    <<"term">> => #{
+                        <<"type">> => <<"message">>
+                    }
+                }]
+            }
+        },
+        <<"aggs">> => #{
+            <<"message_creators">> => #{
+                <<"terms">> => #{
+                    <<"field">> => <<"created_by">>,
+                    <<"size">> => 5
+                }
+            }
+        }
+    },
+    case nkelastic:search(Query, Opts) of
+        {ok, _Total, _Hits, Aggs, _Meta} ->
+            Aggs2 = maps:get(<<"message_creators">>, Aggs),
+            Buckets = maps:get(<<"buckets">>, Aggs2),
+%            Data = [
+%                #{ number => 73000, type => <<"P2P">> },
+%                #{ number => 45000, type => <<"Groups">> },
+%                #{ number => 9000, type => <<"Channels">> }
+%            ],
+            Data = [
+                #{ messages => maps:get(<<"doc_count">>, Bucket), user_id => maps:get(<<"key">>, Bucket) }
+                || Bucket <- Buckets
+            ],
+            {Data2, _} = lists:mapfoldr(
+                fun(L, Acc) ->
+                    {L#{id => Acc}, Acc+1}
+                end,
+            1, Data),
+            {ok, #{data => Data2}, State};
         _ ->
             {error, error, State}
     end;
