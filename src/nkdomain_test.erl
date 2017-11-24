@@ -463,7 +463,7 @@ remove_data() ->
             ok;
         _ ->
             %% lager:notice("Deleting all childs for /stest1"),
-            nkdomain:delete_all_childs("/stest1")
+            nkdomain:delete_path("/stest1")
     end,
     case nkdomain:find("/stest1") of
         {ok, ?DOMAIN_DOMAIN, S1Id_0, _, _} ->

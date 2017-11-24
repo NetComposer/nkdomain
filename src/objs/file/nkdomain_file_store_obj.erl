@@ -51,7 +51,7 @@ find() ->
 
 %% @private
 delete_all() ->
-    nkdomain:delete_all_childs_type(<<"root">>, ?DOMAIN_FILE_STORE).
+    nkdomain:delete_path_type(<<"root">>, ?DOMAIN_FILE_STORE).
 
 
 

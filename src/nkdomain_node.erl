@@ -71,8 +71,8 @@ make_objs([#{path:=Path} = Obj|Rest]) ->
         {error, Error} ->
             lager:warning("Object ~s NOT created: ~p", [Path, Error]),
             error;
-        {ok, _, _} ->
-            lager:notice("Object ~s created", [Path]),
+        {ok, #obj_id_ext{obj_id=ObjId}, _} ->
+            lager:notice("Object ~s created (~s)", [Path, ObjId]),
             make_objs(Rest)
     end.
 

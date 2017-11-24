@@ -38,7 +38,8 @@
 -export([find/1, load/1, unload/1, unload/2, get_obj/1, get_info/1, get_name/1, get_domain_id/1]).
 -export([enable/2, update/2, update_name/2, delete/1, send_info/3]).
 -export([get_roles/1, add_roles/3, remove_roles/3]).
--export([search/1, search/2, search/3, delete_all_childs/1, delete_all_childs_type/2, search_agg_field/4]).
+-export([search/1, search/2, search/3, delete_path/1, delete_path_type/2, search_agg_field/4]).
+-export([get_childs/1, delete_with_childs/1]).
 -export([clean/0]).
 -export_type([obj_id/0, obj_name/0, obj/0, path/0, id/0, type/0, role/0, role_spec/0]).
 -export_type([timestamp/0]).
@@ -297,14 +298,51 @@ search_agg_field(Id, Field, Spec, SubChilds) ->
 
 
 %% @doc
-delete_all_childs(Id) ->
+delete_path(Id) ->
     ?CALL_NKROOT(object_db_delete_all_childs, [Id, #{}]).
 
 
 %% @doc
-delete_all_childs_type(Id, Type) ->
+delete_path_type(Id, Type) ->
     Spec = #{filters => #{type=>nklib_util:to_binary(Type)}},
     ?CALL_NKROOT(object_db_delete_all_childs, [Id, Spec]).
+
+
+%% @doc
+get_childs(Id) ->
+    case nkdomain_lib:find(Id) of
+        #obj_id_ext{obj_id=ObjId} ->
+            case search(#{filters=>#{parent_id=>ObjId}, fields=>[path, type]}) of
+                {ok, _N, Data, _} ->
+                    {ok, Data};
+                {error, Error} ->
+                    {error, Error}
+            end;
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
+%% @doc
+delete_with_childs(Id) ->
+    case get_childs(Id) of
+        {ok, List} ->
+            lists:foreach(
+                fun(#{<<"obj_id">>:=ObjId}) ->
+                    case delete(ObjId) of
+                        ok ->
+                            ok;
+                        {error, Error} ->
+                            lager:notice("cannot delete ~s: ~p", [ObjId, Error])
+                    end
+                end,
+                List);
+        {error, Error} ->
+            {error, Error}
+    end,
+    delete(Id).
+
+
 
 
 %% @private Performs a periodic cleanup

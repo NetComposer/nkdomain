@@ -24,6 +24,7 @@
 -behavior(nkdomain_obj).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
+-export([create/3]).
 -export([http_post/1, http_post/4, http_get/2]).
 -export([find/0, delete_all/0]).
 -export([object_schema/1, object_execute/5]).
@@ -42,10 +43,55 @@
 %% Types
 %% ===================================================================
 
+-type create_opts() ::
+    #{
+        created_by => binary,
+        parent_id => binary,
+        store_id => binary,
+        content_type => binary
+
+    }.
+
+
+
 %% ===================================================================
 %% API
 %% ===================================================================
 
+%% @doc
+-spec create(nkdiomain:id(), binary(), create_opts()) ->
+    any().
+
+create(Domain, Body, Opts) ->
+    case get_store(Opts) of
+        {ok, StoreId, Store} ->
+            FileId = make_file_id(),
+                case upload(StoreId, Store, FileId, Body) of
+                    {ok, FileMeta} ->
+                        CT = maps:with([content_type], Opts),
+                        FileMeta2 = maps:merge(FileMeta, CT),
+                        Obj1 = maps:with([parent_id, created_by], Opts),
+                        Obj2 = Obj1#{
+                            obj_id => FileId,
+                            domain_id => Domain,
+                            type => ?DOMAIN_FILE,
+                            ?DOMAIN_FILE => FileMeta2#{
+                                size => byte_size(Body),
+                                store_id => StoreId
+                            }
+                        },
+                        case nkdomain_obj_make:create(Obj2) of
+                            {ok, #obj_id_ext{obj_id=FileId, pid=Pid}, _} ->
+                              {ok, FileId, Pid};
+                            {error, Error} ->
+                                {error, Error}
+                        end;
+                    {error, Error} ->
+                        {error, Error}
+                end;
+        {error, Error} ->
+            {error, Error}
+    end.
 
 
 %% @doc Creates a file from a nkservice_rest request
@@ -149,7 +195,6 @@ http_get(FileId, Req) ->
     end.
 
 
-
 %% @private
 find() ->
     nkdomain_domain_obj:search(<<"root">>, #{filters=>#{type=>?DOMAIN_FILE}}).
@@ -157,7 +202,7 @@ find() ->
 
 %% @private
 delete_all() ->
-    nkdomain:delete_all_childs_type(<<"root">>, ?DOMAIN_FILE).
+    nkdomain:delete_path_type(<<"root">>, ?DOMAIN_FILE).
 
 
 

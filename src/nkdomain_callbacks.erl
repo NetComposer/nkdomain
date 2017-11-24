@@ -72,6 +72,7 @@
 error({body_too_large, Size, Max})      -> {"Body too large (size is ~p, max is ~p)", [Size, Max]};
 error({could_not_load_parent, Id})      -> {"Object could not load parent '~s'", [Id]};
 error({could_not_load_domain, Id})      -> {"Object could not load domain '~s'", [Id]};
+error({could_not_load_user, Id})        -> {"Object could not load user '~s'", [Id]};
 error(domain_unknown)                   -> "Unknown domain";
 error({domain_unknown, D})              -> {"Unknown domain '~s'", [D]};
 error(domain_invalid)                   -> "Invalid domain";

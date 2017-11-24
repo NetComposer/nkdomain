@@ -570,7 +570,7 @@ download(T, Url) ->
 
 
 create_users(N) ->
-    nkdomain:delete_all_childs("/name_test"),
+    nkdomain:delete_path("/name_test"),
     {ok, _, _Pid1} = login(),
     _ = nkdomain_sample:domain_create("/", name_test, "NameTest", "Name Test"),
     lists:foreach(

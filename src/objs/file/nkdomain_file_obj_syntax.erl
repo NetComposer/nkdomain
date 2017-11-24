@@ -34,6 +34,7 @@
 syntax(<<"create">>, Syntax) ->
     Syntax#{
         name => binary,
+        description => binary,
         ?DOMAIN_FILE => #{
             content_type => binary,
             store_id => binary,
