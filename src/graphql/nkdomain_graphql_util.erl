@@ -43,10 +43,8 @@ object_execute(Field, {#obj_id_ext{}, Obj}, _Args, _Ctx) ->
         <<"createdById">> -> {ok, maps:get(created_by, Obj)};
         <<"createdTime">> -> {ok, maps:get(created_time, Obj, null)};
         <<"description">> -> {ok, maps:get(description, Obj, null)};
-        <<"destroyed">> -> {ok, maps:get(destroyed, Obj, false)};
-        <<"destroyedCode">> -> {ok, maps:get(destroyed_code, Obj, null)};
-        <<"destroyedReason">> -> {ok, maps:get(destroyed_reason, Obj, null)};
-        <<"destroyedTime">> -> {ok, maps:get(destroyed_time, Obj, null)};
+        <<"isDeleted">> -> {ok, maps:get(is_deleted, Obj, false)};
+        <<"deletedTime">> -> {ok, maps:get(deleted_time, Obj, null)};
         <<"domain">> -> get_obj(maps:get(domain_id, Obj));
         <<"domainId">> -> {ok, maps:get(domain_id, Obj)};
         <<"enabled">> -> {ok, maps:get(enabled, Obj, true)};
@@ -369,9 +367,8 @@ get_obj_fields(Opts) ->
         <<"createdById">> => <<"created_by">>,
         <<"createdTime">> => <<"created_time">>,
         <<"description">> => {norm, <<"description_norm">>},
-        <<"destroyedCode">> => <<"destroyed_code">>,
-        <<"destroyedReason">> => <<"destroyed_reason">>,
-        <<"destroyedTime">> => <<"destroyed_time">>,
+        <<"isDeleted">> => <<"is_deleted">>,
+        <<"deletedTime">> => <<"deleted_time">>,
         <<"domainId">> => <<"domain_id">>,
         <<"expiresTime">> => <<"expires_time">>,
         <<"iconId">> => <<"icon_id">>,

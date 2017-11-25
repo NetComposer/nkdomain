@@ -24,7 +24,7 @@
 
 -export([error/1]).
 -export([object_db_init/1, object_db_read/1, object_db_save/1, object_db_delete/1,
-         object_db_find_obj/1, object_db_search/1, object_db_search_alias/1,
+         object_db_find_obj/2, object_db_search/1, object_db_search_objs/2,
          object_db_search_childs/2, object_db_search_all_childs/2,
          object_db_search_types/2, object_db_search_all_types/2, object_db_search_agg_field/4,
          object_db_delete_all_childs/2, object_db_clean/0]).
@@ -72,7 +72,7 @@ object_db_init(State) ->
     end.
 
 
-%% @doc Called to get and parse an object
+%% @doc Called to get an object
 -spec object_db_read(nkdomain:obj_id()) ->
     {ok, map(), Meta::map()} | {error, term()}.
 
@@ -106,33 +106,20 @@ object_db_save(#{obj_id:=ObjId}=Obj) ->
 object_db_delete(ObjId) ->
     case nkdomain_store_es_util:get_opts() of
         {ok, EsOpts} ->
-            case nkdomain_store_es_search:search_childs(ObjId, #{size=>0}, EsOpts) of
-                {ok, 0, []} ->
-                    case nkdomain_lib:find_loaded(ObjId) of
-                        #obj_id_ext{pid=Pid} ->
-                            nkdomain_obj:object_deleted(Pid);
-                        not_found ->
-                            ok
-                    end,
-                    nkelastic:delete(ObjId, EsOpts);
-                {ok, _, _} ->
-                    {error, object_has_childs};
-                {error, Error} ->
-                    {error, Error}
-            end;
+            nkelastic:delete(ObjId, EsOpts);
         _ ->
             continue
     end.
 
 
 %% @doc Finds an object from its ID or Path
--spec object_db_find_obj(nkdomain:id()) ->
+-spec object_db_find_obj(nkdomain:id(), FindDeleted::boolean()) ->
     {ok, nkdomain:type(), nkdomain:obj_id(), nkdomain:path()} | {error, object_not_found|term()}.
 
-object_db_find_obj(Id) ->
+object_db_find_obj(Id, FindDeleted) ->
     case nkdomain_store_es_util:get_opts() of
         {ok, EsOpts} ->
-            nkdomain_store_es_search:find_obj(Id, EsOpts);
+            nkdomain_store_es_search:find_obj(Id, FindDeleted, EsOpts);
         _ ->
             continue
     end.
@@ -153,17 +140,18 @@ object_db_search(Spec) ->
 
 
 %% @doc
--spec object_db_search_alias(nkdomain:alias()) ->
-    {ok, Total::integer(), [{Srv::binary(), nkdomain:type(), nkdomain:obj_id(), nkdomain:path()}], Meta::map()} |
+-spec object_db_search_objs(nkdomain:search_spec(), boolean()) ->
+    {ok, Total::integer(), Objs::[map()], Aggs::map(), Meta::map()} |
     {error, term()}.
 
-object_db_search_alias(Alias) ->
+object_db_search_objs(Spec, FindDeleted) ->
     case nkdomain_store_es_util:get_opts() of
         {ok, EsOpts} ->
-            nkdomain_store_es_search:search_obj_alias(Alias, EsOpts);
+            nkdomain_store_es_search:search_objs(Spec, FindDeleted, EsOpts);
         _ ->
             continue
     end.
+
 
 
 %% @doc

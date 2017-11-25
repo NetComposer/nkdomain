@@ -23,6 +23,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([find/1, find/2, find_loaded/1, read/1, read/2, load/1, load/2]).
+-export([delete/1, delete/2, hard_delete/1, hard_delete/2]).
 -export([type_apply/3]).
 
 -include("nkdomain.hrl").
@@ -37,6 +38,12 @@
 %% Types
 %% ===================================================================
 
+-type opts() ::
+    #{
+        srv_id => atom(),
+        get_deleted => boolean()
+    }.
+
 
 %% ===================================================================
 %% Public
@@ -48,20 +55,20 @@
     #obj_id_ext{} | {error, object_not_found|term()}.
 
 find(Id) ->
-    find(?NKROOT, Id).
+    find(Id, #{}).
 
 
 %% @doc Finds and object using a service's functions
--spec find(nkservice:id(), nkdomain:obj_id()|nkdomain:path()) ->
+-spec find(nkdomain:obj_id()|nkdomain:path(), opts()) ->
     #obj_id_ext{} | {error, object_not_found|term()}.
 
-find(SrvId, Id) ->
+find(Id, Opts) ->
     Id2 = to_bin(Id),
     case find_loaded(Id2) of
         #obj_id_ext{}=ObjIdExt ->
             ObjIdExt;
         not_found ->
-            case find_in_db(SrvId, Id2) of
+            case find_in_db(Id2, Opts) of
                 #obj_id_ext{}=ObjIdExt ->
                     ObjIdExt;
                 {alias, #obj_id_ext{obj_id=ObjId}=ObjIdExt} ->
@@ -86,13 +93,20 @@ find_loaded(Id) ->
 
 
 %% @private
-find_in_db(SrvId, Id) ->
-    case ?CALL_SRV(SrvId, object_db_find_obj, [Id]) of
+find_in_db(Id, Opts) ->
+    SrvId = maps:get(srv_id, Opts, ?NKROOT),
+    FindDeleted = maps:get(get_deleted, Opts, false),
+    case ?CALL_SRV(SrvId, object_db_find_obj, [Id, FindDeleted]) of
         {ok, Type, ObjId, Path} ->
             {ok, _, ObjName} = nkdomain_util:get_parts(Type, Path),
             #obj_id_ext{type=Type, obj_id=ObjId, path=Path, obj_name=ObjName};
         {error, object_not_found} ->
-            case ?CALL_SRV(SrvId, object_db_search_alias, [Id]) of
+            Id2 = to_bin(Id),
+            Spec = #{
+                filter_list => [{aliases, eq, Id2}],
+                fields => [obj_id, type, path]
+            },
+            case ?CALL_SRV(SrvId, object_db_search_objs, [Spec, FindDeleted]) of
                 {ok, 0, []} ->
                     {error, object_not_found};
                 {ok, N, [{Type, ObjId, Path}|_]}->
@@ -115,18 +129,18 @@ find_in_db(SrvId, Id) ->
 
 %% @doc Reads an object from memory if loaded, or disk if not
 -spec read(nkdomain:obj_id()) ->
-    {ok, #obj_id_ext{}, nkdomain:obj()} | {error, term()}.
+    {ok, #obj_id_ext{}, nkdomain:obj()} | {deleted, #obj_id_ext{}, nkdomain:obj()} | {error, term()}.
 
 read(Id) ->
-    read(?NKROOT, Id).
+    read(Id, #{}).
 
 
 %% @doc Reads an object from memory if loaded, or disk if not
--spec read(nkservice:id(), nkdomain:obj_id()) ->
+-spec read(nkdomain:obj_id(), opts()) ->
     {ok, #obj_id_ext{}, nkdomain:obj()} | {error, term()}.
 
-read(SrvId, Id) ->
-    case find(SrvId, Id) of
+read(Id, Opts) ->
+    case find(Id, Opts) of
         #obj_id_ext{pid=Pid}=ObjIdExt when is_pid(Pid) ->
             case nkdomain:get_obj(Pid) of
                 {ok, Obj} ->
@@ -135,15 +149,104 @@ read(SrvId, Id) ->
                     {error, Error}
             end;
         #obj_id_ext{obj_id=ObjId}=ObjIdExt ->
+            case do_read(ObjId, Opts) of
+                {ok, Obj} ->
+                    {ok, ObjIdExt, Obj};
+                {deleted, Obj} ->
+                    {deleted, ObjIdExt, Obj};
+                {error, Error} ->
+                    {error, Error}
+            end;
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
+
+%% @doc Finds an objects's pid or loads it from storage
+-spec load(nkdomain:id()) ->
+    #obj_id_ext{} | {error, object_not_found|term()}.
+
+load(Id) ->
+    load(Id, #{}).
+
+
+%% @doc Finds an objects's pid or loads it from storage
+-spec load(nkdomain:id(), opts()) ->
+    #obj_id_ext{} | {error, object_not_found|term()}.
+
+load(Id, Opts) ->
+    case find(Id, Opts) of
+        #obj_id_ext{pid=Pid}=ObjIdExt when is_pid(Pid) ->
+            ObjIdExt;
+        #obj_id_ext{obj_id=ObjId, path=Path}=ObjIdExt ->
+            case do_read(ObjId, Opts#{get_deleted=>false}) of
+                {ok, #{path:=Path}=Obj} ->
+                    case nkdomain_obj:start(Obj, loaded, #{}) of
+                        {ok, Pid} ->
+                            ObjIdExt#obj_id_ext{pid=Pid};
+                        {error, Error} ->
+                            {error, Error}
+                    end;
+                {error, Error} ->
+                    {error, Error}
+            end;
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
+
+
+
+
+
+%% @doc Marks an object as deleted
+-spec delete(nkdomain:id()) ->
+    ok | {error, object_not_found|term()}.
+
+delete(Id) ->
+    delete(Id, #{}).
+
+
+%% @doc Marks an object as deleted
+-spec delete(nkdomain:id(), opts()) ->
+    ok | {error, object_not_found|term()}.
+
+delete(Id, Opts) ->
+
+    %%case nkdomain_store_es_search:search_childs(ObjId, #{size=>0}, EsOpts) of
+    %%{ok, 0, []} ->
+    %%case nkdomain_lib:find_loaded(ObjId) of
+    %%#obj_id_ext{pid=Pid} ->
+    %%nkdomain_obj:object_deleted(Pid);
+    %%not_found ->
+    %%ok
+    %%end,
+
+    case find(Id, Opts#{get_deleted=>false}) of
+        #obj_id_ext{obj_id=ObjId, pid=Pid} ->
+            case is_pid(Pid) of
+                true ->
+                    nkdomain_obj:object_deleted(Pid);
+                false ->
+                    ok
+            end,
+            SrvId = maps:get(srv_id, Opts, ?NKROOT),
             case ?CALL_SRV(SrvId, object_db_read, [ObjId]) of
                 {ok, Map, _Meta} ->
                     case ?CALL_SRV(SrvId, object_parse, [load, Map]) of
                         {ok, Obj, _Unknown} ->
-                            case check_object(SrvId, Obj) of
-                                ok ->
-                                    {ok, ObjIdExt, Obj};
-                                removed ->
-                                    {error, object_not_found}
+                            Obj2 = Obj#{
+                                is_deleted => true,
+                                deleted_time => nkdomain_util:timestamp()
+                            },
+                            Obj3 = maps:without([active, expires_time, in_alarm, alarms, enabled], Obj2),
+                            case ?CALL_SRV(SrvId, object_db_save, [Obj3]) of
+                                {ok, _Meta} ->
+                                    ok;
+                                {error, Error} ->
+                                    {error, Error}
                             end;
                         {error, Error} ->
                             ?LLOG(notice, "cannot parse object ~s (~p): ~p", [ObjId, Error, Map]),
@@ -159,45 +262,68 @@ read(SrvId, Id) ->
 
 
 
+%% @doc Marks an object as deleted
+-spec hard_delete(nkdomain:id()) ->
+    ok | {error, object_not_found|term()}.
 
-%% @doc Finds an objects's pid or loads it from storage
--spec load(nkdomain:id()) ->
-    #obj_id_ext{} | {error, object_not_found|term()}.
-
-load(Id) ->
-    load(?NKROOT, Id).
+hard_delete(Id) ->
+    hard_delete(Id, #{}).
 
 
-%% @doc Finds an objects's pid or loads it from storage
--spec load(nkservice:id(), nkdomain:id()) ->
-    #obj_id_ext{} | {error, object_not_found|term()}.
+%% @doc Marks an object as hard_deleted
+-spec hard_delete(nkdomain:id(), opts()) ->
+    ok | {error, object_not_found|term()}.
 
-load(SrvId, Id) ->
-    case find(SrvId, Id) of
-        #obj_id_ext{pid=Pid}=ObjIdExt when is_pid(Pid) ->
-            ObjIdExt;
-        #obj_id_ext{obj_id=ObjId, path=Path}=ObjIdExt ->
-            case ?CALL_SRV(SrvId, object_db_read, [ObjId]) of
-                {ok, Map, _Meta} ->
+hard_delete(Id, Opts) ->
+    case find(Id, Opts#{get_deleted=>true}) of
+        #obj_id_ext{obj_id=ObjId} ->
+            SrvId = maps:get(srv_id, Opts, ?NKROOT),
+            case ?CALL_SRV(SrvId, object_db_delete, [ObjId]) of
+                {ok, _Meta} ->
+                    ok;
+                {error, Error} ->
+                    {error, Error}
+            end;
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
+%% ===================================================================
+%% Internal
+%% ===================================================================
+
+
+%% @private
+do_read(ObjId, Opts) ->
+    SrvId = maps:get(srv_id, Opts, ?NKROOT),
+    case ?CALL_SRV(SrvId, object_db_read, [ObjId]) of
+        {ok, #{<<"is_deleted">>:=true}=Map, _Meta} ->
+            case Opts of
+                #{get_deleted:=true} ->
                     case ?CALL_SRV(SrvId, object_parse, [load, Map]) of
-                        {ok, #{path:=Path}=Obj, _Unknown} ->
-                            case check_object(SrvId, Obj) of
-                                ok ->
-                                    case nkdomain_obj:start(Obj, loaded, #{}) of
-                                        {ok, Pid} ->
-                                            ObjIdExt#obj_id_ext{pid=Pid};
-                                        {error, Error} ->
-                                            {error, Error}
-                                    end;
-                                removed ->
-                                    {error, object_not_found}
-                            end;
+                        {ok, Obj, _Unknown} ->
+                            {deleted, Obj};
                         {error, Error} ->
                             ?LLOG(notice, "cannot parse object ~s (~p): ~p", [ObjId, Error, Map]),
                             io:format("Invalid object: ~s\n\n", [nklib_json:encode_pretty(Map)]),
                             {error, Error}
                     end;
+                _ ->
+                    {error, object_not_found}
+            end;
+        {ok, Map, _Meta} ->
+            case ?CALL_SRV(SrvId, object_parse, [load, Map]) of
+                {ok, Obj, _Unknown} ->
+                    case check_object(SrvId, Obj) of
+                        ok ->
+                            {ok, Obj};
+                        removed ->
+                            {error, object_not_found}
+                    end;
                 {error, Error} ->
+                    ?LLOG(notice, "cannot parse object ~s (~p): ~p", [ObjId, Error, Map]),
+                    io:format("Invalid object: ~s\n\n", [nklib_json:encode_pretty(Map)]),
                     {error, Error}
             end;
         {error, Error} ->
@@ -219,6 +345,7 @@ check_object(SrvId, #{obj_id:=ObjId}=Obj) ->
         _ ->
             ok
     end,
+    Res1 = ok,
     case Res1 of
         removed ->
             removed;
@@ -237,6 +364,7 @@ check_object(SrvId, #{obj_id:=ObjId}=Obj) ->
                     ok
             end
     end.
+
 
 
 %% @doc Calls an object's function

@@ -967,7 +967,7 @@ do_save(Reason, State) ->
 do_delete(#obj_state{childs=Childs}=State) when map_size(Childs)==0 ->
     {_, State2} = do_save(pre_delete, State),
     case handle(object_delete, [], State2) of
-        {ok, State3, _Meta} ->
+        {ok, State3} ->
             ?DEBUG("object deleted", [], State3),
             {ok, do_event(deleted, State3)};
         {error, object_has_childs, State3} ->

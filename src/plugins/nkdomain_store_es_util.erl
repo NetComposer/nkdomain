@@ -103,10 +103,8 @@ base_mappings() ->
         enabled => #{type => boolean},
         active => #{type => boolean},
         expires_time => #{type => date},
-        destroyed => #{type => boolean},
-        destroyed_time => #{type => date},
-        destroyed_code => #{type => keyword},
-        destroyed_reason => #{type => keyword},
+        is_deleted => #{type => boolean},
+        deleted_time => #{type => date},
         roles => #{
             type => object,
             dynamic => false,
