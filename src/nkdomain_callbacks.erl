@@ -33,6 +33,7 @@
 -export([object_init/1, object_terminate/2, object_stop/2,
          object_event/2, object_reg_event/4, object_sync_op/3, object_async_op/2,
          object_save/1, object_delete/1, object_link_down/2, object_enabled/2, object_next_status_timer/1,
+         object_alarms/1,
          object_handle_call/3, object_handle_cast/2, object_handle_info/2, object_conflict_detected/3]).
 -export([object_db_init/1, object_db_read/1, object_db_save/1, object_db_delete/1]).
 -export([object_db_find_obj/1, object_db_search/1, object_db_search_alias/1,
@@ -297,8 +298,17 @@ object_syntax(load) ->
         aliases => {list, binary},
         icon_id => binary,
         next_status_time => integer,
+        in_alarm => boolean,
+        alarms => {list,
+            #{
+                reason => binary,
+                severity => {atom, [info, notice, warning, error, critical, alert, emergency]},
+                time => integer,
+                body => map
+            }},
         '_schema_vsn' => any,
         '_store_vsn' => any,
+        '__defaults' => #{in_alarm => false},
         '__mandatory' => [type, obj_id, domain_id, path, created_time]
     },
     {Syntax, #{}};
@@ -682,6 +692,15 @@ object_enabled(Enabled, State) ->
 
 object_next_status_timer(State) ->
     call_module(object_next_status_timer, [], State).
+
+
+%% @doc Called when a object with alarms is loaded
+-spec object_alarms(state()) ->
+    {ok, state(), Meta::map()} | {error, term(), state()}.
+
+object_alarms(State) ->
+    {ok, #obj_state{}=State2} = call_module(object_alarms, [], State),
+    {ok, State2}.
 
 
 %% @doc
