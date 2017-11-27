@@ -384,7 +384,8 @@ get_dash_detail_test() ->
                             cols => [
                                 get_list_chart_json(#{
                                     id => <<"top_users_list_chart">>,
-                                    template => <<"#id#. #fullname# (#username#) #messages#">>,
+                                    %template => <<"#id#. #fullname# (#username#) #messages#">>,
+                                    template => <<"<span class='chart_list_rank'>#id#. </span><span class='chart_list_element'>#fullname# (#username#)</><span class='chart_list_number'>#messages#</span>">>,
                                     header => #{
                                         text => <<"Top 5 Users (messages)">>,
                                         css => <<"chart_header">>
@@ -393,7 +394,8 @@ get_dash_detail_test() ->
                                 }),
                                 get_list_chart_json(#{
                                     id => <<"top_channels_list_chart">>,
-                                    template => <<"#id#. #name# #messages#">>,
+                                    %template => <<"#id#. ##name# #messages#">>,
+                                    template => <<"<span class='chart_list_rank'>#id#. </span><span class='chart_list_element'>##name#</><span class='chart_list_number'>#messages#</span>">>,
                                     header => #{
                                         text => <<"Top 5 Channels (messages)">>,
                                         css => <<"chart_header">>
