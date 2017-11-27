@@ -454,7 +454,7 @@ test_basic_2(Pid) ->
 remove_data() ->
     case nkdomain:find("/users/tuser1") of
         {ok, <<"user">>, UId, _, _} ->
-            {ok, _} = ?CALL_NKROOT(object_db_delete, [UId]);
+            ok = nkdomain_lib:delete(UId);
         {error, object_not_found} ->
             ok
     end,
@@ -463,7 +463,7 @@ remove_data() ->
             ok;
         _ ->
             %% lager:notice("Deleting all childs for /stest1"),
-            nkdomain:delete_all_childs("/stest1")
+            nkdomain:delete_path("/stest1")
     end,
     case nkdomain:find("/stest1") of
         {ok, ?DOMAIN_DOMAIN, S1Id_0, _, _} ->

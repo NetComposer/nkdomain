@@ -227,7 +227,7 @@ create(MakeOpts, Opts) ->
     #obj_id_ext{} | {error, term()}.
 
 create2(#{type:=Type, obj_id:=ObjId, path:=Path}=Obj, Meta) ->
-    case ?CALL_NKROOT(object_db_find_obj, [Path]) of
+    case ?CALL_NKROOT(object_db_find_obj, [Path, false]) of
         {error, object_not_found} ->
             case nkdomain_obj:start(Obj, created, Meta) of
                 {ok, Pid} ->

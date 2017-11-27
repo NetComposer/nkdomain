@@ -33,9 +33,10 @@
 -export([object_init/1, object_terminate/2, object_stop/2,
          object_event/2, object_reg_event/4, object_sync_op/3, object_async_op/2,
          object_save/1, object_delete/1, object_link_down/2, object_enabled/2, object_next_status_timer/1,
+         object_alarms/1,
          object_handle_call/3, object_handle_cast/2, object_handle_info/2, object_conflict_detected/3]).
 -export([object_db_init/1, object_db_read/1, object_db_save/1, object_db_delete/1]).
--export([object_db_find_obj/1, object_db_search/1, object_db_search_alias/1,
+-export([object_db_find_obj/2, object_db_search/1, object_db_search_objs/2,
          object_db_search_types/2, object_db_search_all_types/2,
          object_db_search_childs/2, object_db_search_all_childs/2, object_db_search_agg_field/4,
          object_db_delete_all_childs/2, object_db_clean/0]).
@@ -72,6 +73,7 @@
 error({body_too_large, Size, Max})      -> {"Body too large (size is ~p, max is ~p)", [Size, Max]};
 error({could_not_load_parent, Id})      -> {"Object could not load parent '~s'", [Id]};
 error({could_not_load_domain, Id})      -> {"Object could not load domain '~s'", [Id]};
+error({could_not_load_user, Id})        -> {"Object could not load user '~s'", [Id]};
 error(domain_unknown)                   -> "Unknown domain";
 error({domain_unknown, D})              -> {"Unknown domain '~s'", [D]};
 error(domain_invalid)                   -> "Invalid domain";
@@ -286,18 +288,25 @@ object_syntax(load) ->
                 '__defaults' => #{direct => [], indirect => []}
             }},
         expires_time => integer,
-        destroyed => boolean,
-        destroyed_time => integer,
-        destroyed_code => binary,
-        destroyed_reason => binary,
+        is_deleted => boolean,
+        deleted_time => integer,
         name => binary,
         description => binary,
         tags => {list, binary},
         aliases => {list, binary},
         icon_id => binary,
         next_status_time => integer,
+        in_alarm => boolean,
+        alarms => {list,
+            #{
+                reason => binary,
+                severity => {atom, [info, notice, warning, error, critical, alert, emergency]},
+                time => integer,
+                body => map
+            }},
         '_schema_vsn' => any,
         '_store_vsn' => any,
+        '__defaults' => #{in_alarm => false},
         '__mandatory' => [type, obj_id, domain_id, path, created_time]
     },
     {Syntax, #{}};
@@ -487,8 +496,8 @@ object_do_active(Type, ObjId) ->
                 _ ->
                     spawn_link(
                         fun() ->
-                            case ?CALL_NKROOT(object_db_delete, [ObjId]) of
-                                {ok, _Meta} ->
+                            case nkdomain_lib:delete(ObjId) of
+                                ok ->
                                     ?LLOG(notice, "removed stalle active object ~s (~s)", [ObjId, Type]);
                                 {error, Error} ->
                                     ?LLOG(warning, "could not remove stalle active object ~s (~s): ~p",
@@ -507,8 +516,8 @@ object_do_active(Type, ObjId) ->
 object_do_expired(ObjId) ->
     spawn_link(
         fun() ->
-            case ?CALL_NKROOT(object_db_delete, [ObjId]) of
-                {ok, _Meta} ->
+            case nkdomain_lib:delete(ObjId) of
+                ok ->
                     ?LLOG(notice, "removed expired object ~s", [ObjId]);
                 {error, Error} ->
                     ?LLOG(warning, "could not remove expired object ~s: ~p",
@@ -643,14 +652,14 @@ object_save(State) ->
 
 %% @doc Called to save the remove the object from disk
 -spec object_delete(state()) ->
-    {ok, state(), Meta::map()} | {error, term(), state()}.
+    {ok, state()} | {error, term(), state()}.
 
 object_delete(#obj_state{id=#obj_id_ext{obj_id=ObjId}}=State) ->
     case call_module(object_delete, [], State) of
         {ok, State2} ->
-            case ?CALL_NKROOT(object_db_delete, [ObjId]) of
-                {ok, Meta} ->
-                    {ok, State2, Meta};
+            case nkdomain_lib:delete(ObjId) of
+                ok ->
+                    {ok, State2};
                 {error, Error} ->
                     {error, Error, State2}
             end;
@@ -681,6 +690,15 @@ object_enabled(Enabled, State) ->
 
 object_next_status_timer(State) ->
     call_module(object_next_status_timer, [], State).
+
+
+%% @doc Called when a object with alarms is loaded
+-spec object_alarms(state()) ->
+    {ok, state(), Meta::map()} | {error, term(), state()}.
+
+object_alarms(State) ->
+    {ok, #obj_state{}=State2} = call_module(object_alarms, [], State),
+    {ok, State2}.
 
 
 %% @doc
@@ -777,11 +795,11 @@ object_db_delete(ObjId) ->
 
 
 %% @doc Finds an object from its ID or Path
--spec object_db_find_obj(nkdomain:id()) ->
+-spec object_db_find_obj(nkdomain:id(), FindDeleted::boolean()) ->
     {ok, nkdomain:type(), nkdomain:obj_id(), nkdomain:path()} | {error, object_not_found|term()}.
 
-object_db_find_obj(ObjId) ->
-    ?CALL_NKROOT(object_db_find_obj, [ObjId]).
+object_db_find_obj(ObjId, FindDeleted) ->
+    ?CALL_NKROOT(object_db_find_obj, [ObjId, FindDeleted]).
 
 
 %% @doc
@@ -819,21 +837,21 @@ object_db_search_all_childs(Path, Spec) ->
 
 
 %% @doc
--spec object_db_search_alias(nkdomain:alias()) ->
-    {ok, Total::integer(), [{Srv::binary(), type(), obj_id(), path()}]} |
-    {error, term()}.
-
-object_db_search_alias(Alias) ->
-    ?CALL_NKROOT(object_db_search_alias, [Alias]).
-
-
-%% @doc
 -spec object_db_search(nkdomain:search_spec()) ->
     {ok, Total::integer(), Objs::[map()], map(), Meta::map()} |
     {error, term()}.
 
 object_db_search(Spec) ->
     ?CALL_NKROOT(object_db_search, [Spec]).
+
+
+%% @doc
+-spec object_db_search_objs(nkdomain:search_spec(), FindDeleted::boolean()) ->
+    {ok, Total::integer(), Objs::[map()], map(), Meta::map()} |
+    {error, term()}.
+
+object_db_search_objs(Spec, FindDeleted) ->
+    ?CALL_NKROOT(object_db_search_objs, [Spec, FindDeleted]).
 
 
 %% @doc

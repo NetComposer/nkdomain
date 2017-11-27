@@ -103,10 +103,8 @@ base_mappings() ->
         enabled => #{type => boolean},
         active => #{type => boolean},
         expires_time => #{type => date},
-        destroyed => #{type => boolean},
-        destroyed_time => #{type => date},
-        destroyed_code => #{type => keyword},
-        destroyed_reason => #{type => keyword},
+        is_deleted => #{type => boolean},
+        deleted_time => #{type => date},
         roles => #{
             type => object,
             dynamic => false,
@@ -138,9 +136,19 @@ base_mappings() ->
         tags => #{type => keyword},
         aliases => #{type => keyword},
         icon_id => #{type => keyword},
-        next_status_time => #{type => date}
+        next_status_time => #{type => date},
+        in_alarm => #{type => boolean},
+        alarms => #{
+            type => object,
+            dynamic => false,
+            properties => #{
+                reason => #{type => text},
+                severity => #{type => keyword},
+                time => #{type => date},
+                body => #{enabled => false}
+           }
+        }
     }.
-
 
 
 

@@ -22,9 +22,9 @@
 -module(nkdomain_store_es_search).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([find_obj/2]).
+-export([find_obj/3, search/2, search_objs/3]).
 -export([search_agg_field/5]).
--export([search_types/3, search_all_types/3, search_childs/3, search_all_childs/3, search/2, search_obj_alias/2]).
+-export([search_types/3, search_all_types/3, search_childs/3, search_all_childs/3, search_obj_alias/2]).
 -export([delete_all_childs/3]).
 -export([clean/1, import_objects/3, print/2]).
 
@@ -47,17 +47,23 @@
 
 
 %% @doc Finds an object from its ID or Path
--spec find_obj(nkdomain:id(), nkelastic:opts()) ->
+-spec find_obj(nkdomain:id(), FindDeleted::boolean(), nkelastic:opts()) ->
     {ok, Srv::binary(), nkdomain:type(), nkdomain:obj_id(), nkdomain:path()} | {error, object_not_found|term()}.
 
-find_obj(Id, EsOpts) ->
+find_obj(Id, FindDeleted, EsOpts) ->
+    Base = case FindDeleted of
+        true ->
+            [];
+        false ->
+            [{'not', {is_deleted, eq, true}}]
+    end,
     Filters = case nkdomain_util:is_path(Id) of
         {true, Path} ->
-            #{path => Path};
+            [{path, eq, Path}|Base];
         {false, Id2} ->
-            #{obj_id => Id2}
+            [{obj_id, eq, Id2}|Base]
     end,
-    case do_search_objs(#{filters=>Filters}, EsOpts) of
+    case do_search_objs(#{filter_list=>Filters}, EsOpts) of
         {ok, 0, []} ->
             {error, object_not_found};
         {ok, 1, [{Type, ObjId, ObjPath}]} ->
@@ -79,6 +85,23 @@ search(Spec, EsOpts) ->
         {error, Error} ->
             {error, Error}
     end.
+
+
+%% @doc Generic search
+-spec search_objs(search_spec(), boolean(), nkelastic:opts()) ->
+    {ok, integer(), Data::[map()], Aggs::map(), meta()} | {error, term()}.
+
+search_objs(Spec, FindDeleted, EsOpts) ->
+    false = maps:is_key(filters, Spec),
+    Spec2 = case FindDeleted of
+        true ->
+            Spec;
+        false ->
+            FilterList1 = maps:get(filter_list, Spec, []),
+            FilterList2 = [{'not', {is_deleted, eq, true}}|FilterList1],
+            Spec#{filter_list=>FilterList2}
+    end,
+    do_search_objs(Spec2, EsOpts).
 
 
 %% @doc Finds types
@@ -262,7 +285,7 @@ clean(EsOpts) ->
 %% @private
 do_clean_active(EsOpts) ->
     Spec = #{
-        filters => #{active=>true},
+        filter_list => [{active, eq, true}, {'not', {is_deleted, eq, true}}],
         size => ?ES_ITER_SIZE,
         fields => [<<"type">>]
     },
@@ -285,7 +308,7 @@ do_clean_active(EsOpts) ->
 do_clean_expired(EsOpts) ->
     Time = nkdomain_util:timestamp() + 10000,
     Spec = #{
-        filters => #{expires_time => <<"<", (to_bin(Time))/binary>>},
+        filter_list => [{expires_time, lt, Time}, {'not', {is_deleted, eq, true}}],
         size => ?ES_ITER_SIZE
     },
     Fun = fun(#{<<"obj_id">>:=ObjId}, Acc) ->
@@ -480,7 +503,7 @@ filter_childs(Id, Spec, EsOpts) ->
         {false, Id2} ->
             {ok, parent_filter(Id2, Spec)};
         {true, Path} ->
-            case find_obj(Path, EsOpts) of
+            case find_obj(Path, false, EsOpts) of
                 {ok, _Srv, _Type, ObjId, _Path} ->
                     {ok, parent_filter(ObjId, Spec)};
                 {error, _} ->
@@ -502,7 +525,7 @@ filter_all_childs(Id, Spec, EsOpts) ->
         {true, Path} ->
             {ok, path_filter(Path, Spec)};
         {false, Id2} ->
-            case find_obj(Id2, EsOpts) of
+            case find_obj(Id2, false, EsOpts) of
                 {ok, _Srv, _Type, _ObjId, Path} ->
                     {ok, path_filter(Path, Spec)};
                 {error, _} ->

@@ -22,7 +22,7 @@
 -module(nkdomain_nkroot_callbacks).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -export([object_db_init/1, object_db_read/1, object_db_save/1, object_db_delete/1]).
--export([object_db_find_obj/1, object_db_search/1, object_db_search_alias/1,
+-export([object_db_find_obj/2, object_db_search/1, object_db_search_objs/2,
          object_db_search_types/2, object_db_search_all_types/2,
          object_db_search_childs/2, object_db_search_all_childs/2, object_db_search_agg_field/4,
          object_db_delete_all_childs/2, object_db_clean/0]).
@@ -136,10 +136,10 @@ object_db_delete(_ObjId) ->
 
 
 %% @doc Finds an object from its ID or Path
--spec object_db_find_obj(nkdomain:id()) ->
+-spec object_db_find_obj(nkdomain:id(), FindDeleted::boolean()) ->
     {ok, nkdomain:type(), nkdomain:obj_id(), nkdomain:path()} | {error, object_not_found|term()}.
 
-object_db_find_obj(_ObjId) ->
+object_db_find_obj(_ObjId, _FindDeleted) ->
     {error, db_not_defined}.
 
 
@@ -178,20 +178,20 @@ object_db_search_all_childs(_Path, _Spec) ->
 
 
 %% @doc
--spec object_db_search_alias(nkdomain:alias()) ->
-    {ok, Total::integer(), [{Srv::binary(), type(), obj_id(), path()}]} |
-    {error, term()}.
-
-object_db_search_alias(_Alias) ->
-    {error, db_not_defined}.
-
-
-%% @doc
 -spec object_db_search(nkdomain:search_spec()) ->
     {ok, Total::integer(), Objs::[map()], map(), Meta::map()} |
     {error, term()}.
 
 object_db_search(_Spec) ->
+    {error, db_not_defined}.
+
+
+%% @doc
+-spec object_db_search_objs(nkdomain:search_spec(), FindDeleted::boolean()) ->
+    {ok, Total::integer(), Objs::[map()], map(), Meta::map()} |
+    {error, term()}.
+
+object_db_search_objs(_Spec, _FindDeleted) ->
     {error, db_not_defined}.
 
 

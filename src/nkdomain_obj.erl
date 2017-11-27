@@ -157,6 +157,7 @@
     get_roles |
     {add_roles, nkdomain:role(), nkdomain:role_spec()|[nkdomain:role_spec()]} |
     {remove_roles, nkdomain:role(), nkdomain:role_spec()|[nkdomain:role_spec()]} |
+    get_alarms |
     term().
 
 -type async_op() ::
@@ -308,10 +309,11 @@ init({Op, Obj, StartOpts}) when Op==loaded; Op==created ->
                             ?DEBUG("loaded (~p)", [self()], State5),
                             State6 = do_event(loaded, State5),
                             % Save if created or init sets is_dirty = true
-                            case do_save(creation, State6) of
-                                {ok, State7} ->
-                                    {ok, do_refresh(State7)};
-                                {{error, Error}, _State7} ->
+                            State7 = do_check_alarms(State6),
+                            case do_save(creation, State7) of
+                                {ok, State8} ->
+                                    {ok, do_refresh(State8)};
+                                {{error, Error}, _State8} ->
                                     {stop, Error}
                             end;
                         {error, Error} ->
@@ -684,6 +686,15 @@ do_sync_op({remove_roles, Role, RoleList}, _From, State) when is_list(RoleList) 
 do_sync_op({remove_roles, Role, RoleSpec}, From, State) ->
     do_sync_op({remove_roles, Role, [RoleSpec]}, From, State);
 
+do_sync_op(get_alarms, _From, #obj_state{obj=Obj}=State) ->
+    Alarms = case Obj of
+        #{in_alarm:=true, alarms:=AlarmList} ->
+            AlarmList;
+        _ ->
+            []
+    end,
+    {reply, {ok, Alarms}, State};
+
 do_sync_op(Op, _From, State) ->
     ?LLOG(notice, "unknown sync op: ~p", [Op], State),
     reply({error, unknown_op}, State).
@@ -927,6 +938,15 @@ set_unload_policy(Obj, Info) ->
 
 
 %% @private
+do_check_alarms(#obj_state{obj=#{in_alarm:=true}}=State) ->
+    {ok, State2} = handle(object_alarms, [], State),
+    State2;
+
+do_check_alarms(State) ->
+    State.
+
+
+%% @private
 do_save(_Reason, #obj_state{is_dirty=false}=State) ->
     {ok, State};
 
@@ -947,7 +967,7 @@ do_save(Reason, State) ->
 do_delete(#obj_state{childs=Childs}=State) when map_size(Childs)==0 ->
     {_, State2} = do_save(pre_delete, State),
     case handle(object_delete, [], State2) of
-        {ok, State3, _Meta} ->
+        {ok, State3} ->
             ?DEBUG("object deleted", [], State3),
             {ok, do_event(deleted, State3)};
         {error, object_has_childs, State3} ->

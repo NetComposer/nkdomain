@@ -52,7 +52,7 @@ find() ->
 
 %% @private
 delete_all() ->
-    nkdomain:delete_all_childs_type(<<"root">>, ?DOMAIN_MAIL_PROVIDER).
+    nkdomain:delete_path_type(<<"root">>, ?DOMAIN_MAIL_PROVIDER).
 
 
 
