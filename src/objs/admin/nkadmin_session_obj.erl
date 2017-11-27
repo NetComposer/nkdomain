@@ -629,9 +629,7 @@ do_get_chart_data(<<"video_calls_barh_chart">>, _Spec, State) ->
         }
     },
     case nkelastic:search(Query, Opts) of
-        {ok, _Total, _Hits, Aggs, _Meta} ->
-            lager:error("ES RESPONSE: ~n~p~n~p~n~p~n~p~n", [_Total, _Hits, Aggs, _Meta]),
-            %{ok, #{<<"total_files">> => #{value => Hits, delta => 15}}, State};
+        {ok, _Total, _Hits, _Aggs, _Meta} ->
             Data = [
                 #{ minutes => 2050, type => <<"Total">> },
                 #{ minutes => 700, type => <<"VideoC.">> },
@@ -772,6 +770,89 @@ do_get_chart_data(<<"top_users_list_chart">>, _Spec, State) ->
                 end,
             1, Data),
             {ok, #{data => Data2}, State};
+        _ ->
+            {error, error, State}
+    end;
+
+do_get_chart_data(<<"top_channels_list_chart">>, _Spec, State) ->
+    {ok, Opts} = nkdomain_store_es_util:get_opts(),
+    Query1 = #{
+        <<"size">> => 9999,
+        <<"query">> => #{
+            <<"bool">> => #{
+                <<"filter">> => [#{
+                    <<"terms">> => #{
+                        <<"conversation.type">> => [<<"channel">>]
+                    }
+                }, #{
+                    <<"term">> => #{
+                        <<"type">> => <<"conversation">>
+                    }
+                }]
+            }
+        }
+    },
+    case nkelastic:search(Query1, Opts) of
+        {ok, _Total1, Hits1, _Aggs1, _Meta1} ->
+            %lager:error("ES RESPONSE: ~nTotal: ~p~nHits: ~p~nAggs: ~p~nMeta: ~p~n", [_Total1, Hits1, _Aggs1, _Meta1]),
+            ChannelTupleList = lists:map(
+                fun(#{<<"_source">> := #{<<"obj_id">> := ObjId, <<"name">> := Name}}) ->
+                    {ObjId, Name}
+                end,
+                Hits1),
+            ChannelMap = maps:from_list(ChannelTupleList),
+            Query2 = #{
+                <<"size">> => 0,
+                <<"query">> => #{
+                    <<"bool">> => #{
+                        <<"filter">> => [#{
+                            <<"terms">> => #{
+                                <<"message.type">> => [<<"text">>]
+                            }
+                        }, #{
+                            <<"terms">> => #{
+                                <<"parent_id">> => maps:keys(ChannelMap)
+                            }
+                        }, #{
+                            <<"term">> => #{
+                                <<"type">> => <<"message">>
+                            }
+                        }]
+                    }
+                },
+                <<"aggs">> => #{
+                    <<"active_channels">> => #{
+                        <<"terms">> => #{
+                            <<"field">> => <<"parent_id">>,
+                            <<"size">> => 5
+                        }
+                    }
+                }
+            },
+            case nkelastic:search(Query2, Opts) of
+                {ok, _Total, _Hits, Aggs, _Meta} ->
+                    Aggs2 = maps:get(<<"active_channels">>, Aggs),
+                    Buckets = maps:get(<<"buckets">>, Aggs2),
+%                   Data = [
+%                       #{ number => 73000, type => <<"P2P">> },
+%                       #{ number => 45000, type => <<"Groups">> },
+%                       #{ number => 9000, type => <<"Channels">> }
+%                   ],
+                    Data = lists:map(
+                        fun(#{<<"key">> := Key, <<"doc_count">> := Count}) ->
+                            #{ messages => Count, conversation_id => Key, name => maps:get(Key, ChannelMap) }
+                        end,
+                        Buckets
+                    ),
+                    {Data2, _} = lists:mapfoldr(
+                        fun(L, Acc) ->
+                            {L#{id => Acc}, Acc+1}
+                        end,
+                    1, Data),
+                    {ok, #{data => Data2}, State};
+                _ ->
+                    {error, error, State}
+            end;
         _ ->
             {error, error, State}
     end;

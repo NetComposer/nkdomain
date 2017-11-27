@@ -390,6 +390,15 @@ get_dash_detail_test() ->
                                         css => <<"chart_header">>
                                     },
                                     dynamic => false
+                                }),
+                                get_list_chart_json(#{
+                                    id => <<"top_channels_list_chart">>,
+                                    template => <<"#id#. #name# #messages#">>,
+                                    header => #{
+                                        text => <<"Top 5 Channels (messages)">>,
+                                        css => <<"chart_header">>
+                                    },
+                                    dynamic => false
                                 })
                             ]
                         }]

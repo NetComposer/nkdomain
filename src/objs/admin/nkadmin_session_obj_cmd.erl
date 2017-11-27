@@ -120,7 +120,6 @@ cmd(<<"get_data">>, #nkreq{data=Data}=Req) ->
     end;
 
 cmd(<<"get_chart_data">>, #nkreq{data=Data}=Req) ->
-    lager:info("get_chart_data: ~p~n", [Req]),
     #{element_id:=ElementId} = Data,
     case nkdomain_api_util:get_id(?DOMAIN_ADMIN_SESSION, Data, Req) of
         {ok, SessId} ->
