@@ -384,12 +384,12 @@ get_dash_detail_test() ->
                             cols => [
                                 get_list_chart_json(#{
                                     id => <<"top_users_list_chart">>,
-                                    template => <<"#id#. #user_id# #messages#">>,
+                                    template => <<"#id#. #fullname# (#username#) #messages#">>,
                                     header => #{
                                         text => <<"Top 5 Users (messages)">>,
                                         css => <<"chart_header">>
                                     },
-                                    dynamic => false
+                                    dynamic => true
                                 }),
                                 get_list_chart_json(#{
                                     id => <<"top_channels_list_chart">>,
@@ -398,7 +398,7 @@ get_dash_detail_test() ->
                                         text => <<"Top 5 Channels (messages)">>,
                                         css => <<"chart_header">>
                                     },
-                                    dynamic => false
+                                    dynamic => true
                                 })
                             ]
                         }]

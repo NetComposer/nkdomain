@@ -760,11 +760,20 @@ do_get_chart_data(<<"top_users_list_chart">>, _Spec, State) ->
 %                #{ number => 45000, type => <<"Groups">> },
 %                #{ number => 9000, type => <<"Channels">> }
 %            ],
-            Data = [
-                #{ messages => maps:get(<<"doc_count">>, Bucket), user_id => maps:get(<<"key">>, Bucket) }
-                || Bucket <- Buckets
-            ],
-            {Data2, _} = lists:mapfoldr(
+            Data = lists:map(
+                fun(#{<<"key">> := UserId, <<"doc_count">> := Count}) ->
+                    {Username, Fullname} = case nkdomain_user:get_name(UserId) of
+                        {ok, #{obj_name := ObjName, fullname := FN} = User} ->
+                            lager:info("User: ~p~n", [User]),
+                            {ObjName, FN};
+                        {error, _Error} ->
+                            {<<>>, <<>>}
+                    end,
+                    #{ messages => Count, user_id => UserId, fullname => Fullname, username => Username }
+                end,
+                Buckets
+            ),
+            {Data2, _} = lists:mapfoldl(
                 fun(L, Acc) ->
                     {L#{id => Acc}, Acc+1}
                 end,
@@ -844,7 +853,7 @@ do_get_chart_data(<<"top_channels_list_chart">>, _Spec, State) ->
                         end,
                         Buckets
                     ),
-                    {Data2, _} = lists:mapfoldr(
+                    {Data2, _} = lists:mapfoldl(
                         fun(L, Acc) ->
                             {L#{id => Acc}, Acc+1}
                         end,
