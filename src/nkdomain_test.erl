@@ -123,10 +123,10 @@ test_create_user(Pid) ->
 
     % Find user by several ways
     {ok, U2} = cmd(Pid, <<"objects/user/get">>, #{id=><<"/users/tuser1">>}),
-    #obj_id_ext{type= <<"user">>, obj_id=U2Id, pid=Pid1} = F1 = nkdomain_lib:find("/users/tuser1"),
-    F1 = nkdomain_lib:find(U2Id),
-    F1 = nkdomain_lib:load("/users/tuser1"),
-    F1 = nkdomain_lib:load(U2Id),
+    #obj_id_ext{type= <<"user">>, obj_id=U2Id, pid=Pid1} = F1 = nkdomain_db:find("/users/tuser1"),
+    F1 = nkdomain_db:find(U2Id),
+    F1 = nkdomain_db:load("/users/tuser1"),
+    F1 = nkdomain_db:load(U2Id),
 
     % Unload the user
     ok = nkdomain:unload(U2Id),
@@ -211,7 +211,7 @@ test_session1(Pid) ->
 test_session2(Pid) ->
     % Get the admin user (without id) and its current session
     {ok, #{<<"obj_id">>:=SessId}} = cmd(Pid, <<"objects/session/get">>, #{}),
-    #obj_id_ext{type = <<"session">>, obj_id=SessId, path=Path, pid=SessPid} = nkdomain_lib:find(SessId),
+    #obj_id_ext{type = <<"session">>, obj_id=SessId, path=Path, pid=SessPid} = nkdomain_db:find(SessId),
 
     {ok, Childs} = nkdomain_obj:sync_op(<<"admin">>, get_childs),
     true = maps:is_key(SessId, Childs),
@@ -228,7 +228,7 @@ test_session2(Pid) ->
     timer:sleep(100),
     {ok, Childs2} = nkdomain_obj:sync_op(<<"admin">>, get_childs),
     false = maps:is_key(SessId, Childs2),
-    #obj_id_ext{type= <<"session">>, obj_id=SessId, path=Path, pid=undefined} = nkdomain_lib:find(SessId),
+    #obj_id_ext{type= <<"session">>, obj_id=SessId, path=Path, pid=undefined} = nkdomain_db:find(SessId),
 
     % If we force a clean of the database, the stale object is deleted and archived
     {ok, #{inactive:=N}} = nkdomain:clean(),
@@ -245,7 +245,7 @@ test_session2(Pid) ->
 test_session3(Admin) ->
     % Do login over tuser1, check the session is created and loaded
     {ok, Pid, SessId} = login("/users/tuser1", pass2),
-    #obj_id_ext{type= <<"session">>, obj_id=SessId, pid=SPid, path = <<"/sessions/", _/binary>>} = nkdomain_lib:find(SessId),
+    #obj_id_ext{type= <<"session">>, obj_id=SessId, pid=SPid, path = <<"/sessions/", _/binary>>} = nkdomain_db:find(SessId),
     true = is_pid(SPid),
 
     {ok, #{<<"path">>:=<<"/users/tuser1">>}} = cmd(Pid, <<"objects/user/get">>, #{}),
@@ -454,16 +454,16 @@ test_basic_2(Pid) ->
 remove_data() ->
     case nkdomain:find("/users/tuser1") of
         {ok, <<"user">>, UId, _, _} ->
-            ok = nkdomain_lib:delete(UId);
+            ok = nkdomain_db:delete(UId);
         {error, object_not_found} ->
             ok
     end,
-    case nkdomain_domain_obj:search_childs("/stest1", #{}) of
+    case nkdomain_db:search({paths, "/stest1", #{}}) of
         {ok, 0, []} ->
             ok;
         _ ->
             %% lager:notice("Deleting all childs for /stest1"),
-            nkdomain:delete_path("/stest1")
+            nkdomain:remove_path("/stest1")
     end,
     case nkdomain:find("/stest1") of
         {ok, ?DOMAIN_DOMAIN, S1Id_0, _, _} ->
@@ -515,7 +515,7 @@ cmd(Pid, Cmd, Data) ->
 
 %% Will not find aliases
 is_loaded(Id) ->
-    case nkdomain_lib:find_loaded(Id) of
+    case nkdomain_db:find_loaded(Id) of
         #obj_id_ext{} ->
             true;
         _ ->

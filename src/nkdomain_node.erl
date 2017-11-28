@@ -221,7 +221,7 @@ check_node_obj(#state{node_obj_pid=Pid}=State) when is_pid(Pid) ->
     {true, State};
 
 check_node_obj(#state{node_path=Path}=State) ->
-    case nkdomain_lib:load(Path) of
+    case nkdomain_db:load(Path) of
         {error, object_not_found} ->
             case nkdomain_node_obj:create() of
                 {ok, _NodeId, Pid} when is_pid(Pid) ->

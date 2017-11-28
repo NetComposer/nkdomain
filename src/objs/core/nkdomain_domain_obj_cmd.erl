@@ -37,9 +37,18 @@ cmd(<<"check_name">>, #nkreq{data=#{name:=Name}}) ->
 cmd(<<"find">>, #nkreq{data=Data}=Req) ->
     case get_domain(Data, Req) of
         {ok, Id} ->
-            case nkdomain_domain_obj:search(Id, Data) of
-                {ok, Total, List, _Meta} ->
-                    {ok, #{total=>Total, data=>List}};
+            case nkdomain_db:find(Id) of
+                #obj_id_ext{obj_id=ObjId} ->
+                    Filters1 = maps:get(filters, Data, #{}),
+                    Filters2 = Filters1#{domain_id=>ObjId},
+                    Data2 = maps:remove(id, Data#{filters=>Filters2}),
+                    {ok, EsOpts} = nkdomain_store_es_util:get_opts(),
+                    case nkdomain_store_es_search:search(Data2, EsOpts) of
+                        {ok, Total, List, _Aggs, _Meta} ->
+                            {ok, #{total=>Total, data=>List}};
+                        {error, Error} ->
+                            {error, Error}
+                    end;
                 {error, Error} ->
                     {error, Error}
             end;
@@ -50,9 +59,18 @@ cmd(<<"find">>, #nkreq{data=Data}=Req) ->
 cmd(<<"find_all">>, #nkreq{data=Data}=Req) ->
     case get_domain(Data, Req) of
         {ok, Id} ->
-            case nkdomain_domain_obj:search_all(Id, Data) of
-                {ok, Total, List, _Meta} ->
-                    {ok, #{total=>Total, data=>List}};
+            case nkdomain_db:find(Id) of
+                #obj_id_ext{path=Path} ->
+                    Filters1 = maps:get(filters, Data, #{}),
+                    Filters2 = Filters1#{path=><<"childs_of:", Path/binary>>},
+                    Data2 = maps:remove(id, Data#{filters=>Filters2}),
+                    {ok, EsOpts} = nkdomain_store_es_util:get_opts(),
+                    case nkdomain_store_es_search:search(Data2, EsOpts) of
+                        {ok, Total, List, _Aggs, _Meta} ->
+                            {ok, #{total=>Total, data=>List}};
+                        {error, Error} ->
+                            {error, Error}
+                    end;
                 {error, Error} ->
                     {error, Error}
             end;
@@ -60,49 +78,49 @@ cmd(<<"find_all">>, #nkreq{data=Data}=Req) ->
             Error
     end;
 
-cmd(<<"find_types">>, #nkreq{data=Data}=Req) ->
-    case get_domain(Data, Req) of
-        {ok, Id} ->
-            case nkdomain_domain_obj:search_type(Id, Data) of
-                {ok, Total, List, _Meta} ->
-                    {ok, #{total=>Total, data=>maps:from_list(List)}};
-                {error, Error} ->
-                    {error, Error}
-            end;
-        Error ->
-            Error
-    end;
-
-cmd(<<"find_all_types">>, #nkreq{data=Data}=Req) ->
-    case get_domain(Data, Req) of
-        {ok, Id} ->
-            case nkdomain_domain_obj:search_all_types(Id, Data) of
-                {ok, Total, List, _Meta} ->
-                    {ok, #{total=>Total, data=>maps:from_list(List)}};
-                {error, Error} ->
-                    {error, Error}
-            end;
-        Error ->
-            Error
-    end;
-
-cmd(<<"find_childs">>, #nkreq{data=Data}=Req) ->
-    case get_domain(Data, Req) of
-        {ok, Id} ->
-            Search = nkdomain_domain_obj:search_childs(Id, Data),
-            nkdomain_api_util:search(Search);
-        Error ->
-            Error
-    end;
-
-cmd(<<"find_all_childs">>, #nkreq{data=Data}=Req) ->
-    case get_domain(Data, Req) of
-        {ok, Id} ->
-            Search = nkdomain_domain_obj:search_all_childs(Id, Data),
-            nkdomain_api_util:search(Search);
-        Error ->
-            Error
-    end;
+%%cmd(<<"find_types">>, #nkreq{data=Data}=Req) ->
+%%    case get_domain(Data, Req) of
+%%        {ok, Id} ->
+%%            case nkdomain_db:aggs({type, Id, #{}}) of
+%%                {ok, Total, List} ->
+%%                    {ok, #{total=>Total, data=>maps:from_list(List)}};
+%%                {error, Error} ->
+%%                    {error, Error}
+%%            end;
+%%        Error ->
+%%            Error
+%%    end;
+%%
+%%cmd(<<"find_all_types">>, #nkreq{data=Data}=Req) ->
+%%    case get_domain(Data, Req) of
+%%        {ok, Id} ->
+%%            case nkdomain_db:aggs({type, Id, #{deep=>true}}) of
+%%                {ok, Total, List} ->
+%%                    {ok, #{total=>Total, data=>maps:from_list(List)}};
+%%                {error, Error} ->
+%%                    {error, Error}
+%%            end;
+%%        Error ->
+%%            Error
+%%    end;
+%%
+%%cmd(<<"find_childs">>, #nkreq{data=Data}=Req) ->
+%%    case get_domain(Data, Req) of
+%%        {ok, Id} ->
+%%            Search = nkdomain_db:search({paths, Id, #{}}),
+%%            nkdomain_api_util:search(Search);
+%%        Error ->
+%%            Error
+%%    end;
+%%
+%%cmd(<<"find_all_childs">>, #nkreq{data=Data}=Req) ->
+%%    case get_domain(Data, Req) of
+%%        {ok, Id} ->
+%%            Search = nkdomain_db:search({paths, Id, #{deep=>true}}),
+%%            nkdomain_api_util:search(Search);
+%%        Error ->
+%%            Error
+%%    end;
 
 cmd(<<"unload_childs">>, #nkreq{data=Data}=Req) ->
     case get_domain(Data, Req) of

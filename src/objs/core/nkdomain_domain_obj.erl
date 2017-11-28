@@ -24,7 +24,6 @@
 -behavior(nkdomain_obj).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([search/2, search_all/2, search_type/2, search_all_types/2, search_childs/2, search_all_childs/2]).
 -export([find_path/1, find_path/2, unload_childs/1, get_childs_type/2]).
 -export([get_all_counters/1, get_counter/2, make_path/3]).
 -export([object_execute/5, object_schema/1, object_query/3, object_mutation/3]).
@@ -49,70 +48,70 @@
 %% ===================================================================
 
 
-%% @doc
-search(Id, Spec) ->
-    case nkdomain_lib:find(Id) of
-        #obj_id_ext{obj_id=ObjId} ->
-            Filters1 = maps:get(filters, Spec, #{}),
-            Filters2 = Filters1#{domain_id=>ObjId},
-            Spec2 = maps:remove(id, Spec#{filters=>Filters2}),
-            nkdomain:search(Spec2);
-        {error, Error} ->
-            {error, Error}
-    end.
+%%%% @doc
+%%search(Id, Spec) ->
+%%    case nkdomain_db:find(Id) of
+%%        #obj_id_ext{obj_id=ObjId} ->
+%%            Filters1 = maps:get(filters, Spec, #{}),
+%%            Filters2 = Filters1#{domain_id=>ObjId},
+%%            Spec2 = maps:remove(id, Spec#{filters=>Filters2}),
+%%            nkdomain:search(Spec2);
+%%        {error, Error} ->
+%%            {error, Error}
+%%    end.
 
 
-%% @doc
-search_all(Id, Spec) ->
-    case nkdomain_lib:find(Id) of
-        #obj_id_ext{path=Path} ->
-            Filters1 = maps:get(filters, Spec, #{}),
-            Filters2 = Filters1#{path=><<"childs_of:", Path/binary>>},
-            Spec2 = maps:remove(id, Spec#{filters=>Filters2}),
-            nkdomain:search(Spec2);
-        {error, Error} ->
-            {error, Error}
-    end.
+%%%% @doc
+%%search_all(Id, Spec) ->
+%%    case nkdomain_db:find(Id) of
+%%        #obj_id_ext{path=Path} ->
+%%            Filters1 = maps:get(filters, Spec, #{}),
+%%            Filters2 = Filters1#{path=><<"childs_of:", Path/binary>>},
+%%            Spec2 = maps:remove(id, Spec#{filters=>Filters2}),
+%%            nkdomain:search(Spec2);
+%%        {error, Error} ->
+%%            {error, Error}
+%%    end.
 
 
-%% @doc
-search_type(Id, Spec) ->
-    case nkdomain_lib:find(Id) of
-        #obj_id_ext{obj_id=ObjId} ->
-            ?CALL_NKROOT(object_db_search_types, [ObjId, Spec]);
-        {error, Error} ->
-            {error, Error}
-    end.
+%%%% @doc
+%%search_type(Id, Spec) ->
+%%    case nkdomain_lib:find(Id) of
+%%        #obj_id_ext{obj_id=ObjId} ->
+%%            ?CALL_NKROOT(object_db_search_types, [ObjId, Spec]);
+%%        {error, Error} ->
+%%            {error, Error}
+%%    end.
 
 
-%% @doc
-search_all_types(Id, Spec) ->
-    case nkdomain_lib:find(Id) of
-        #obj_id_ext{path=Path} ->
-            ?CALL_NKROOT(object_db_search_all_types, [Path, Spec]);
-        {error, Error} ->
-            {error, Error}
-    end.
+%%%% @doc
+%%search_all_types(Id, Spec) ->
+%%    case nkdomain_lib:find(Id) of
+%%        #obj_id_ext{path=Path} ->
+%%            ?CALL_NKROOT(object_db_search_all_types, [Path, Spec]);
+%%        {error, Error} ->
+%%            {error, Error}
+%%    end.
 
 
-%% @doc
-search_childs(Id, Spec) ->
-    case nkdomain_lib:find(Id) of
-        #obj_id_ext{obj_id=ObjId} ->
-            ?CALL_NKROOT(object_db_search_childs, [ObjId, Spec]);
-        {error, Error} ->
-            {error, Error}
-    end.
+%%%% @doc
+%%search_childs(Id, Spec) ->
+%%    case nkdomain_lib:find(Id) of
+%%        #obj_id_ext{obj_id=ObjId} ->
+%%            ?CALL_NKROOT(object_db_search_childs, [ObjId, Spec]);
+%%        {error, Error} ->
+%%            {error, Error}
+%%    end.
 
 
-%% @doc
-search_all_childs(Id, Spec) ->
-    case nkdomain_lib:find(Id) of
-        #obj_id_ext{path=Path} ->
-            ?CALL_NKROOT(object_db_search_all_childs, [Path, Spec]);
-        {error, Error} ->
-            {error, Error}
-    end.
+%%%% @doc
+%%search_all_childs(Id, Spec) ->
+%%    case nkdomain_lib:find(Id) of
+%%        #obj_id_ext{path=Path} ->
+%%            ?CALL_NKROOT(object_db_search_all_childs, [Path, Spec]);
+%%        {error, Error} ->
+%%            {error, Error}
+%%    end.
 
 
 %% @doc Finds a child object with this path
@@ -164,7 +163,7 @@ unload_childs(Id) ->
     {ok, nkdomain:path()} | {error, term()}.
 
 make_path(Id, Type, Name) ->
-    case nkdomain_lib:find(Id) of
+    case nkdomain_db:find(Id) of
         #obj_id_ext{type=?DOMAIN_DOMAIN, path=Path} ->
             Class = nkdomain_util:class(Type),
             Path2 = nkdomain_util:append(Path, Class),

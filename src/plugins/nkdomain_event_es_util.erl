@@ -18,13 +18,11 @@
 %%
 %% -------------------------------------------------------------------
 
-%% @doc Elasticsearch plugin
--module(
-nkdomain_store_es_util).
+%% @doc Elasticsearch Event plugin
+-module(nkdomain_event_es_util).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([get_opts/0, get_index_opts/0, reload_index/0, delete_index/0, read_obj/1]).
--export([child_filter/2, get_obj_id/1, get_path/1]).
 -export([base_mappings/0, unparse/1]).
 -export([db_init/2, normalize/1, normalize_multi/1]).
 
@@ -77,60 +75,6 @@ delete_index() ->
 read_obj(Id) ->
     {ok, E} = get_opts(),
     nkelastic:get(to_bin(Id), E).
-
-
-%% @private
-child_filter(Id, Opts) ->
-    case Opts of
-        #{deep:=true} ->
-            case get_path(Id) of
-                {ok, Path} ->
-                    {ok, [{path, subdir, Path}]};
-                {error, Error} ->
-                    {error, Error}
-            end;
-        _ ->
-            case get_obj_id(Id) of
-                {ok, ObjId} ->
-                    {ok, [{domain_id, eq, ObjId}]};
-                {error, Error} ->
-                    {error, Error}
-            end
-    end.
-
-
-%% @private
-get_obj_id(Id) ->
-    case nkdomain_util:is_path(Id) of
-        {true, <<"/">>} ->
-            {ok, <<"root">>};
-        {true, Path} ->
-            case nkdomain_store_es_callbacks:object_db_find_obj(Path, false) of
-                {ok, _Type, ObjId, _Path} ->
-                    {ok, ObjId};
-                {error, Error} ->
-                    {error, Error}
-            end;
-        {false, ObjId} ->
-            {ok, ObjId}
-    end.
-
-
-%% @private
-get_path(Id) ->
-    case nkdomain_util:is_path(Id) of
-        {true, Path} ->
-            {ok, Path};
-        {false, <<"root">>} ->
-            {ok, <<"/">>};
-        {false, ObjId} ->
-            case nkdomain_store_es_callbacks:object_db_find_obj(ObjId, false) of
-                {ok, _Type, _ObjId, Path} ->
-                    {ok, Path};
-                {error, Error} ->
-                    {error, Error}
-            end
-    end.
 
 
 
@@ -424,7 +368,7 @@ norm_multi([], Chars, Words, Opts) ->
 
 
 %% ===================================================================
-%% Internal
+%% Public
 %% ===================================================================
 
 

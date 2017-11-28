@@ -62,8 +62,7 @@ create(SubType, Opts, Data) ->
 
 %% @doc
 find_configs(Path, SubType) ->
-    Filters = #{type=>?DOMAIN_CONFIG, subtype=>SubType},
-    nkdomain_domain_obj:search_all_childs(Path, #{filters=>Filters}).
+    nkdomain_db:search({paths, Path, #{type=>?DOMAIN_CONFIG, subtypes=>[SubType], deep=>true}}).
 
 
 

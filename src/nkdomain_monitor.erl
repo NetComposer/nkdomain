@@ -146,7 +146,7 @@ add_obj(Id, Obj, #obj_monitor{regtag=RegTag}=Monitor) ->
         {enabled, _, _}  ->
             {error, object_already_exists};
         _ ->
-            case nkdomain_lib:load(Id, #{register=>{RegTag, self()}}) of
+            case nkdomain_db:load(Id, #{register=>{RegTag, self()}}) of
                 #obj_id_ext{obj_id=ObjId, pid=Pid} ->
                     case do_add_enabled(ObjId, Obj, Pid, Monitor) of
                         {ok, Monitor2} ->
@@ -170,7 +170,7 @@ rm_obj(Id, #obj_monitor{objs=Objs}=Monitor) ->
         {ok, _} ->
             {ok, do_remove(Id2, Monitor)};
         error ->
-            case nkdomain_lib:find(Id2) of
+            case nkdomain_db:find(Id2) of
                 #obj_id_ext{obj_id=ObjId} ->
                     case maps:find(ObjId, Objs) of
                         {ok, _} ->

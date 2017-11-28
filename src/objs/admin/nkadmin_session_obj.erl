@@ -118,7 +118,7 @@ get_chart_data(Id, ElementId, Data) ->
 
 %% @private
 find_all() ->
-    nkdomain_domain_obj:search_all(root, #{filters=>#{type=>?DOMAIN_ADMIN_SESSION}}).
+    nkdomain:get_paths_type(root, ?DOMAIN_ADMIN_SESSION).
 
 
 
@@ -209,7 +209,7 @@ object_stop(_Reason, #obj_state{session_link={Mod, Pid}}=State) ->
 
 %% @private
 object_sync_op({?MODULE, switch_domain, Domain, Url}, _From, State) ->
-    case nkdomain_lib:load(Domain) of
+    case nkdomain_db:load(Domain) of
         #obj_id_ext{obj_id=DomainId, path=Path, type= ?DOMAIN_DOMAIN} ->
             case do_switch_domain(DomainId, Path, Url, State) of
                 {ok, Reply, State2} ->
@@ -314,8 +314,8 @@ object_handle_info(_Info, _State) ->
 
 %% @private
 do_switch_domain(DomainId, Path, Url, #obj_state{session=Session}=State) ->
-    case nkdomain_domain_obj:search_all_types(DomainId, #{}) of
-        {ok, _, TypeList, _Meta} ->
+    case nkdomain_db:aggs({type, DomainId, #{deep=>true}}) of
+        {ok, _, TypeList} ->
             Url2 = case Url of
                 <<"#", U/binary>> -> U;
                 _ -> Url
@@ -760,7 +760,7 @@ do_get_chart_data(ElementId, _Spec, State) ->
 
 %% @private
 find_url(<<"_id/", ObjId/binary>>, _Session) ->
-    case nkdomain_lib:find(ObjId) of
+    case nkdomain_db:find(ObjId) of
         #obj_id_ext{type=Type, path=Path} ->
             {ok, [?ADMIN_OBJ_ID, ObjId, Type, Path]};
         {error, _Error} ->
@@ -772,7 +772,7 @@ find_url(Url, Session) ->
         undefined ->
             #admin_session{domain_path=Base} = Session,
             Url2 = nkdomain_util:append(Base, Url),
-            case nkdomain_lib:find(Url2) of
+            case nkdomain_db:find(Url2) of
                 #obj_id_ext{obj_id=ObjId, type=Type, path=Path} ->
                     {ok, [?ADMIN_OBJ_ID, ObjId, Type, Path]};
                 {error, _} ->

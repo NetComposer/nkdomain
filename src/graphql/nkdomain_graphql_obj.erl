@@ -243,7 +243,7 @@ object_schema(_) ->
 
 %% @doc
 object_query(<<"node">>, #{<<"id">>:=Id}, _Ctx) ->
-    case nkdomain_lib:read(Id) of
+    case nkdomain_db:read(Id) of
         {ok, #obj_id_ext{}=ObjIdExt, Obj} ->
             {ok, {ObjIdExt, Obj}};
         {error, Error} ->

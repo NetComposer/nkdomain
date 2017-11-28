@@ -17,7 +17,9 @@
 -define(ADMIN_PASS, "netcomposer").
 
 
-
+i() ->
+    F = fun(I, Acc) -> lager:error("NKLOG I: ~p", [I]), {ok, Acc+1} end,
+    nkdomain_db:iterate({paths, "/dkv", #{sort=>rpath, deep=>true}}, F, 0).
 
 ts() ->
      Op = #{
@@ -570,7 +572,7 @@ download(T, Url) ->
 
 
 create_users(N) ->
-    nkdomain:delete_path("/name_test"),
+    nkdomain:remove_path("/name_test"),
     {ok, _, _Pid1} = login(),
     _ = nkdomain_sample:domain_create("/", name_test, "NameTest", "Name Test"),
     lists:foreach(

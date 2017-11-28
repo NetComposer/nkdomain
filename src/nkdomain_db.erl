@@ -18,20 +18,20 @@
 %%
 %% -------------------------------------------------------------------
 
-%% @doc NkDomain library module
--module(nkdomain_lib).
+%% @doc NkDomain db-related module
+-module(nkdomain_db).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([find/1, find/2, find_loaded/1, read/1, read/2, load/1, load/2]).
 -export([delete/1, delete/2, hard_delete/1, hard_delete/2]).
--export([type_apply/3]).
+-export([search/1, search/2, iterate/3, iterate/4, aggs/1, aggs/2]).
 
 -include("nkdomain.hrl").
 -include_lib("nkevent/include/nkevent.hrl").
 -include_lib("nkservice/include/nkservice.hrl").
 
 
--define(LLOG(Type, Txt, Args), lager:Type("NkDOMAIN LIB "++Txt, Args)).
+-define(LLOG(Type, Txt, Args), lager:Type("NkDOMAIN DB "++Txt, Args)).
 
 
 %% ===================================================================
@@ -44,6 +44,10 @@
         get_deleted => boolean()
     }.
 
+-type obj_id() :: nkdomain:obj_id().
+-type type() :: nkdomain:type().
+-type path() :: nkdomain:path().
+
 
 %% ===================================================================
 %% Public
@@ -51,7 +55,7 @@
 
 
 %% @doc Finds and object from UUID or Path, in memory and disk
--spec find(nkdomain:obj_id()|nkdomain:path()) ->
+-spec find(obj_id()|path()) ->
     #obj_id_ext{} | {error, object_not_found|term()}.
 
 find(Id) ->
@@ -59,7 +63,7 @@ find(Id) ->
 
 
 %% @doc Finds and object using a service's functions
--spec find(nkdomain:obj_id()|nkdomain:path(), opts()) ->
+-spec find(obj_id()|path(), opts()) ->
     #obj_id_ext{} | {error, object_not_found|term()}.
 
 find(Id, Opts) ->
@@ -101,15 +105,10 @@ find_in_db(Id, Opts) ->
             {ok, _, ObjName} = nkdomain_util:get_parts(Type, Path),
             #obj_id_ext{type=Type, obj_id=ObjId, path=Path, obj_name=ObjName};
         {error, object_not_found} ->
-            Id2 = to_bin(Id),
-            Spec = #{
-                filter_list => [{aliases, eq, Id2}],
-                fields => [obj_id, type, path]
-            },
-            case ?CALL_SRV(SrvId, object_db_search_objs, [Spec, FindDeleted]) of
+            case search(core, {alias, Id, #{get_deleted=>FindDeleted}}, Opts) of
                 {ok, 0, []} ->
                     {error, object_not_found};
-                {ok, N, [{Type, ObjId, Path}|_]}->
+                {ok, N, [#{<<"type">>:=Type, <<"obj_id">>:=ObjId, <<"path">>:=Path}|_]}->
                     case N > 1 of
                         true ->
                             lager:notice("NkDOMAIN: duplicated alias for ~s", [Id]);
@@ -128,7 +127,7 @@ find_in_db(Id, Opts) ->
 
 
 %% @doc Reads an object from memory if loaded, or disk if not
--spec read(nkdomain:obj_id()) ->
+-spec read(obj_id()) ->
     {ok, #obj_id_ext{}, nkdomain:obj()} | {deleted, #obj_id_ext{}, nkdomain:obj()} | {error, term()}.
 
 read(Id) ->
@@ -136,7 +135,7 @@ read(Id) ->
 
 
 %% @doc Reads an object from memory if loaded, or disk if not
--spec read(nkdomain:obj_id(), opts()) ->
+-spec read(obj_id(), opts()) ->
     {ok, #obj_id_ext{}, nkdomain:obj()} | {error, term()}.
 
 read(Id, Opts) ->
@@ -196,11 +195,6 @@ load(Id, Opts) ->
     end.
 
 
-
-
-
-
-
 %% @doc Marks an object as deleted
 -spec delete(nkdomain:id()) ->
     ok | {error, object_not_found|term()}.
@@ -243,7 +237,7 @@ delete(Id, Opts) ->
                             },
                             Obj3 = maps:without([active, expires_time, in_alarm, alarms, enabled], Obj2),
                             case ?CALL_SRV(SrvId, object_db_save, [Obj3]) of
-                                {ok, _Meta} ->
+                                {ok, _Meta2} ->
                                     ok;
                                 {error, Error} ->
                                     {error, Error}
@@ -287,6 +281,94 @@ hard_delete(Id, Opts) ->
         {error, Error} ->
             {error, Error}
     end.
+
+
+%% @doc Internal search (non GraphQL). See nkdomain:search_type()
+-spec search(nkdomain:search_type()) ->
+    {ok, integer(), RawObj::map()} | {error, term()}.
+
+search(SearchType) ->
+    search(core, SearchType, #{}).
+
+
+%% @doc
+-spec search(type()|core, nkdomain:search_type()) ->
+    {ok, integer(), RawObj::map()} | {error, term()}.
+
+search(Type, SearchType) ->
+    search(Type, SearchType, #{}).
+
+
+%% @doc
+-spec search(type()|core, nkdomain:search_type(), opts()) ->
+    {ok, integer(), RawObj::map()} | {error, term()}.
+
+search(Type, SearchType, Opts) ->
+    SrvId = maps:get(srv_id, Opts, ?NKROOT),
+    case ?CALL_SRV(SrvId, object_db_search_objs, [SrvId, Type, SearchType]) of
+        {ok, Total, Data} ->
+            {ok, Total, Data};
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
+-type iter_fun() :: fun(({type(), obj_id(), path(), Fields::map()}, term()) -> {ok, term()}).
+
+%% @doc Internal iteration
+-spec iterate(nkdomain:search_type(), iter_fun(), term()) ->
+    {ok, term()} | {error, term()}.
+
+iterate(SearchType, Fun, Acc) ->
+    iterate(core, SearchType, Fun, Acc, #{}).
+
+
+%% @doc Internal iteration
+-spec iterate(type()|core, nkdomain:search_type(), iter_fun(), term()) ->
+    {ok, term()} | {error, term()}.
+
+iterate(Type, SearchType, Fun, Acc) ->
+    iterate(Type, SearchType, Fun, Acc, #{}).
+
+
+%% @doc
+-spec iterate(type()|core, nkdomain:search_type(), iter_fun(), term(), opts()) ->
+    {ok, term()} | {error, term()}.
+
+iterate(Type, SearchType, Fun, Acc, Opts) ->
+    SrvId = maps:get(srv_id, Opts, ?NKROOT),
+    ?CALL_SRV(SrvId, object_db_iterate_objs, [SrvId, Type, SearchType, Fun, Acc]).
+
+
+%% @doc Internal aggregation
+-spec aggs(nkdomain:aggs_type()) ->
+    {ok, integer(), [{binary(), integer()}]} | {error, term()}.
+
+aggs(AggType) ->
+    aggs(core, AggType, #{}).
+
+
+%% @doc Internal aggregation
+-spec aggs(type()|core, nkdomain:aggs_type()) ->
+    {ok, integer(), [{binary(), integer()}]} | {error, term()}.
+
+aggs(Type, AggType) ->
+    aggs(Type, AggType, #{}).
+
+
+%% @doc
+-spec aggs(type()|core, nkdomain:agg_type(), opts()) ->
+    {ok, integer(), [{binary(), integer()}]} | {error, term()}.
+
+aggs(Type, AggType, Opts) ->
+    SrvId = maps:get(srv_id, Opts, ?NKROOT),
+    case ?CALL_SRV(SrvId, object_db_agg_objs, [SrvId, Type, AggType]) of
+        {ok, Total, Data, _Meta} ->
+            {ok, Total, Data};
+        {error, Error} ->
+            {error, Error}
+    end.
+
 
 
 %% ===================================================================
@@ -364,26 +446,6 @@ check_object(SrvId, #{obj_id:=ObjId}=Obj) ->
                     ok
             end
     end.
-
-
-
-%% @doc Calls an object's function
--spec type_apply(nkdomain:type()|module(), atom(), list()) ->
-    not_exported | term().
-
-type_apply(Module, Fun, Args) when is_atom(Module) ->
-    case erlang:function_exported(Module, Fun, length(Args)) of
-        true ->
-            apply(Module, Fun, Args);
-        false ->
-            not_exported
-    end;
-
-type_apply(Type, Fun, Args) when is_binary(Type) ->
-    Module = nkdomain_reg:get_type_module(Type),
-    true = is_atom(Module),
-    type_apply(Module, Fun, Args).
-
 
 
 %% @private

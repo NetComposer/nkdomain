@@ -197,12 +197,12 @@ http_get(FileId, Req) ->
 
 %% @private
 find() ->
-    nkdomain_domain_obj:search(<<"root">>, #{filters=>#{type=>?DOMAIN_FILE}}).
+    nkdomain:get_paths_type(<<"root">>, ?DOMAIN_FILE).
 
 
 %% @private
 delete_all() ->
-    nkdomain:delete_path_type(<<"root">>, ?DOMAIN_FILE).
+    nkdomain:remove_path_type(<<"root">>, ?DOMAIN_FILE).
 
 
 
@@ -334,7 +334,7 @@ get_store(_Obj) ->
 
 %% @private
 do_get_store(StoreId) ->
-    case nkdomain_lib:load(StoreId) of
+    case nkdomain_db:load(StoreId) of
         #obj_id_ext{obj_id=StoreObjId, type = ?DOMAIN_FILE_STORE} ->
             case nkdomain:get_obj(StoreObjId) of
                 {ok, #{?DOMAIN_FILE_STORE:=Data}} ->

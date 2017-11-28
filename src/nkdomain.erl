@@ -38,11 +38,13 @@
 -export([find/1, load/1, unload/1, unload/2, get_obj/1, get_info/1, get_name/1, get_domain_id/1]).
 -export([enable/2, update/2, update_name/2, delete/1, send_info/3]).
 -export([get_roles/1, add_roles/3, remove_roles/3]).
--export([search/1, search/2, search/3, delete_path/1, delete_path_type/2, search_agg_field/4]).
--export([get_childs/1, delete_with_childs/1]).
+-export([get_types/1]).
+-export([get_paths/1, get_paths_type/2, remove_path/1, remove_path_type/2]).
+-export([get_childs/1, get_childs_type/2, remove_with_childs/1]).
 -export([clean/0]).
+-export([print_fun/0, delete_fun/0]).
 -export_type([obj_id/0, obj_name/0, obj/0, path/0, id/0, type/0, role/0, role_spec/0]).
--export_type([timestamp/0]).
+-export_type([timestamp/0, search_type/0, agg_type/0]).
 
 -include("nkdomain.hrl").
 
@@ -67,11 +69,26 @@
     {Role::role(), ObjId::obj_id()}.   % Objects having 'Role' over ObjId
 
 
-
 %% @see nkdomain_callbacks:domain_store_base_mapping/0
 -type obj() :: map().
 
--type search_spec() :: map().
+
+% Internal search specification
+-type search_type() ::
+    {graphql, Filters::term(), #{from=>integer(), size=>integer(), sort=>[binary()]}} |
+    {alias, binary(), #{get_deleted=>boolean()}} |
+    {paths, Domain::id(),
+        #{get_deleted=>boolean(), deep=>boolean(), type=>type(), subtypes=>[binary()], size=>integer(),
+          sort => path | rpath}} |
+    {path_roles, Domain::id(), [type()], User::obj_id(), #{get_deleted=>boolean(), size=>integer()}} |
+    {childs, Obj::id(), #{get_deleted=>boolean(), type=>type(), size=>integer(), sort => path | rpath}} |
+    {user_email, binary(), #{get_deleted=>boolean(), size=>integer()}}.
+
+
+% Internal search specification
+-type agg_type() ::
+    {types, nkdomain:id(), #{get_deleted=>boolean(), deep=>boolean(), size=>integer()}}.
+
 
 -type timestamp() :: nklib_util:m_timestamp().
 
@@ -87,7 +104,7 @@
     {ok, type(), obj_id(), path(), pid()|undefined} | {error, object_not_found|term()}.
 
 find(Id) ->
-    case nkdomain_lib:find(Id) of
+    case nkdomain_db:find(Id) of
         #obj_id_ext{type=Type, obj_id=ObjId, path=Path, pid=Pid} ->
             {ok, Type, ObjId, Path, Pid};
         {error, Error} ->
@@ -100,7 +117,7 @@ find(Id) ->
     {ok, type(), obj_id(), path(), pid()} |  {error, object_not_found|term()}.
 
 load(Id) ->
-    case nkdomain_lib:load(Id) of
+    case nkdomain_db:load(Id) of
         #obj_id_ext{type=Type, obj_id=ObjId, path=Path, pid=Pid} ->
             {ok, Type, ObjId, Path, Pid};
         {error, Error} ->
@@ -192,7 +209,7 @@ unload(Id) ->
     ok | {error, term()}.
 
 unload(Id, Reason) ->
-    case nkdomain_lib:find(Id) of
+    case nkdomain_db:find(Id) of
         #obj_id_ext{pid=Pid} when is_pid(Pid) ->
             nkdomain_obj:async_op(Pid, {unload, Reason});
         #obj_id_ext{} ->
@@ -226,95 +243,79 @@ remove_roles(Id, Role, RoleSpec) ->
     nkdomain_obj:sync_op(Id, {remove_roles, Role, RoleSpec}).
 
 
-%% @doc
--spec search(search_spec()) ->
-    {ok, integer(), Data::[map()], Meta::map()} | {error, term()}.
-
-search(Spec) ->
-    case ?CALL_NKROOT(object_db_search, [Spec]) of
-        {ok, Total, List, _Aggs, Meta} ->
-            {ok, Total, List, Meta};
-        {error, Error} ->
-            {error, Error}
-    end.
-
-
-%% @doc
--spec search(nkdomain:id(), search_spec()) ->
-    {ok, integer(), Data::[map()], Meta::map()} | {error, term()}.
-
-search(Domain, Spec) ->
-    case nkdomain_lib:find(Domain) of
-        #obj_id_ext{path=Path} ->
-            Filters1 = maps:get(filters, Spec, #{}),
-            Filters2 = Filters1#{path=><<"childs_of:", Path/binary>>},
-            search(Spec#{filters=>Filters2});
-        {error, Error} ->
-            {error, Error}
-    end.
-
-
-%% @doc
--spec search(nkdomain:id(), nkdomain:type(), search_spec()) ->
-    {ok, integer(), Data::[map()], Meta::map()} | {error, term()}.
-
-search(Domain, Type, Spec) ->
-    Filters1 = maps:get(filters, Spec, #{}),
-    Filters2 = Filters1#{type=>Type},
-    search(Domain, Spec#{filters=>Filters2}).
-
-
-%% @doc Finds types
--spec search_agg_field(nkdomain:obj_id(), binary(), nkdomain:search_spec(), boolean()) ->
-    {ok, integer(), [{nkdomain:type(), integer()}], map()} | {error, term()}.
-
-search_agg_field(Id, Field, Spec, SubChilds) ->
-    case ?CALL_NKROOT(object_db_search_agg_field, [Id, Field, Spec, SubChilds]) of
-        {ok, Total, Data, Meta} ->
-            {ok, Total, Data, Meta};
-        {error, Error} ->
-            {error, Error}
-    end.
-
-
-%%%% @doc Archives an object
-%%-spec archive( obj_id(), nkservice:error()) ->
-%%    ok | {error, term()}.
+%%%% @doc
+%%-spec search(search_spec()) ->
+%%    {ok, integer(), Data::[map()], Meta::map()} | {error, term()}.
 %%
-%%archive(ObjId, Reason) ->
-%%    case SrvId:object_db_read(ObjId) of
-%%        {ok, Obj, _Meta} ->
-%%            Obj2 = nkdomain_util:add_destroyed(Reason, Obj),
-%%            case nkdomain_store:archive(ObjId, Obj2) of
-%%                ok ->
-%%                    nkdomain_store:delete(ObjId);
-%%                {error, Error} ->
-%%                    {error, Error}
-%%            end;
+%%search(Spec) ->
+%%    case ?CALL_NKROOT(object_db_search, [Spec]) of
+%%        {ok, Total, List, _Aggs, Meta} ->
+%%            {ok, Total, List, Meta};
 %%        {error, Error} ->
 %%            {error, Error}
 %%    end.
 
 
+%%%% @doc
+%%-spec search(nkdomain:id(), search_spec()) ->
+%%    {ok, integer(), Data::[map()], Meta::map()} | {error, term()}.
+%%
+%%search(Domain, Spec) ->
+%%    case nkdomain_db:find(Domain) of
+%%        #obj_id_ext{path=Path} ->
+%%            Filters1 = maps:get(filters, Spec, #{}),
+%%            Filters2 = Filters1#{path=><<"childs_of:", Path/binary>>},
+%%            search(Spec#{filters=>Filters2});
+%%        {error, Error} ->
+%%            {error, Error}
+%%    end.
+%%
+%%
+%%%% @doc
+%%-spec search(nkdomain:id(), nkdomain:type(), search_spec()) ->
+%%    {ok, integer(), Data::[map()], Meta::map()} | {error, term()}.
+%%
+%%search(Domain, Type, Spec) ->
+%%    Filters1 = maps:get(filters, Spec, #{}),
+%%    Filters2 = Filters1#{type=>Type},
+%%    search(Domain, Spec#{filters=>Filters2}).
+
+
+%%%% @doc Finds types
+%%-spec search_agg_field(nkdomain:obj_id(), binary(), nkdomain:search_spec(), boolean()) ->
+%%    {ok, integer(), [{nkdomain:type(), integer()}], map()} | {error, term()}.
+%%
+%%search_agg_field(Id, Field, Spec, SubChilds) ->
+%%    case ?CALL_NKROOT(object_db_search_agg_field, [Id, Field, Spec, SubChilds]) of
+%%        {ok, Total, Data, Meta} ->
+%%            {ok, Total, Data, Meta};
+%%        {error, Error} ->
+%%            {error, Error}
+%%    end.
+
 
 %% @doc
-delete_path(Id) ->
-    ?CALL_NKROOT(object_db_delete_all_childs, [Id, #{}]).
+get_types(Domain) ->
+    nkdomain_db:aggs({types, Domain, #{deep=>true}}).
 
 
 %% @doc
-delete_path_type(Id, Type) ->
-    Spec = #{filters => #{type=>nklib_util:to_binary(Type)}},
-    ?CALL_NKROOT(object_db_delete_all_childs, [Id, Spec]).
+get_paths(Id) ->
+    nkdomain_db:search({paths, Id, #{deep=>true, sort=>path, size=>100}}).
 
 
 %% @doc
-get_childs(Id) ->
-    case nkdomain_lib:find(Id) of
-        #obj_id_ext{obj_id=ObjId} ->
-            case search(#{filters=>#{parent_id=>ObjId}, fields=>[path, type]}) of
-                {ok, _N, Data, _} ->
-                    {ok, Data};
+get_paths_type(Id, Type) ->
+    nkdomain_db:search({paths, Id, #{deep=>true, type=>Type, sort=>path, size=>100}}).
+
+
+%% @doc
+remove_path(Id) ->
+    case nkdomain_db:iterate({paths, Id, #{deep=>true, sort=>rpath, get_deleted=>true}}, print_fun(), 0) of
+        {ok, Count} ->
+            case nkdomain_db:hard_delete(Id) of
+                ok ->
+                    {ok, Count+1};
                 {error, Error} ->
                     {error, Error}
             end;
@@ -324,25 +325,43 @@ get_childs(Id) ->
 
 
 %% @doc
-delete_with_childs(Id) ->
-    case get_childs(Id) of
-        {ok, List} ->
-            lists:foreach(
-                fun(#{<<"obj_id">>:=ObjId}) ->
-                    case delete(ObjId) of
-                        ok ->
-                            ok;
-                        {error, Error} ->
-                            lager:notice("cannot delete ~s: ~p", [ObjId, Error])
-                    end
-                end,
-                List);
+remove_path_type(Id, Type) ->
+    case nkdomain_db:iterate({paths, Id, #{type=>Type, deep=>true, sort=>rpath, get_deleted=>true}}, delete_fun(), 0) of
+        {ok, Count} ->
+            case nkdomain_db:hard_delete(Id) of
+                ok ->
+                    {ok, Count+1};
+                {error, Error} ->
+                    {error, Error}
+            end;
         {error, Error} ->
             {error, Error}
-    end,
-    delete(Id).
+    end.
 
 
+%% @doc
+get_childs(Id) ->
+    nkdomain_db:search({childs, Id, #{sort=>path}}).
+
+
+%% @doc
+get_childs_type(Id, Type) ->
+    nkdomain_db:search({childs, Id, #{type=>Type, sort=>path}}).
+
+
+%% @doc
+remove_with_childs(Id) ->
+    case nkdomain_db:iterate({childs, Id, #{sort=>rpath, get_deleted=>true}}, delete_fun(), 0) of
+        {ok, Count} ->
+            case nkdomain_db:hard_delete(Id) of
+                ok ->
+                    {ok, Count+1};
+                {error, Error} ->
+                    {error, Error}
+            end;
+        {error, Error} ->
+            {error, Error}
+    end.
 
 
 %% @private Performs a periodic cleanup
@@ -351,3 +370,28 @@ delete_with_childs(Id) ->
 
 clean() ->
     ?CALL_NKROOT(object_db_clean, []).
+
+
+
+%% ===================================================================
+%% Internal
+%% ===================================================================
+
+print_fun() ->
+    fun(#{obj_id:=ObjId, path:=Path}, Acc) ->
+        lager:info("Object ~s (~s)", [Path, ObjId]),
+        {ok, Acc+1}
+    end.
+
+
+delete_fun() ->
+    fun(#{obj_id:=ObjId, path:=Path}, Acc) ->
+        case nkdomain_db:hard_delete(ObjId) of
+            ok ->
+                lager:info("Deleted object ~s (~s)", [Path, ObjId]),
+                {ok, Acc+1};
+            {error, Error} ->
+                lager:info("Could node deleted object ~s (~s): ~p", [Path, ObjId, Error]),
+                {ok, Acc}
+        end
+    end.

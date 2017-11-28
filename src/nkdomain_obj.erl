@@ -212,7 +212,7 @@ sync_op(_Id, _Op, _Timeout, 0) ->
     {error, process_not_found};
 
 sync_op(Id, Op, Timeout, Tries) ->
-    case nkdomain_lib:load(Id) of
+    case nkdomain_db:load(Id) of
         #obj_id_ext{pid=Pid} when is_pid(Pid) ->
             case sync_op(Pid, Op, Timeout) of
                 {error, process_not_found} ->
@@ -235,7 +235,7 @@ async_op(Pid, Op) when is_pid(Pid) ->
     gen_server:cast(Pid, {nkdomain_async_op, Op});
 
 async_op(Id, Op) ->
-    case nkdomain_lib:load(Id) of
+    case nkdomain_db:load(Id) of
         #obj_id_ext{pid=Pid} when is_pid(Pid) ->
             async_op(Pid, Op);
         {error, Error} ->
@@ -912,7 +912,7 @@ register_parent(#obj_state{id=ObjIdExt, parent_id=ParentId}=State, #{parent_pid:
     {ok, State2};
 
 register_parent(#obj_state{parent_id=ParentId}=State, Opts) ->
-    case nkdomain_lib:load(ParentId) of
+    case nkdomain_db:load(ParentId) of
         #obj_id_ext{pid=ParentPid} ->
             register_parent(State, Opts#{parent_pid=>ParentPid});
         {error, object_not_found} ->
@@ -1060,7 +1060,7 @@ do_update_name(ObjName, #obj_state{id=Id, obj=Obj}=State) ->
             {ok, State};
         {ok, Domain, _} ->
             Path2 = nkdomain_util:make_path(Domain, Type, ObjName),
-            case nkdomain_lib:find(Path2) of
+            case nkdomain_db:find(Path2) of
                 {error, object_not_found} ->
                     Id2 = Id#obj_id_ext{path=Path2, obj_name=ObjName},
                     Update = #{

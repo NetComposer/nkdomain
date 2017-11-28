@@ -47,12 +47,12 @@
 
 %% @private
 find() ->
-    nkdomain_domain_obj:search(<<"root">>, #{filters=>#{type=>?DOMAIN_MAIL_PROVIDER}}).
+    nkdomain:get_paths_type(<<"root">>, ?DOMAIN_MAIL_PROVIDER).
 
 
 %% @private
 delete_all() ->
-    nkdomain:delete_path_type(<<"root">>, ?DOMAIN_MAIL_PROVIDER).
+    nkdomain:remove_path_type(<<"root">>, ?DOMAIN_MAIL_PROVIDER).
 
 
 

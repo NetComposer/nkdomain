@@ -203,10 +203,7 @@ check_raw_token(Token) ->
 search({ok, Total, List}) ->
     Data = #{
         total => Total,
-        data =>
-            lists:map(
-                fun({Type, ObjId, Path}) -> #{type=>Type, obj_id=>ObjId, path=>Path} end,
-                List)
+        data => List
     },
     {ok, Data};
 

@@ -167,7 +167,7 @@ selected_type(Type, Path, Updates, Session) ->
 
 %% @doc
 selected_obj(ObjId, Updates, Session) ->
-    case nkdomain_lib:find(ObjId) of
+    case nkdomain_db:find(ObjId) of
         #obj_id_ext{type=Type, path=Path} ->
             selected_obj(ObjId, Type, Path, Updates, Session);
         {error, Error} ->
@@ -183,7 +183,7 @@ selected_obj(_ObjId, ?DOMAIN_DOMAIN, ObjPath, Updates, Session) ->
 selected_obj(ObjId, Type, ObjPath, Updates, Session) ->
     case nkdomain_admin_util:get_obj_view_mod(Type, Session) of
         {ok, Mod} ->
-            case nkdomain_lib:load(ObjId) of
+            case nkdomain_db:load(ObjId) of
                 #obj_id_ext{}=ObjIdExt ->
                     {Detail, Session2} = Mod:view(ObjIdExt, Session),
                     {Updates3, Session3} = nkadmin_util:update_detail(ObjPath, Detail, Updates, Session2),
