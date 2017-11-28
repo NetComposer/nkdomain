@@ -24,7 +24,7 @@
 -behaviour(application).
 
 -export([start/0, start/1, start/2, stop/1, maybe_start_nkroot/0, reload/0]).
--export([get/1, put/2, del/1]).
+-export([get/1, get/2, put/2, del/1]).
 -export([register_types/0]).
 
 -include("nkdomain.hrl").

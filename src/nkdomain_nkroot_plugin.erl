@@ -84,6 +84,7 @@ plugin_listen(_Config, #{id:=_SrvId}) ->
 %% Called from nkdomain_nkroot_callbacks:plugin_syntax/0
 syntax() ->
     #{
+        server_vsn => binary,
         start_nkroot => boolean,
         load_schema => boolean,
         listen_ip => host,
@@ -102,6 +103,7 @@ syntax() ->
         default_mail_provider => binary,
         start_services => {list, binary},
         '__defaults' => #{
+            server_vsn => <<"v0.0.3">>,
             start_nkroot => false,
             load_schema => false,
             listen_ip => <<"127.0.0.1">>,
