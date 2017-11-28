@@ -38,6 +38,7 @@
 -export([object_db_init/1, object_db_read/1, object_db_save/1, object_db_delete/1]).
 -export([object_db_find_obj/2, object_db_search_objs/3, object_db_agg_objs/3,
          object_db_iterate_objs/5, object_db_get_filter/3, object_db_get_agg/3, object_db_clean/0]).
+-export([object_db_event_send/1]).
 -export([service_api_syntax/3, service_api_allow/2, service_api_cmd/2]).
 -export([api_server_http_auth/3, api_server_reg_down/4]).
 -export([nkservice_rest_http/4]).
@@ -910,6 +911,19 @@ object_db_get_filter(Module, Type, Spec) ->
 object_db_get_agg(Module, Type, Spec) ->
     ?CALL_NKROOT(object_db_get_agg, [Module, Type, Spec]).
 
+
+
+%% ===================================================================
+%% External events
+%%
+%% ===================================================================
+
+%% @doc Called when an event is sent to nkevent
+-spec object_db_event_send(#nkevent{}) ->
+    ok.
+
+object_db_event_send(#nkevent{}) ->
+    ok.
 
 
 %% ===================================================================

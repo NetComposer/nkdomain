@@ -23,7 +23,8 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([error/1]).
-
+-export([object_db_init/1, object_db_event_send/1]).
+-export([object_db_event_search/1]).
 
 -include("nkdomain.hrl").
 -include_lib("nkservice/include/nkservice.hrl").
@@ -44,7 +45,69 @@ error(_) -> continue.
 
 
 
+%% ===================================================================
+%% Offered callbacks
+%% ===================================================================
+
+
+object_db_event_search(Spec) ->
+    case nkdomain_event_es_util:get_opts() of
+        {ok, EsOpts} ->
+            nkdomain_event_es_util:db_search(Spec, EsOpts);
+        _ ->
+            continue
+    end.
+
+
 
 %% ===================================================================
 %% Implemented callbacks
 %% ===================================================================
+
+%% @doc Initializes database
+-spec object_db_init(nkservice:state()) ->
+    {ok, nkservice:state()} | {error, term()}.
+
+object_db_init(State) ->
+    case nkdomain_event_es_util:get_index_opts() of
+        {ok, IndexOpts, EsOpts} ->
+            case nkdomain_event_es_util:db_init(IndexOpts, EsOpts) of
+                ok ->
+                    {ok, State};
+                {error, Error} ->
+                    {error, {object_db_init, Error}}
+            end;
+        _ ->
+            continue
+    end.
+
+
+%% @doc Sends an event to DB
+-spec object_db_event_send(nkevent:event()) ->
+    ok | continue.
+
+object_db_event_send(Event) ->
+    case nkdomain_event_es_util:get_opts() of
+        {ok, EsOpts} ->
+            spawn_link(
+                fun() ->
+                    case nkdomain_event_es_util:db_save(Event, EsOpts) of
+                        {ok, _EventId, _Meta} ->
+                            % ?LLOG(info, "sent event ~s ~p", [EventId, Meta]),
+                            ok;
+                        {error, Error} ->
+                            ?LLOG(notice, "could not send event: ~p", [Error]),
+                            ok
+                    end
+                end),
+            ok;
+        _ ->
+            continue
+    end.
+
+
+
+
+%%%% @private
+%%to_bin(T) when is_binary(T)-> T;
+%%to_bin(T) -> nklib_util:to_binary(T).

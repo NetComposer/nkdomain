@@ -116,6 +116,7 @@ send_event(EvType, ObjId, ObjPath, Body, #obj_state{id=#obj_id_ext{type=Type}}=S
     },
     ?DEBUG("event sent to listeners: ~p", [lager:pr(Event, ?MODULE)], State),
     send_session_event(Event, State),
+    ?CALL_NKROOT(object_db_event_send, [Event]),
     nkevent:send(Event),
     {ok, State}.
 

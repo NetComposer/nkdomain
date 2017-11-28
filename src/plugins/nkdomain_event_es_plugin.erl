@@ -37,6 +37,7 @@
 %% Plugin Callbacks
 %% ===================================================================
 
+%% @private
 plugin_deps() ->
     [nkdomain_store_es].
 
@@ -44,22 +45,61 @@ plugin_deps() ->
 %% Other plugins can also parse db_clusters
 plugin_syntax() ->
     #{
-        nkdomain_event_es => #{
-            db_store => binary,
-            '__mandatory' => [db_store]
+        nkdomain => #{
+            event_store => binary,
+            db_clusters => {list, #{
+                id => binary,
+                class => atom,
+                url => binary,
+                pool_size => {integer, 1, none},
+                pool_overflow => {integer, 1, none},
+                replicas => {integer, 1, 5},
+                database => binary,
+                '__mandatory' => [class],
+                '__defaults' => #{id => <<"main">>}
+            }}
         }
     }.
 
 
-plugin_config(#{nkdomain_event_es:=NkDomain}=Config, _Service) ->
-    #{db_store:=DbStore} = NkDomain,
-    {ok, Config, {db_store, DbStore}};
+%% @private
+plugin_config(#{nkdomain:=#{event_store:=Store, db_clusters:=Clusters}}=Config, _Service) ->
+    case parse_clusters(Clusters, Store) of
+        {ok, IndexOpts, EsOpts} ->
+            {ok, Config, {nkdomain_event_es, IndexOpts, EsOpts}};
+        {error, Error} ->
+            {error, Error};
+        not_found ->
+            {ok, Config, {}}
+    end;
 
-plugin_config(_Config, _Service) ->
-    continue.
+plugin_config(Config, _Service) ->
+    {ok, Config, {}}.
 
 
 
 %% ===================================================================
 %% Internal
 %% ===================================================================
+
+
+%% @private
+parse_clusters([], _DbStore) ->
+    not_found;
+
+parse_clusters([#{id:=DbStore, class:=nkelastic}=Cluster|_], DbStore) ->
+    IndexOpts = #{
+        number_of_replicas => maps:get(replicas, Cluster, 1)
+    },
+    EsOpts = #{
+        srv_id => ?NKROOT,
+        cluster_id => DbStore,
+        index => maps:get(database, Cluster, <<"nkevents">>),
+        type => <<"events">>,
+        type_is_dynamic => true,
+        refresh => false
+    },
+    {ok, IndexOpts, EsOpts};
+
+parse_clusters([_Cluster|Rest], _DbStore) ->
+    parse_clusters(Rest, _DbStore).
