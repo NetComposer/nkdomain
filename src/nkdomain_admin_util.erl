@@ -207,6 +207,8 @@ get_agg_term(Field, Type, Path) ->
 
 %% @private
 do_get_agg(Field, Type, Path) ->
+    lager:error("NKLOG Field, Type, Path ~p", [{Field, Type, Path}]),
+
     Filter = case Type of
         <<>> -> #{};
         _ -> #{type => Type}

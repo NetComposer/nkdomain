@@ -109,12 +109,12 @@ element_action([?ADMIN_DETAIL_OBJ_VIEW, _Type, ObjId], disable, _Value, Updates,
     {ok, Updates2, Session2} = selected_obj(ObjId, Updates, Session),
     {ok, Updates2, Session2};
 
-element_action([?ADMIN_DETAIL_OBJ_VIEW, Type, ObjId], delete, _Value, Updates, #admin_session{domain_path=Path} = Session) ->
+element_action([?ADMIN_DETAIL_OBJ_VIEW, Type, ObjId], delete, _Value, Updates, #admin_session{base_path=Path} = Session) ->
     _ = type_view_delete([ObjId], Updates, Session),
     {ok, Updates2, Session2} = selected_type(Type, Path, Updates, Session),
     {ok, Updates2, Session2};
 
-element_action([?ADMIN_DETAIL_OBJ_VIEW, Type, ObjId], save, Value, Updates, #admin_session{domain_path=Path} = Session) ->
+element_action([?ADMIN_DETAIL_OBJ_VIEW, Type, ObjId], save, Value, Updates, #admin_session{base_path=Path} = Session) ->
     obj_view_save(Type, ObjId, Value, Session),
     {ok, Updates2, Session2} = selected_type(Type, Path, Updates, Session),
     {ok, Updates2, Session2};

@@ -112,9 +112,11 @@ element_action(Id, ElementId, Action, Value) ->
 get_data(Id, ElementId, Data) ->
     nkdomain_obj:sync_op(Id, {?MODULE, get_data, ElementId, Data}).
 
+
 %% @doc
 get_chart_data(Id, ElementId, Data) ->
         nkdomain_obj:sync_op(Id, {?MODULE, get_chart_data, ElementId, Data}).    
+
 
 %% @private
 find_all() ->
@@ -181,12 +183,12 @@ object_init(#obj_state{effective_srv_id=SrvId, domain_id=DomainId, id=Id, obj=Ob
     #obj_id_ext{obj_id=SessId} = Id,
     #{created_by:=UserId} = Obj,
     Session = #admin_session{
-        srv_id = SrvId,
         session_id = SessId,
-        http_auth_id = maps:get(http_auth_id, Meta, <<>>),
         domain_id = DomainId,
+        srv_id = SrvId,
         user_id = UserId,
-        language = maps:get(language, Meta, <<"en">>)
+        language = maps:get(language, Meta, <<"en">>),
+        http_auth_id = maps:get(http_auth_id, Meta, <<>>)
     },
     ok = nkdomain_user:register_session(UserId, DomainId, ?DOMAIN_ADMIN_SESSION, SessId, #{}),
     State2 = nkdomain_obj_util:link_to_session_server(?MODULE, State),
@@ -314,7 +316,7 @@ object_handle_info(_Info, _State) ->
 
 %% @private
 do_switch_domain(DomainId, Path, Url, #obj_state{session=Session}=State) ->
-    case nkdomain_db:aggs({type, DomainId, #{deep=>true}}) of
+    case nkdomain_db:aggs({types, DomainId, #{deep=>true}}) of
         {ok, _, TypeList} ->
             Url2 = case Url of
                 <<"#", U/binary>> -> U;
@@ -322,20 +324,20 @@ do_switch_domain(DomainId, Path, Url, #obj_state{session=Session}=State) ->
             end,
             Types = [Type || {Type, _Counter} <- TypeList],
             Session2 = Session#admin_session{
-                domain_id   = DomainId,
-                domain_path = Path,
-                url         = case Url2 of <<>> -> Path; _ -> Url2 end,
-                detail      = #{},
-                db_types    = Types,
-                resources   = [],
-                sessions    = #{},
+                domain_id = DomainId,
+                base_path = Path,
+                url = case Url2 of <<>> -> Path; _ -> Url2 end,
+                detail = #{},
+                db_types = Types,
+                resources = [],
+                sessions = #{},
                 object_tags = #{},
-                key_data    = #{},
-                special_urls= #{}
+                key_data = #{},
+                special_urls = #{}
             },
             case do_get_domain(Session2, State) of
                 {ok, Updates, #admin_session{}=Session3} ->
-                    #admin_session{domain_path=OldPath} = Session,
+                    #admin_session{base_path=OldPath} = Session,
                     Session4 = subscribe_domain(OldPath, Session3),
                     State4 = State#obj_state{session=Session4},
                     % io:format("UPDATES:\n\n~p\n", [Updates]),
@@ -918,7 +920,7 @@ find_url(<<"_id/", ObjId/binary>>, _Session) ->
 find_url(Url, Session) ->
     case nkadmin_util:get_special_url(Url, Session) of
         undefined ->
-            #admin_session{domain_path=Base} = Session,
+            #admin_session{base_path=Base} = Session,
             Url2 = nkdomain_util:append(Base, Url),
             case nkdomain_db:find(Url2) of
                 #obj_id_ext{obj_id=ObjId, type=Type, path=Path} ->
@@ -952,7 +954,7 @@ find_url_class(Url) ->
 
 %% @private
 %% TODO we should subscribe to type_counter only on my base (top) domain, and subscribe to any other object one-by-one
-subscribe_domain(OldPath, #admin_session{srv_id=SrvId, domain_path=NewPath, reg_pids=RegPids}=Session) ->
+subscribe_domain(OldPath, #admin_session{srv_id=SrvId, base_path=NewPath, reg_pids=RegPids}=Session) ->
     Types = [<<"created">>, <<"updated">>, <<"deleted">>, <<"type_counter">>],
     case OldPath of
         <<>> ->
@@ -967,19 +969,12 @@ subscribe_domain(OldPath, #admin_session{srv_id=SrvId, domain_path=NewPath, reg_
             nkevent:unreg(Reg)
     end,
     Reg2 = #{
-        srv_id => SrvId,
+        srv_id => ?NKROOT,
         class => ?DOMAIN_EVENT_CLASS,
         type => Types,
         domain => NewPath
     },
     {ok, Pids} = nkevent:reg(Reg2),
-    Reg2N = #{
-        srv_id => sipstorm_c4,
-        class => ?DOMAIN_EVENT_CLASS,
-        type => Types,
-        domain => NewPath
-    },
-    {ok, _} = nkevent:reg(Reg2N),
     RegPids2 = lists:foldl(
         fun(Pid, Acc) ->
             Objs = case maps:find(Pid, Acc) of
