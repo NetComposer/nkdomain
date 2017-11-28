@@ -39,7 +39,7 @@
 -export([enable/2, update/2, update_name/2, delete/1, send_info/3]).
 -export([get_roles/1, add_roles/3, remove_roles/3]).
 -export([get_types/1]).
--export([get_paths/1, get_paths_type/2, remove_path/1, remove_path_type/2]).
+-export([get_paths/1, get_paths_type/2, remove_path/1, remove_path_type/2, print_path_type/2]).
 -export([get_childs/1, get_childs_type/2, remove_with_childs/1]).
 -export([clean/0]).
 -export([print_fun/0, delete_fun/0]).
@@ -338,6 +338,11 @@ remove_path_type(Id, Type) ->
             {error, Error}
     end.
 
+%% @doc
+print_path_type(Id, Type) ->
+    nkdomain_db:iterate({paths, Id, #{type=>Type, deep=>true, sort=>path, get_deleted=>true}}, print_fun(), 0).
+
+
 
 %% @doc
 get_childs(Id) ->
@@ -364,7 +369,10 @@ remove_with_childs(Id) ->
     end.
 
 
-%% @private Performs a periodic cleanup
+
+
+
+        %% @private Performs a periodic cleanup
 -spec clean() ->
     {ok, map()} | {error, term()}.
 
@@ -378,14 +386,14 @@ clean() ->
 %% ===================================================================
 
 print_fun() ->
-    fun(#{obj_id:=ObjId, path:=Path}, Acc) ->
+    fun(#{<<"obj_id">>:=ObjId, <<"path">>:=Path}, Acc) ->
         lager:info("Object ~s (~s)", [Path, ObjId]),
         {ok, Acc+1}
     end.
 
 
 delete_fun() ->
-    fun(#{obj_id:=ObjId, path:=Path}, Acc) ->
+    fun(#{<<"obj_id">>:=ObjId, <<"path">>:=Path}, Acc) ->
         case nkdomain_db:hard_delete(ObjId) of
             ok ->
                 lager:info("Deleted object ~s (~s)", [Path, ObjId]),
