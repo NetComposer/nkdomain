@@ -96,6 +96,7 @@ parse_clusters([#{class:=nkelastic}=Data|Rest], DbStore, Config) ->
                 cluster_id => Id,
                 index => Database,
                 type => <<"objs">>,
+                type_is_dynamic => strict,
                 refresh => true
             },
             % nkdomain_store will be captured by nkdomain and generate cache

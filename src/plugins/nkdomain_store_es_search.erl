@@ -520,7 +520,7 @@ do_search(Spec, EsOpts) ->
                         end,
                         List),
                     {ok, N, Data, Aggs, Meta};
-                {error, search_error} ->
+                {error, {search_error, _}} ->
                     {ok, 0, [], #{}, #{error=>search_error}};
                 {error, Error} ->
                     ?LLOG(notice, "Error calling search (~p): ~p", [Query, Error]),

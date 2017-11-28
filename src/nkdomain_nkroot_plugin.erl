@@ -95,6 +95,8 @@ syntax() ->
         start_rest => boolean,
         db_clusters => {list, map},
         db_store => binary,
+        event_store => binary,
+        log_store => binary,
         default_store_id => binary,
         default_file_store => binary,
         default_mail_provider => binary,

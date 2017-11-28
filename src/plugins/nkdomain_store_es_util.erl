@@ -27,6 +27,7 @@ nkdomain_store_es_util).
 -export([child_filter/2, get_obj_id/1, get_path/1]).
 -export([base_mappings/0, unparse/1]).
 -export([db_init/2, normalize/1, normalize_multi/1]).
+-export([print_index/0, put1/0, get1/0]).
 
 -define(LLOG(Type, Txt, Args),
     lager:Type("NkDOMAIN Store ES "++Txt, Args)).
@@ -133,6 +134,37 @@ get_path(Id) ->
     end.
 
 
+%% @private
+print_index() ->
+    {ok, E} = get_opts(),
+    {ok, I, _} = nkelastic:get_index(E),
+    io:format("\n~s\n", [nklib_json:encode_pretty(I)]).
+
+
+put1() ->
+    {ok, E} = get_opts(),
+    {ok, O, _} = nkelastic:get(<<"admin">>, E),
+    O2 = O#{<<"fieldXX">> => <<"test">>},
+    % Since mapping for global fields is 'strict' it should fail
+    {error, {strict_mapping, _}} = nkelastic:put(<<"admin">>, O2, E),
+    % Mapping for 'user' fields is 'false' so it is accepted but not mapped
+    #{<<"user">> := U1} = O,
+    U2 = U1#{<<"fieldYY">> => 1},
+    {ok, _} = nkelastic:put(<<"admin">>, O#{<<"user">>:=U2}, E),
+    U3 = U1#{<<"fieldYY">> =>  <<"test">>},
+    {ok, _} = nkelastic:put(<<"admin">>, O#{<<"user">>:=U3}, E),
+    U4 = maps:remove(<<"fieldYY">>, U3),
+    {ok, _} = nkelastic:put(<<"admin">>, O#{<<"user">>:=U4}, E),
+    ok.
+
+
+get1() ->
+    {ok, E} = get_opts(),
+    nkelastic:get(<<"admin">>, E).
+
+
+
+
 
 %% ===================================================================
 %% Syntax
@@ -159,7 +191,7 @@ base_mappings() ->
         active => #{type => boolean},
         expires_time => #{type => date},
         is_deleted => #{type => boolean},
-        deleted_time => #{type => long},
+        deleted_time => #{type => date},
         roles => #{
             type => object,
             dynamic => false,
@@ -273,12 +305,11 @@ db_init(IndexOpts, EsOpts) ->
 
 
 %% @doc
-%% TODO: each service could have their own type
 db_init_mappings(EsOpts) ->
     Modules = nkdomain_reg:get_all_type_modules(),
     Base = base_mappings(),
     Mappings = do_get_mappings(Modules, Base),
-    %% io:format("ES Mappings\n~s\n\n", [nklib_json:encode_pretty(Mappings)]),
+    % io:format("ES Mappings\n~s\n\n", [nklib_json:encode_pretty(Mappings)]),
     case nkelastic:add_mapping(Mappings, EsOpts) of
         {ok, _} ->
             db_init_root(EsOpts);
