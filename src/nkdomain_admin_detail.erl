@@ -378,6 +378,31 @@ get_dash_detail_test() ->
                                     dynamic => false
                                 })
                             ]
+                        }, #{
+                            height => 300,
+                            type => <<"clean">>,
+                            cols => [
+                                get_list_chart_json(#{
+                                    id => <<"top_users_list_chart">>,
+                                    %template => <<"#id#. #fullname# (#username#) #messages#">>,
+                                    template => <<"<span class='chart_list_rank'>#id#. </span><span class='chart_list_element'>#fullname# (#username#)</><span class='chart_list_number'>#messages#</span>">>,
+                                    header => #{
+                                        text => <<"Top 5 Users (messages)">>,
+                                        css => <<"chart_header">>
+                                    },
+                                    dynamic => true
+                                }),
+                                get_list_chart_json(#{
+                                    id => <<"top_channels_list_chart">>,
+                                    %template => <<"#id#. ##name# #messages#">>,
+                                    template => <<"<span class='chart_list_rank'>#id#. </span><span class='chart_list_element'>##name#</><span class='chart_list_number'>#messages#</span>">>,
+                                    header => #{
+                                        text => <<"Top 5 Channels (messages)">>,
+                                        css => <<"chart_header">>
+                                    },
+                                    dynamic => true
+                                })
+                            ]
                         }]
                     }
                 ]
@@ -745,6 +770,38 @@ get_series_chart_json(#{id := ChartId, x := X, y := Y}=Opts) ->
         dynamic => IsDynamic
     },
     nkadmin_webix_chart:chart(Spec2, #{}).
+
+get_list_chart_json(#{id := ChartId}=Opts) ->
+    Autoheight = maps:get(autoheight, Opts, true),
+    Data = maps:get(data, Opts, <<>>),
+    Header = maps:get(header, Opts, #{}),
+    HeaderValue = maps:get(text, Header, <<>>),
+    HeaderCss = maps:get(css, Header, <<>>),
+    IsDynamic = maps:get(dynamic, Opts, false),
+    Select = maps:get(select, Opts, false),
+    Template = maps:get(template, Opts, <<"template">>),
+    Spec = case HeaderValue of
+        <<>> ->
+            #{};
+        _ ->
+            #{
+                header => #{
+                    text => HeaderValue,
+                    css => HeaderCss
+                }
+            }
+    end,
+    Spec2 = Spec#{
+        chart_id => ChartId,
+        chart_type => <<"list">>,
+        is_subchart => true,
+        autoheight => Autoheight,
+        select => Select,
+        template => Template,
+        data => Data,
+        dynamic => IsDynamic
+    },
+    nkadmin_webix_chart:chart(Spec2,#{}).
 
 get_chart_json(#{id := ChartId, x := X, y := Y}=Opts) ->
     Type = maps:get(type, Opts, <<"line">>),
