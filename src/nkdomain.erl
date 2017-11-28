@@ -44,7 +44,7 @@
 -export([clean/0]).
 -export([print_fun/0, delete_fun/0]).
 -export_type([obj_id/0, obj_name/0, obj/0, path/0, id/0, type/0, role/0, role_spec/0]).
--export_type([timestamp/0, search_type/0, agg_type/0]).
+-export_type([timestamp/0, search_type/0, search_objs_opts/0, agg_type/0]).
 
 -include("nkdomain.hrl").
 
@@ -73,6 +73,18 @@
 -type obj() :: map().
 
 
+-type search_objs_opts() ::
+    #{
+        from => integer(),
+        size => integer(),
+        fields => [atom()|binary()],        % Default obj_id
+        sort => binary() | [binary()],      % "asc:..." or "desc:..."
+        get_deleted => boolean(),           % Default false
+        type => nkdomain:type(),            % Filter by type
+        base => nkdomain:path()             % Filter by path
+    }.
+
+
 % Internal search specification
 -type search_type() ::
     {graphql, Filters::term(), #{from=>integer(), size=>integer(), sort=>[binary()]}} |
@@ -87,7 +99,8 @@
 
 % Internal search specification
 -type agg_type() ::
-    {types, nkdomain:id(), #{get_deleted=>boolean(), deep=>boolean(), size=>integer()}}.
+    {types, nkdomain:id(), #{get_deleted=>boolean(), deep=>boolean(), size=>integer()}} |
+    {values, nkdomain:id(), #{get_deleted=>boolean(), deep=>boolean(), size=>integer()}}.
 
 
 -type timestamp() :: nklib_util:m_timestamp().

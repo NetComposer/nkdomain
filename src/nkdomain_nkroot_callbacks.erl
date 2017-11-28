@@ -324,25 +324,17 @@ object_db_get_filter(Backend, Type, QueryType) ->
     {ok, term()} | {error, term()}.
 
 object_db_get_agg(nkelastic, core, {types, Domain, Opts}) ->
-    Filters = case Opts of
-        #{deep:=true} ->
-            case nkdomain_store_es_util:get_path(Domain) of
-                {ok, Path} ->
-                    {ok, [{path, subdir, Path}]};
-                {error, Error} ->
-                    {error, Error}
-            end;
-        _ ->
-            case nkdomain_store_es_util:get_obj_id(Domain) of
-                {ok, ObjId} ->
-                    {ok, [{domain_id, eq, ObjId}]};
-                {error, Error} ->
-                    {error, Error}
-            end
-    end,
-    case Filters of
-        {ok, FilterList} ->
-            {ok, {FilterList, <<"type">>, Opts}};
+    case nkdomain_store_es_util:child_filter(Domain, Opts) of
+        {ok, Filters} ->
+            {ok, {Filters, <<"type">>, Opts}};
+        {error, Error2} ->
+            {error, Error2}
+    end;
+
+object_db_get_agg(nkelastic, core, {values, Domain, Field, Opts}) ->
+    case nkdomain_store_es_util:child_filter(Domain, Opts) of
+        {ok, Filters} ->
+            {ok, {Filters, to_bin(Field), Opts}};
         {error, Error2} ->
             {error, Error2}
     end;

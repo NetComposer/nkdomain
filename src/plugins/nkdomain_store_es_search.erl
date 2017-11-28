@@ -91,11 +91,13 @@ search(Spec, EsOpts) ->
         size => integer(),
         fields => [atom()|binary()],
         sort => nkelastic_search:sort_spec(),
-        get_deleted=>boolean()
+        get_deleted => boolean(),
+        type => nkdomain:type(),
+        base => nkdomain:path()
     }.
 
 %% @doc Generic search
--spec search_objs(nkelastic_search:filter_list(),search_objs_opts(), nkelastic:opts()) ->
+-spec search_objs(nkelastic_search:filter_list(), search_objs_opts(), nkelastic:opts()) ->
     {ok, integer(), [RawObj::map()], meta()} | {error, term()}.
 
 search_objs(Filters, Opts, EsOpts) ->
@@ -105,15 +107,26 @@ search_objs(Filters, Opts, EsOpts) ->
         _ ->
             [{'not', {is_deleted, eq, true}}|Filters]
     end,
+    Filters3 = case Opts of
+        #{type:=Type} ->
+            [{type, eq, to_bin(Type)}|Filters2];
+        _ ->
+            Filters2
+    end,
+    Filters4 = case Opts of
+        #{base:=Path} ->
+            [{path, subdir, to_bin(Path)}|Filters3];
+        _ ->
+            Filters3
+    end,
     Spec1 = maps:with([from, size, sort, fields], Opts),
-    Spec2 = Spec1#{filter_list => Filters2},
+    Spec2 = Spec1#{filter_list => Filters4},
     do_search_objs(Spec2, EsOpts).
 
 
 
 %% @doc Finds types
--spec search_agg_objs(nkelastic_search:filter_list(), binary(),
-                      #{size=>integer(), get_deleted=>boolean()}, nkelastic:opts()) ->
+-spec search_agg_objs(nkelastic_search:filter_list(), binary(), search_objs_opts(), nkelastic:opts()) ->
     {ok, integer(), [{binary(), integer()}], meta()} | {error, term()}.
 
 search_agg_objs(Filters, Field, Opts, EsOpts) ->
@@ -123,9 +136,21 @@ search_agg_objs(Filters, Field, Opts, EsOpts) ->
         _ ->
             [{'not', {is_deleted, eq, true}}|Filters]
     end,
+    Filters3 = case Opts of
+        #{type:=Type} ->
+            [{type, eq, to_bin(Type)}|Filters2];
+        _ ->
+            Filters2
+    end,
+    Filters4 = case Opts of
+        #{base:=Path} ->
+            [{path, subdir, to_bin(Path)}|Filters3];
+        _ ->
+            Filters3
+    end,
     Size = maps:get(size, Opts, 100),
     Spec = #{
-        filter_list => Filters2,
+        filter_list => Filters4,
         aggs => #{
             my_fields => #{
                 terms => #{
@@ -614,6 +639,6 @@ do_search(Spec, EsOpts) ->
 
 
 
-%%%% @private
-%%to_bin(T) when is_binary(T)-> T;
-%%to_bin(T) -> nklib_util:to_binary(T).
+%% @private
+to_bin(T) when is_binary(T)-> T;
+to_bin(T) -> nklib_util:to_binary(T).

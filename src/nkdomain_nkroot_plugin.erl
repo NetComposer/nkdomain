@@ -155,8 +155,8 @@ config(Config, _Service) ->
         true ->
             Config2#{
                 nkadmin => #{
-                    webserver_url => <<BaseHttp/binary, "/_admin">>,
-                    api_url => <<BaseWs/binary, "/_admin/_ws">>
+                    webserver_url => <<BaseHttp/binary, "/_admin">>
+                    %api_url => <<BaseWs/binary, "/_admin/_api/_ws">>
                 }
             };
         false ->
