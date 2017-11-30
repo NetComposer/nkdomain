@@ -24,8 +24,6 @@
 -behavior(nkdomain_obj).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([find_path/1, find_path/2, unload_childs/1, get_childs_type/2]).
--export([get_all_counters/1, get_counter/2, make_path/3]).
 -export([object_execute/5, object_schema/1, object_query/3, object_mutation/3]).
 -export([object_info/0, object_admin_info/0, object_parse/2, object_es_mapping/0,
          object_api_syntax/2, object_send_event/2, object_api_cmd/2]).
@@ -40,144 +38,9 @@
 -type events() ::
     {obj_loaded, nkdomain:type(), nkdomain:obj_id(), nkdomain:name(), pid()} |
     {obj_unloaded, nkdomain:type(), nkdomain:obj_id()} |
-    {type_counter, nkdomain:type(), integer()}.
-
-
-%% ===================================================================
-%% Public
-%% ===================================================================
-
-
-%%%% @doc
-%%search(Id, Spec) ->
-%%    case nkdomain_db:find(Id) of
-%%        #obj_id_ext{obj_id=ObjId} ->
-%%            Filters1 = maps:get(filters, Spec, #{}),
-%%            Filters2 = Filters1#{domain_id=>ObjId},
-%%            Spec2 = maps:remove(id, Spec#{filters=>Filters2}),
-%%            nkdomain:search(Spec2);
-%%        {error, Error} ->
-%%            {error, Error}
-%%    end.
-
-
-%%%% @doc
-%%search_all(Id, Spec) ->
-%%    case nkdomain_db:find(Id) of
-%%        #obj_id_ext{path=Path} ->
-%%            Filters1 = maps:get(filters, Spec, #{}),
-%%            Filters2 = Filters1#{path=><<"childs_of:", Path/binary>>},
-%%            Spec2 = maps:remove(id, Spec#{filters=>Filters2}),
-%%            nkdomain:search(Spec2);
-%%        {error, Error} ->
-%%            {error, Error}
-%%    end.
-
-
-%%%% @doc
-%%search_type(Id, Spec) ->
-%%    case nkdomain_lib:find(Id) of
-%%        #obj_id_ext{obj_id=ObjId} ->
-%%            ?CALL_NKROOT(object_db_search_types, [ObjId, Spec]);
-%%        {error, Error} ->
-%%            {error, Error}
-%%    end.
-
-
-%%%% @doc
-%%search_all_types(Id, Spec) ->
-%%    case nkdomain_lib:find(Id) of
-%%        #obj_id_ext{path=Path} ->
-%%            ?CALL_NKROOT(object_db_search_all_types, [Path, Spec]);
-%%        {error, Error} ->
-%%            {error, Error}
-%%    end.
-
-
-%%%% @doc
-%%search_childs(Id, Spec) ->
-%%    case nkdomain_lib:find(Id) of
-%%        #obj_id_ext{obj_id=ObjId} ->
-%%            ?CALL_NKROOT(object_db_search_childs, [ObjId, Spec]);
-%%        {error, Error} ->
-%%            {error, Error}
-%%    end.
-
-
-%%%% @doc
-%%search_all_childs(Id, Spec) ->
-%%    case nkdomain_lib:find(Id) of
-%%        #obj_id_ext{path=Path} ->
-%%            ?CALL_NKROOT(object_db_search_all_childs, [Path, Spec]);
-%%        {error, Error} ->
-%%            {error, Error}
-%%    end.
-
-
-%% @doc Finds a child object with this path
-%% Must be send to a domain that is part of the path (or root to be sure)
--spec find_path(binary()) ->
-    {ok, nkdomain:type(), nkdomain:obj_id(), pid()} | {error, term()}.
-
-find_path(Path) ->
-    find_path(<<"root">>, Path).
-
-
-%% @doc Finds a child object with this path
-%% Must be send to a domain that is part of the path (or root to be sure)
--spec find_path(nkdomain:obj_id(), binary()) ->
-    {ok, nkdomain:type(), nkdomain:obj_id(), pid()} | {error, term()}.
-
-find_path(Id, Path) ->
-    case nkdomain_util:get_parts(Path) of
-        {ok, Base, Type, ObjName} ->
-            nkdomain_obj:sync_op(Id, {?MODULE, find_path, Base, Type, ObjName});
-        {error, Error} ->
-            {error, Error}
-    end.
-
-
-%% @doc
-get_childs_type(Id, Type) ->
-    nkdomain_obj:sync_op(Id, {?MODULE, get_childs_type, nklib_util:to_binary(Type)}).
-
-
-%% @doc
-get_counter(Id, Type) ->
-    nkdomain_obj:sync_op(Id, {?MODULE, get_counter, nklib_util:to_binary(Type)}).
-
-
-%% @doc
-get_all_counters(Id) ->
-    nkdomain_obj:sync_op(Id, {?MODULE, get_all_counters}).
-
-
-%% @doc
-unload_childs(Id) ->
-    nkdomain_obj:sync_op(Id, {?MODULE, unload_childs}).
-
-
-
-%% @doc Makes a full path form a domain and a obj_name
--spec make_path(nkdomain:id(), nkdomain:type(), binary()) ->
-    {ok, nkdomain:path()} | {error, term()}.
-
-make_path(Id, Type, Name) ->
-    case nkdomain_db:find(Id) of
-        #obj_id_ext{type=?DOMAIN_DOMAIN, path=Path} ->
-            Class = nkdomain_util:class(Type),
-            Path2 = nkdomain_util:append(Path, Class),
-            Name2 = nkdomain_util:name(Name),
-            Path3 = nkdomain_util:append(Path2, Name2),
-            {ok, Path3};
-        {error, object_not_found} ->
-            {error, domain_not_found};
-        {error, Error} ->
-            {error, Error}
-    end.
-
-
-
+    {type_counter, nkdomain:type(), integer()} |
+    {config_updated, Key::binary(), Val::map()} |
+    {default_updated, Key::binary(), Val::map()}.
 
 
 %% ===================================================================
@@ -234,14 +97,17 @@ object_mutation(MutationName, Params, Ctx) ->
 %% @private
 object_es_mapping() ->
     #{
-        defaults => #{enabled => false}
+        defaults => #{enabled => false},
+        configs => #{enabled => false}
     }.
 
 
 %% @private
 object_parse(_Mode, _Obj) ->
     #{
-        defaults => map
+        defaults => map,
+        configs => map,
+        '__defaults' => #{defaults => #{}, confif => #{}}
     }.
 
 
@@ -299,80 +165,18 @@ object_sync_op({nkdomain_reg_obj, ObjIdExt}, _From, #obj_state{id=Id, effective_
             {reply, {error, object_path_invalid}, State}
     end;
 
-object_sync_op({?MODULE, find_path, <<>>, ?DOMAIN_DOMAIN, <<>>}, _From,
-                #obj_state{id=#obj_id_ext{obj_id = <<"root">>, type = ?DOMAIN_DOMAIN}}=State) ->
-    {reply, {ok, ?DOMAIN_DOMAIN, <<"root">>, self()}, State};
-
-object_sync_op({?MODULE, find_path, Base, Type, ObjName}, From, State) ->
-    case find_obj(Base, Type, ObjName, State) of
-        {ok, ObjId, Pid} ->
-            {reply, {ok, Type, ObjId, Pid}, State};
-        {subdomain, Pid} ->
-            nkdomain_obj:async_op(Pid, {?MODULE, find_path, Base, Type, ObjName, From}),
-            {noreply, State};
-        {error, Error} ->
-            {reply, {error, Error}, State}
-    end;
-
-object_sync_op({?MODULE, unload_childs}, _From, State) ->
-    #obj_state{id=#obj_id_ext{path=Path}, session=#session{obj_ids=Objs}} = State,
-    ?LLOG(notice, "unloading childs at ~s", [Path], State),
-    lists:foreach(
-        fun({_ObjId, #obj_id_ext{type=Type, path=ObjPath, pid=Pid}}) ->
-            case Type of
-                ?DOMAIN_DOMAIN ->
-                    ?LLOG(notice, "unloading childs of ~s", [ObjPath], State),
-                    unload_childs(Pid);
-               _ ->
-                   ok
-            end,
-            ?LLOG(notice, "unloading ~s", [Path], State),
-            nkdomain_obj:async_op(Pid, {unload, normal})
-        end,
-        maps:to_list(Objs)),
-    {reply, ok, State};
-
-object_sync_op({?MODULE, get_childs_type, Type}, _From, State) ->
-    #obj_state{session=#session{obj_types=ObjTypes}} = State,
-    ObjNames = maps:get(Type, ObjTypes, #{}),
-    {reply, maps:values(ObjNames), State};
-
-object_sync_op({?MODULE, get_all_counters}, _From, State) ->
-    Value = do_get_all_counters(State),
-    {reply, {ok, Value}, State};
-
-object_sync_op({?MODULE, get_counter, Type}, _From, State) ->
-    Value = get_type_counter(Type, State),
-    {reply, {ok, Value}, State};
+object_sync_op({?MODULE, Op}, From, State) ->
+    sync_op(Op, From, State);
 
 object_sync_op(_Op, _From, _State) ->
     continue.
 
 
 %% @private
-object_async_op({?MODULE, find_path, Base, Type, ObjName, From}, State) ->
-    case find_obj(Base, Type, ObjName, State) of
-        {ok, ObjId, Pid} ->
-            gen_server:reply(From, {ok, Type, ObjId, Pid});
-        {subdomain, Pid} ->
-            nkdomain_obj:async_op(Pid, {?MODULE, find_path, Base, Type, ObjName, From});
-        {error, Error} ->
-            gen_server:reply(From, {error, Error})
-    end,
-    {noreply, State};
+object_async_op({?MODULE, Op}, State) ->
+    async_op(Op, State);
 
-object_async_op({?MODULE, child_counter, ChildDomain, Type, Counter}, State) ->
-    #obj_state{session=Session} = State,
-    #session{counters=Counters} = Session,
-    TypeCounters1 = maps:get(Type, Counters, #{}),
-    TypeCounters2 = TypeCounters1#{ChildDomain => Counter},
-    Counters2 = Counters#{Type => TypeCounters2},
-    Session2 = Session#session{counters=Counters2},
-    State2 = State#obj_state{session=Session2},
-    State3 = send_counter(Type, State2),
-    {noreply, State3};
-
-object_async_op(_Op,  _State) ->
+object_async_op(_Op, _State) ->
     continue.
 
 
@@ -426,6 +230,109 @@ object_handle_info(_Info, _State) ->
 %% ===================================================================
 %% Internal
 %% ===================================================================
+
+%% @private
+sync_op({get_config, Key}, _From, #obj_state{obj=#{?DOMAIN_DOMAIN:=Domain}}=State) ->
+    Key2 = nklib_util:to_binary(Key),
+    Configs = maps:get(configs, Domain, #{}),
+    {reply, {ok, maps:get(Key2, Configs, #{})}, State};
+
+sync_op({set_config, Key, Val}, _From, #obj_state{obj=#{?DOMAIN_DOMAIN:=Domain}=Obj}=State) ->
+    Key2 = nklib_util:to_binary(Key),
+    Configs1 = maps:get(configs, Domain, #{}),
+    Configs2 = Configs1#{Key2 => Val},
+    Domain2 = Domain#{configs => Configs2},
+    Obj2 = ?ADD_TO_OBJ(?DOMAIN_DOMAIN, Domain2, Obj),
+    State2 = State#obj_state{obj=Obj2},
+    State3 = do_event({config_updated, Key, Val}, State2),
+    {reply_and_save, ok, State3};
+
+sync_op({get_default, Key}, _From, #obj_state{obj=#{?DOMAIN_DOMAIN:=Domain}}=State) ->
+    Key2 = nklib_util:to_binary(Key),
+    Configs = maps:get(defaults, Domain, #{}),
+    {reply, {ok, maps:get(Key2, Configs, #{})}, State};
+
+sync_op({set_default, Key, Val}, _From, #obj_state{obj=#{?DOMAIN_DOMAIN:=Domain}=Obj}=State) ->
+    Key2 = nklib_util:to_binary(Key),
+    Configs1 = maps:get(defaults, Domain, #{}),
+    Configs2 = Configs1#{Key2 => Val},
+    Domain2 = Domain#{defaults => Configs2},
+    Obj2 = ?ADD_TO_OBJ(?DOMAIN_DOMAIN, Domain2, Obj),
+    State2 = State#obj_state{obj=Obj2},
+    State3 = do_event({default_updated, Key, Val}, State2),
+    {reply_and_save, ok, State3};
+
+sync_op({find_path, <<>>, ?DOMAIN_DOMAIN, <<>>}, _From,
+               #obj_state{id=#obj_id_ext{obj_id = <<"root">>, type = ?DOMAIN_DOMAIN}}=State) ->
+    {reply, {ok, ?DOMAIN_DOMAIN, <<"root">>, self()}, State};
+
+sync_op({find_path, Base, Type, ObjName}, From, State) ->
+    case find_obj(Base, Type, ObjName, State) of
+        {ok, ObjId, Pid} ->
+            {reply, {ok, Type, ObjId, Pid}, State};
+        {subdomain, Pid} ->
+            nkdomain_obj:async_op(Pid, {?MODULE, find_path, Base, Type, ObjName, From}),
+            {noreply, State};
+        {error, Error} ->
+            {reply, {error, Error}, State}
+    end;
+
+sync_op(unload_childs, _From, State) ->
+    #obj_state{id=#obj_id_ext{path=Path}, session=#session{obj_ids=Objs}} = State,
+    ?LLOG(notice, "unloading childs at ~s", [Path], State),
+    lists:foreach(
+        fun({_ObjId, #obj_id_ext{type=Type, path=ObjPath, pid=Pid}}) ->
+            case Type of
+                ?DOMAIN_DOMAIN ->
+                    ?LLOG(notice, "unloading childs of ~s", [ObjPath], State),
+                    nkdomain_domain:unload_childs(Pid);
+                _ ->
+                    ok
+            end,
+            ?LLOG(notice, "unloading ~s", [Path], State),
+            nkdomain_obj:async_op(Pid, {unload, normal})
+        end,
+        maps:to_list(Objs)),
+    {reply, ok, State};
+
+sync_op({get_childs_type, Type}, _From, State) ->
+    #obj_state{session=#session{obj_types=ObjTypes}} = State,
+    ObjNames = maps:get(Type, ObjTypes, #{}),
+    {reply, maps:values(ObjNames), State};
+
+sync_op(get_all_counters, _From, State) ->
+    Value = do_get_all_counters(State),
+    {reply, {ok, Value}, State};
+
+sync_op({get_counter, Type}, _From, State) ->
+    Value = get_type_counter(Type, State),
+    {reply, {ok, Value}, State}.
+
+
+
+%% @private
+async_op({find_path, Base, Type, ObjName, From}, State) ->
+    case find_obj(Base, Type, ObjName, State) of
+        {ok, ObjId, Pid} ->
+            gen_server:reply(From, {ok, Type, ObjId, Pid});
+        {subdomain, Pid} ->
+            nkdomain_domain:async_op(Pid, {find_path, Base, Type, ObjName, From});
+        {error, Error} ->
+            gen_server:reply(From, {error, Error})
+    end,
+    {noreply, State};
+
+async_op({child_counter, ChildDomain, Type, Counter}, State) ->
+    #obj_state{session=Session} = State,
+    #session{counters=Counters} = Session,
+    TypeCounters1 = maps:get(Type, Counters, #{}),
+    TypeCounters2 = TypeCounters1#{ChildDomain => Counter},
+    Counters2 = Counters#{Type => TypeCounters2},
+    Session2 = Session#session{counters=Counters2},
+    State2 = State#obj_state{session=Session2},
+    State3 = send_counter(Type, State2),
+    {noreply, State3}.
+
 
 %% @private
 do_add_obj(ObjIdExt, #obj_state{session=Session}=State) ->
@@ -589,7 +496,8 @@ send_counter_parent(_Type, _Counter, #obj_state{id=#obj_id_ext{obj_id = <<"root"
     ok;
 
 send_counter_parent(Type, Counter, #obj_state{id=#obj_id_ext{obj_id=DomainId}, domain_pid=Pid}) when is_pid(Pid) ->
-    nkdomain_obj:async_op(Pid, {?MODULE, child_counter, DomainId, Type, Counter});
+    nkdomain_domain:async_op(Pid, {child_counter, DomainId, Type, Counter});
 
 send_counter_parent(_Type, _Counter, _State) ->
     ok.
+
