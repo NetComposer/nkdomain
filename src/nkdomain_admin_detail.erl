@@ -109,12 +109,12 @@ element_action([?ADMIN_DETAIL_OBJ_VIEW, _Type, ObjId], disable, _Value, Updates,
     {ok, Updates2, Session2} = selected_obj(ObjId, Updates, Session),
     {ok, Updates2, Session2};
 
-element_action([?ADMIN_DETAIL_OBJ_VIEW, Type, ObjId], delete, _Value, Updates, #admin_session{domain_path=Path} = Session) ->
+element_action([?ADMIN_DETAIL_OBJ_VIEW, Type, ObjId], delete, _Value, Updates, #admin_session{base_path=Path} = Session) ->
     _ = type_view_delete([ObjId], Updates, Session),
     {ok, Updates2, Session2} = selected_type(Type, Path, Updates, Session),
     {ok, Updates2, Session2};
 
-element_action([?ADMIN_DETAIL_OBJ_VIEW, Type, ObjId], save, Value, Updates, #admin_session{domain_path=Path} = Session) ->
+element_action([?ADMIN_DETAIL_OBJ_VIEW, Type, ObjId], save, Value, Updates, #admin_session{base_path=Path} = Session) ->
     obj_view_save(Type, ObjId, Value, Session),
     {ok, Updates2, Session2} = selected_type(Type, Path, Updates, Session),
     {ok, Updates2, Session2};
@@ -167,7 +167,7 @@ selected_type(Type, Path, Updates, Session) ->
 
 %% @doc
 selected_obj(ObjId, Updates, Session) ->
-    case nkdomain_lib:find(ObjId) of
+    case nkdomain_db:find(ObjId) of
         #obj_id_ext{type=Type, path=Path} ->
             selected_obj(ObjId, Type, Path, Updates, Session);
         {error, Error} ->
@@ -183,7 +183,7 @@ selected_obj(_ObjId, ?DOMAIN_DOMAIN, ObjPath, Updates, Session) ->
 selected_obj(ObjId, Type, ObjPath, Updates, Session) ->
     case nkdomain_admin_util:get_obj_view_mod(Type, Session) of
         {ok, Mod} ->
-            case nkdomain_lib:load(ObjId) of
+            case nkdomain_db:load(ObjId) of
                 #obj_id_ext{}=ObjIdExt ->
                     {Detail, Session2} = Mod:view(ObjIdExt, Session),
                     {Updates3, Session3} = nkadmin_util:update_detail(ObjPath, Detail, Updates, Session2),
@@ -376,6 +376,31 @@ get_dash_detail_test() ->
                                         value => <<"type">>
                                     },
                                     dynamic => false
+                                })
+                            ]
+                        }, #{
+                            height => 300,
+                            type => <<"clean">>,
+                            cols => [
+                                get_list_chart_json(#{
+                                    id => <<"top_users_list_chart">>,
+                                    %template => <<"#id#. #fullname# (#username#) #messages#">>,
+                                    template => <<"<span class='chart_list_rank'>#id#. </span><span class='chart_list_element'>#fullname# (#username#)</><span class='chart_list_number'>#messages#</span>">>,
+                                    header => #{
+                                        text => <<"Top 5 Users (messages)">>,
+                                        css => <<"chart_header">>
+                                    },
+                                    dynamic => true
+                                }),
+                                get_list_chart_json(#{
+                                    id => <<"top_channels_list_chart">>,
+                                    %template => <<"#id#. ##name# #messages#">>,
+                                    template => <<"<span class='chart_list_rank'>#id#. </span><span class='chart_list_element'>##name#</><span class='chart_list_number'>#messages#</span>">>,
+                                    header => #{
+                                        text => <<"Top 5 Channels (messages)">>,
+                                        css => <<"chart_header">>
+                                    },
+                                    dynamic => true
                                 })
                             ]
                         }]
@@ -745,6 +770,38 @@ get_series_chart_json(#{id := ChartId, x := X, y := Y}=Opts) ->
         dynamic => IsDynamic
     },
     nkadmin_webix_chart:chart(Spec2, #{}).
+
+get_list_chart_json(#{id := ChartId}=Opts) ->
+    Autoheight = maps:get(autoheight, Opts, true),
+    Data = maps:get(data, Opts, <<>>),
+    Header = maps:get(header, Opts, #{}),
+    HeaderValue = maps:get(text, Header, <<>>),
+    HeaderCss = maps:get(css, Header, <<>>),
+    IsDynamic = maps:get(dynamic, Opts, false),
+    Select = maps:get(select, Opts, false),
+    Template = maps:get(template, Opts, <<"template">>),
+    Spec = case HeaderValue of
+        <<>> ->
+            #{};
+        _ ->
+            #{
+                header => #{
+                    text => HeaderValue,
+                    css => HeaderCss
+                }
+            }
+    end,
+    Spec2 = Spec#{
+        chart_id => ChartId,
+        chart_type => <<"list">>,
+        is_subchart => true,
+        autoheight => Autoheight,
+        select => Select,
+        template => Template,
+        data => Data,
+        dynamic => IsDynamic
+    },
+    nkadmin_webix_chart:chart(Spec2,#{}).
 
 get_chart_json(#{id := ChartId, x := X, y := Y}=Opts) ->
     Type = maps:get(type, Opts, <<"line">>),

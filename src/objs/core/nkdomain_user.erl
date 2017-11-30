@@ -90,7 +90,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([create/1, auth/2, make_token/4, get_name/1, get_info/2]).
--export([find_childs/1, user_pass/1]).
+-export([user_pass/1]).
 -export([get_sessions/1, get_sessions/2, get_presence/3, update_presence/3]).
 -export([register_session/5, unregister_session/2, launch_session_notifications/2, set_status/4, get_status/3]).
 -export([add_token_notification/4, remove_token_notification/3]).
@@ -290,7 +290,7 @@ get_info(Id, Opts) ->
                           ok | {error, term()}.
 
 register_session(Id, Domain, Type, SessId, Opts) ->
-    case nkdomain_lib:find(Domain) of
+    case nkdomain_db:find(Domain) of
         #obj_id_ext{type=?DOMAIN_DOMAIN, path=DomainPath} ->
             sync_op(Id, {register_session, DomainPath, Type, SessId, Opts, self()});
         {error, Error} ->
@@ -324,7 +324,7 @@ get_sessions(UserId, Type) ->
     {ok, user_presence()} | {error, term()}.
 
 get_presence(Id, Type, Domain) ->
-    case nkdomain_lib:find(Domain) of
+    case nkdomain_db:find(Domain) of
         #obj_id_ext{path=DomainPath} ->
             sync_op(Id, {get_presence, Type, DomainPath});
         {error, Error} ->
@@ -349,7 +349,7 @@ set_status(Id, Srv, Domain, Status) when is_map(Status) ->
         undefined ->
             {error, invalid_service};
         SrvId ->
-            case nkdomain_lib:find(Domain) of
+            case nkdomain_db:find(Domain) of
                 #obj_id_ext{path=DomainPath} ->
                     async_op(Id, {set_status, SrvId, DomainPath, Status});
                 {error, Error} ->
@@ -367,7 +367,7 @@ get_status(Id, Srv, Domain) ->
         undefined ->
             {error, invalid_service};
         SrvId ->
-            case nkdomain_lib:find(Domain) of
+            case nkdomain_db:find(Domain) of
                 #obj_id_ext{path=DomainPath} ->
                     sync_op(Id, {get_status, SrvId, DomainPath});
                 {error, Error} ->
@@ -406,7 +406,7 @@ add_push_device(Id, Domain, Srv, DeviceId, PushData) ->
         undefined ->
             {error, invalid_service};
         SrvId ->
-            case nkdomain_lib:find(Domain) of
+            case nkdomain_db:find(Domain) of
                 #obj_id_ext{path=DomainPath} ->
                     async_op(Id, {add_push_device, DomainPath, SrvId, DeviceId, PushData});
                 {error, Error} ->
@@ -438,20 +438,20 @@ send_push(Id, Srv, Push) ->
     end.
 
 
-%% @private
-find_childs(User) ->
-    case nkdomain_lib:find(User) of
-        #obj_id_ext{obj_id=UserId} ->
-            Spec = #{
-                filters => #{
-                    parent_id => UserId
-                },
-                fields => [<<"path">>]
-            },
-            nkdomain:search(Spec);
-        {error, Error} ->
-            {error, Error}
-    end.
+%%%% @private
+%%find_childs(User) ->
+%%    case nkdomain_db:find(User) of
+%%        #obj_id_ext{obj_id=UserId} ->
+%%            Spec = #{
+%%                filters => #{
+%%                    parent_id => UserId
+%%                },
+%%                fields => [<<"path">>]
+%%            },
+%%            nkdomain:search(Spec);
+%%        {error, Error} ->
+%%            {error, Error}
+%%    end.
 
 
 %% @private

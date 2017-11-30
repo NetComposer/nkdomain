@@ -112,13 +112,15 @@ element_action(Id, ElementId, Action, Value) ->
 get_data(Id, ElementId, Data) ->
     nkdomain_obj:sync_op(Id, {?MODULE, get_data, ElementId, Data}).
 
+
 %% @doc
 get_chart_data(Id, ElementId, Data) ->
         nkdomain_obj:sync_op(Id, {?MODULE, get_chart_data, ElementId, Data}).    
 
+
 %% @private
 find_all() ->
-    nkdomain_domain_obj:search_all(root, #{filters=>#{type=>?DOMAIN_ADMIN_SESSION}}).
+    nkdomain:get_paths_type(root, ?DOMAIN_ADMIN_SESSION).
 
 
 
@@ -181,12 +183,12 @@ object_init(#obj_state{effective_srv_id=SrvId, domain_id=DomainId, id=Id, obj=Ob
     #obj_id_ext{obj_id=SessId} = Id,
     #{created_by:=UserId} = Obj,
     Session = #admin_session{
-        srv_id = SrvId,
         session_id = SessId,
-        http_auth_id = maps:get(http_auth_id, Meta, <<>>),
         domain_id = DomainId,
+        srv_id = SrvId,
         user_id = UserId,
-        language = maps:get(language, Meta, <<"en">>)
+        language = maps:get(language, Meta, <<"en">>),
+        http_auth_id = maps:get(http_auth_id, Meta, <<>>)
     },
     ok = nkdomain_user:register_session(UserId, DomainId, ?DOMAIN_ADMIN_SESSION, SessId, #{}),
     State2 = nkdomain_obj_util:link_to_session_server(?MODULE, State),
@@ -209,7 +211,7 @@ object_stop(_Reason, #obj_state{session_link={Mod, Pid}}=State) ->
 
 %% @private
 object_sync_op({?MODULE, switch_domain, Domain, Url}, _From, State) ->
-    case nkdomain_lib:load(Domain) of
+    case nkdomain_db:load(Domain) of
         #obj_id_ext{obj_id=DomainId, path=Path, type= ?DOMAIN_DOMAIN} ->
             case do_switch_domain(DomainId, Path, Url, State) of
                 {ok, Reply, State2} ->
@@ -314,28 +316,28 @@ object_handle_info(_Info, _State) ->
 
 %% @private
 do_switch_domain(DomainId, Path, Url, #obj_state{session=Session}=State) ->
-    case nkdomain_domain_obj:search_all_types(DomainId, #{}) of
-        {ok, _, TypeList, _Meta} ->
+    case nkdomain_db:aggs({types, DomainId, #{deep=>true}}) of
+        {ok, _, TypeList} ->
             Url2 = case Url of
                 <<"#", U/binary>> -> U;
                 _ -> Url
             end,
             Types = [Type || {Type, _Counter} <- TypeList],
             Session2 = Session#admin_session{
-                domain_id   = DomainId,
-                domain_path = Path,
-                url         = case Url2 of <<>> -> Path; _ -> Url2 end,
-                detail      = #{},
-                db_types    = Types,
-                resources   = [],
-                sessions    = #{},
+                domain_id = DomainId,
+                base_path = Path,
+                url = case Url2 of <<>> -> Path; _ -> Url2 end,
+                detail = #{},
+                db_types = Types,
+                resources = [],
+                sessions = #{},
                 object_tags = #{},
-                key_data    = #{},
-                special_urls= #{}
+                key_data = #{},
+                special_urls = #{}
             },
             case do_get_domain(Session2, State) of
                 {ok, Updates, #admin_session{}=Session3} ->
-                    #admin_session{domain_path=OldPath} = Session,
+                    #admin_session{base_path=OldPath} = Session,
                     Session4 = subscribe_domain(OldPath, Session3),
                     State4 = State#obj_state{session=Session4},
                     % io:format("UPDATES:\n\n~p\n", [Updates]),
@@ -610,19 +612,26 @@ do_get_chart_data(<<"video_calls_barh_chart">>, _Spec, State) ->
         <<"query">> => #{
             <<"bool">> => #{
                 <<"filter">> => [#{ 
+                    <<"terms">> => #{
+                        <<"message.type">> => [<<"media.call">>]
+                    }
+                }, #{
                     <<"term">> => #{
-                        <<"type">> => <<"file">>
+                        <<"type">> => <<"message">>
                     }
                 }]
             }
+        },
+        <<"aggs">> => #{
+            <<"total_duration">> => #{
+                <<"sum">> => #{
+                    <<"field">> => <<"message.body.duration">>
+                }
+            }
         }
-        %"aggs" => #{
-        %}
     },
     case nkelastic:search(Query, Opts) of
-        {ok, _Hits, _, _, _} ->
-            %lager:info("RESPONSE: ~p~n", [Hits]),
-            %{ok, #{<<"total_files">> => #{value => Hits, delta => 15}}, State};
+        {ok, _Total, _Hits, _Aggs, _Meta} ->
             Data = [
                 #{ minutes => 2050, type => <<"Total">> },
                 #{ minutes => 700, type => <<"VideoC.">> },
@@ -718,6 +727,147 @@ do_get_chart_data(<<"conversations_barh_chart">>, _Spec, State) ->
             {error, error, State}
     end;
 
+do_get_chart_data(<<"top_users_list_chart">>, _Spec, State) ->
+    {ok, Opts} = nkdomain_store_es_util:get_opts(),
+    Query = #{
+        <<"size">> => 0,
+        <<"query">> => #{
+            <<"bool">> => #{
+                <<"filter">> => [#{ 
+                    <<"terms">> => #{
+                        <<"message.type">> => [<<"text">>]
+                    }
+                }, #{
+                    <<"term">> => #{
+                        <<"type">> => <<"message">>
+                    }
+                }]
+            }
+        },
+        <<"aggs">> => #{
+            <<"message_creators">> => #{
+                <<"terms">> => #{
+                    <<"field">> => <<"created_by">>,
+                    <<"size">> => 5
+                }
+            }
+        }
+    },
+    case nkelastic:search(Query, Opts) of
+        {ok, _Total, _Hits, Aggs, _Meta} ->
+            Aggs2 = maps:get(<<"message_creators">>, Aggs),
+            Buckets = maps:get(<<"buckets">>, Aggs2),
+%            Data = [
+%                #{ number => 73000, type => <<"P2P">> },
+%                #{ number => 45000, type => <<"Groups">> },
+%                #{ number => 9000, type => <<"Channels">> }
+%            ],
+            Data = lists:map(
+                fun(#{<<"key">> := UserId, <<"doc_count">> := Count}) ->
+                    {Username, Fullname} = case nkdomain_user:get_name(UserId) of
+                        {ok, #{obj_name := ObjName, fullname := FN} = User} ->
+                            lager:info("User: ~p~n", [User]),
+                            {ObjName, FN};
+                        {error, _Error} ->
+                            {<<>>, <<>>}
+                    end,
+                    #{ messages => Count, user_id => UserId, fullname => Fullname, username => Username }
+                end,
+                Buckets
+            ),
+            {Data2, _} = lists:mapfoldl(
+                fun(L, Acc) ->
+                    {L#{id => Acc}, Acc+1}
+                end,
+            1, Data),
+            {ok, #{data => Data2}, State};
+        _ ->
+            {error, error, State}
+    end;
+
+do_get_chart_data(<<"top_channels_list_chart">>, _Spec, State) ->
+    {ok, Opts} = nkdomain_store_es_util:get_opts(),
+    Query1 = #{
+        <<"size">> => 9999,
+        <<"query">> => #{
+            <<"bool">> => #{
+                <<"filter">> => [#{
+                    <<"terms">> => #{
+                        <<"conversation.type">> => [<<"channel">>]
+                    }
+                }, #{
+                    <<"term">> => #{
+                        <<"type">> => <<"conversation">>
+                    }
+                }]
+            }
+        }
+    },
+    case nkelastic:search(Query1, Opts) of
+        {ok, _Total1, Hits1, _Aggs1, _Meta1} ->
+            %lager:error("ES RESPONSE: ~nTotal: ~p~nHits: ~p~nAggs: ~p~nMeta: ~p~n", [_Total1, Hits1, _Aggs1, _Meta1]),
+            ChannelTupleList = lists:map(
+                fun(#{<<"_source">> := #{<<"obj_id">> := ObjId, <<"name">> := Name}}) ->
+                    {ObjId, Name}
+                end,
+                Hits1),
+            ChannelMap = maps:from_list(ChannelTupleList),
+            Query2 = #{
+                <<"size">> => 0,
+                <<"query">> => #{
+                    <<"bool">> => #{
+                        <<"filter">> => [#{
+                            <<"terms">> => #{
+                                <<"message.type">> => [<<"text">>]
+                            }
+                        }, #{
+                            <<"terms">> => #{
+                                <<"parent_id">> => maps:keys(ChannelMap)
+                            }
+                        }, #{
+                            <<"term">> => #{
+                                <<"type">> => <<"message">>
+                            }
+                        }]
+                    }
+                },
+                <<"aggs">> => #{
+                    <<"active_channels">> => #{
+                        <<"terms">> => #{
+                            <<"field">> => <<"parent_id">>,
+                            <<"size">> => 5
+                        }
+                    }
+                }
+            },
+            case nkelastic:search(Query2, Opts) of
+                {ok, _Total, _Hits, Aggs, _Meta} ->
+                    Aggs2 = maps:get(<<"active_channels">>, Aggs),
+                    Buckets = maps:get(<<"buckets">>, Aggs2),
+%                   Data = [
+%                       #{ number => 73000, type => <<"P2P">> },
+%                       #{ number => 45000, type => <<"Groups">> },
+%                       #{ number => 9000, type => <<"Channels">> }
+%                   ],
+                    Data = lists:map(
+                        fun(#{<<"key">> := Key, <<"doc_count">> := Count}) ->
+                            #{ messages => Count, conversation_id => Key, name => maps:get(Key, ChannelMap) }
+                        end,
+                        Buckets
+                    ),
+                    {Data2, _} = lists:mapfoldl(
+                        fun(L, Acc) ->
+                            {L#{id => Acc}, Acc+1}
+                        end,
+                    1, Data),
+                    {ok, #{data => Data2}, State};
+                _ ->
+                    {error, error, State}
+            end;
+        _ ->
+            {error, error, State}
+    end;
+
 do_get_chart_data(ElementId, _Spec, State) ->
     lager:info("Unknown element id: ~p~n", [ElementId]),
     {ok, #{ElementId => #{value => 0, delta => 0}}, State}.
@@ -760,7 +910,7 @@ do_get_chart_data(ElementId, _Spec, State) ->
 
 %% @private
 find_url(<<"_id/", ObjId/binary>>, _Session) ->
-    case nkdomain_lib:find(ObjId) of
+    case nkdomain_db:find(ObjId) of
         #obj_id_ext{type=Type, path=Path} ->
             {ok, [?ADMIN_OBJ_ID, ObjId, Type, Path]};
         {error, _Error} ->
@@ -770,9 +920,9 @@ find_url(<<"_id/", ObjId/binary>>, _Session) ->
 find_url(Url, Session) ->
     case nkadmin_util:get_special_url(Url, Session) of
         undefined ->
-            #admin_session{domain_path=Base} = Session,
+            #admin_session{base_path=Base} = Session,
             Url2 = nkdomain_util:append(Base, Url),
-            case nkdomain_lib:find(Url2) of
+            case nkdomain_db:find(Url2) of
                 #obj_id_ext{obj_id=ObjId, type=Type, path=Path} ->
                     {ok, [?ADMIN_OBJ_ID, ObjId, Type, Path]};
                 {error, _} ->
@@ -804,7 +954,7 @@ find_url_class(Url) ->
 
 %% @private
 %% TODO we should subscribe to type_counter only on my base (top) domain, and subscribe to any other object one-by-one
-subscribe_domain(OldPath, #admin_session{srv_id=SrvId, domain_path=NewPath, reg_pids=RegPids}=Session) ->
+subscribe_domain(OldPath, #admin_session{srv_id=SrvId, base_path=NewPath, reg_pids=RegPids}=Session) ->
     Types = [<<"created">>, <<"updated">>, <<"deleted">>, <<"type_counter">>],
     case OldPath of
         <<>> ->
@@ -819,19 +969,12 @@ subscribe_domain(OldPath, #admin_session{srv_id=SrvId, domain_path=NewPath, reg_
             nkevent:unreg(Reg)
     end,
     Reg2 = #{
-        srv_id => SrvId,
+        srv_id => ?NKROOT,
         class => ?DOMAIN_EVENT_CLASS,
         type => Types,
         domain => NewPath
     },
     {ok, Pids} = nkevent:reg(Reg2),
-    Reg2N = #{
-        srv_id => sipstorm_c4,
-        class => ?DOMAIN_EVENT_CLASS,
-        type => Types,
-        domain => NewPath
-    },
-    {ok, _} = nkevent:reg(Reg2N),
     RegPids2 = lists:foldl(
         fun(Pid, Acc) ->
             Objs = case maps:find(Pid, Acc) of

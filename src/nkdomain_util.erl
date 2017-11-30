@@ -21,6 +21,7 @@
 -module(nkdomain_util).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
+-export([type_apply/3]).
 -export([make_path/3, is_path/1, get_parts/1, get_parts/2, class/1, type/1, name/1, field/2, fields/2]).
 -export([append/2, get_srv_id/1, add_destroyed/3]).
 -export([timestamp/0, remove_nulls/1]).
@@ -40,7 +41,27 @@
 %% Public
 %% ===================================================================
 
-%% @doc 
+
+%% @doc Calls an object's function
+-spec type_apply(nkdomain:type()|module(), atom(), list()) ->
+    not_exported | term().
+
+type_apply(Module, Fun, Args) when is_atom(Module) ->
+    case erlang:function_exported(Module, Fun, length(Args)) of
+        true ->
+            apply(Module, Fun, Args);
+        false ->
+            not_exported
+    end;
+
+type_apply(Type, Fun, Args) when is_binary(Type) ->
+    Module = nkdomain_reg:get_type_module(Type),
+    true = is_atom(Module),
+    type_apply(Module, Fun, Args).
+
+
+
+%% @doc
 make_path(Base, Type, ObjName) ->
     Class = case to_bin(Type) of
         ?DOMAIN_DOMAIN ->
@@ -59,7 +80,7 @@ make_path(Base, Type, ObjName) ->
 %% @doc Normalizes a path
 %% Valid paths either start with / or has '@' or '.'
 -spec is_path(list()|binary()) ->
-    {true|false, nkdomain:path()}.
+    {true|false, nkdomain:path()|binary()}.
 
 is_path(<<"/", _/binary>>=Path) ->
     {true, Path};

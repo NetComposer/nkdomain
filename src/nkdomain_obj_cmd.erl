@@ -138,56 +138,56 @@ cmd(<<"enable">>, Type, #nkreq{data=#{enable:=Enable} = Data} = Req) ->
             {error, Error}
     end;
 
-cmd(<<"find">>, Type, #nkreq{data=Data, srv_id=SrvId} = Req) ->
-    case nkdomain_api_util:get_id(?DOMAIN_DOMAIN, domain_id, Data, Req) of
-        {ok, DomainId} ->
-            Filters1 = maps:get(filters, Data, #{}),
-            Filters2 = Filters1#{type=>Type},
-            Data2 = Data#{filters=>Filters2},
-            case nkdomain_domain_obj:search(SrvId, DomainId, Data2) of
-                {ok, Total, List, _Meta} ->
-                    {ok, #{<<"total">>=>Total, <<"data">>=>List}};
-                {error, Error} ->
-                    {error, Error}
-            end;
-        {error, Error} ->
-            {error, Error}
-    end;
+%%cmd(<<"find">>, Type, #nkreq{data=Data, srv_id=SrvId} = Req) ->
+%%    case nkdomain_api_util:get_id(?DOMAIN_DOMAIN, domain_id, Data, Req) of
+%%        {ok, DomainId} ->
+%%            Filters1 = maps:get(filters, Data, #{}),
+%%            Filters2 = Filters1#{type=>Type},
+%%            Data2 = Data#{filters=>Filters2},
+%%            case nkdomain_domain_obj:search(SrvId, DomainId, Data2) of
+%%                {ok, Total, List, _Meta} ->
+%%                    {ok, #{<<"total">>=>Total, <<"data">>=>List}};
+%%                {error, Error} ->
+%%                    {error, Error}
+%%            end;
+%%        {error, Error} ->
+%%            {error, Error}
+%%    end;
+%%
+%%cmd(<<"find_all">>, Type, #nkreq{data=Data} = Req) ->
+%%    case nkdomain_api_util:get_id(?DOMAIN_DOMAIN, domain_id, Data, Req) of
+%%        {ok, DomainId} ->
+%%            Filters1 = maps:get(filters, Data, #{}),
+%%            Filters2 = Filters1#{type=>Type},
+%%            Data2 = Data#{filters=>Filters2},
+%%            case nkdomain_domain_obj:search_all(DomainId, Data2) of
+%%                {ok, Total, List, _Meta} ->
+%%                    {ok, #{<<"total">>=>Total, <<"data">>=>List}};
+%%                {error, Error} ->
+%%                    {error, Error}
+%%            end;
+%%        {error, Error} ->
+%%            {error, Error}
+%%    end;
 
-cmd(<<"find_all">>, Type, #nkreq{data=Data} = Req) ->
-    case nkdomain_api_util:get_id(?DOMAIN_DOMAIN, domain_id, Data, Req) of
-        {ok, DomainId} ->
-            Filters1 = maps:get(filters, Data, #{}),
-            Filters2 = Filters1#{type=>Type},
-            Data2 = Data#{filters=>Filters2},
-            case nkdomain_domain_obj:search_all(DomainId, Data2) of
-                {ok, Total, List, _Meta} ->
-                    {ok, #{<<"total">>=>Total, <<"data">>=>List}};
-                {error, Error} ->
-                    {error, Error}
-            end;
-        {error, Error} ->
-            {error, Error}
-    end;
-
-cmd(<<"make_token">>, Type, #nkreq{data=Data, user_id=UserId, srv_id=SrvId} = Req) ->
-    case nkdomain_api_util:get_id(?DOMAIN_DOMAIN, domain_id, Data, Req) of
-        {ok, DomainId} ->
-            case nkdomain_api_util:get_id(Type, Data, Req) of
-                {ok, Id} ->
-                    case nkdomain_token_obj:create(SrvId, DomainId, Id, UserId, Type, #{}, Data) of
-                        {ok, TokenId, _Pid, TTL, Unknown} ->
-                            Req2 = nkservice_api:add_unknown(Unknown, Req),
-                            {ok, #{obj_id=>TokenId, ttl=>TTL}, Req2};
-                        {error, Error} ->
-                            {error, Error}
-                    end;
-                {error, Error} ->
-                    {error, Error}
-            end;
-        {error, Error} ->
-            {error, Error}
-    end;
+%%cmd(<<"make_token">>, Type, #nkreq{data=Data, user_id=UserId, srv_id=SrvId} = Req) ->
+%%    case nkdomain_api_util:get_id(?DOMAIN_DOMAIN, domain_id, Data, Req) of
+%%        {ok, DomainId} ->
+%%            case nkdomain_api_util:get_id(Type, Data, Req) of
+%%                {ok, Id} ->
+%%                    case nkdomain_token_obj:create(SrvId, DomainId, Id, UserId, Type, #{}, Data) of
+%%                        {ok, TokenId, _Pid, TTL, Unknown} ->
+%%                            Req2 = nkservice_api:add_unknown(Unknown, Req),
+%%                            {ok, #{obj_id=>TokenId, ttl=>TTL}, Req2};
+%%                        {error, Error} ->
+%%                            {error, Error}
+%%                    end;
+%%                {error, Error} ->
+%%                    {error, Error}
+%%            end;
+%%        {error, Error} ->
+%%            {error, Error}
+%%    end;
 
 cmd(_Cmd, _Type, _Req) ->
     lager:error("NKLOG API Not Implemented ~p", [_Cmd]),

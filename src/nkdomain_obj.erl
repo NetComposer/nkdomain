@@ -154,6 +154,10 @@
     delete |
     {register, usage|link, nklib:link()} |
     save |
+    get_roles |
+    {add_roles, nkdomain:role(), nkdomain:role_spec()|[nkdomain:role_spec()]} |
+    {remove_roles, nkdomain:role(), nkdomain:role_spec()|[nkdomain:role_spec()]} |
+    get_alarms |
     term().
 
 -type async_op() ::
@@ -208,7 +212,7 @@ sync_op(_Id, _Op, _Timeout, 0) ->
     {error, process_not_found};
 
 sync_op(Id, Op, Timeout, Tries) ->
-    case nkdomain_lib:load(Id) of
+    case nkdomain_db:load(Id) of
         #obj_id_ext{pid=Pid} when is_pid(Pid) ->
             case sync_op(Pid, Op, Timeout) of
                 {error, process_not_found} ->
@@ -231,7 +235,7 @@ async_op(Pid, Op) when is_pid(Pid) ->
     gen_server:cast(Pid, {nkdomain_async_op, Op});
 
 async_op(Id, Op) ->
-    case nkdomain_lib:load(Id) of
+    case nkdomain_db:load(Id) of
         #obj_id_ext{pid=Pid} when is_pid(Pid) ->
             async_op(Pid, Op);
         {error, Error} ->
@@ -305,10 +309,11 @@ init({Op, Obj, StartOpts}) when Op==loaded; Op==created ->
                             ?DEBUG("loaded (~p)", [self()], State5),
                             State6 = do_event(loaded, State5),
                             % Save if created or init sets is_dirty = true
-                            case do_save(creation, State6) of
-                                {ok, State7} ->
-                                    {ok, do_refresh(State7)};
-                                {{error, Error}, _State7} ->
+                            State7 = do_check_alarms(State6),
+                            case do_save(creation, State7) of
+                                {ok, State8} ->
+                                    {ok, do_refresh(State8)};
+                                {{error, Error}, _State8} ->
                                     {stop, Error}
                             end;
                         {error, Error} ->
@@ -643,6 +648,53 @@ do_sync_op({update_name, ObjName}, _From, #obj_state{is_enabled=IsEnabled, objec
             end
     end;
 
+do_sync_op(get_roles, _From, State) ->
+    Roles = nkdomain_obj_roles:get_roles(State),
+    {reply, {ok, Roles}, State};
+
+do_sync_op({add_roles, Role, RoleList}, _From, State) when is_list(RoleList) ->
+    Role2 = nklib_util:to_binary(Role),
+    Roles1 = nkdomain_obj_roles:get_roles(State),
+    RoleData1 = maps:get(Role2, Roles1, []),
+    {RoleData2, State2} = nkdomain_obj_roles:add_roles(RoleList, Role2, RoleData1, State),
+    Roles2 = Roles1#{Role2 => RoleData2},
+    State3 = nkdomain_obj_roles:save_roles(Roles2, State2),
+    case do_save(role_added, State3) of
+        {ok, State4} ->
+            {reply, ok, State4};
+        {{error, Error}, State4} ->
+            {reply, {error, Error}, State4}
+    end;
+
+do_sync_op({add_roles, Role, RoleSpec}, From, State) ->
+    do_sync_op({add_roles, Role, [RoleSpec]}, From, State);
+
+do_sync_op({remove_roles, Role, RoleList}, _From, State) when is_list(RoleList) ->
+    Role2 = nklib_util:to_binary(Role),
+    Roles1 = nkdomain_obj_roles:get_roles(State),
+    RoleData = maps:get(Role2, Roles1, []),
+    {RoleData2, State2} = nkdomain_obj_roles:remove_roles(RoleList, Role2, RoleData, State),
+    Roles2 = Roles1#{Role2 => RoleData2},
+    State3 = nkdomain_obj_roles:save_roles(Roles2, State2),
+    case do_save(role_added, State3) of
+        {ok, State4} ->
+            {reply, ok, State4};
+        {{error, Error}, State4} ->
+            {reply, {error, Error}, State4}
+    end;
+
+do_sync_op({remove_roles, Role, RoleSpec}, From, State) ->
+    do_sync_op({remove_roles, Role, [RoleSpec]}, From, State);
+
+do_sync_op(get_alarms, _From, #obj_state{obj=Obj}=State) ->
+    Alarms = case Obj of
+        #{in_alarm:=true, alarms:=AlarmList} ->
+            AlarmList;
+        _ ->
+            []
+    end,
+    {reply, {ok, Alarms}, State};
+
 do_sync_op(Op, _From, State) ->
     ?LLOG(notice, "unknown sync op: ~p", [Op], State),
     reply({error, unknown_op}, State).
@@ -860,7 +912,7 @@ register_parent(#obj_state{id=ObjIdExt, parent_id=ParentId}=State, #{parent_pid:
     {ok, State2};
 
 register_parent(#obj_state{parent_id=ParentId}=State, Opts) ->
-    case nkdomain_lib:load(ParentId) of
+    case nkdomain_db:load(ParentId) of
         #obj_id_ext{pid=ParentPid} ->
             register_parent(State, Opts#{parent_pid=>ParentPid});
         {error, object_not_found} ->
@@ -886,6 +938,15 @@ set_unload_policy(Obj, Info) ->
 
 
 %% @private
+do_check_alarms(#obj_state{obj=#{in_alarm:=true}}=State) ->
+    {ok, State2} = handle(object_alarms, [], State),
+    State2;
+
+do_check_alarms(State) ->
+    State.
+
+
+%% @private
 do_save(_Reason, #obj_state{is_dirty=false}=State) ->
     {ok, State};
 
@@ -906,7 +967,7 @@ do_save(Reason, State) ->
 do_delete(#obj_state{childs=Childs}=State) when map_size(Childs)==0 ->
     {_, State2} = do_save(pre_delete, State),
     case handle(object_delete, [], State2) of
-        {ok, State3, _Meta} ->
+        {ok, State3} ->
             ?DEBUG("object deleted", [], State3),
             {ok, do_event(deleted, State3)};
         {error, object_has_childs, State3} ->
@@ -999,7 +1060,7 @@ do_update_name(ObjName, #obj_state{id=Id, obj=Obj}=State) ->
             {ok, State};
         {ok, Domain, _} ->
             Path2 = nkdomain_util:make_path(Domain, Type, ObjName),
-            case nkdomain_lib:find(Path2) of
+            case nkdomain_db:find(Path2) of
                 {error, object_not_found} ->
                     Id2 = Id#obj_id_ext{path=Path2, obj_name=ObjName},
                     Update = #{

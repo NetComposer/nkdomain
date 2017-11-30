@@ -17,7 +17,9 @@
 -define(ADMIN_PASS, "netcomposer").
 
 
-
+i() ->
+    F = fun(I, Acc) -> lager:error("NKLOG I: ~p", [I]), {ok, Acc+1} end,
+    nkdomain_db:iterate({paths, "/dkv", #{sort=>rpath, deep=>true}}, F, 0).
 
 ts() ->
      Op = #{
@@ -39,6 +41,40 @@ ts() ->
     {ok, E} = nkdomain_store_es_util:get_opts(),
     {ok, Q} = nkelastic_search:query(Op),
     nkelastic:search(Q, E).
+
+t2() ->
+    {Syn, _} = nkdomain_callbacks:object_syntax(update),
+    Obj = #{
+        roles => [
+            #{
+                role => role1,
+                indirect => [
+                    #{
+                        role => role2,
+                        obj_id => [
+                            o3,
+                            o2
+                        ]
+                    },
+                    #{
+                        role => rol3,
+                        obj_id => [
+                            o3
+                        ]
+                    }
+                ],
+                direct => [
+                    obj5,
+                    obj4,
+                    obj3,
+                    obj2,
+                    obj1
+                ]
+            }
+        ]
+    },
+    nklib_syntax:parse(Obj, Syn).
+
 
 
 
@@ -536,7 +572,7 @@ download(T, Url) ->
 
 
 create_users(N) ->
-    nkdomain:delete_all_childs("/name_test"),
+    nkdomain:remove_path("/name_test"),
     {ok, _, _Pid1} = login(),
     _ = nkdomain_sample:domain_create("/", name_test, "NameTest", "Name Test"),
     lists:foreach(

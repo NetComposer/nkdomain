@@ -18,38 +18,26 @@
 %%
 %% -------------------------------------------------------------------
 
-%% @doc File Object Syntax
-
--module(nkdomain_file_obj_syntax).
+%% @doc Elasticsearch Event plugin
+-module(nkdomain_event_es).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([syntax/2]).
+-export([search/1]).
+
+-define(LLOG(Type, Txt, Args),
+    lager:Type("NkDOMAIN Event ES "++Txt, Args)).
 
 -include("nkdomain.hrl").
+-include_lib("nkevent/include/nkevent.hrl").
+
 
 %% ===================================================================
-%% Syntax
+%% Public
 %% ===================================================================
 
-syntax(<<"create">>, Syntax) ->
-    Syntax#{
-        name => binary,
-        description => binary,
-        ?DOMAIN_FILE => #{
-            content_type => binary,
-            store_id => binary,
-            body => base64,
-            '__mandatory' => [content_type, body]
-        },
-        '__mandatory' => [name]
-    };
 
-syntax(<<"get_inline">>, Syntax) ->
-    Syntax#{
-        id => binary,
-        '__mandatory' => [id]
-    };
 
-syntax(Cmd, Syntax) ->
-    nkdomain_obj_syntax:syntax(Cmd, ?DOMAIN_FILE, Syntax).
+%% @doc
+search(Spec) ->
+    ?CALL_NKROOT(object_db_event_search, [Spec]).
 

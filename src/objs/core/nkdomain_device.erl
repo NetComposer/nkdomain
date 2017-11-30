@@ -80,9 +80,9 @@ create(Domain, Opts) ->
     ok | {error, existing_session|term()}.
 
 attach_session(DeviceId, User, SessId) ->
-    case nkdomain_lib:load(SessId) of
+    case nkdomain_db:load(SessId) of
         #obj_id_ext{pid=Pid} ->
-            case nkdomain_lib:find(User) of
+            case nkdomain_db:find(User) of
                 #obj_id_ext{obj_id=UserId, type=?DOMAIN_USER} ->
                     sync_op(DeviceId, {attach_session, UserId, SessId, Pid});
                 {error, object_not_found} ->
@@ -99,14 +99,8 @@ attach_session(DeviceId, User, SessId) ->
 
 %% @doc
 find_device_uuid(Domain, DeviceUUID) ->
-    Fields = [{<<"device_uuid">>, nklib_util:to_binary(DeviceUUID)}],
-    Filter = nkdomain_api_util:head_type_filters(?DOMAIN_DEVICE, Fields),
-    Spec = #{
-        filters => Filter,
-        fields => []
-    },
-    case nkdomain:search(Domain, ?DOMAIN_DEVICE, Spec) of
-        {ok, _, Data, _} ->
+    case nkdomain_db:search(?DOMAIN_DEVICE, {find_device_uuid, Domain, DeviceUUID}) of
+        {ok, _, Data} ->
             Data2 = [ObjId || #{<<"obj_id">>:=ObjId} <- Data],
             {ok, Data2};
         {error, Error} ->

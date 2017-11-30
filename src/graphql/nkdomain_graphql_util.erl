@@ -43,10 +43,8 @@ object_execute(Field, {#obj_id_ext{}, Obj}, _Args, _Ctx) ->
         <<"createdById">> -> {ok, maps:get(created_by, Obj)};
         <<"createdTime">> -> {ok, maps:get(created_time, Obj, null)};
         <<"description">> -> {ok, maps:get(description, Obj, null)};
-        <<"destroyed">> -> {ok, maps:get(destroyed, Obj, false)};
-        <<"destroyedCode">> -> {ok, maps:get(destroyed_code, Obj, null)};
-        <<"destroyedReason">> -> {ok, maps:get(destroyed_reason, Obj, null)};
-        <<"destroyedTime">> -> {ok, maps:get(destroyed_time, Obj, null)};
+        <<"isDeleted">> -> {ok, maps:get(is_deleted, Obj, false)};
+        <<"deletedTime">> -> {ok, maps:get(deleted_time, Obj, null)};
         <<"domain">> -> get_obj(maps:get(domain_id, Obj));
         <<"domainId">> -> {ok, maps:get(domain_id, Obj)};
         <<"enabled">> -> {ok, maps:get(enabled, Obj, true)};
@@ -102,19 +100,9 @@ search(Params, Opts) ->
     Fields = get_obj_fields(Opts),
     Filters1 = maps:get(<<"filter">>, Params2, []),
     Filters2 = maps:get(filters, Opts, []) ++ Filters1,
-    Spec1 = case add_filters(Filters2, Fields, []) of
-        [] ->
-            #{};
-        FilterList ->
-            #{filter_list => FilterList}
-    end,
-    Sort = maps:get(<<"sort">>, Params2, []),
-    Spec2 = case add_sort(Sort, Fields, []) of
-        [] ->
-            Spec1;
-        SortList ->
-            Spec1#{sort => SortList}
-    end,
+    Filters3 = add_filters(Filters2, Fields, []),
+    Sort1 = maps:get(<<"sort">>, Params2, []),
+    Sort2 = add_sort(Sort1, Fields, []),
     % lager:error("Spec2: ~p", [Spec2]),
     From = case maps:get(<<"from">>, Params2, 0) of
         % null -> 0;
@@ -126,7 +114,7 @@ search(Params, Opts) ->
         S when is_integer(S), S >= 0, S < 50 -> S;
         _ -> error(invalid_size)
     end,
-    case read_objs(From, Size, Spec2) of
+    case read_objs(From, Size, Filters3, Sort2) of
         {ok, Total, Data2} ->
             Result = #{
                 <<"objects">> => Data2,
@@ -146,7 +134,7 @@ get_obj(<<>>) ->
     get_obj(<<"root">>);
 
 get_obj(ObjId) ->
-    case nkdomain_lib:read(ObjId) of
+    case nkdomain_db:read(ObjId) of
         {ok, ObjIdExt, Obj} ->
             case get_type(ObjIdExt) of
                 {ok, _} ->
@@ -329,16 +317,16 @@ add_filter_norm(Field, <<"fuzzy">>, Value, Acc) ->
 
 
 %% @private
-read_objs(From, Size, Spec) ->
-    do_read_objs(From, Size, Spec, []).
+read_objs(From, Size, Filters, Sort) ->
+    do_read_objs(From, Size, Filters, Sort, []).
 
 
 %% @private
-do_read_objs(Start, Size, Spec, Acc) ->
-    case nkdomain:search(Spec#{from=>Start, size=>Size, fields=>[]}) of
-        {ok, Total, [], _Meta} ->
+do_read_objs(Start, Size, Filters, Sort, Acc) ->
+    case nkdomain_db:search({graphql, Filters, #{from=>Start, size=>Size, sort=>Sort}}) of
+        {ok, Total, []} ->
             {ok, Total, lists:reverse(Acc)};
-        {ok, Total, Data, _Meta} ->
+        {ok, Total, Data} ->
             Acc2 = lists:foldl(
                 fun(#{<<"obj_id">>:=ObjId}, FunAcc) ->
                     case get_obj(ObjId) of
@@ -357,7 +345,7 @@ do_read_objs(Start, Size, Spec, Acc) ->
                 Records when Records > Size ->
                     {ok, Total, lists:sublist(lists:reverse(Acc2), Size)};
                 _ ->
-                    do_read_objs(Start+Size, Size, Spec, Acc2)
+                    do_read_objs(Start+Size, Size, Filters, Sort, Acc2)
             end;
         {error, Error} ->
             {error, Error}
@@ -369,9 +357,8 @@ get_obj_fields(Opts) ->
         <<"createdById">> => <<"created_by">>,
         <<"createdTime">> => <<"created_time">>,
         <<"description">> => {norm, <<"description_norm">>},
-        <<"destroyedCode">> => <<"destroyed_code">>,
-        <<"destroyedReason">> => <<"destroyed_reason">>,
-        <<"destroyedTime">> => <<"destroyed_time">>,
+        <<"isDeleted">> => <<"is_deleted">>,
+        <<"deletedTime">> => <<"deleted_time">>,
         <<"domainId">> => <<"domain_id">>,
         <<"expiresTime">> => <<"expires_time">>,
         <<"iconId">> => <<"icon_id">>,

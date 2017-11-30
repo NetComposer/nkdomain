@@ -28,7 +28,7 @@
 -include("nkdomain_debug.hrl").
 
 -export([object_info/0, object_admin_info/0, object_api_syntax/2, object_api_cmd/2, object_send_event/2]).
--export([object_es_mapping/0, object_parse/2]).
+-export([object_es_mapping/0, object_parse/2, object_db_get_filter/2]).
 -export([object_execute/5, object_schema/1, object_query/3, object_mutation/3]).
 -export([object_init/1, object_sync_op/3, object_link_down/2]).
 
@@ -101,6 +101,27 @@ object_es_mapping() ->
         device_uuid => #{type => keyword},
         sso_device_ids => #{type => keyword}
     }.
+
+
+%% @private
+object_db_get_filter(nkelastic, {find_device_uuid, Domain, UUID}) ->
+    case nkdomain_store_es_util:get_path(Domain) of
+        {ok, DomainPath} ->
+            Filters = [
+                {path, subdir, DomainPath},
+                {[?DOMAIN_DEVICE, ".device_uuid"], eq, nklib_util:to_binary(UUID)}
+            ],
+            {ok, {Filters, #{}}};
+        {error, Error} ->
+            {error, Error}
+    end;
+
+object_db_get_filter(nkelastic, QueryType) ->
+    {error, {unknown_query, QueryType}};
+
+object_db_get_filter(Backend, _) ->
+    {error, {unknown_backend, Backend}}.
+
 
 
 % @private

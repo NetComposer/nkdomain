@@ -33,12 +33,12 @@
 -export([object_init/1, object_terminate/2, object_stop/2,
          object_event/2, object_reg_event/4, object_sync_op/3, object_async_op/2,
          object_save/1, object_delete/1, object_link_down/2, object_enabled/2, object_next_status_timer/1,
+         object_alarms/1,
          object_handle_call/3, object_handle_cast/2, object_handle_info/2, object_conflict_detected/3]).
 -export([object_db_init/1, object_db_read/1, object_db_save/1, object_db_delete/1]).
--export([object_db_find_obj/1, object_db_search/1, object_db_search_alias/1,
-         object_db_search_types/2, object_db_search_all_types/2,
-         object_db_search_childs/2, object_db_search_all_childs/2, object_db_search_agg_field/4,
-         object_db_delete_all_childs/2, object_db_clean/0]).
+-export([object_db_find_obj/2, object_db_search_objs/3, object_db_agg_objs/3,
+         object_db_iterate_objs/5, object_db_get_filter/3, object_db_get_agg/3, object_db_clean/0]).
+-export([object_db_event_send/1]).
 -export([service_api_syntax/3, service_api_allow/2, service_api_cmd/2]).
 -export([api_server_http_auth/3, api_server_reg_down/4]).
 -export([nkservice_rest_http/4]).
@@ -72,6 +72,7 @@
 error({body_too_large, Size, Max})      -> {"Body too large (size is ~p, max is ~p)", [Size, Max]};
 error({could_not_load_parent, Id})      -> {"Object could not load parent '~s'", [Id]};
 error({could_not_load_domain, Id})      -> {"Object could not load domain '~s'", [Id]};
+error({could_not_load_user, Id})        -> {"Object could not load user '~s'", [Id]};
 error(domain_unknown)                   -> "Unknown domain";
 error({domain_unknown, D})              -> {"Unknown domain '~s'", [D]};
 error(domain_invalid)                   -> "Invalid domain";
@@ -272,19 +273,39 @@ object_syntax(load) ->
         updated_time => integer,
         enabled => boolean,
         active => boolean,                    % Must be loaded to exist
+        roles => {list,
+            #{
+                role => binary,
+                direct => {list, binary},
+                indirect => {list,
+                    #{
+                        role => binary,
+                        obj_id => binary,
+                        '__mandatory' => [role, obj_id]
+                    }},
+                '__mandatory' => [role],
+                '__defaults' => #{direct => [], indirect => []}
+            }},
         expires_time => integer,
-        destroyed => boolean,
-        destroyed_time => integer,
-        destroyed_code => binary,
-        destroyed_reason => binary,
+        is_deleted => boolean,
+        deleted_time => integer,
         name => binary,
         description => binary,
         tags => {list, binary},
         aliases => {list, binary},
         icon_id => binary,
         next_status_time => integer,
+        in_alarm => boolean,
+        alarms => {list,
+            #{
+                reason => binary,
+                severity => {atom, [info, notice, warning, error, critical, alert, emergency]},
+                time => integer,
+                body => map
+            }},
         '_schema_vsn' => any,
         '_store_vsn' => any,
+        '__defaults' => #{in_alarm => false},
         '__mandatory' => [type, obj_id, domain_id, path, created_time]
     },
     {Syntax, #{}};
@@ -296,6 +317,19 @@ object_syntax(update) ->
         enabled => boolean,
         name => binary,
         description => binary,
+        roles => {list,
+                  #{
+                      role => binary,
+                      direct => {list, binary},
+                      indirect => {list,
+                                   #{
+                                       role => binary,
+                                       obj_id => binary,
+                                       '__mandatory' => [role, obj_id]
+                                   }},
+                      '__mandatory' => [role],
+                      '__defaults' => #{direct => [], indirect => []}
+                  }},
         tags => {list, binary},
         aliases => {list, binary},
         icon_id => binary
@@ -413,7 +447,7 @@ object_admin_info(Type) ->
     ok | continue | {ok, nkdomain:obj()} | {error, term()}.
 
 object_update(#{type:=Type}=Obj) ->
-    case nkdomain_lib:type_apply(Type, object_udpate, [Obj]) of
+    case nkdomain_util:type_apply(Type, object_udpate, [Obj]) of
         not_exported ->
             {ok, Obj};
         {ok, Obj2} ->
@@ -432,19 +466,19 @@ object_update(#{type:=Type}=Obj) ->
     true | false | removed.
 
 object_do_active(Type, ObjId) ->
-    case nkdomain_lib:type_apply(Type, object_do_active, [ObjId]) of
+    case nkdomain_util:type_apply(Type, object_do_active, [ObjId]) of
         not_exported ->
             ok;
         Res when Res==ok; Res==processed; Res==removed ->
             Res;
         force_load ->
-            case nkdomain_lib:find_loaded(ObjId) of
+            case nkdomain_db:find_loaded(ObjId) of
                 #obj_id_ext{} ->
                     ok;
                 _ ->
                     spawn_link(
                         fun() ->
-                            case nkdomain_lib:load(ObjId) of
+                            case nkdomain_db:load(ObjId) of
                                 #obj_id_ext{} ->
                                     ok;
                                 {error, Error} ->
@@ -455,14 +489,14 @@ object_do_active(Type, ObjId) ->
                     processed
             end;
         delete_if_not_loaded ->
-            case nkdomain_lib:find_loaded(ObjId) of
+            case nkdomain_db:find_loaded(ObjId) of
                 #obj_id_ext{} ->
                     ok;
                 _ ->
                     spawn_link(
                         fun() ->
-                            case ?CALL_NKROOT(object_db_delete, [ObjId]) of
-                                {ok, _Meta} ->
+                            case nkdomain_db:delete(ObjId) of
+                                ok ->
                                     ?LLOG(notice, "removed stalle active object ~s (~s)", [ObjId, Type]);
                                 {error, Error} ->
                                     ?LLOG(warning, "could not remove stalle active object ~s (~s): ~p",
@@ -481,8 +515,8 @@ object_do_active(Type, ObjId) ->
 object_do_expired(ObjId) ->
     spawn_link(
         fun() ->
-            case ?CALL_NKROOT(object_db_delete, [ObjId]) of
-                {ok, _Meta} ->
+            case nkdomain_db:delete(ObjId) of
+                ok ->
                     ?LLOG(notice, "removed expired object ~s", [ObjId]);
                 {error, Error} ->
                     ?LLOG(warning, "could not remove expired object ~s: ~p",
@@ -617,14 +651,14 @@ object_save(State) ->
 
 %% @doc Called to save the remove the object from disk
 -spec object_delete(state()) ->
-    {ok, state(), Meta::map()} | {error, term(), state()}.
+    {ok, state()} | {error, term(), state()}.
 
 object_delete(#obj_state{id=#obj_id_ext{obj_id=ObjId}}=State) ->
     case call_module(object_delete, [], State) of
         {ok, State2} ->
-            case ?CALL_NKROOT(object_db_delete, [ObjId]) of
-                {ok, Meta} ->
-                    {ok, State2, Meta};
+            case nkdomain_db:delete(ObjId) of
+                ok ->
+                    {ok, State2};
                 {error, Error} ->
                     {error, Error, State2}
             end;
@@ -655,6 +689,15 @@ object_enabled(Enabled, State) ->
 
 object_next_status_timer(State) ->
     call_module(object_next_status_timer, [], State).
+
+
+%% @doc Called when a object with alarms is loaded
+-spec object_alarms(state()) ->
+    {ok, state(), Meta::map()} | {error, term(), state()}.
+
+object_alarms(State) ->
+    {ok, #obj_state{}=State2} = call_module(object_alarms, [], State),
+    {ok, State2}.
 
 
 %% @doc
@@ -751,80 +794,97 @@ object_db_delete(ObjId) ->
 
 
 %% @doc Finds an object from its ID or Path
--spec object_db_find_obj(nkdomain:id()) ->
+-spec object_db_find_obj(nkdomain:id(), FindDeleted::boolean()) ->
     {ok, nkdomain:type(), nkdomain:obj_id(), nkdomain:path()} | {error, object_not_found|term()}.
 
-object_db_find_obj(ObjId) ->
-    ?CALL_NKROOT(object_db_find_obj, [ObjId]).
+object_db_find_obj(ObjId, FindDeleted) ->
+    ?CALL_NKROOT(object_db_find_obj, [ObjId, FindDeleted]).
 
 
 %% @doc
--spec object_db_search_types(obj_id(), nkdomain:search_spec()) ->
-    {ok, Total::integer(), [{Srv::binary(), type(), integer()}]} | {error, term()}.
+-spec object_db_search_objs(nkservice:id(), type()|core, nkdomain:search_type()) ->
+    {ok, Total::integer(), [{type(), obj_id(), path(), Fields::map()}]} | {error, term()}.
 
-object_db_search_types(ObjId, Spec) ->
-    ?CALL_NKROOT(object_db_search_types, [ObjId, Spec]).
-
-
-%% @doc
--spec object_db_search_all_types(path(), nkdomain:search_spec()) ->
-    {ok, Total::integer(), [{type(), integer()}]} | {error, term()}.
-
-object_db_search_all_types(ObjId, Spec) ->
-    ?CALL_NKROOT(object_db_search_all_types, [ObjId, Spec]).
+object_db_search_objs(SrvId, Type, SearchType) ->
+    ?CALL_NKROOT(object_db_search_objs, [SrvId, Type, SearchType]).
 
 
 %% @doc
--spec object_db_search_childs(obj_id(), nkdomain:search_spec()) ->
-    {ok, Total::integer(), [{type(), obj_id(), path()}]} |
-    {error, term()}.
+-spec object_db_iterate_objs(nkservice:id(), type()|core, nkdomain:search_type(),
+                             fun(({type(), obj_id(), path()}, term()) -> {ok, term()}), term()) ->
+                                {ok, term()} | {error, term()}.
 
-object_db_search_childs(ObjId, Spec) ->
-    ?CALL_NKROOT(object_db_search_childs, [ObjId, Spec]).
-
-
-%% @doc
--spec object_db_search_all_childs(path(), nkdomain:search_spec()) ->
-    {ok, Total::integer(), [{Srv::binary(), type(), obj_id(), path()}]} |
-    {error, term()}.
-
-object_db_search_all_childs(Path, Spec) ->
-    ?CALL_NKROOT(object_db_search_all_childs, [Path, Spec]).
+object_db_iterate_objs(SrvId, Type, SearchType, Fun, Acc) ->
+    ?CALL_NKROOT(object_db_iterate_objs, [SrvId, Type, SearchType, Fun, Acc]).
 
 
 %% @doc
--spec object_db_search_alias(nkdomain:alias()) ->
-    {ok, Total::integer(), [{Srv::binary(), type(), obj_id(), path()}]} |
-    {error, term()}.
+-spec object_db_agg_objs(nkservice:id(), type()|core, nkdomain:agg_type()) ->
+    {ok, Total::integer(), [{binary(), integer()}]}| {error, term()}.
 
-object_db_search_alias(Alias) ->
-    ?CALL_NKROOT(object_db_search_alias, [Alias]).
-
-
-%% @doc
--spec object_db_search(nkdomain:search_spec()) ->
-    {ok, Total::integer(), Objs::[map()], map(), Meta::map()} |
-    {error, term()}.
-
-object_db_search(Spec) ->
-    ?CALL_NKROOT(object_db_search, [Spec]).
+object_db_agg_objs(SrvId, Type, AggType) ->
+    ?CALL_NKROOT(object_db_agg_objs, [SrvId, Type, AggType]).
 
 
-%% @doc
--spec object_db_search_agg_field(nkdomain:id(), binary(),
-                                 nkdomain:search_spec(), SubChilds::boolean()) ->
-                                    {ok, Total::integer(), [{nkdomain:type(), integer()}], Map::map()} | {error, term()}.
+%%%% @doc
+%%-spec object_db_search_types(obj_id(), nkdomain:search_spec()) ->
+%%    {ok, Total::integer(), [{Srv::binary(), type(), integer()}]} | {error, term()}.
+%%
+%%object_db_search_types(ObjId, Spec) ->
+%%    ?CALL_NKROOT(object_db_search_types, [ObjId, Spec]).
+%%
+%%
+%%%% @doc
+%%-spec object_db_search_all_types(path(), nkdomain:search_spec()) ->
+%%    {ok, Total::integer(), [{type(), integer()}]} | {error, term()}.
+%%
+%%object_db_search_all_types(ObjId, Spec) ->
+%%    ?CALL_NKROOT(object_db_search_all_types, [ObjId, Spec]).
 
-object_db_search_agg_field(Id, Field, Spec, SubChilds) ->
-    ?CALL_NKROOT(object_db_search_agg_field, [Id, Field, Spec, SubChilds]).
+
+%%%% @doc
+%%-spec object_db_search_childs(obj_id(), nkdomain:search_spec()) ->
+%%    {ok, Total::integer(), [{type(), obj_id(), path()}]} |
+%%    {error, term()}.
+%%
+%%object_db_search_childs(ObjId, Spec) ->
+%%    ?CALL_NKROOT(object_db_search_childs, [ObjId, Spec]).
+%%
+%%
+%%%% @doc
+%%-spec object_db_search_all_childs(path(), nkdomain:search_spec()) ->
+%%    {ok, Total::integer(), [{Srv::binary(), type(), obj_id(), path()}]} |
+%%    {error, term()}.
+%%
+%%object_db_search_all_childs(Path, Spec) ->
+%%    ?CALL_NKROOT(object_db_search_all_childs, [Path, Spec]).
 
 
-%% @doc Must stop loaded objects
--spec object_db_delete_all_childs(path(), nkdomain:search_spec()) ->
-    {ok, Total::integer()} | {error, term()}.
+%%%% @doc
+%%-spec object_db_search(nkdomain:search_spec()) ->
+%%    {ok, Total::integer(), Objs::[map()], map(), Meta::map()} |
+%%    {error, term()}.
+%%
+%%object_db_search(Spec) ->
+%%    ?CALL_NKROOT(object_db_search, [Spec]).
 
-object_db_delete_all_childs(Path, Spec) ->
-    ?CALL_NKROOT(object_db_delete_all_childs, [Path, Spec]).
+
+%%%% @doc
+%%-spec object_db_search_objs(nkdomain:search_spec(), FindDeleted::boolean()) ->
+%%    {ok, Total::integer(), Objs::[map()], map(), Meta::map()} |
+%%    {error, term()}.
+%%
+%%object_db_search_objs(Spec, FindDeleted) ->
+%%    ?CALL_NKROOT(object_db_search_objs, [Spec, FindDeleted]).
+
+
+%%%% @doc
+%%-spec object_db_search_agg_field(nkdomain:id(), binary(),
+%%                                 nkdomain:search_spec(), SubChilds::boolean()) ->
+%%                                    {ok, Total::integer(), [{nkdomain:type(), integer()}], Map::map()} | {error, term()}.
+%%
+%%object_db_search_agg_field(Id, Field, Spec, SubChilds) ->
+%%    ?CALL_NKROOT(object_db_search_agg_field, [Id, Field, Spec, SubChilds]).
 
 
 %% @doc Called to perform a cleanup of the store (expired objects, etc.)
@@ -835,6 +895,35 @@ object_db_delete_all_childs(Path, Spec) ->
 object_db_clean() ->
     ?CALL_NKROOT(object_db_clean, []).
 
+
+%% @doc Called when a backend needs to process a query
+-spec object_db_get_filter(module(), type()|core, nkdomain:search_type()) ->
+    {ok, term()} | {error, term()}.
+
+object_db_get_filter(Module, Type, Spec) ->
+    ?CALL_NKROOT(object_db_get_filter, [Module, Type, Spec]).
+
+
+%% @doc Called when a backend needs to process an aggregation
+-spec object_db_get_agg(module(), type()|core, nkdomain:search_type()) ->
+    {ok, term()} | {error, term()}.
+
+object_db_get_agg(Module, Type, Spec) ->
+    ?CALL_NKROOT(object_db_get_agg, [Module, Type, Spec]).
+
+
+
+%% ===================================================================
+%% External events
+%%
+%% ===================================================================
+
+%% @doc Called when an event is sent to nkevent
+-spec object_db_event_send(#nkevent{}) ->
+    ok.
+
+object_db_event_send(#nkevent{}) ->
+    ok.
 
 
 %% ===================================================================

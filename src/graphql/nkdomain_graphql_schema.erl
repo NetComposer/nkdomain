@@ -240,7 +240,7 @@ make_schema_mutations(Modules) ->
 %% @private
 get_module_schema(Type, Module) ->
     code:ensure_loaded(Module),
-    case nkdomain_lib:type_apply(Module, object_schema, [Type]) of
+    case nkdomain_util:type_apply(Module, object_schema, [Type]) of
         not_exported ->
             #{};
         Map when is_map(Map) ->

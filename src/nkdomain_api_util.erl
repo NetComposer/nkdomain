@@ -203,10 +203,7 @@ check_raw_token(Token) ->
 search({ok, Total, List}) ->
     Data = #{
         total => Total,
-        data =>
-            lists:map(
-                fun({Type, ObjId, Path}) -> #{type=>Type, obj_id=>ObjId, path=>Path} end,
-                List)
+        data => List
     },
     {ok, Data};
 
@@ -274,7 +271,6 @@ head_type_filters(Type, List) when is_list(List) ->
     maps:from_list(Fields).
 
 
-
 %% @private
-to_bin(T) when is_binary(T)-> T;
-to_bin(T) -> nklib_util:to_binary(T).
+to_bin(Term) when is_binary(Term) -> Term;
+to_bin(Term) -> nklib_util:to_binary(Term).

@@ -84,6 +84,7 @@ plugin_listen(_Config, #{id:=_SrvId}) ->
 %% Called from nkdomain_nkroot_callbacks:plugin_syntax/0
 syntax() ->
     #{
+        server_vsn => binary,
         start_nkroot => boolean,
         load_schema => boolean,
         listen_ip => host,
@@ -95,6 +96,8 @@ syntax() ->
         start_rest => boolean,
         db_clusters => {list, map},
         db_store => binary,
+        event_store => binary,
+        log_store => binary,
         default_store_id => binary,
         default_file_store => binary,
         default_mail_provider => binary,
@@ -102,6 +105,7 @@ syntax() ->
         default_image_processor => binary,
         start_services => {list, binary},
         '__defaults' => #{
+            server_vsn => <<"v0.0.3">>,
             start_nkroot => false,
             load_schema => false,
             listen_ip => <<"127.0.0.1">>,
@@ -153,8 +157,8 @@ config(Config, _Service) ->
         true ->
             Config2#{
                 nkadmin => #{
-                    webserver_url => <<BaseHttp/binary, "/_admin">>,
-                    api_url => <<BaseWs/binary, "/_admin/_ws">>
+                    webserver_url => <<BaseHttp/binary, "/_admin">>
+                    %api_url => <<BaseWs/binary, "/_admin/_api/_ws">>
                 }
             };
         false ->

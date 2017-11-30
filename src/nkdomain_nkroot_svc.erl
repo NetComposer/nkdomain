@@ -45,7 +45,7 @@
 start() ->
     Spec = #{
         plugins => [
-            nkdomain_nkroot, nkdomain_store_es, nkadmin,
+            nkdomain_nkroot, nkdomain_store_es, nkdomain_event_es, nkadmin,
             nkapi, nkmail, nkmail_smtp_client, nkfile_filesystem, nkfile_s3, nkfile_s3_mini, nkservice_rest,
             nktranscoder_netscale_ffmpeg, nkimage_netscale_pillow
         ],

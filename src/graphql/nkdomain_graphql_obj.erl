@@ -101,7 +101,7 @@ execute(Ctx, Obj, Field, Args) ->
 
 object_schema(scalars) ->
     #{
-        'Cursor' => #{comment=>"Pagination cursor"},
+        %'Cursor' => #{comment=>"Pagination cursor"},
         'UnixTime' => #{comment=>"Standard milisecond-resolution unix time"}
     };
 
@@ -243,7 +243,7 @@ object_schema(_) ->
 
 %% @doc
 object_query(<<"node">>, #{<<"id">>:=Id}, _Ctx) ->
-    case nkdomain_lib:read(Id) of
+    case nkdomain_db:read(Id) of
         {ok, #obj_id_ext{}=ObjIdExt, Obj} ->
             {ok, {ObjIdExt, Obj}};
         {error, Error} ->
@@ -273,10 +273,8 @@ object_fields(Base) ->
         createdById => {no_null, string, #{comment => "UserId that created the object"}},
         createdTime => {no_null, time, #{comment => "Object creation time"}},
         description => {string, #{comment => "User-related description"}},
-        destroyed => {boolean, #{comment => "True if the object is destroyed"}},
-        destroyedCode => {string, #{comment => "Destruction reason code"}},
-        destroyedReason => {string, #{comment => "Destruction reason text"}},
-        destroyedTime => {time, #{comment => "Destruction time"}},
+        isDeleted => {boolean, #{comment => "True if the object is destroyed"}},
+        deletedTime => {time, #{comment => "Destruction time"}},
         domain => {no_null, 'Domain', #{comment => "Domain this object belongs to"}},
         domainId => {no_null, string, #{comment => "DomainId this object belongs to"}},
         enabled => {no_null, boolean, #{comment => "False if object is disabled"}},
@@ -307,8 +305,8 @@ object_fields_filter(Fields) ->
         createdById => {'FilterId', #{comment => "Objects created by this user"}},
         createdTime => {'FilterInt', #{comment => "Object creation time"}},
         description => {'FilterNormalizedString', #{comment => "Words in description"}},
-        destroyed => {'FilterBoolean', #{comment => "Filter by destroyed objects"}},
-        destroyedTime => {'FilterInt', #{comment => "Destruction time"}},
+        isDeleted => {'FilterBoolean', #{comment => "Filter by destroyed objects"}},
+        deletedTime => {'FilterInt', #{comment => "Destruction time"}},
         domainId => {'FilterId', #{comment => "Filter objects belonging to this domain"}},
         enabled => {'FilterBoolean', #{comment => "Filter enabled or disabled objects"}},
         expiresTime => {'FilterInt', #{comment => "Time this object will expire"}},

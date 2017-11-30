@@ -46,12 +46,12 @@
 
 %% @private
 find() ->
-    nkdomain_domain_obj:search(<<"root">>, #{filters=>#{type=>?DOMAIN_FILE_STORE}}).
+    nkdomain:get_paths_type(<<"root">>, ?DOMAIN_FILE_STORE).
 
 
 %% @private
 delete_all() ->
-    nkdomain:delete_all_childs_type(<<"root">>, ?DOMAIN_FILE_STORE).
+    nkdomain:remove_path_type(<<"root">>, ?DOMAIN_FILE_STORE).
 
 
 

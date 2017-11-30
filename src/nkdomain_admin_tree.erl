@@ -173,13 +173,10 @@ get_dashboards(Session) ->
 
 
 %% @private
-find_domains(#admin_session{domain_id=DomainId}) ->
-    Spec = #{
-        filters => #{type => ?DOMAIN_DOMAIN}
-    },
-    case nkdomain_domain_obj:search_childs(DomainId, Spec) of
+find_domains(#admin_session{base_path=BasePath}) ->
+    case nkdomain_db:search({paths, BasePath, #{type=>?DOMAIN_DOMAIN}}) of
         {ok, _N, List} ->
-            {ok, [ObjId || {_SrvId, ?DOMAIN_DOMAIN, ObjId, _Path} <- List]};
+            {ok, [ObjId || #{<<"obj_id">>:=ObjId} <- List]};
         {error, Error} ->
             {error, Error}
     end.

@@ -26,7 +26,8 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([object_execute/5, object_schema/1, object_query/3, object_mutation/3]).
--export([object_info/0, object_admin_info/0, object_create/1, object_update/1, object_es_mapping/0, object_es_unparse/2,
+-export([object_info/0, object_admin_info/0, object_create/1, object_update/1,
+         object_es_mapping/0, object_es_unparse/2, object_db_get_filter/2,
          object_parse/2, object_api_syntax/2, object_api_cmd/2, object_send_event/2]).
 -export([object_init/1, object_save/1, object_event/2,
          object_sync_op/3, object_async_op/2, object_link_down/2, object_handle_info/2]).
@@ -243,6 +244,19 @@ object_es_unparse(Obj, Base) ->
     }.
 
 
+%% @private
+object_db_get_filter(nkelastic, {user_email, Email, Opts}) ->
+    Filters = [{type, eq, ?DOMAIN_USER}, {[?DOMAIN_USER, ".email"], eq, Email}],
+    Opts2 = maps:with([size, get_deleted], Opts),
+    {ok, {Filters, Opts2}};
+
+object_db_get_filter(nkelastic, QueryType) ->
+    {error, {unknown_query, QueryType}};
+
+object_db_get_filter(Backend, _) ->
+    {error, {unknown_backend, Backend}}.
+
+
 
 %% @doc
 object_update(Obj) ->
@@ -394,7 +408,7 @@ sync_op({get_info, Opts}, _From, #obj_state{obj=Obj}=State) ->
     Data = Base#{
         name => UserName,
         surname => UserSurName,
-        fullname => maps:get(name, Obj, UserName),
+        fullname => <<UserName/binary, " ", UserSurName/binary>>,
         email => maps:get(email, User, <<>>),
         phone_t => maps:get(phone_t, User, <<>>),
         address_t => maps:get(address_t, User, <<>>),
@@ -406,7 +420,7 @@ sync_op({get_info, Opts}, _From, #obj_state{obj=Obj}=State) ->
                 {true, DP} ->
                     DP;
                 {false, _} ->
-                    case nkdomain_lib:find(Domain) of
+                    case nkdomain_db:find(Domain) of
                         #obj_id_ext{path=DP} -> DP;
                         _ -> undefined
                     end
@@ -538,7 +552,7 @@ async_op({loaded_token, TokenId, Pid}, State) ->
                     #{
                         <<"session_type">> := SessType
                     } = Notification,
-                    case nkdomain_lib:find(DomainId) of
+                    case nkdomain_db:find(DomainId) of
                         #obj_id_ext{path=DomainPath} ->
                             Notify = #notify_token{
                                 token_id = TokenId,
@@ -606,14 +620,10 @@ check_email(#{?DOMAIN_USER:=#{email:=Email}}=Obj) ->
         true ->
             {ok, Obj};
         false ->
-            Spec = #{
-                size => 0,
-                filters => #{type=>?DOMAIN_USER, << ?DOMAIN_USER/binary, ".email">> => Email2}
-            },
-            case nkdomain:search(Spec) of
-                {ok, 0, _, _} ->
+            case nkdomain_db:search(?DOMAIN_USER, {user_email, Email2, #{size=>0}}) of
+                {ok, 0, _} ->
                     {ok, Obj#{aliases=>Email2}};
-                {ok, _, _, _} ->
+                {ok, _, _} ->
                     {error, {email_duplicated, Email2}};
                 {error, Error} ->
                     {error, Error}

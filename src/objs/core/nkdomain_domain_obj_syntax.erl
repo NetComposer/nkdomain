@@ -59,17 +59,17 @@ syntax(<<"find">>, Syntax) ->
 syntax(<<"find_all">>, Syntax) ->
     syntax(<<"find">>, Syntax);
 
-syntax(<<"find_types">>, Syntax) ->
-    syntax(<<"find">>, Syntax);
-
-syntax(<<"find_all_types">>, Syntax) ->
-    syntax(<<"find">>, Syntax);
-
-syntax(<<"find_childs">>, Syntax) ->
-    syntax(<<"find">>, Syntax);
-
-syntax(<<"find_all_childs">>, Syntax) ->
-    syntax(<<"find">>, Syntax);
+%%syntax(<<"find_types">>, Syntax) ->
+%%    syntax(<<"find">>, Syntax);
+%%
+%%syntax(<<"find_all_types">>, Syntax) ->
+%%    syntax(<<"find">>, Syntax);
+%%
+%%syntax(<<"find_childs">>, Syntax) ->
+%%    syntax(<<"find">>, Syntax);
+%%
+%%syntax(<<"find_all_childs">>, Syntax) ->
+%%    syntax(<<"find">>, Syntax);
 
 syntax(<<"unload_childs">>, Syntax) ->
     Syntax#{

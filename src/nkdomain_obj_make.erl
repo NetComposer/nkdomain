@@ -84,7 +84,7 @@ make(Opts) ->
     User = maps:get(created_by, Opts, <<"admin">>),
     Parent = maps:get(parent_id, Opts, Domain),
     try
-        {DomainId, DomainPath} = case nkdomain_lib:find(Domain) of
+        {DomainId, DomainPath} = case nkdomain_db:find(Domain) of
             #obj_id_ext{type=?DOMAIN_DOMAIN, obj_id=DomainId0, path=DomainPath0} ->
                 {DomainId0, DomainPath0};
             {error, object_not_found} ->
@@ -92,7 +92,7 @@ make(Opts) ->
             {error, DomainError} ->
                 throw(DomainError)
         end,
-        ParentId = case nkdomain_lib:find(Parent) of
+        ParentId = case nkdomain_db:find(Parent) of
             #obj_id_ext{obj_id=ParentId0} ->
                 ParentId0;
             {error, object_not_found} ->
@@ -100,7 +100,7 @@ make(Opts) ->
             {error, ParentError} ->
                 throw(ParentError)
         end,
-        UserId = case nkdomain_lib:find(User) of
+        UserId = case nkdomain_db:find(User) of
             #obj_id_ext{type = ?DOMAIN_USER, obj_id=UserId0} ->
                 UserId0;
             {error, object_not_found} ->
@@ -227,7 +227,7 @@ create(MakeOpts, Opts) ->
     #obj_id_ext{} | {error, term()}.
 
 create2(#{type:=Type, obj_id:=ObjId, path:=Path}=Obj, Meta) ->
-    case ?CALL_NKROOT(object_db_find_obj, [Path]) of
+    case ?CALL_NKROOT(object_db_find_obj, [Path, false]) of
         {error, object_not_found} ->
             case nkdomain_obj:start(Obj, created, Meta) of
                 {ok, Pid} ->

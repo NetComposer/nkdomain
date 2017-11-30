@@ -24,8 +24,10 @@ nkdomain_store_es_util).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([get_opts/0, get_index_opts/0, reload_index/0, delete_index/0, read_obj/1]).
+-export([child_filter/2, get_obj_id/1, get_path/1]).
 -export([base_mappings/0, unparse/1]).
 -export([db_init/2, normalize/1, normalize_multi/1]).
+-export([print_index/0, put1/0, get1/0]).
 
 -define(LLOG(Type, Txt, Args),
     lager:Type("NkDOMAIN Store ES "++Txt, Args)).
@@ -78,6 +80,91 @@ read_obj(Id) ->
     nkelastic:get(to_bin(Id), E).
 
 
+%% @private
+child_filter(Id, Opts) ->
+    case Opts of
+        #{deep:=true} ->
+            case get_path(Id) of
+                {ok, Path} ->
+                    {ok, [{path, subdir, Path}]};
+                {error, Error} ->
+                    {error, Error}
+            end;
+        _ ->
+            case get_obj_id(Id) of
+                {ok, ObjId} ->
+                    {ok, [{domain_id, eq, ObjId}]};
+                {error, Error} ->
+                    {error, Error}
+            end
+    end.
+
+
+%% @private
+get_obj_id(Id) ->
+    case nkdomain_util:is_path(Id) of
+        {true, <<"/">>} ->
+            {ok, <<"root">>};
+        {true, Path} ->
+            case nkdomain_store_es_callbacks:object_db_find_obj(Path, false) of
+                {ok, _Type, ObjId, _Path} ->
+                    {ok, ObjId};
+                {error, Error} ->
+                    {error, Error}
+            end;
+        {false, ObjId} ->
+            {ok, ObjId}
+    end.
+
+
+%% @private
+get_path(Id) ->
+    case nkdomain_util:is_path(Id) of
+        {true, Path} ->
+            {ok, Path};
+        {false, <<"root">>} ->
+            {ok, <<"/">>};
+        {false, ObjId} ->
+            case nkdomain_store_es_callbacks:object_db_find_obj(ObjId, false) of
+                {ok, _Type, _ObjId, Path} ->
+                    {ok, Path};
+                {error, Error} ->
+                    {error, Error}
+            end
+    end.
+
+
+%% @private
+print_index() ->
+    {ok, E} = get_opts(),
+    {ok, I, _} = nkelastic:get_index(E),
+    io:format("\n~s\n", [nklib_json:encode_pretty(I)]).
+
+
+put1() ->
+    {ok, E} = get_opts(),
+    {ok, O, _} = nkelastic:get(<<"admin">>, E),
+    O2 = O#{<<"fieldXX">> => <<"test">>},
+    % Since mapping for global fields is 'strict' it should fail
+    {error, {strict_mapping, _}} = nkelastic:put(<<"admin">>, O2, E),
+    % Mapping for 'user' fields is 'false' so it is accepted but not mapped
+    #{<<"user">> := U1} = O,
+    U2 = U1#{<<"fieldYY">> => 1},
+    {ok, _} = nkelastic:put(<<"admin">>, O#{<<"user">>:=U2}, E),
+    U3 = U1#{<<"fieldYY">> =>  <<"test">>},
+    {ok, _} = nkelastic:put(<<"admin">>, O#{<<"user">>:=U3}, E),
+    U4 = maps:remove(<<"fieldYY">>, U3),
+    {ok, _} = nkelastic:put(<<"admin">>, O#{<<"user">>:=U4}, E),
+    ok.
+
+
+get1() ->
+    {ok, E} = get_opts(),
+    nkelastic:get(<<"admin">>, E).
+
+
+
+
 
 %% ===================================================================
 %% Syntax
@@ -103,10 +190,24 @@ base_mappings() ->
         enabled => #{type => boolean},
         active => #{type => boolean},
         expires_time => #{type => date},
-        destroyed => #{type => boolean},
-        destroyed_time => #{type => date},
-        destroyed_code => #{type => keyword},
-        destroyed_reason => #{type => keyword},
+        is_deleted => #{type => boolean},
+        deleted_time => #{type => date},
+        roles => #{
+            type => object,
+            dynamic => false,
+            properties => #{
+                role => #{type => keyword},
+                direct => #{type => keyword},
+                indirect => #{
+                    type => object,
+                    dynamic => false,
+                    properties => #{
+                        role => #{type => keyword},
+                        obj_id => #{type => keyword}
+                    }
+                }
+            }
+        },
         name => #{
             type => text,
             analyzer => standard,
@@ -122,9 +223,19 @@ base_mappings() ->
         tags => #{type => keyword},
         aliases => #{type => keyword},
         icon_id => #{type => keyword},
-        next_status_time => #{type => date}
+        next_status_time => #{type => date},
+        in_alarm => #{type => boolean},
+        alarms => #{
+            type => object,
+            dynamic => false,
+            properties => #{
+                reason => #{type => text},
+                severity => #{type => keyword},
+                time => #{type => date},
+                body => #{enabled => false}
+           }
+        }
     }.
-
 
 
 
@@ -159,14 +270,14 @@ unparse(#{type:=Type}=Obj) ->
         _ ->
             BaseMap4
     end,
-    case nkdomain_lib:type_apply(Type, object_es_mapping, []) of
+    case nkdomain_util:type_apply(Type, object_es_mapping, []) of
         not_exported ->
             BaseMap5#{Type => #{}};
         not_indexed ->
             ModData = maps:get(Type, Obj, #{}),
             BaseMap5#{Type => ModData};
         Map when is_map(Map) ->
-            case nkdomain_lib:type_apply(Type, object_es_unparse, [Obj, BaseMap5]) of
+            case nkdomain_util:type_apply(Type, object_es_unparse, [Obj, BaseMap5]) of
                 not_exported ->
                     ModData = maps:get(Type, Obj, #{}),
                     ModKeys = maps:keys(Map),
@@ -194,12 +305,11 @@ db_init(IndexOpts, EsOpts) ->
 
 
 %% @doc
-%% TODO: each service could have their own type
 db_init_mappings(EsOpts) ->
     Modules = nkdomain_reg:get_all_type_modules(),
     Base = base_mappings(),
     Mappings = do_get_mappings(Modules, Base),
-    %% io:format("ES Mappings\n~s\n\n", [nklib_json:encode_pretty(Mappings)]),
+    % io:format("ES Mappings\n~s\n\n", [nklib_json:encode_pretty(Mappings)]),
     case nkelastic:add_mapping(Mappings, EsOpts) of
         {ok, _} ->
             db_init_root(EsOpts);
@@ -213,7 +323,7 @@ do_get_mappings([], Acc) ->
     Acc;
 
 do_get_mappings([Module|Rest], Acc) ->
-    Mapping = case nkdomain_lib:type_apply(Module, object_es_mapping, []) of
+    Mapping = case nkdomain_util:type_apply(Module, object_es_mapping, []) of
         not_exported ->
             #{enabled => false};
         not_indexed ->
@@ -345,7 +455,7 @@ norm_multi([], Chars, Words, Opts) ->
 
 
 %% ===================================================================
-%% Public
+%% Internal
 %% ===================================================================
 
 

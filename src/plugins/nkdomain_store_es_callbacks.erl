@@ -24,10 +24,8 @@
 
 -export([error/1]).
 -export([object_db_init/1, object_db_read/1, object_db_save/1, object_db_delete/1,
-         object_db_find_obj/1, object_db_search/1, object_db_search_alias/1,
-         object_db_search_childs/2, object_db_search_all_childs/2,
-         object_db_search_types/2, object_db_search_all_types/2, object_db_search_agg_field/4,
-         object_db_delete_all_childs/2, object_db_clean/0]).
+         object_db_find_obj/2, object_db_search_objs/3, object_db_agg_objs/3,
+         object_db_iterate_objs/5, object_db_clean/0]).
 
 
 -include("nkdomain.hrl").
@@ -72,7 +70,7 @@ object_db_init(State) ->
     end.
 
 
-%% @doc Called to get and parse an object
+%% @doc Called to get an object
 -spec object_db_read(nkdomain:obj_id()) ->
     {ok, map(), Meta::map()} | {error, term()}.
 
@@ -106,17 +104,49 @@ object_db_save(#{obj_id:=ObjId}=Obj) ->
 object_db_delete(ObjId) ->
     case nkdomain_store_es_util:get_opts() of
         {ok, EsOpts} ->
-            case nkdomain_store_es_search:search_childs(ObjId, #{size=>0}, EsOpts) of
-                {ok, 0, []} ->
-                    case nkdomain_lib:find_loaded(ObjId) of
-                        #obj_id_ext{pid=Pid} ->
-                            nkdomain_obj:object_deleted(Pid);
-                        not_found ->
-                            ok
-                    end,
-                    nkelastic:delete(ObjId, EsOpts);
-                {ok, _, _} ->
-                    {error, object_has_childs};
+            nkelastic:delete(ObjId, EsOpts);
+        _ ->
+            continue
+    end.
+
+
+%% @doc Finds an object from its ID or Path
+-spec object_db_find_obj(nkdomain:id(), FindDeleted::boolean()) ->
+    {ok, nkdomain:type(), nkdomain:obj_id(), nkdomain:path()} | {error, object_not_found|term()}.
+
+object_db_find_obj(Id, FindDeleted) ->
+    case nkdomain_store_es_util:get_opts() of
+        {ok, EsOpts} ->
+            nkdomain_store_es_search:find_obj(Id, FindDeleted, EsOpts);
+        _ ->
+            continue
+    end.
+
+
+%%%% @doc
+%%-spec object_db_search(nkdomain:search_spec()) ->
+%%    {ok, Total::integer(), Objs::[map()], Aggs::map(), Meta::map()} |
+%%    {error, term()}.
+%%
+%%object_db_search(Spec) ->
+%%    case nkdomain_store_es_util:get_opts() of
+%%        {ok, EsOpts} ->
+%%            nkdomain_store_es_search:search(Spec, EsOpts);
+%%        _ ->
+%%            continue
+%%    end.
+
+
+%% @doc
+-spec object_db_search_objs(nkservice:id(), nkdomain:type()|core, nkdomain:search_spec()) ->
+    {ok, integer(), [RawObj::map()]} | {error, term()}.
+
+object_db_search_objs(SrvId, Type, Spec) ->
+    case nkdomain_store_es_util:get_opts() of
+        {ok, EsOpts} ->
+            case ?CALL_SRV(SrvId, object_db_get_filter, [nkelastic, Type, Spec]) of
+                {ok, {Filters, Opts}} ->
+                    nkdomain_store_es_search:search_objs(Filters, Opts, EsOpts);
                 {error, Error} ->
                     {error, Error}
             end;
@@ -125,112 +155,98 @@ object_db_delete(ObjId) ->
     end.
 
 
-%% @doc Finds an object from its ID or Path
--spec object_db_find_obj(nkdomain:id()) ->
-    {ok, nkdomain:type(), nkdomain:obj_id(), nkdomain:path()} | {error, object_not_found|term()}.
-
-object_db_find_obj(Id) ->
-    case nkdomain_store_es_util:get_opts() of
-        {ok, EsOpts} ->
-            nkdomain_store_es_search:find_obj(Id, EsOpts);
-        _ ->
-            continue
-    end.
-
-
 %% @doc
--spec object_db_search(nkdomain:search_spec()) ->
-    {ok, Total::integer(), Objs::[map()], Aggs::map(), Meta::map()} |
+-spec object_db_agg_objs(nkservice:id(), nkdomain:type()|core, nkdomain:search_spec()) ->
+    {ok, Total::integer(), [{binary(), integer()}], Meta::map()} |
     {error, term()}.
 
-object_db_search(Spec) ->
+object_db_agg_objs(SrvId, Type, Spec) ->
     case nkdomain_store_es_util:get_opts() of
         {ok, EsOpts} ->
-            nkdomain_store_es_search:search(Spec, EsOpts);
+            case ?CALL_SRV(SrvId, object_db_get_agg, [nkelastic, Type, Spec]) of
+                {ok, {Filters, Field, Opts}} ->
+                    nkdomain_store_es_search:search_agg_objs(Filters, Field, Opts, EsOpts);
+                {error, Error} ->
+                    {error, Error}
+            end;
         _ ->
             continue
     end.
 
 
 %% @doc
--spec object_db_search_alias(nkdomain:alias()) ->
-    {ok, Total::integer(), [{Srv::binary(), nkdomain:type(), nkdomain:obj_id(), nkdomain:path()}], Meta::map()} |
-    {error, term()}.
+-spec object_db_iterate_objs(nkservice:id(), nkdomain:type()|core, nkdomain:search_spec(), fun(), term()) ->
+    {ok, term()} | {error, term()}.
 
-object_db_search_alias(Alias) ->
+object_db_iterate_objs(SrvId, Type, Spec, Fun, Acc0) ->
     case nkdomain_store_es_util:get_opts() of
         {ok, EsOpts} ->
-            nkdomain_store_es_search:search_obj_alias(Alias, EsOpts);
+            case ?CALL_SRV(SrvId, object_db_get_filter, [nkelastic, Type, Spec]) of
+                {ok, {Filters, Opts}} ->
+                    Opts2 = Opts#{fold_fun=>Fun, fold_acc0=>Acc0},
+                    nkdomain_store_es_search:iterate_objs(Filters, Opts2, Fun, Acc0, EsOpts);
+                {error, Error2} ->
+                    {error, Error2}
+            end;
         _ ->
             continue
     end.
 
 
-%% @doc
--spec object_db_search_types(nkdomain:id(), nkdomain:search_spec()) ->
-    {ok, Total::integer(), [{Srv::binary(), nkdomain:type(), integer()}], Meta::map()} | {error, term()}.
-
-object_db_search_types(Id, Spec) ->
-    case nkdomain_store_es_util:get_opts() of
-        {ok, EsOpts} ->
-            nkdomain_store_es_search:search_types(Id, Spec, EsOpts);
-        _ ->
-            continue
-    end.
 
 
-%% @doc
--spec object_db_search_all_types(nkdomain:id(), nkdomain:search_spec()) ->
-    {ok, Total::integer(), [{Srv::binary(), nkdomain:type(), integer()}], Map::map()} | {error, term()}.
-
-object_db_search_all_types(Id, Spec) ->
-    case nkdomain_store_es_util:get_opts() of
-        {ok, EsOpts} ->
-            nkdomain_store_es_search:search_all_types(Id, Spec, EsOpts);
-        _ ->
-            continue
-    end.
-
-
-%% @doc
--spec object_db_search_childs(nkdomain:id(), nkdomain:search_spec()) ->
-    {ok, Total::integer(), [{nkdomain:type(), nkdomain:obj_id(), nkdomain:path()}], Meta::map()} |
-    {error, term()}.
-
-object_db_search_childs(Id, Spec) ->
-    case nkdomain_store_es_util:get_opts() of
-        {ok, EsOpts} ->
-            nkdomain_store_es_search:search_childs(Id, Spec, EsOpts);
-        _ ->
-            continue
-    end.
-
-
-%% @doc
--spec object_db_search_all_childs(nkdomain:id(), nkdomain:search_spec()) ->
-    {ok, Total::integer(), [{nkdomain:type(), nkdomain:obj_id(), nkdomain:path()}], Meta::map()} |
-    {error, term()}.
-
-object_db_search_all_childs(Id, Spec) ->
-    case nkdomain_store_es_util:get_opts() of
-        {ok, EsOpts} ->
-            nkdomain_store_es_search:search_all_childs(Id, Spec, EsOpts);
-        _ ->
-            continue
-    end.
-
-
-%% @doc Must stop loaded objects
--spec object_db_delete_all_childs(nkdomain:id(), nkdomain:search_spec()) ->
-    {ok, Total::integer()} | {error, term()}.
-
-object_db_delete_all_childs(Id, Spec) ->
-    case nkdomain_store_es_util:get_opts() of
-        {ok, EsOpts} ->
-            nkdomain_store_es_search:delete_all_childs(Id, Spec, EsOpts);
-        _ ->
-            continue
-    end.
+%%%% @doc
+%%-spec object_db_search_types(nkdomain:id(), nkdomain:search_spec()) ->
+%%    {ok, Total::integer(), [{Srv::binary(), nkdomain:type(), integer()}], Meta::map()} | {error, term()}.
+%%
+%%object_db_search_types(Id, Spec) ->
+%%    case nkdomain_store_es_util:get_opts() of
+%%        {ok, EsOpts} ->
+%%            nkdomain_store_es_search:search_types(Id, Spec, EsOpts);
+%%        _ ->
+%%            continue
+%%    end.
+%%
+%%
+%%%% @doc
+%%-spec object_db_search_all_types(nkdomain:id(), nkdomain:search_spec()) ->
+%%    {ok, Total::integer(), [{Srv::binary(), nkdomain:type(), integer()}], Map::map()} | {error, term()}.
+%%
+%%object_db_search_all_types(Id, Spec) ->
+%%    case nkdomain_store_es_util:get_opts() of
+%%        {ok, EsOpts} ->
+%%            nkdomain_store_es_search:search_all_types(Id, Spec, EsOpts);
+%%        _ ->
+%%            continue
+%%    end.
+%%
+%%
+%%%% @doc
+%%-spec object_db_search_childs(nkdomain:id(), nkdomain:search_spec()) ->
+%%    {ok, Total::integer(), [{nkdomain:type(), nkdomain:obj_id(), nkdomain:path()}], Meta::map()} |
+%%    {error, term()}.
+%%
+%%object_db_search_childs(Id, Spec) ->
+%%    case nkdomain_store_es_util:get_opts() of
+%%        {ok, EsOpts} ->
+%%            nkdomain_store_es_search:search_childs(Id, Spec, EsOpts);
+%%        _ ->
+%%            continue
+%%    end.
+%%
+%%
+%%%% @doc
+%%-spec object_db_search_all_childs(nkdomain:id(), nkdomain:search_spec()) ->
+%%    {ok, Total::integer(), [{nkdomain:type(), nkdomain:obj_id(), nkdomain:path()}], Meta::map()} |
+%%    {error, term()}.
+%%
+%%object_db_search_all_childs(Id, Spec) ->
+%%    case nkdomain_store_es_util:get_opts() of
+%%        {ok, EsOpts} ->
+%%            nkdomain_store_es_search:search_all_childs(Id, Spec, EsOpts);
+%%        _ ->
+%%            continue
+%%    end.
 
 
 %% @doc Called to perform a cleanup of the store (expired objects, etc.)
@@ -247,16 +263,21 @@ object_db_clean() ->
     end.
 
 
-%% @doc
--spec object_db_search_agg_field(nkdomain:id(), binary(),
-                                 nkdomain:search_spec(), SubChilds::boolean()) ->
-    {ok, Total::integer(), [{nkdomain:type(), integer()}], Map::map()} | {error, term()}.
+%%%% @doc
+%%-spec object_db_search_agg_field(nkdomain:id(), binary(),
+%%                                 nkdomain:search_spec(), SubChilds::boolean()) ->
+%%    {ok, Total::integer(), [{nkdomain:type(), integer()}], Map::map()} | {error, term()}.
+%%
+%%object_db_search_agg_field(Id, Field, Spec, SubChilds) ->
+%%    case nkdomain_store_es_util:get_opts() of
+%%        {ok, EsOpts} ->
+%%            nkdomain_store_es_search:search_agg_field(Id, Field, Spec, SubChilds, EsOpts);
+%%        _ ->
+%%            continue
+%%    end.
 
-object_db_search_agg_field(Id, Field, Spec, SubChilds) ->
-    case nkdomain_store_es_util:get_opts() of
-        {ok, EsOpts} ->
-            nkdomain_store_es_search:search_agg_field(Id, Field, Spec, SubChilds, EsOpts);
-        _ ->
-            continue
-    end.
 
+
+%% ===================================================================
+%% Internal
+%% ===================================================================
