@@ -107,7 +107,8 @@ register_types() ->
         nkdomain_token_obj, nkdomain_service_obj, nkdomain_task_obj, nkdomain_alert_obj,
         nkdomain_device_obj, nkdomain_node_obj, nkdomain_location_obj, nkdomain_mail_obj, 
         nkdomain_mail_provider_obj, nkdomain_file_store_obj, nkdomain_file_obj, nkadmin_session_obj,
-        nkdomain_transcoder_server_obj, nkdomain_transcoder_job_obj]).
+        nkdomain_transcoder_server_obj, nkdomain_transcoder_job_obj, 
+        nkdomain_image_processor_obj, nkdomain_image_job_obj ]).
 
 
 %% @doc

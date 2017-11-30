@@ -1,10 +1,10 @@
 -module(nkdomain_transcoder_job_obj).
 -export([object_info/0, object_parse/2, object_schema_types/0, object_es_mapping/0]).
 -export([object_api_syntax/2, object_api_cmd/2]).
--export([make_job_id/0]).
-%-export([object_sync_op/3]).
--export([create/7, update/2, subscribe/2, unsubscribe/2, notify/2, nkevent/2]).
+-export([create/4, subscribe/2, start/4, update/2]).
+-export([unsubscribe/2, notify/2, nkevent/2]).
 -export([update_output_file/2]).
+-export([nktranscoder_event/1]).
 -include_lib("nktranscoder/include/nktranscoder.hrl").
 -include_lib("nkevent/include/nkevent.hrl").
 -include("../../../include/nkdomain.hrl").
@@ -70,13 +70,11 @@ object_api_cmd(Cmd, Req) ->
 make_job_id() ->
     <<"transcoder.job-", (nklib_util:luid())/binary>>.
 
-
-subscribe(SrvId, JobId) -> 
-    Event = nkevent(SrvId, JobId),
-    nkapi_server:subscribe(self(), Event),
-    ?DEBUG("~p subscribed to events on transcoder job ~p", [self(),
-                                                            JobId]),
-    ok.
+subscribe(#{srv_id := SrvId,
+            obj_id := JobId}, Req) ->
+    Ev = nkevent(SrvId, JobId),
+    {ok, _, Req2} = nkservice_api:api(<<"event/subscribe">>, Ev, Req),
+    {ok, Req2}.
 
 unsubscribe(SrvId, JobId) -> 
     Event = nkevent(SrvId, JobId),
@@ -103,34 +101,60 @@ nkevent(_SrvId, JobId, Body) ->
              body = Body,
              srv_id=?NKROOT}.
 
-create(SrvId, Domain, UserId, TranscoderId, StoreId, CallbackUrl, #{ input := #{ type := StoreType,
-                                                          path := Input,
-                                                          content_type := ContentType },
-                                              output := #{ type := StoreType,
-                                                           path := Output }}) ->
-    JobId = make_job_id(),
-    Obj = #{
-      srv_id => SrvId,
-      obj_id => JobId,
-      type => ?TRANSCODER_JOB,
-      domain_id => Domain,
-      created_by => UserId,
-      ?TRANSCODER_JOB => #{ content_type => ContentType,
-                            input => Input,
-                            output => Output,
-                            store_type => StoreType,
-                            transcoder_id => TranscoderId,
-                            callback_url => CallbackUrl }},
-    
-    OutputContentType = <<"video/mp4">>,
-    case nkdomain_obj_make:create(Obj) of
-        {ok, #obj_id_ext{path=Path}, _Unknown} ->
-            case nkdomain_file_obj:create(StoreId, UserId, Domain, Output, SrvId, OutputContentType, 0, [#{ type => original, id => Input }]) of
-                {ok, _, _} ->
-                    case nkdomain_file_obj:update(Input, #{ links => [#{ type => transcoding,
-                                                                         id => Output }]}) of
-                        {ok, []} ->
-                            {ok, Path, Obj};
+create(SrvId, Domain, UserId, #{file_id := FileId}=Req) -> 
+    case nkdomain_transcoder_server_obj:get_default() of
+        {ok, TranscoderId, Transcoder} ->
+            case find_file_and_store(FileId) of
+                {ok, File, Store} ->
+                    case map_store_type(Store) of
+                        {ok, StoreType} ->
+                            OutputFileId = nkdomain_file_obj:make_file_id(),
+                            Req2 = Req#{store_type => StoreType,
+                                        output => OutputFileId},
+                            JobObj = job_obj(SrvId, Domain, UserId,
+                                               job_props(File, TranscoderId, Req2)),
+                            case nkdomain_obj_make:create(JobObj) of
+                                {ok, _, _} ->
+                                    case create_output_file(Store, JobObj) of 
+                                        ok -> 
+                                            {ok, JobObj, Transcoder, File};  
+                                        {error, Error} ->
+                                            {error, Error}
+                                    end;
+                                {error, Error} ->
+                                    {error, Error}
+                            end;
+                        {error, Error} -> 
+                            {error, Error}
+                    end;
+                {error, Error} ->
+                    {error, Error}
+            end;
+        {error, Error} ->
+            {error, Error}
+    end.
+
+create_output_file(#{id:=StoreId}, #{ srv_id := SrvId,
+                                      domain_id := Domain,
+                                      created_by := UserId,
+                                      ?TRANSCODER_JOB := #{ input := FileId,
+                                                            output := OutputFileId,
+                                                            content_type := Mime }}) -> 
+                    
+    LinkToOriginal = #{ type => original,
+                        id => FileId},
+    case nkdomain_file_obj:create(StoreId, UserId, Domain, OutputFileId,
+                                  SrvId, Mime, 0, [LinkToOriginal]) of
+        {ok, _, _} ->
+            case nkdomain:get_obj(FileId) of
+                 {ok, #{ <<"file">> := #{ links := Links} }} ->
+                    NewLinks = [#{ type => <<"transcoding">>, 
+                                   id => OutputFileId
+                                 }|Links],
+                    case nkdomain:update(FileId, #{ ?DOMAIN_FILE =>
+                                                    #{ links => NewLinks }}) of
+                        {ok, _} ->
+                            ok;
                         {error, Error} ->
                             {error, Error}
                     end;
@@ -140,6 +164,76 @@ create(SrvId, Domain, UserId, TranscoderId, StoreId, CallbackUrl, #{ input := #{
         {error, Error} ->
             {error, Error}
     end.
+
+start(SrvId, File, Transcoder, Job) ->
+    #{ obj_id := FileId,
+       ?DOMAIN_FILE := #{ content_type := InputMime }} = File,
+        
+    #{ obj_id := JobId,
+       ?TRANSCODER_JOB := #{ content_type := OutputMime,
+                             output := OutputFileId,
+                             store_type := StoreType,
+                             callback_url := _CallbackUrl }} = Job,
+
+    Args = #{ callback => {?MODULE, nktranscoder_event, [JobId]},
+              input => #{ type => StoreType,
+                          path => FileId,
+                          content_type => InputMime },
+              output => #{ type => StoreType,
+                           path => OutputFileId,
+                           content_type => OutputMime }},
+
+    nktranscoder:transcode(SrvId, Transcoder, Args).
+
+nktranscoder_event([JobId, Ev, Pid, Msg]) ->
+    ?DEBUG("=> got event ~p with Pid: ~p, JobId: ~p, Msg: ~p", [Ev, Pid, JobId, Msg]),
+    case update(JobId, #{ status => Ev,
+                          pid => Pid,
+                          info => Msg }) of 
+        ok -> 
+            ?DEBUG("succesfully updated transcoding job ~p", [JobId]);
+        {error, Error} ->
+            ?ERROR("error while updating transcoding job ~p: ~p", [JobId, Error])
+    end.
+
+mime(#{ format:= <<>>}, Default) -> 
+    Default;
+
+mime(#{ format:= CT}, _Default) ->
+    CT;
+
+mime(_, Default) -> 
+    Default.
+
+job_obj(SrvId, Domain, UserId, Props) ->
+    #{ srv_id => SrvId,
+       obj_id => make_job_id(),
+       type => ?TRANSCODER_JOB,
+       domain_id => Domain,
+       created_by => UserId,
+       ?TRANSCODER_JOB=> Props
+     }.
+
+job_props(#{ obj_id := FileId, 
+             ?DOMAIN_FILE := #{ content_type := InputMime }}, 
+          TranscoderId, #{ store_type := StoreType,
+                                   output := Output,
+                                   callback_url := CallbackUrl}=Req) -> 
+    
+    OutputMime = mime(Req, InputMime),
+    
+    #{ content_type => OutputMime,
+       input => FileId,
+       output => Output,
+       store_type => StoreType,
+       status => <<"in progress">>,
+       progress => 0,
+       transcoder_id => TranscoderId,
+       callback_url => CallbackUrl }.
+
+map_store_type(#{ class := fs}) -> {ok, <<"fs">>};
+map_store_type(_) -> {ok, <<"s3">>}.
+
 
 update(JobId, JobData) ->
     case validate(JobData) of 
@@ -165,13 +259,8 @@ update(JobId, JobData) ->
             {error, Error}
     end.
 
-update_output_file(FileId, #{ size := Size,
-                            content_type := ContentType }) ->
-    nkdomain_file_obj:update(FileId, #{ content_type => ContentType,
-                                        size => Size });
-
-update_output_file(FileId, #{ content_type := ContentType }) ->
-    nkdomain_file_obj:update(FileId, #{ content_type => ContentType });
+update_output_file(FileId, #{ size := Size}) ->
+    nkdomain_file_obj:update(FileId, #{ size => Size });
 
 update_output_file(_FileId, _) -> {ok, []}.
 
@@ -201,3 +290,16 @@ validate(#{ status := Status, info := #{ <<"progress">> := Progress }}) ->
 
 validate(#{ status := Status }) ->
     {ok, #{ status => Status }}.
+
+find_file_and_store(FileId) -> 
+    case nkdomain:get_obj(FileId) of
+        {ok, File} ->
+            case nkdomain_file_obj:get_store(File) of
+                {ok, StoreId, Store} ->
+                    {ok, File, Store#{id => StoreId}};
+                {error, Error} -> 
+                    {error, Error}
+            end;
+        {error, Error} -> 
+            {error, Error}
+    end.

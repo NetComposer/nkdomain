@@ -78,7 +78,8 @@
     db_store :: binary(),
     file_store :: binary,
     email_provider :: binary(),
-    transcoder_server :: binary()
+    transcoder_server :: binary(),
+    image_processor :: binary()
 }).
 
 

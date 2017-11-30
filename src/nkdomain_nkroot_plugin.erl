@@ -99,6 +99,7 @@ syntax() ->
         default_file_store => binary,
         default_mail_provider => binary,
         default_transcoder => binary,
+        default_image_processor => binary,
         start_services => {list, binary},
         '__defaults' => #{
             start_nkroot => false,
@@ -187,7 +188,8 @@ config(Config, _Service) ->
         db_store = DbStore,
         file_store = maps:get(default_file_store, Env, <<>>),
         email_provider = maps:get(default_file_store, Env, <<>>),
-        transcoder_server = maps:get(default_transcoder, Env, <<>>)
+        transcoder_server = maps:get(default_transcoder, Env, <<>>),
+        image_processor = maps:get(default_image_processor, Env, <<>>)
     },
     Config5 = add_graphql(Config4),
     {ok, Config5, Cache}.
