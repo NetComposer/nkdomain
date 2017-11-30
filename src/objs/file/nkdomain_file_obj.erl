@@ -95,6 +95,34 @@ create(Domain, Body, Opts) ->
             {error, Error}
     end.
 
+-spec create(nkdomain:id(), 
+             nkdomain:id(),
+             nkdomain:id(), 
+             nkdomain:id(),
+             nkservice:id(),
+             binary,
+             integer,
+             list) ->
+    any(). 
+
+create(StoreObjId, UserId, DomainId, FileObjId, SrvId, ContentType, Size, Links) -> 
+    Obj = #{ created_by => UserId, 
+              domain_id => DomainId,
+              name => <<>>,
+              obj_id => FileObjId,
+              srv_id => SrvId ,type => <<"file">>,
+              ?DOMAIN_FILE => #{
+                  content_type => ContentType,
+                  size => Size,
+                  store_id => StoreObjId,
+                  links => Links
+            }},
+    case nkdomain_obj_make:create(Obj) of
+        {ok, ExtId, _Unknown} ->
+            {ok, ExtId, Obj};
+        {error, Error} ->
+            {error, Error}
+    end.
 
 %% @doc Creates a file from a nkservice_rest request
 http_post(Req) ->
@@ -144,7 +172,6 @@ http_post(Domain, StoreId, Name, Req) ->
                                         ?DOMAIN_FILE => maps:merge(File2, FileMeta)
                                     },
 
-                                    io:format("File object: ~p~n", [Obj]),
                                     case nkdomain_obj_make:create(Obj) of
                                         {ok, ExtId, _Unknown} ->
                                             {ok, ExtId, Obj};
@@ -164,25 +191,6 @@ http_post(Domain, StoreId, Name, Req) ->
             {error, Error}
     end.
 
-
-create(StoreObjId, UserId, DomainId, FileObjId, SrvId, ContentType, Size, Links) -> 
-    Obj = #{ created_by => UserId, 
-              domain_id => DomainId,
-              name => <<>>,
-              obj_id => FileObjId,
-              srv_id => SrvId ,type => <<"file">>,
-              <<"file">> => #{
-                  content_type => ContentType,
-                  size => Size,
-                  store_id => StoreObjId,
-                  links => Links
-            }},
-    case nkdomain_obj_make:create(Obj) of
-        {ok, ExtId, _Unknown} ->
-            {ok, ExtId, Obj};
-        {error, Error} ->
-            {error, Error}
-    end.
 
 update(FileId, Data) -> 
     nkdomain:update(FileId, #{?DOMAIN_FILE => Data}).
@@ -283,22 +291,17 @@ object_execute(Field, _ObjId, #{?DOMAIN_FILE:=File}, _Args, _Ctx) ->
 
 
 %% @private
-%%
-%% TODO: uncomment this -- temporarily commented
-%% out in order to make "link" work
-%%object_es_mapping() ->
-%%    #{
-%%        content_type => #{type => keyword},
-%%        store_id => #{type => keyword},
-%%        size => #{type => long},
-%%        password => #{type => keyword}
-%%    }.
-%% TODO: remove this once links (as a list)
-%% are supported in object_es_mapping/0.
-%%
-object_es_mapping() -> 
-    not_indexed.
-
+object_es_mapping() ->
+    #{
+        content_type => #{type => keyword},
+        store_id => #{type => keyword},
+        size => #{type => long},
+        password => #{type => keyword},
+        links => #{ type => object,
+                    dynamic => false,
+                    properties => #{ id => #{ type => binary },
+                                     type => #{ type => binary }}}
+    }.
 
 %% @private
 object_parse(update, _Obj) ->

@@ -43,10 +43,9 @@ get_default() ->
             {error, transcoder_server_id_missing}
     end.
 
-
 %% @private
 do_get_transcoder(TranscoderId) ->
-    case nkdomain_lib:load(TranscoderId) of
+    case nkdomain_db:load(TranscoderId) of
         #obj_id_ext{obj_id=TranscoderObjId, type = ?TRANSCODER_SERVER} ->
             case nkdomain:get_obj(TranscoderObjId) of
                 {ok, #{?TRANSCODER_SERVER:=Data}} ->

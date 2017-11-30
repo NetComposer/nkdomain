@@ -46,8 +46,7 @@ get_default() ->
 
 %% @private
 do_get_processor(ProcessorId) ->
-    lager:debug("~p: Loading default image processor: ~p", [?MODULE, ProcessorId]),
-    case nkdomain_lib:load(ProcessorId) of
+    case nkdomain_db:load(ProcessorId) of
         #obj_id_ext{obj_id=ProcessorObjId, type = ?IMAGE_PROCESSOR} ->
             case nkdomain:get_obj(ProcessorObjId) of
                 {ok, #{?IMAGE_PROCESSOR:=Data}} ->
