@@ -47,6 +47,7 @@ object_parse(create, _Obj) ->
        status => binary,
        progress => float,
        callback_url => binary,
+       options => map,
        '__mandatory' => [ content_type, 
                           store_type, 
                           input, 
@@ -54,7 +55,8 @@ object_parse(create, _Obj) ->
                           transcoder_id],
        '__defaults' => #{ status => <<"not_started">>,
                           progress => 0,
-                          callback_url => <<"">> }
+                          callback_url => <<"">>,
+                          options => #{}}
      };
 
 object_parse(load, Obj) ->
@@ -173,8 +175,9 @@ start(SrvId, File, Transcoder, Job) ->
        ?TRANSCODER_JOB := #{ content_type := OutputMime,
                              output := OutputFileId,
                              store_type := StoreType,
-                             callback_url := _CallbackUrl }} = Job,
+                             callback_url := _CallbackUrl } = JobProps } = Job,
 
+    
     Args = #{ callback => {?MODULE, nktranscoder_event, [JobId]},
               input => #{ type => StoreType,
                           path => FileId,
@@ -182,8 +185,14 @@ start(SrvId, File, Transcoder, Job) ->
               output => #{ type => StoreType,
                            path => OutputFileId,
                            content_type => OutputMime }},
-
-    nktranscoder:transcode(SrvId, Transcoder, Args).
+    
+    Args2 = case maps:is_key(options, JobProps) of 
+                true -> 
+                    Args#{ options => maps:get(options, JobProps) };
+                false -> 
+                    Args
+            end,
+    nktranscoder:transcode(SrvId, Transcoder, Args2).
 
 nktranscoder_event([JobId, Ev, Pid, Msg]) ->
     ?DEBUG("=> got event ~p with Pid: ~p, JobId: ~p, Msg: ~p", [Ev, Pid, JobId, Msg]),
@@ -222,14 +231,21 @@ job_props(#{ obj_id := FileId,
     
     OutputMime = mime(Req, InputMime),
     
-    #{ content_type => OutputMime,
+    Props = #{ content_type => OutputMime,
        input => FileId,
        output => Output,
        store_type => StoreType,
        status => <<"in progress">>,
        progress => 0,
        transcoder_id => TranscoderId,
-       callback_url => CallbackUrl }.
+       callback_url => CallbackUrl },
+
+    case maps:is_key(options, Req) of 
+        true -> 
+            Props#{options => maps:get(options, Req)};
+        false ->
+            Props
+    end.
 
 map_store_type(#{ class := fs}) -> {ok, <<"fs">>};
 map_store_type(_) -> {ok, <<"s3">>}.
