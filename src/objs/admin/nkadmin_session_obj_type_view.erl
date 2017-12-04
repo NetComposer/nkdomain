@@ -135,7 +135,7 @@ table_data(#{start:=Start, size:=Size, sort:=Sort, filter:=Filter}, _Opts, #admi
                 0 -> search;
                 1 -> search_all
             end,
-            case nkdomain_domain_obj:Fun(DomainId, FindSpec) of
+            case nkdomain_domain:Fun(DomainId, FindSpec) of
                 {ok, Total, List, _Meta} ->
                     Data = table_iter(List, Start+1, []),
                     {ok, Total, Data};

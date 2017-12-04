@@ -202,11 +202,23 @@ type(Class) ->
     Size = byte_size(Class),
     case Size > 3 andalso binary:part(Class, Size, -3) of
         <<"ies">> ->
-            {ok, <<(binary:part(Class, 0, byte_size(Class)-3))/binary, $y>>};
+            Type = <<(binary:part(Class, 0, byte_size(Class)-3))/binary, $y>>,
+            case nkdomain_reg:get_type_module(Type) of
+                undefined ->
+                    error;
+                _ ->
+                    {ok, Type}
+            end;
         _ when Size > 1 ->
             case binary:part(Class, Size, -1) of
                 <<"s">> ->
-                    {ok, binary:part(Class, 0, byte_size(Class)-1)};
+                    Type = binary:part(Class, 0, byte_size(Class)-1),
+                    case nkdomain_reg:get_type_module(Type) of
+                        undefined ->
+                            error;
+                        _ ->
+                            {ok, Type}
+                    end;
                 _ ->
                     error
             end;

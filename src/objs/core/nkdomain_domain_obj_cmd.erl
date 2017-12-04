@@ -125,7 +125,7 @@ cmd(<<"find_all">>, #nkreq{data=Data}=Req) ->
 cmd(<<"unload_childs">>, #nkreq{data=Data}=Req) ->
     case get_domain(Data, Req) of
         {ok, Id} ->
-            nkdomain_domain_obj:unload_childs(Id);
+            nkdomain_domain:unload_childs(Id);
         Error ->
             Error
     end;
