@@ -73,7 +73,7 @@ object_db_init(State) ->
         {ok, IndexOpts, EsOpts} ->
             case nkdomain_event_es_util:db_init(IndexOpts, EsOpts) of
                 ok ->
-                    {ok, State};
+                    {continue, [State]};
                 {error, Error} ->
                     {error, {object_db_init, Error}}
             end;
