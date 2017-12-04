@@ -339,17 +339,8 @@ remove_path(Id) ->
 
 %% @doc
 remove_path_type(Id, Type) ->
-    case nkdomain_db:iterate({paths, Id, #{type=>Type, deep=>true, sort=>rpath, get_deleted=>true}}, delete_fun(), 0) of
-        {ok, Count} ->
-            case nkdomain_db:hard_delete(Id) of
-                ok ->
-                    {ok, Count+1};
-                {error, Error} ->
-                    {error, Error}
-            end;
-        {error, Error} ->
-            {error, Error}
-    end.
+    nkdomain_db:iterate({paths, Id, #{type=>Type, deep=>true, sort=>rpath, get_deleted=>true}}, delete_fun(), 0).
+
 
 %% @doc
 print_path_type(Id, Type) ->
@@ -382,10 +373,7 @@ remove_with_childs(Id) ->
     end.
 
 
-
-
-
-        %% @private Performs a periodic cleanup
+%% @private Performs a periodic cleanup
 -spec clean() ->
     {ok, map()} | {error, term()}.
 

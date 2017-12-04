@@ -212,4 +212,4 @@ sync_op(Domain, Op) ->
 
 %% @private
 async_op(Domain, Op) ->
-    nkdomain_obj:async_op(Domain, {nkdomain_user_obj, Op}).
+    nkdomain_obj:async_op(Domain, {nkdomain_domain_obj, Op}).

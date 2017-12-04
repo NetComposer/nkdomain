@@ -144,7 +144,7 @@ cmd(<<"enable">>, Type, #nkreq{data=#{enable:=Enable} = Data} = Req) ->
 %%            Filters1 = maps:get(filters, Data, #{}),
 %%            Filters2 = Filters1#{type=>Type},
 %%            Data2 = Data#{filters=>Filters2},
-%%            case nkdomain_domain_obj:search(SrvId, DomainId, Data2) of
+%%            case nkdomain_domain:search(SrvId, DomainId, Data2) of
 %%                {ok, Total, List, _Meta} ->
 %%                    {ok, #{<<"total">>=>Total, <<"data">>=>List}};
 %%                {error, Error} ->
@@ -160,7 +160,7 @@ cmd(<<"enable">>, Type, #nkreq{data=#{enable:=Enable} = Data} = Req) ->
 %%            Filters1 = maps:get(filters, Data, #{}),
 %%            Filters2 = Filters1#{type=>Type},
 %%            Data2 = Data#{filters=>Filters2},
-%%            case nkdomain_domain_obj:search_all(DomainId, Data2) of
+%%            case nkdomain_domain:search_all(DomainId, Data2) of
 %%                {ok, Total, List, _Meta} ->
 %%                    {ok, #{<<"total">>=>Total, <<"data">>=>List}};
 %%                {error, Error} ->
