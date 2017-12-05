@@ -397,7 +397,7 @@ get_session_items([Type|Rest], Acc, Session) ->
     #admin_session{domain_id=DomainId} = Session,
     case is_session(Type, Session) of
         {true, Info} ->
-            case nkdomain_domain_obj:get_counter(DomainId, Type) of
+            case nkdomain_domain:get_counter(DomainId, Type) of
                 {ok, 0} ->
                     get_session_items(Rest, Acc, Session);
                 {ok, Counter} ->

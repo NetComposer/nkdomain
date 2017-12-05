@@ -95,15 +95,10 @@ create(Domain, Body, Opts) ->
             {error, Error}
     end.
 
--spec create(nkdomain:id(), 
-             nkdomain:id(),
-             nkdomain:id(), 
-             nkdomain:id(),
-             nkservice:id(),
-             binary,
-             integer,
-             list) ->
-    any(). 
+
+%% @doc
+-spec create(nkdomain:id(), nkdomain:id(), nkdomain:id(), nkdomain:id(), nkservice:id(), binary(), integer(), list()) ->
+    {ok, #obj_id_ext{}, nkdomain:obj()} | {error, term()}.
 
 create(StoreObjId, UserId, DomainId, FileObjId, SrvId, ContentType, Size, Links) -> 
     Obj = #{ created_by => UserId, 
@@ -303,11 +298,14 @@ object_es_mapping() ->
                                      type => #{ type => binary }}}
     }.
 
+
+%% TODO Size, content_type shouldn't be updated!
 %% @private
 object_parse(update, _Obj) ->
-    #{ size => integer,
-       content_type => binary,
-       links => list
+    #{
+        size => integer,
+        content_type => binary,
+        links => list
      };
 
 object_parse(_Mode, _Obj) ->

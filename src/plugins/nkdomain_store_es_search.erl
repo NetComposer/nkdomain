@@ -119,8 +119,14 @@ search_objs(Filters, Opts, EsOpts) ->
         _ ->
             Filters3
     end,
+    Filters5 = case Opts of
+        #{tags:=Tags} ->
+            [{tags, values, Tags}|Filters4];
+        _ ->
+            Filters4
+    end,
     Spec1 = maps:with([from, size, sort, fields], Opts),
-    Spec2 = Spec1#{filter_list => Filters4},
+    Spec2 = Spec1#{filter_list => Filters5},
     do_search_objs(Spec2, EsOpts).
 
 
@@ -148,9 +154,15 @@ search_agg_objs(Filters, Field, Opts, EsOpts) ->
         _ ->
             Filters3
     end,
+    Filters5 = case Opts of
+        #{tags:=Tags} ->
+            [{tags, values, Tags}|Filters4];
+        _ ->
+            Filters4
+    end,
     Size = maps:get(size, Opts, 100),
     Spec = #{
-        filter_list => Filters4,
+        filter_list => Filters5,
         aggs => #{
             my_fields => #{
                 terms => #{

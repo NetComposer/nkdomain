@@ -2,7 +2,7 @@
 -export([object_info/0, object_parse/2, object_schema_types/0, object_es_mapping/0]).
 -export([get_default/0]).
 -include_lib("nkimage/include/nkimage.hrl").
--include("../../../include/nkdomain.hrl").
+-include("nkdomain.hrl").
 
 object_info() ->
     #{ type => ?IMAGE_PROCESSOR,

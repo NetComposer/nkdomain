@@ -49,6 +49,7 @@
         active => boolean(),
         description => binary(),
         aliases => [binary()],
+        tags => [binary()],
         nkdomain:type() => map(),
 
         % Pseudo-field:
