@@ -89,7 +89,7 @@
 -module(nkdomain_user).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([create/1, auth/2, make_token/4, get_name/1, get_info/2]).
+-export([create/2, auth/2, make_token/4, get_name/1, get_info/2]).
 -export([user_pass/1]).
 -export([get_sessions/1, get_sessions/2, get_presence/3, update_presence/3]).
 -export([register_session/5, unregister_session/2, launch_session_notifications/2, set_status/4, get_status/3]).
@@ -176,7 +176,16 @@
     {presence_updated, nkdomain:type(), Path::nkdomain:path(), user_presence()}.
 
 
+-type create_opts() ::
+    #{
+        parent_id => nkdomain:id(),
+        created_by => nkdomain:id(),
+        ttl => integer(),
+        name => binary(),
+        surname => binary(),
+        email => binary()
 
+    }.
 
 
 %% ===================================================================
@@ -185,11 +194,29 @@
 
 
 %% @doc
--spec create(map()) ->
+-spec create(nkdomain:id(), create_opts()) ->
     {ok, #obj_id_ext{}, [Unknown::binary()]} | {error, term()}.
 
-create(Obj) ->
-    nkdomain_user_obj:object_create(Obj).
+create(Domain, Opts) ->
+    Base = maps:with([parent_id, created_by, ttl], Opts),
+    User = maps:with([name, surname, email], Opts),
+    Obj = Base#{
+        type => ?DOMAIN_USER,
+        domain_id => Domain,
+        ?DOMAIN_USER => User
+    },
+    case nkdomain_user_obj:check_email(Obj) of
+        {ok, Obj2} ->
+            case nkdomain_obj_make:create(Obj2) of
+                {ok, #obj_id_ext{obj_id=UserId, pid=Pid}, _} ->
+                    {ok, UserId, Pid};
+                {error, Error} ->
+                    {error, Error}
+            end;
+        {error, Error} ->
+            {error, Error}
+    end.
+
 
 
 %% @doc
@@ -221,8 +248,8 @@ auth(User, #{sso_device_id:=DeviceId}) ->
             {error, Error}
     end;
 
-auth(_User, _Data) ->
-    {error, no_password}.
+auth(User, _Data) ->
+    auth(User, #{password=><<>>}).
 
 
 %% @doc Generates a password from an user password or hash
