@@ -28,7 +28,7 @@
 -export([object_info/0, object_es_mapping/0, object_parse/2, object_send_event/2,
          object_sync_op/3, object_async_op/2]).
 -export([object_admin_info/0]).
--export([get_token_data/1, consume_token/2]).
+-export([get_token_data/1, consume_token/2, execute_token/1]).
 -export([object_execute/5, object_schema/1, object_query/3, object_mutation/3]).
 
 -include("nkdomain.hrl").
@@ -47,6 +47,8 @@
         parent_id => nkdomain:id(),     % Mandatory
         created_by => nkdomain:id(),    % Mandatory
         subtype => nkdomain:subtype(),
+        module => module(),
+        function => atom(),
         srv_id => nkservice:id(),
         ttl => integer()
     }.
@@ -65,13 +67,14 @@
 
 create(DomainId, Opts, Data) ->
     Base = maps:with([parent_id, created_by, subtype, srv_id], Opts),
+    TokenData = maps:with([module, function], Opts),
     case check_ttl(Opts) of
         {ok, TTL} ->
             Obj = Base#{
                 domain_id => DomainId,
                 type => ?DOMAIN_TOKEN,
                 ttl => TTL,
-                ?DOMAIN_TOKEN => #{
+                ?DOMAIN_TOKEN => TokenData#{
                     data => Data
                 }
             },
@@ -104,6 +107,11 @@ check_ttl(TokenOpts) ->
         _ ->
             {error, token_invalid_ttl}
     end.
+
+
+%% @doc
+execute_token(Id) ->
+    nkdomain_obj:sync_op(Id, {?MODULE, execute}).
 
 
 %% @doc
@@ -163,7 +171,9 @@ object_mutation(MutationName, Params, Ctx) ->
 object_es_mapping() ->
     #{
         vsn => #{type => keyword},
-        data => #{enabled => false}
+        data => #{enabled => false},
+        module => #{type => keyword},
+        function => #{type => keyword}
     }.
 
 
@@ -171,6 +181,8 @@ object_es_mapping() ->
 object_parse(_Mode, _Obj) ->
     #{
         vsn => binary,
+        module => module,
+        function => atom,
         data => any,
         '__defaults' => #{vsn => 1, data => #{}}
     }.
@@ -194,7 +206,23 @@ object_sync_op({?MODULE, get_token_data}, _From, State) ->
     },
     {reply, {ok, Reply}, State};
 
-%% @private
+object_sync_op({?MODULE, execute}, _From, #obj_state{obj=Obj}=State) ->
+    case Obj of
+        #{?DOMAIN_TOKEN:=#{
+            module := Module,
+            function := Function
+        }} ->
+            case erlang:function_exported(Module, Function, 1) of
+                true ->
+                    Reply = apply(Module, Function, [Obj]),
+                    {reply, Reply, State};
+                false ->
+                    {reply, {error, invalid_token}, State}
+            end;
+        _ ->
+            {reply, {error, invalid_token}, State}
+    end;
+
 object_sync_op({?MODULE, consume, Reason}, From, State) ->
     #obj_state{domain_id=DomainId, obj=Obj} = State,
     #{?DOMAIN_TOKEN:=#{data:=TokenData}} = Obj,
