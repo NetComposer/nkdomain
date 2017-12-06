@@ -427,7 +427,6 @@ check_object(SrvId, #{obj_id:=ObjId}=Obj) ->
         _ ->
             ok
     end,
-    Res1 = ok,
     case Res1 of
         removed ->
             removed;
