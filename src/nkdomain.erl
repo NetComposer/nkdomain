@@ -324,7 +324,7 @@ get_paths_type(Id, Type) ->
 
 %% @doc
 remove_path(Id) ->
-    case nkdomain_db:iterate({paths, Id, #{deep=>true, sort=>rpath, get_deleted=>true}}, print_fun(), 0) of
+    case nkdomain_db:iterate({paths, Id, #{deep=>true, sort=>rpath, get_deleted=>true}}, delete_fun(), 0) of
         {ok, Count} ->
             case nkdomain_db:hard_delete(Id) of
                 ok ->
