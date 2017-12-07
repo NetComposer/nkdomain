@@ -120,13 +120,19 @@ search_objs(Filters, Opts, EsOpts) ->
             Filters3
     end,
     Filters5 = case Opts of
-        #{tags:=Tags} ->
-            [{tags, values, Tags}|Filters4];
+        #{all_tags:=Tags1} ->
+            [{tags, eq, Tag} || Tag <- Tags1] ++ Filters4;
         _ ->
             Filters4
     end,
+    Filters6 = case Opts of
+        #{some_tags:=Tags2} ->
+            [{tags, values, Tags2}|Filters4];
+        _ ->
+            Filters5
+    end,
     Spec1 = maps:with([from, size, sort, fields], Opts),
-    Spec2 = Spec1#{filter_list => Filters5},
+    Spec2 = Spec1#{filter_list => Filters6},
     do_search_objs(Spec2, EsOpts).
 
 
