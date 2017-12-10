@@ -270,7 +270,13 @@ hard_delete(Id) ->
 
 hard_delete(Id, Opts) ->
     case find(Id, Opts#{get_deleted=>true}) of
-        #obj_id_ext{obj_id=ObjId} ->
+        #obj_id_ext{obj_id=ObjId, pid=Pid} ->
+            case is_pid(Pid) of
+                true ->
+                    nkdomain_obj:object_deleted(Pid);
+                false ->
+                    ok
+            end,
             SrvId = maps:get(srv_id, Opts, ?NKROOT),
             case ?CALL_SRV(SrvId, object_db_delete, [ObjId]) of
                 {ok, _Meta} ->

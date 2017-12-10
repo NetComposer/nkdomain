@@ -360,11 +360,16 @@ get_childs_type(Id, Type) ->
 
 %% @doc
 remove_with_childs(Id) ->
-    case nkdomain_db:iterate({childs, Id, #{sort=>rpath, get_deleted=>true}}, delete_fun(), 0) of
-        {ok, Count} ->
-            case nkdomain_db:hard_delete(Id) of
-                ok ->
-                    {ok, Count+1};
+    case nkdomain_db:find(Id) of
+        #obj_id_ext{obj_id=ObjId} ->
+            case nkdomain_db:iterate({childs, ObjId, #{sort=>rpath, get_deleted=>true}}, delete_fun(), 0) of
+                {ok, Count} ->
+                    case nkdomain_db:hard_delete(ObjId) of
+                        ok ->
+                            {ok, Count+1};
+                        {error, Error} ->
+                            {error, Error}
+                    end;
                 {error, Error} ->
                     {error, Error}
             end;
