@@ -24,7 +24,7 @@
 -behavior(nkdomain_obj).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([create/3]).
+-export([create/3, download/1]).
 -export([http_post/1, http_post/4, http_get/2]).
 -export([find/0, delete_all/0]).
 -export([object_schema/1, object_execute/5]).
@@ -203,17 +203,22 @@ http_get(FileId, Req) ->
     end,
     case nkdomain_api_util:check_raw_token(Token) of
         {ok, _UserId, _UserDomainId, _Data, _SessId} ->
-            case nkdomain:get_obj(FileId) of
-                {ok, #{obj_id:=FileObjId, ?DOMAIN_FILE:=File}} ->
-                    CT = maps:get(content_type, File),
-                    case get_store(File) of
-                        {ok, _StoreObjId, Store} ->
-                            case nkfile:download(?NKROOT, Store, File#{name=>FileObjId}) of
-                                {ok, _, Body} ->
-                                    {ok, CT, Body};
-                                {error, Error} ->
-                                    {error, Error}
-                            end;
+            download(FileId);
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
+%% @doc
+download(FileId) ->
+    case nkdomain:get_obj(FileId) of
+        {ok, #{obj_id:=FileObjId, ?DOMAIN_FILE:=File}} ->
+            CT = maps:get(content_type, File),
+            case get_store(File) of
+                {ok, _StoreObjId, Store} ->
+                    case nkfile:download(?NKROOT, Store, File#{name=>FileObjId}) of
+                        {ok, _, Body} ->
+                            {ok, CT, Body};
                         {error, Error} ->
                             {error, Error}
                     end;
@@ -223,6 +228,10 @@ http_get(FileId, Req) ->
         {error, Error} ->
             {error, Error}
     end.
+
+
+
+
 
 
 %% @private
