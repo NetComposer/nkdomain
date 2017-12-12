@@ -72,7 +72,7 @@ create(Domain, Body, Opts) ->
                     {ok, FileMeta} ->
                         CT = maps:with([content_type], Opts),
                         FileMeta2 = maps:merge(FileMeta, CT),
-                        Obj1 = maps:with([parent_id, created_by], Opts),
+                        Obj1 = maps:with([parent_id, created_by, name, description], Opts),
                         Obj2 = Obj1#{
                             obj_id => FileId,
                             domain_id => Domain,
