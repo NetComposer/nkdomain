@@ -60,7 +60,7 @@ make_objs([]) ->
 
 make_objs([#{path:=Path} = Obj|Rest]) ->
     case nkdomain_obj_make:create(Obj) of
-        {error, object_already_exists} ->
+        {error, {object_already_exists, _ObjId}} ->
             case nkdomain:update(Path, Obj) of
                 {ok, _} ->
                     lager:info("Object ~s updated", [Path]);

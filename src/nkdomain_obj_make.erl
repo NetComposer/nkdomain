@@ -237,7 +237,7 @@ create2(#{type:=Type, obj_id:=ObjId, path:=Path}=Obj, Meta) ->
                     {error, Error}
             end;
         {ok, _, _, _} ->
-            {error, object_already_exists};
+            {error, {object_already_exists, ObjId}};
         {error, Error} ->
             {error, Error}
     end.

@@ -158,6 +158,7 @@
     {add_roles, nkdomain:role(), nkdomain:role_spec()|[nkdomain:role_spec()]} |
     {remove_roles, nkdomain:role(), nkdomain:role_spec()|[nkdomain:role_spec()]} |
     get_alarms |
+    {apply, Mod::module(), Fun::atom(), Args::list()} |
     term().
 
 -type async_op() ::
@@ -695,6 +696,9 @@ do_sync_op(get_alarms, _From, #obj_state{obj=Obj}=State) ->
     end,
     {reply, {ok, Alarms}, State};
 
+do_sync_op({apply, Mod, Fun, Args}, From, State) ->
+    apply(Mod, Fun, Args++[From, State]);
+
 do_sync_op(Op, _From, State) ->
     ?LLOG(notice, "unknown sync op: ~p", [Op], State),
     reply({error, unknown_op}, State).
@@ -1082,9 +1086,9 @@ do_update_name(ObjName, #obj_state{id=Id, obj=Obj}=State) ->
                         {error, Error} ->
                             {error, Error}
                     end;
-                #obj_id_ext{} ->
+                #obj_id_ext{obj_id=ObjId} ->
                     ?LLOG(notice, "cannot update name, ~s already exists", [Path2], State),
-                    {error, object_already_exists};
+                    {error, {object_already_exists, ObjId}};
                 {error, Error} ->
                     {error, Error}
             end
