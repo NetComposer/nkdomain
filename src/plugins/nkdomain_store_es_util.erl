@@ -191,7 +191,7 @@ base_mappings() ->
         active => #{type => boolean},
         expires_time => #{type => date},
         is_deleted => #{type => boolean},
-        deleted_time => #{type => date},
+        deleted_time => #{type => date},        %% TODO Change to date
         roles => #{
             type => object,
             dynamic => false,

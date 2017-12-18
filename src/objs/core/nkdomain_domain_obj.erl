@@ -247,6 +247,22 @@ sync_op({set_config, Key, Val}, _From, #obj_state{obj=#{?DOMAIN_DOMAIN:=Domain}=
     State3 = do_event({config_updated, Key, Val}, State2),
     {reply_and_save, ok, State3};
 
+sync_op({apply_config, Key, Fun}, _From, #obj_state{obj=#{?DOMAIN_DOMAIN:=Domain}=Obj}=State) ->
+    Key2 = nklib_util:to_binary(Key),
+    Configs1 = maps:get(configs, Domain, #{}),
+    Val1 = maps:get(Key2, Configs1, #{}),
+    case Fun(Val1) of
+        {ok, Val2} ->
+            Configs2 = Configs1#{Key2 => Val2},
+            Domain2 = Domain#{configs => Configs2},
+            Obj2 = ?ADD_TO_OBJ(?DOMAIN_DOMAIN, Domain2, Obj),
+            State2 = State#obj_state{obj=Obj2},
+            State3 = do_event({config_updated, Key, Val2}, State2),
+            {reply_and_save, ok, State3};
+        {error, Error} ->
+            {reply, {error, Error}, State}
+    end;
+
 sync_op({get_default, Key}, _From, #obj_state{obj=#{?DOMAIN_DOMAIN:=Domain}}=State) ->
     Key2 = nklib_util:to_binary(Key),
     Configs = maps:get(defaults, Domain, #{}),

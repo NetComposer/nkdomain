@@ -31,7 +31,7 @@
          object_parse/2, object_api_syntax/2, object_api_cmd/2, object_send_event/2]).
 -export([object_init/1, object_save/1, object_event/2,
          object_sync_op/3, object_async_op/2, object_link_down/2, object_handle_info/2]).
--export([fun_user_pass/1]).
+-export([check_email/1, fun_user_pass/1]).
 
 
 -include("nkdomain.hrl").
@@ -381,13 +381,19 @@ sync_op({check_pass, _Pass}, _From, #obj_state{is_enabled=false}=State) ->
     {reply, {error, object_is_disabled}, State};
 
 sync_op({check_pass, Pass}, _From, #obj_state{id=Id, obj=Obj}=State) ->
-    case Obj of
-        #{domain_id:=DomainId, ?DOMAIN_USER:=#{password:=Pass}} ->
-            #obj_id_ext{obj_id=UserId} = Id,
-            {reply, {ok, {true, UserId, DomainId}}, State};
-        _ ->
-            {reply, {ok, false}, State}
-    end;
+    #obj_id_ext{obj_id=UserId} = Id,
+    Reply = case Obj of
+        #{domain_id:=DomainId, ?DOMAIN_USER:=#{password:=UserPass}} ->
+            case UserPass of
+                Pass ->
+                    {true, UserId, DomainId};
+                _ ->
+                    false
+            end;
+        #{domain_id:=DomainId} ->
+            {true, UserId, DomainId}
+    end,
+    {reply, {ok, Reply}, State};
 
 sync_op({check_device, _Pass}, _From, #obj_state{is_enabled=false}=State) ->
     {reply, {error, object_is_disabled}, State};

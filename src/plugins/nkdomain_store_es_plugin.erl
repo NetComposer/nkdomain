@@ -52,7 +52,7 @@ plugin_syntax() ->
                 url => binary,
                 pool_size => {integer, 1, none},
                 pool_overflow => {integer, 1, none},
-                replicas => {integer, 1, 5},
+                replicas => {integer, 0, 5},
                 database => binary,
                 '__mandatory' => [class]
             }},

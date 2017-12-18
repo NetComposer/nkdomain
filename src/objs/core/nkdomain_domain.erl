@@ -24,7 +24,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 
--export([get_config/2, set_config/3, get_default/2, set_default/3]).
+-export([get_config/2, set_config/3, apply_config/3, get_default/2, set_default/3]).
 -export([find_path/1, find_path/2, unload_childs/1, get_childs_type/2]).
 -export([get_all_counters/1, get_counter/2]).
 -export([sync_op/2, async_op/2]).
@@ -120,6 +120,14 @@ get_config(DomainId, Key) ->
 
 set_config(DomainId, Key, Val) when is_map(Val) ->
     sync_op(DomainId, {set_config, nklib_util:to_binary(Key), Val}).
+
+
+%% @doc Sets a 'config' key
+-spec apply_config(nkdomain:id(), Key::binary(), fun((term()) -> {ok, term()} | {error, term()})) ->
+    {ok, map()} | {error, term()}.
+
+apply_config(DomainId, Key, Fun) when is_function(Fun, 1) ->
+    sync_op(DomainId, {apply_config, nklib_util:to_binary(Key), Fun}).
 
 
 %% @doc Get a 'defaults' key
