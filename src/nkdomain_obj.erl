@@ -1086,9 +1086,9 @@ do_update_name(ObjName, #obj_state{id=Id, obj=Obj}=State) ->
                         {error, Error} ->
                             {error, Error}
                     end;
-                #obj_id_ext{obj_id=ObjId} ->
+                #obj_id_ext{} ->
                     ?LLOG(notice, "cannot update name, ~s already exists", [Path2], State),
-                    {error, {object_already_exists, ObjId}};
+                    {error, {object_already_exists, Path2}};
                 {error, Error} ->
                     {error, Error}
             end

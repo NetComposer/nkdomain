@@ -191,6 +191,8 @@ class(Type) ->
     Type2 = to_bin(Type),
     Size = byte_size(Type2),
     case binary:at(Type2, Size-1) of
+        $s ->
+            <<Type2/binary, "es">>;
         $y ->
             <<Type2:(Size-1)/binary, "ies">>;
         _ ->
