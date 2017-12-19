@@ -38,7 +38,7 @@
 -include("nkdomain_debug.hrl").
 -include_lib("nkservice/include/nkservice.hrl").
 
--define(MAX_FILE_SIZE, 10000000).
+-define(MAX_FILE_SIZE, 52428800).
 
 
 %% ===================================================================

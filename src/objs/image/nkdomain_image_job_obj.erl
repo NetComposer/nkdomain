@@ -35,13 +35,15 @@ object_parse(_Mode, _Obj) ->
        height => integer,
        format => binary,
        callback_url => binary,
+       options => map,
        '__mandatory' => [ input, 
                           progress,
                           status,
                           processor_id],
        '__defaults' => #{ status => <<"not_started">>,
                           progress => 0,
-                          callback_url => <<"">> }
+                          callback_url => <<"">>,
+                          options => #{} }
      }.
 
 make_job_id() ->
@@ -146,7 +148,8 @@ job_props(FileId, ProcessorId, #{action := Action,
                                  format := Fmt,
                                  width := Width,
                                  height := Height,
-                                 callback_url:=CallbackUrl}) -> 
+                                 callback_url:=CallbackUrl,
+                                 options := Options }) -> 
     #{ input => FileId,
        action => Action,
        output => <<>>,
@@ -156,12 +159,14 @@ job_props(FileId, ProcessorId, #{action := Action,
        status => <<"not_started">>,
        progress => 0,
        processor_id => ProcessorId,
-       callback_url => CallbackUrl };
+       callback_url => CallbackUrl,
+       options => Options };
 
 
 job_props(FileId, ProcessorId, #{action := Action,
                                  format := Fmt,
-                                 callback_url:=CallbackUrl}) -> 
+                                 callback_url:=CallbackUrl, 
+                                 options := Options }) -> 
     #{ input => FileId,
        action => Action,
        output => <<>>,
@@ -169,7 +174,8 @@ job_props(FileId, ProcessorId, #{action := Action,
        status => <<"not_started">>,
        progress => 0,
        processor_id => ProcessorId,
-       callback_url => CallbackUrl };
+       callback_url => CallbackUrl,
+       options => Options };
 
 job_props(FileId, ProcessorId, #{action := _}=Req) -> 
     job_props(FileId, ProcessorId, Req#{callback_url=> <<>>}).
