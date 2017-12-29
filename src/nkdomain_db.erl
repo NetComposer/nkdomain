@@ -24,7 +24,8 @@
 
 -export([find/1, find/2, find_loaded/1, read/1, read/2, load/1, load/2]).
 -export([delete/1, delete/2, hard_delete/1, hard_delete/2]).
--export([search/1, search/2, iterate/3, iterate/4, aggs/1, aggs/2]).
+-export([search/2, iterate/4, aggs/2]).
+-export_type([search_obj/0, search_objs_opts/0]).
 
 -include("nkdomain.hrl").
 -include_lib("nkevent/include/nkevent.hrl").
@@ -43,6 +44,29 @@
         srv_id => atom(),
         get_deleted => boolean()
     }.
+
+-type search_type() :: term().
+
+-type search_obj() :: #{binary() => term()}.
+
+-type iterate_fun() :: fun((search_obj()) -> {ok, term()}).
+
+-type aggregation_type() :: term().
+
+
+%% Common filter opts supported by all queries, aggregations and iterations
+-type search_objs_opts() ::
+    #{
+        from => integer(),
+        size => integer(),
+        fields => [atom()|binary()|iolist()],
+        sort => binary() | [binary()],      % "asc:..." or "desc:..."
+        get_deleted => boolean(),           % Default false
+        type => nkdomain:type(),            % Filter by type
+        all_tags => [binary()],             % Must have all tags
+        some_tags => [binary()]             % Must have any of these tags
+    }.
+
 
 -type obj_id() :: nkdomain:obj_id().
 -type type() :: nkdomain:type().
@@ -105,10 +129,10 @@ find_in_db(Id, Opts) ->
             {ok, _, ObjName} = nkdomain_util:get_parts(Type, Path),
             #obj_id_ext{type=Type, obj_id=ObjId, path=Path, obj_name=ObjName};
         {error, object_not_found} ->
-            case search(core, {alias, Id, #{get_deleted=>FindDeleted}}, Opts) of
-                {ok, 0, []} ->
+            case search(core, {query_alias, Id, #{get_deleted=>FindDeleted}}, Opts) of
+                {ok, 0, [], _Meta} ->
                     {error, object_not_found};
-                {ok, N, [#{<<"type">>:=Type, <<"obj_id">>:=ObjId, <<"path">>:=Path}|_]}->
+                {ok, N, [#{<<"type">>:=Type, <<"obj_id">>:=ObjId, <<"path">>:=Path}|_], _Meta}->
                     case N > 1 of
                         true ->
                             lager:notice("NkDOMAIN: duplicated alias for ~s", [Id]);
@@ -289,48 +313,25 @@ hard_delete(Id, Opts) ->
     end.
 
 
-%% @doc Internal search (non GraphQL). See nkdomain:search_type()
--spec search(nkdomain:search_type()) ->
-    {ok, integer(), RawObj::map()} | {error, term()}.
+%% @doc
+-spec search(nkdomain:type()|core, search_type()) ->
+    {ok, integer(), [search_obj()]} | {error, term()}.
 
-search(SearchType) ->
-    search(core, SearchType, #{}).
+search(ObjType, SearchType) ->
+    search(ObjType, SearchType, #{}).
 
 
 %% @doc
--spec search(type()|core, nkdomain:search_type()) ->
-    {ok, integer(), RawObj::map()} | {error, term()}.
+-spec search(nkdomain:type()|core, search_type(), opts()) ->
+    {ok, integer(), [search_obj()], Meta::map()} | {error, term()}.
 
-search(Type, SearchType) ->
-    search(Type, SearchType, #{}).
-
-
-%% @doc
--spec search(type()|core, nkdomain:search_type(), opts()) ->
-    {ok, integer(), RawObj::map()} | {error, term()}.
-
-search(Type, SearchType, Opts) ->
+search(ObjType, SearchType, Opts) ->
     SrvId = maps:get(srv_id, Opts, ?NKROOT),
-    case ?CALL_SRV(SrvId, object_db_search_objs, [SrvId, Type, SearchType]) of
-        {ok, Total, Data} ->
-            {ok, Total, Data};
-        {error, Error} ->
-            {error, Error}
-    end.
-
-
--type iter_fun() :: fun(({type(), obj_id(), path(), Fields::map()}, term()) -> {ok, term()}).
-
-%% @doc Internal iteration
--spec iterate(nkdomain:search_type(), iter_fun(), term()) ->
-    {ok, term()} | {error, term()}.
-
-iterate(SearchType, Fun, Acc) ->
-    iterate(core, SearchType, Fun, Acc, #{}).
+    ?CALL_SRV(SrvId, object_db_search_objs, [SrvId, ObjType, SearchType, Opts]).
 
 
 %% @doc Internal iteration
--spec iterate(type()|core, nkdomain:search_type(), iter_fun(), term()) ->
+-spec iterate(type()|core, search_type(), iterate_fun(), term()) ->
     {ok, term()} | {error, term()}.
 
 iterate(Type, SearchType, Fun, Acc) ->
@@ -338,24 +339,16 @@ iterate(Type, SearchType, Fun, Acc) ->
 
 
 %% @doc
--spec iterate(type()|core, nkdomain:search_type(), iter_fun(), term(), opts()) ->
+-spec iterate(type()|core, search_type(), iterate_fun(), term(), opts()) ->
     {ok, term()} | {error, term()}.
 
 iterate(Type, SearchType, Fun, Acc, Opts) ->
     SrvId = maps:get(srv_id, Opts, ?NKROOT),
-    ?CALL_SRV(SrvId, object_db_iterate_objs, [SrvId, Type, SearchType, Fun, Acc]).
+    ?CALL_SRV(SrvId, object_db_iterate_objs, [SrvId, Type, SearchType, Fun, Acc, Opts]).
 
 
 %% @doc Internal aggregation
--spec aggs(nkdomain:aggs_type()) ->
-    {ok, integer(), [{binary(), integer()}]} | {error, term()}.
-
-aggs(AggType) ->
-    aggs(core, AggType, #{}).
-
-
-%% @doc Internal aggregation
--spec aggs(type()|core, nkdomain:aggs_type()) ->
+-spec aggs(type()|core, aggregation_type()) ->
     {ok, integer(), [{binary(), integer()}]} | {error, term()}.
 
 aggs(Type, AggType) ->
@@ -363,12 +356,12 @@ aggs(Type, AggType) ->
 
 
 %% @doc
--spec aggs(type()|core, nkdomain:agg_type(), opts()) ->
+-spec aggs(type()|core, aggregation_type(), opts()) ->
     {ok, integer(), [{binary(), integer()}]} | {error, term()}.
 
 aggs(Type, AggType, Opts) ->
     SrvId = maps:get(srv_id, Opts, ?NKROOT),
-    case ?CALL_SRV(SrvId, object_db_agg_objs, [SrvId, Type, AggType]) of
+    case ?CALL_SRV(SrvId, object_db_agg_objs, [SrvId, Type, AggType, Opts]) of
         {ok, Total, Data, _Meta} ->
             {ok, Total, Data};
         {error, Error} ->

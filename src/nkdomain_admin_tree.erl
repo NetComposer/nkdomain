@@ -174,8 +174,8 @@ get_dashboards(Session) ->
 
 %% @private
 find_domains(#admin_session{base_path=BasePath}) ->
-    case nkdomain_db:search({paths, BasePath, #{type=>?DOMAIN_DOMAIN}}) of
-        {ok, _N, List} ->
+    case nkdomain_db:search(core, {query_paths, BasePath, #{type=>?DOMAIN_DOMAIN}}) of
+        {ok, _N, List, _Meta} ->
             {ok, [ObjId || #{<<"obj_id">>:=ObjId} <- List]};
         {error, Error} ->
             {error, Error}

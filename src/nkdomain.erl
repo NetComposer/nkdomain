@@ -44,7 +44,7 @@
 -export([clean/0]).
 -export([print_fun/0, delete_fun/0]).
 -export_type([obj_id/0, obj_name/0, obj/0, path/0, id/0, type/0, role/0, role_spec/0]).
--export_type([timestamp/0, search_type/0, search_objs_opts/0, agg_type/0]).
+-export_type([timestamp/0]).
 
 -include("nkdomain.hrl").
 
@@ -71,36 +71,6 @@
 
 %% @see nkdomain_callbacks:domain_store_base_mapping/0
 -type obj() :: map().
-
-
--type search_objs_opts() ::
-    #{
-        from => integer(),
-        size => integer(),
-        fields => [atom()|binary()],        % Default obj_id
-        sort => binary() | [binary()],      % "asc:..." or "desc:..."
-        get_deleted => boolean(),           % Default false
-        type => nkdomain:type(),            % Filter by type
-        base => nkdomain:path()             % Filter by path
-    }.
-
-
-% Internal search specification
--type search_type() ::
-    {graphql, Filters::term(), #{from=>integer(), size=>integer(), sort=>[binary()]}} |
-    {alias, binary(), #{get_deleted=>boolean()}} |
-    {paths, Domain::id(),
-        #{get_deleted=>boolean(), deep=>boolean(), type=>type(), subtypes=>[binary()], size=>integer(),
-          sort => path | rpath}} |
-    {path_roles, Domain::id(), [type()], User::obj_id(), #{get_deleted=>boolean(), size=>integer()}} |
-    {childs, Obj::id(), #{get_deleted=>boolean(), type=>type(), size=>integer(), sort => path | rpath}} |
-    {user_email, binary(), #{get_deleted=>boolean(), size=>integer()}}.
-
-
-% Internal search specification
--type agg_type() ::
-    {types, nkdomain:id(), #{get_deleted=>boolean(), deep=>boolean(), size=>integer()}} |
-    {values, nkdomain:id(), #{get_deleted=>boolean(), deep=>boolean(), size=>integer()}}.
 
 
 -type timestamp() :: nklib_util:m_timestamp().
@@ -270,7 +240,7 @@ remove_roles(Id, Role, RoleSpec) ->
 
 
 %%%% @doc
-%%-spec search(nkdomain:id(), search_spec()) ->
+%%-spec search(id(), search_spec()) ->
 %%    {ok, integer(), Data::[map()], Meta::map()} | {error, term()}.
 %%
 %%search(Domain, Spec) ->
@@ -285,7 +255,7 @@ remove_roles(Id, Role, RoleSpec) ->
 %%
 %%
 %%%% @doc
-%%-spec search(nkdomain:id(), nkdomain:type(), search_spec()) ->
+%%-spec search(id(), nkdomain:type(), search_spec()) ->
 %%    {ok, integer(), Data::[map()], Meta::map()} | {error, term()}.
 %%
 %%search(Domain, Type, Spec) ->
@@ -308,23 +278,45 @@ remove_roles(Id, Role, RoleSpec) ->
 
 
 %% @doc
+-spec get_types(id()) ->
+    {ok, integer(), [{binary(), integer()}]} | {error, term()}.
+
 get_types(Domain) ->
-    nkdomain_db:aggs({types, Domain, #{deep=>true}}).
+    nkdomain_db:aggs(core, {query_types, Domain, #{deep=>true}}).
 
 
-%% @doc
+%% @doc Gets objects under a path, sorted by path
+-spec get_paths(id()) ->
+    {ok, integer(), [#{binary() => term()}]} | {error, term()}.
+
 get_paths(Id) ->
-    nkdomain_db:search({paths, Id, #{deep=>true, sort=>path, size=>100}}).
+    case nkdomain_db:search(core, {query_paths, Id, #{deep=>true, sort=>path, size=>100}}) of
+        {ok, Total, Data, _Meta} ->
+            {ok, Total, Data};
+        {error, Error} ->
+            {error, Error}
+    end.
 
 
-%% @doc
+%% @doc Gets objects under a path with a type, sorted by path
+-spec get_paths_type(id(), type()) ->
+    {ok, integer(), [#{binary() => term()}]} | {error, term()}.
+
 get_paths_type(Id, Type) ->
-    nkdomain_db:search({paths, Id, #{deep=>true, type=>Type, sort=>path, size=>100}}).
+    case nkdomain_db:search(core, {query_paths, Id, #{deep=>true, type=>Type, sort=>path, size=>100}}) of
+        {ok, Total, Data, _Meta} ->
+            {ok, Total, Data};
+        {error, Error} ->
+            {error, Error}
+    end.
 
 
 %% @doc
+-spec remove_path(id()) ->
+    {ok, integer()} | {error, term()}.
+
 remove_path(Id) ->
-    case nkdomain_db:iterate({paths, Id, #{deep=>true, sort=>rpath, get_deleted=>true}}, delete_fun(), 0) of
+    case nkdomain_db:iterate(core, {query_paths, Id, #{deep=>true, sort=>rpath, get_deleted=>true}}, delete_fun(), 0) of
         {ok, Count} ->
             case nkdomain_db:hard_delete(Id) of
                 ok ->
@@ -338,31 +330,49 @@ remove_path(Id) ->
 
 
 %% @doc
+-spec remove_path_type(id(), type()) ->
+    {ok, integer()} | {error, term()}.
+
 remove_path_type(Id, Type) ->
-    nkdomain_db:iterate({paths, Id, #{type=>Type, deep=>true, sort=>rpath, get_deleted=>true}}, delete_fun(), 0).
+    nkdomain_db:iterate(core, {query_paths, Id, #{type=>Type, deep=>true, sort=>rpath, get_deleted=>true}}, delete_fun(), 0).
 
 
 %% @doc
 print_path_type(Id, Type) ->
-    nkdomain_db:iterate({paths, Id, #{type=>Type, deep=>true, sort=>path, get_deleted=>true}}, print_fun(), 0).
+    nkdomain_db:iterate(core, {query_paths, Id, #{type=>Type, deep=>true, sort=>path, get_deleted=>true}}, print_fun(), 0).
 
 
+%% @doc Gets objects having a parent, sorted by path
+-spec get_childs(id()) ->
+    {ok, integer(), [#{binary() => term()}]} | {error, term()}.
 
-%% @doc
 get_childs(Id) ->
-    nkdomain_db:search({childs, Id, #{sort=>path}}).
+    case nkdomain_db:search(core, {query_childs, Id, #{sort=>path}}) of
+        {ok, Total, Data, _Meta} ->
+            {ok, Total, Data};
+        {error, Error} ->
+            {error, Error}
+    end.
 
 
-%% @doc
+%% @doc Gets objects having a parent with a type, sorted by path
+-spec get_childs_type(id(), type()) ->
+    {ok, integer(), [#{binary() => term()}]} | {error, term()}.
+
 get_childs_type(Id, Type) ->
-    nkdomain_db:search({childs, Id, #{type=>Type, sort=>path}}).
+    case nkdomain_db:search(core, {query_childs, Id, #{type=>Type, sort=>path}}) of
+        {ok, Total, Data, _Meta} ->
+            {ok, Total, Data};
+        {error, Error} ->
+            {error, Error}
+    end.
 
 
 %% @doc
 remove_with_childs(Id) ->
     case nkdomain_db:find(Id) of
         #obj_id_ext{obj_id=ObjId} ->
-            case nkdomain_db:iterate({childs, ObjId, #{sort=>rpath, get_deleted=>true}}, delete_fun(), 0) of
+            case nkdomain_db:iterate(core, {query_childs, ObjId, #{sort=>rpath, get_deleted=>true}}, delete_fun(), 0) of
                 {ok, Count} ->
                     case nkdomain_db:hard_delete(ObjId) of
                         ok ->

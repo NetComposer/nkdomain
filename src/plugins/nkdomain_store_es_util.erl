@@ -19,12 +19,11 @@
 %% -------------------------------------------------------------------
 
 %% @doc Elasticsearch plugin
--module(
-nkdomain_store_es_util).
+-module(nkdomain_store_es_util).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([get_opts/0, get_index_opts/0, reload_index/0, delete_index/0, read_obj/1]).
--export([child_filter/2, get_obj_id/1, get_path/1]).
+-export([domain_filter/2, get_obj_id/1, get_path/1]).
 -export([base_mappings/0, unparse/1]).
 -export([db_init/2, normalize/1, normalize_multi/1]).
 -export([print_index/0, put1/0, get1/0]).
@@ -80,8 +79,8 @@ read_obj(Id) ->
     nkelastic:get(to_bin(Id), E).
 
 
-%% @private
-child_filter(Id, Opts) ->
+%% @private Checks for 'deep' option and uses path or domain_id
+domain_filter(Id, Opts) ->
     case Opts of
         #{deep:=true} ->
             case get_path(Id) of
@@ -100,7 +99,7 @@ child_filter(Id, Opts) ->
     end.
 
 
-%% @private
+%% @private Finds obj_id
 get_obj_id(Id) ->
     case nkdomain_util:is_path(Id) of
         {true, <<"/">>} ->
@@ -117,7 +116,7 @@ get_obj_id(Id) ->
     end.
 
 
-%% @private
+%% @private Finds path
 get_path(Id) ->
     case nkdomain_util:is_path(Id) of
         {true, Path} ->

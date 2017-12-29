@@ -28,9 +28,10 @@
 -include("nkdomain_debug.hrl").
 
 -export([object_info/0, object_admin_info/0, object_api_syntax/2, object_api_cmd/2, object_send_event/2]).
--export([object_es_mapping/0, object_parse/2, object_db_get_filter/2]).
+-export([object_es_mapping/0, object_parse/2, object_db_get_query/3]).
 -export([object_execute/5, object_schema/1, object_query/3, object_mutation/3]).
 -export([object_init/1, object_sync_op/3, object_link_down/2]).
+-export_type([query/0]).
 
 -define(LLOG(Type, Txt, Args),
     lager:Type("NkDOMAIN Device "++Txt, Args)).
@@ -103,24 +104,29 @@ object_es_mapping() ->
     }.
 
 
+
+-type query() ::
+    {query_find_device_uuid, nkdomain:id(), binary()}.
+
 %% @private
-object_db_get_filter(nkelastic, {find_device_uuid, Domain, UUID}) ->
+object_db_get_query(nkelastic, {query_find_device_uuid, Domain, UUID}, DbOpts) ->
     case nkdomain_store_es_util:get_path(Domain) of
         {ok, DomainPath} ->
             Filters = [
                 {path, subdir, DomainPath},
                 {[?DOMAIN_DEVICE, ".device_uuid"], eq, nklib_util:to_binary(UUID)}
             ],
-            {ok, {Filters, #{}}};
+            Opts = #{type => ?DOMAIN_DEVICE},
+            {ok, {nkelastic, Filters, maps:merge(DbOpts, Opts)}};
         {error, Error} ->
             {error, Error}
     end;
 
-object_db_get_filter(nkelastic, QueryType) ->
-    {error, {unknown_query, QueryType}};
+object_db_get_query(nkelastic, QueryType, _DbOpts) ->
+    {error, {unknown_query_type, QueryType}};
 
-object_db_get_filter(Backend, _) ->
-    {error, {unknown_backend, Backend}}.
+object_db_get_query(Backend, _, _) ->
+    {error, {unknown_query_backend, Backend}}.
 
 
 

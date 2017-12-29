@@ -62,7 +62,12 @@ create(SubType, Opts, Data) ->
 
 %% @doc
 find_configs(Path, SubType) ->
-    nkdomain_db:search({paths, Path, #{type=>?DOMAIN_CONFIG, subtypes=>[SubType], deep=>true}}).
+    case nkdomain_db:search(core, {query_paths, Path, #{type=>?DOMAIN_CONFIG, subtypes=>[SubType], deep=>true}}) of
+        {ok, Total, Data, _Meta} ->
+            {ok, Total, Data};
+        {error, Error} ->
+            {error, Error}
+    end.
 
 
 

@@ -99,8 +99,8 @@ attach_session(DeviceId, User, SessId) ->
 
 %% @doc
 find_device_uuid(Domain, DeviceUUID) ->
-    case nkdomain_db:search(?DOMAIN_DEVICE, {find_device_uuid, Domain, DeviceUUID}) of
-        {ok, _, Data} ->
+    case nkdomain_db:search(?DOMAIN_DEVICE, {query_find_device_uuid, Domain, DeviceUUID}) of
+        {ok, _, Data, _Meta} ->
             Data2 = [ObjId || #{<<"obj_id">>:=ObjId} <- Data],
             {ok, Data2};
         {error, Error} ->

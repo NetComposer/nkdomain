@@ -24,8 +24,8 @@
 
 -export([error/1]).
 -export([object_db_init/1, object_db_read/1, object_db_save/1, object_db_delete/1,
-         object_db_find_obj/2, object_db_search_objs/3, object_db_agg_objs/3,
-         object_db_iterate_objs/5, object_db_clean/0]).
+         object_db_find_obj/2, object_db_search_objs/4, object_db_agg_objs/4,
+         object_db_iterate_objs/6, object_db_clean/0]).
 
 
 -include("nkdomain.hrl").
@@ -123,29 +123,15 @@ object_db_find_obj(Id, FindDeleted) ->
     end.
 
 
-%%%% @doc
-%%-spec object_db_search(nkdomain:search_spec()) ->
-%%    {ok, Total::integer(), Objs::[map()], Aggs::map(), Meta::map()} |
-%%    {error, term()}.
-%%
-%%object_db_search(Spec) ->
-%%    case nkdomain_store_es_util:get_opts() of
-%%        {ok, EsOpts} ->
-%%            nkdomain_store_es_search:search(Spec, EsOpts);
-%%        _ ->
-%%            continue
-%%    end.
-
-
 %% @doc
--spec object_db_search_objs(nkservice:id(), nkdomain:type()|core, nkdomain:search_spec()) ->
-    {ok, integer(), [RawObj::map()]} | {error, term()}.
+-spec object_db_search_objs(nkservice:id(), nkdomain:type()|core, nkdomain_db:search_type(), nkdomain_db:opts()) ->
+    {ok, integer(), [nkdomain_db:search_objs()], Meta::map()} | {error, term()}.
 
-object_db_search_objs(SrvId, Type, Spec) ->
+object_db_search_objs(SrvId, Type, SearchType, DbOpts) ->
     case nkdomain_store_es_util:get_opts() of
         {ok, EsOpts} ->
-            case ?CALL_SRV(SrvId, object_db_get_filter, [nkelastic, Type, Spec]) of
-                {ok, {Filters, Opts}} ->
+            case ?CALL_SRV(SrvId, object_db_get_query, [nkelastic, Type, SearchType, DbOpts]) of
+                {ok, {nkelastic, Filters, Opts}} ->
                     nkdomain_store_es_search:search_objs(Filters, Opts, EsOpts);
                 {error, Error} ->
                     {error, Error}
@@ -156,15 +142,15 @@ object_db_search_objs(SrvId, Type, Spec) ->
 
 
 %% @doc
--spec object_db_agg_objs(nkservice:id(), nkdomain:type()|core, nkdomain:search_spec()) ->
+-spec object_db_agg_objs(nkservice:id(), nkdomain:type()|core, nkdomain:search_spec(), nkdomain_db:opts()) ->
     {ok, Total::integer(), [{binary(), integer()}], Meta::map()} |
     {error, term()}.
 
-object_db_agg_objs(SrvId, Type, Spec) ->
+object_db_agg_objs(SrvId, Type, Spec, DbOpts) ->
     case nkdomain_store_es_util:get_opts() of
         {ok, EsOpts} ->
-            case ?CALL_SRV(SrvId, object_db_get_agg, [nkelastic, Type, Spec]) of
-                {ok, {Filters, Field, Opts}} ->
+            case ?CALL_SRV(SrvId, object_db_get_agg, [nkelastic, Type, Spec, DbOpts]) of
+                {ok, {nkelastic, Filters, Field, Opts}} ->
                     nkdomain_store_es_search:search_agg_objs(Filters, Field, Opts, EsOpts);
                 {error, Error} ->
                     {error, Error}
@@ -175,14 +161,15 @@ object_db_agg_objs(SrvId, Type, Spec) ->
 
 
 %% @doc
--spec object_db_iterate_objs(nkservice:id(), nkdomain:type()|core, nkdomain:search_spec(), fun(), term()) ->
+-spec object_db_iterate_objs(nkservice:id(), nkdomain:type()|core, nkdomain:search_spec(),
+                             nkdomain_db:iterate_fun(), term(), nkdomain:db_opts()) ->
     {ok, term()} | {error, term()}.
 
-object_db_iterate_objs(SrvId, Type, Spec, Fun, Acc0) ->
+object_db_iterate_objs(SrvId, Type, Spec, Fun, Acc0, DbOpts) ->
     case nkdomain_store_es_util:get_opts() of
         {ok, EsOpts} ->
-            case ?CALL_SRV(SrvId, object_db_get_filter, [nkelastic, Type, Spec]) of
-                {ok, {Filters, Opts}} ->
+            case ?CALL_SRV(SrvId, object_db_get_query, [nkelastic, Type, Spec, DbOpts]) of
+                {ok, {nkelastic, Filters, Opts}} ->
                     Opts2 = Opts#{fold_fun=>Fun, fold_acc0=>Acc0},
                     nkdomain_store_es_search:iterate_objs(Filters, Opts2, Fun, Acc0, EsOpts);
                 {error, Error2} ->

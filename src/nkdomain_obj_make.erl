@@ -196,7 +196,7 @@ create(MakeOpts) ->
 
 
 %% @doc
--spec create(make_opts(), nkdomain:start_ots()) ->
+-spec create(make_opts(), nkdomain:start_opts()) ->
     {ok, #obj_id_ext{}, [Unknown::binary()]} | {error, term()}.
 
 create(MakeOpts, Opts) ->

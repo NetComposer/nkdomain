@@ -36,8 +36,8 @@
          object_alarms/1,
          object_handle_call/3, object_handle_cast/2, object_handle_info/2, object_conflict_detected/3]).
 -export([object_db_init/1, object_db_read/1, object_db_save/1, object_db_delete/1]).
--export([object_db_find_obj/2, object_db_search_objs/3, object_db_agg_objs/3,
-         object_db_iterate_objs/5, object_db_get_filter/3, object_db_get_agg/3, object_db_clean/0]).
+-export([object_db_find_obj/2, object_db_search_objs/4, object_db_agg_objs/4,
+         object_db_iterate_objs/6, object_db_get_query/4, object_db_get_agg/4, object_db_clean/0]).
 -export([object_db_event_send/1]).
 -export([service_api_syntax/3, service_api_allow/2, service_api_cmd/2]).
 -export([api_server_http_auth/3, api_server_reg_down/4]).
@@ -57,7 +57,7 @@
 
 -type obj_id() :: nkdomain:obj_id().
 -type type() :: nkdomain:type().
--type path() :: nkdomain:path().
+%-type path() :: nkdomain:path().
 -type continue() :: continue | {continue, list()}.
 -type state() :: #obj_state{}.
 
@@ -803,28 +803,28 @@ object_db_find_obj(ObjId, FindDeleted) ->
 
 
 %% @doc
--spec object_db_search_objs(nkservice:id(), type()|core, nkdomain:search_type()) ->
-    {ok, Total::integer(), [{type(), obj_id(), path(), Fields::map()}]} | {error, term()}.
+-spec object_db_search_objs(nkservice:id(), type()|core, nkdomain_db:search_type(), nkdomain_db:opts()) ->
+    {ok, Total::integer(), nkdomain_db:search_objs()} | {error, term()}.
 
-object_db_search_objs(SrvId, Type, SearchType) ->
-    ?CALL_NKROOT(object_db_search_objs, [SrvId, Type, SearchType]).
-
-
-%% @doc
--spec object_db_iterate_objs(nkservice:id(), type()|core, nkdomain:search_type(),
-                             fun(({type(), obj_id(), path()}, term()) -> {ok, term()}), term()) ->
-                                {ok, term()} | {error, term()}.
-
-object_db_iterate_objs(SrvId, Type, SearchType, Fun, Acc) ->
-    ?CALL_NKROOT(object_db_iterate_objs, [SrvId, Type, SearchType, Fun, Acc]).
+object_db_search_objs(SrvId, Type, SearchType, DbOpts) ->
+    ?CALL_NKROOT(object_db_search_objs, [SrvId, Type, SearchType, DbOpts]).
 
 
 %% @doc
--spec object_db_agg_objs(nkservice:id(), type()|core, nkdomain:agg_type()) ->
+-spec object_db_iterate_objs(nkservice:id(), type()|core, nkdomain_db:search_type(),
+                             nkdomain_db:iterate_fun(), term(), nkdomain_db:opts()) ->
+    {ok, term()} | {error, term()}.
+
+object_db_iterate_objs(SrvId, Type, SearchType, Fun, Acc, DbOpts) ->
+    ?CALL_NKROOT(object_db_iterate_objs, [SrvId, Type, SearchType, Fun, Acc, DbOpts]).
+
+
+%% @doc
+-spec object_db_agg_objs(nkservice:id(), type()|core, nkdomain_db:aggregation_type(), nkdomain_db:opts()) ->
     {ok, Total::integer(), [{binary(), integer()}]}| {error, term()}.
 
-object_db_agg_objs(SrvId, Type, AggType) ->
-    ?CALL_NKROOT(object_db_agg_objs, [SrvId, Type, AggType]).
+object_db_agg_objs(SrvId, Type, AggType, DbOpts) ->
+    ?CALL_NKROOT(object_db_agg_objs, [SrvId, Type, AggType, DbOpts]).
 
 
 %%%% @doc
@@ -897,20 +897,20 @@ object_db_clean() ->
     ?CALL_NKROOT(object_db_clean, []).
 
 
-%% @doc Called when a backend needs to process a query
--spec object_db_get_filter(module(), type()|core, nkdomain:search_type()) ->
+%% @doc Called when a backend needs to process a query. The result must be valid for this module
+-spec object_db_get_query(module(), type()|core, nkdomain_db:search_type(), nkdomain_db:opts()) ->
     {ok, term()} | {error, term()}.
 
-object_db_get_filter(Module, Type, Spec) ->
-    ?CALL_NKROOT(object_db_get_filter, [Module, Type, Spec]).
+object_db_get_query(Module, Type, SearchType, DbOpts) ->
+    ?CALL_NKROOT(object_db_get_query, [Module, Type, SearchType, DbOpts]).
 
 
 %% @doc Called when a backend needs to process an aggregation
--spec object_db_get_agg(module(), type()|core, nkdomain:search_type()) ->
+-spec object_db_get_agg(module(), type()|core, nkdomain_db:aggregation_type(), nkdomain_db:opts()) ->
     {ok, term()} | {error, term()}.
 
-object_db_get_agg(Module, Type, Spec) ->
-    ?CALL_NKROOT(object_db_get_agg, [Module, Type, Spec]).
+object_db_get_agg(Module, Type, Spec, DbOpts) ->
+    ?CALL_NKROOT(object_db_get_agg, [Module, Type, Spec, DbOpts]).
 
 
 

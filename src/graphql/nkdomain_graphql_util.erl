@@ -323,10 +323,10 @@ read_objs(From, Size, Filters, Sort) ->
 
 %% @private
 do_read_objs(Start, Size, Filters, Sort, Acc) ->
-    case nkdomain_db:search({graphql, Filters, #{from=>Start, size=>Size, sort=>Sort}}) of
-        {ok, Total, []} ->
+    case nkdomain_db:search(core, {query_graphql, Filters, #{from=>Start, size=>Size, sort=>Sort}}) of
+        {ok, Total, [], _Meta} ->
             {ok, Total, lists:reverse(Acc)};
-        {ok, Total, Data} ->
+        {ok, Total, Data, _Meta} ->
             Acc2 = lists:foldl(
                 fun(#{<<"obj_id">>:=ObjId}, FunAcc) ->
                     case get_obj(ObjId) of

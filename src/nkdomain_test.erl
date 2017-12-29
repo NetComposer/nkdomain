@@ -458,8 +458,8 @@ remove_data() ->
         {error, object_not_found} ->
             ok
     end,
-    case nkdomain_db:search({paths, "/stest1", #{}}) of
-        {ok, 0, []} ->
+    case nkdomain_db:search(core, {query_paths, "/stest1", #{}}) of
+        {ok, 0, [], _Meta} ->
             ok;
         _ ->
             %% lager:notice("Deleting all childs for /stest1"),

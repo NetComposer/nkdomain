@@ -27,12 +27,12 @@
 
 -export([object_execute/5, object_schema/1, object_query/3, object_mutation/3]).
 -export([object_info/0, object_admin_info/0, object_create/1, object_update/1,
-         object_es_mapping/0, object_es_unparse/2, object_db_get_filter/2,
+         object_es_mapping/0, object_es_unparse/2, object_db_get_query/3,
          object_parse/2, object_api_syntax/2, object_api_cmd/2, object_send_event/2]).
 -export([object_init/1, object_save/1, object_event/2,
          object_sync_op/3, object_async_op/2, object_link_down/2, object_handle_info/2]).
 -export([check_email/1, fun_user_pass/1]).
-
+-export_type([query/0]).
 
 -include("nkdomain.hrl").
 -include("nkdomain_debug.hrl").
@@ -244,17 +244,24 @@ object_es_unparse(Obj, Base) ->
     }.
 
 
+-type query() ::
+    {query_user_email, binary(), nkdomain_db:search_objs_opts()}.
+
+
 %% @private
-object_db_get_filter(nkelastic, {user_email, Email, Opts}) ->
-    Filters = [{type, eq, ?DOMAIN_USER}, {[?DOMAIN_USER, ".email"], eq, Email}],
+object_db_get_query(nkelastic, {query_user_email, Email, Opts}, DbOpts) ->
+    Filters = [{[?DOMAIN_USER, ".email"], eq, to_bin(Email)}],
     Opts2 = maps:with([size, get_deleted], Opts),
-    {ok, {Filters, Opts2}};
+    Opts3 = Opts2#{
+        type => ?DOMAIN_USER
+    },
+    {ok, {nkelastic, Filters, maps:merge(DbOpts, Opts3)}};
 
-object_db_get_filter(nkelastic, QueryType) ->
-    {error, {unknown_query, QueryType}};
+object_db_get_query(nkelastic, QueryType, _DbOpts) ->
+    {error, {unknown_query_type, QueryType}};
 
-object_db_get_filter(Backend, _) ->
-    {error, {unknown_backend, Backend}}.
+object_db_get_query(Backend, _, _) ->
+    {error, {unknown_query_backend, Backend}}.
 
 
 
@@ -626,10 +633,10 @@ check_email(#{?DOMAIN_USER:=#{email:=Email}}=Obj) ->
         true ->
             {ok, Obj};
         false ->
-            case nkdomain_db:search(?DOMAIN_USER, {user_email, Email2, #{size=>0}}) of
-                {ok, 0, _} ->
+            case nkdomain_db:search(?DOMAIN_USER, {query_user_email, Email2, #{size=>0}}) of
+                {ok, 0, _, _Meta} ->
                     {ok, Obj#{aliases=>Email2}};
-                {ok, _, _} ->
+                {ok, _, _, _Meta} ->
                     {error, {email_duplicated, Email2}};
                 {error, Error} ->
                     {error, Error}
@@ -1013,3 +1020,8 @@ do_set_status(SrvId, Path, UserStatus, #obj_state{session=Session}=State) ->
 %% @private
 do_event(Event, State) ->
     nkdomain_obj_util:event(Event, State).
+
+
+%% @private
+to_bin(T) when is_binary(T)-> T;
+to_bin(T) -> nklib_util:to_binary(T).

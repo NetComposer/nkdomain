@@ -22,9 +22,9 @@
 -module(nkdomain_nkroot_callbacks).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -export([object_db_init/1, object_db_read/1, object_db_save/1, object_db_delete/1]).
--export([object_db_find_obj/2, object_db_search_objs/3, object_db_agg_objs/3,
-         object_db_iterate_objs/5, object_db_clean/0,
-         object_db_get_filter/3, object_db_get_agg/3]).
+-export([object_db_find_obj/2, object_db_search_objs/4, object_db_agg_objs/4,
+         object_db_iterate_objs/6, object_db_clean/0,
+         object_db_get_query/4, object_db_get_agg/4]).
 -export([service_init/2, service_handle_cast/2, service_handle_info/2]).
 
 
@@ -39,7 +39,7 @@
 
 -type obj_id() :: nkdomain:obj_id().
 -type type() :: nkdomain:type().
--type path() :: nkdomain:path().
+%-type path() :: nkdomain:path().
 
 
 %% ===================================================================
@@ -182,28 +182,28 @@ object_db_find_obj(_ObjId, _FindDeleted) ->
 %%    {error, db_not_defined}.
 
 
-%% @doc
--spec object_db_search_objs(nkservice:id(), type()|core, nkdomain:search_type()) ->
-    {ok, Total::integer(), [{type(), obj_id(), path()}]}| {error, term()}.
+%% @doc This function must be implemented by DB plugins like nkdomain_store_es
+-spec object_db_search_objs(nkservice:id(), type()|core, nkdomain_db:search_type(), nkdomain_db:opts()) ->
+    {ok, Total::integer(), [nkdomain_db:search_objs()]}| {error, term()}.
 
-object_db_search_objs(_SrvId, _Type, _SearchType) ->
+object_db_search_objs(_SrvId, _Type, _SearchType, _DbOpts) ->
     {error, db_not_defined}.
 
 
 %% @doc
--spec object_db_iterate_objs(nkservice:id(), type()|core, nkdomain:search_type(),
-                             fun(({type(), obj_id(), path()}, term()) -> {ok, term()}), term()) ->
+-spec object_db_iterate_objs(nkservice:id(), type()|core, nkdomain_db:search_type(),
+                             nkdomain_db:iterate_fun(), term(), nkdomain_db:opts()) ->
     {ok, term()} | {error, term()}.
 
-object_db_iterate_objs(_SrvId, _Type, _SearchType, _Fun, _Acc) ->
+object_db_iterate_objs(_SrvId, _Type, _SearchType, _Fun, _Acc, _DbOpts) ->
     {error, db_not_defined}.
 
 
 %% @doc
--spec object_db_agg_objs(nkservice:id(), type()|core, nkdomain:agg_type()) ->
+-spec object_db_agg_objs(nkservice:id(), type()|core, nkdomain_db:aggregation_type(), nkdomain_db:opts()) ->
     {ok, Total::integer(), [{binary(), integer()}]}| {error, term()}.
 
-object_db_agg_objs(_SrvId, _Type, _AggType) ->
+object_db_agg_objs(_SrvId, _Type, _AggType, _DbOpts) ->
     {error, db_not_defined}.
 
 
@@ -226,78 +226,75 @@ object_db_clean() ->
     {error, db_not_defined}.
 
 
+
+-type core_query() ::
+    {query_graphql, Filters::term(), nkdomain_db:search_objs_opts()} |
+    {query_alias, binary(), nkdomain_db:search_objs_opts()} |
+    {query_paths, nkdomain:id(), nkdomain_db:search_objs_opts() | #{deep=>boolean(), subtypes=>[binary()], sort => path | rpath}} |
+    {query_childs, nkdomain:id(), nkdomain_db:search_objs_opts() | #{sort => path | rpath}} |
+    {query_child_roles, nkdomain:id(), [type()], User::obj_id(), nkdomain_db:search_objs_opts()}.
+
+
 %% @doc Called when a backend needs to process a query
--spec object_db_get_filter(module(), type()|core, nkdomain:search_type()) ->
+-spec object_db_get_query(module(), type()|core, core_query()|nkdomain_db:search_type(), nkdomain_db:opts()) ->
     {ok, term()} | {error, term()}.
 
-object_db_get_filter(nkelastic, core, {graphql, Filters, Opts}) ->
-    {ok, {Filters, Opts}};
+object_db_get_query(nkelastic, core, {query_graphql, Filters, Opts}, DbOpts) ->
+    {ok, {nkelastic, Filters, maps:merge(DbOpts, Opts)}};
 
-object_db_get_filter(nkelastic, core, {alias, Alias, Opts}) ->
-    {ok, {[{aliases, eq, to_bin(Alias)}], Opts}};
+object_db_get_query(nkelastic, core, {query_alias, Alias, Opts}, DbOpts) ->
+    {ok, {nkelastic, [{aliases, eq, to_bin(Alias)}], maps:merge(DbOpts, Opts)}};
 
-object_db_get_filter(nkelastic, core, {paths, Domain, Opts}) ->
-    Filters = nkdomain_store_es_util:child_filter(Domain, Opts),
-    case Filters of
+object_db_get_query(nkelastic, core, {query_paths, Domain, Opts}, DbOpts) ->
+    case nkdomain_store_es_util:domain_filter(Domain, Opts) of
         {ok, FilterList1} ->
             FilterList2 = case Opts of
-                #{type:=Type} ->
-                    [{type, eq, to_bin(Type)}|FilterList1];
+                #{subtypes:=SubTypes} ->
+                    [{subtype, values, SubTypes}|FilterList1];
                 _ ->
                     FilterList1
-            end,
-            FilterList3 = case Opts of
-                #{subtypes:=SubTypes} ->
-                    [{subtype, values, SubTypes}|FilterList2];
-                _ ->
-                    FilterList2
             end,
             Opts2 = case Opts of
                 #{sort:=Sort} ->
                     case Sort of
                         path -> Opts#{sort:=[<<"asc:path">>]};
-                        rpath -> Opts#{sort:=[<<"desc:path">>]}
+                        rpath -> Opts#{sort:=[<<"desc:path">>]};
+                        _ -> Opts
                     end;
                 _ ->
                     Opts
             end,
-            {ok, {FilterList3, Opts2}};
+            {ok, {nkelastic, FilterList2, maps:merge(DbOpts, Opts2)}};
         {error, Error2} ->
             {error, Error2}
     end;
 
-object_db_get_filter(nkelastic, core, {childs, Id, Opts}) ->
+object_db_get_query(nkelastic, core, {query_childs, Id, Opts}, DbOpts) ->
     case nkdomain_store_es_util:get_obj_id(Id) of
         {ok, ObjId} ->
-            FilterList1 = [{parent_id, eq, ObjId}],
-            FilterList2 = case Opts of
-                #{type:=Type} ->
-                    [{type, eq, to_bin(Type)}|FilterList1];
-                _ ->
-                    FilterList1
-            end,
+            FilterList = [{parent_id, eq, ObjId}],
             Opts2 = case Opts of
                 #{sort:=Sort} ->
                     case Sort of
                         path -> Opts#{sort:=[<<"asc:path">>]};
-                        rpath -> Opts#{sort:=[<<"desc:path">>]}
+                        rpath -> Opts#{sort:=[<<"desc:path">>]};
+                        _ -> Opts
                     end;
                 _ ->
                     Opts
             end,
-            {ok, {FilterList2, Opts2}};
+            {ok, {nkelastic, FilterList, maps:merge(DbOpts, Opts2)}};
         {error, Error2} ->
             {error, Error2}
     end;
 
-object_db_get_filter(nkelastic, core, {child_roles, Domain, Roles, User, Opts}) ->
-    Filters = nkdomain_store_es_util:child_filter(Domain, Opts#{deep=>true}),
-    case nkdomain_store_es_util:get_obj_id(User) of
-        {ok, UserId} ->
-            case Filters of
-                {ok, FilterList1} ->
+object_db_get_query(nkelastic, core, {query_child_roles, Domain, Roles, User, Opts}, DbOpts) ->
+    case nkdomain_store_es_util:domain_filter(Domain, Opts#{deep=>true}) of
+        {ok, FilterList1} ->
+            case nkdomain_store_es_util:get_obj_id(User) of
+                {ok, UserId} ->
                     FilterList2 = [{type, values, Roles}, {parent_id, eq, UserId}|FilterList1],
-                    {ok, {FilterList2, Opts}};
+                    {ok, {nkelastic, FilterList2, maps:merge(DbOpts, Opts)}};
                 {error, Error2} ->
                     {error, Error2}
             end;
@@ -305,51 +302,58 @@ object_db_get_filter(nkelastic, core, {child_roles, Domain, Roles, User, Opts}) 
             {error, Error}
     end;
 
-object_db_get_filter(_Backend, core, QueryType) ->
-    {error, {unknown_query3, QueryType}};
+object_db_get_query(_Backend, core, QueryType, _DbOpts) ->
+    {error, {unknown_query_type, QueryType}};
 
-object_db_get_filter(Backend, Type, QueryType) ->
-    case nkdomain_util:type_apply(Type, object_db_get_filter, [Backend, QueryType]) of
+object_db_get_query(Backend, Type, QueryType, DbOpts) ->
+    case nkdomain_util:type_apply(Type, object_db_get_query, [Backend, QueryType, DbOpts]) of
         {ok, Data} ->
             {ok, Data};
         {error, Error} ->
             {error, Error};
         not_exported ->
-            {error, {unknown_query4, QueryType}}
+            {error, {unknown_query_type, QueryType}}
     end.
 
 
+
+% Internal search specification
+-type core_agg() ::
+    {query_types, nkdomain:id(), nkdomain_db:search_objs_opts() | #{deep=>boolean(), size=>integer()}} |
+    {query_values, nkdomain:id(), nkdomain_db:search_objs_opts() | #{deep=>boolean(), size=>integer()}}.
+
+
 %% @doc Called when a backend needs to process an aggregation
--spec object_db_get_agg(module(), type()|core, nkdomain:agg_type()) ->
+-spec object_db_get_agg(module(), type()|core, core_agg() | nkdomain_db:aggregation_type(), nkdomain_db:opts()) ->
     {ok, term()} | {error, term()}.
 
-object_db_get_agg(nkelastic, core, {types, Domain, Opts}) ->
-    case nkdomain_store_es_util:child_filter(Domain, Opts) of
+object_db_get_agg(nkelastic, core, {query_types, Domain, Opts}, DbOpts) ->
+    case nkdomain_store_es_util:domain_filter(Domain, Opts) of
         {ok, Filters} ->
-            {ok, {Filters, <<"type">>, Opts}};
+            {ok, {nkelastic, Filters, <<"type">>, maps:merge(DbOpts, Opts)}};
         {error, Error2} ->
             {error, Error2}
     end;
 
-object_db_get_agg(nkelastic, core, {values, Domain, Field, Opts}) ->
-    case nkdomain_store_es_util:child_filter(Domain, Opts) of
+object_db_get_agg(nkelastic, core, {query_values, Domain, Field, Opts}, DbOpts) ->
+    case nkdomain_store_es_util:domain_filter(Domain, Opts) of
         {ok, Filters} ->
-            {ok, {Filters, to_bin(Field), Opts}};
+            {ok, {nkelastic, Filters, to_bin(Field), maps:merge(DbOpts, Opts)}};
         {error, Error2} ->
             {error, Error2}
     end;
 
-object_db_get_agg(nkelastic, core, QueryType) ->
-    {error, {unknown_query, QueryType}};
+object_db_get_agg(nkelastic, core, QueryType, _DbOpts) ->
+    {error, {unknown_query_type, QueryType}};
 
-object_db_get_agg(Backend, Type, QueryType) ->
-    case nkdomain_util:type_apply(Type, object_db_get_agg, [Backend, QueryType]) of
+object_db_get_agg(Backend, Type, QueryType, DbOpts) ->
+    case nkdomain_util:type_apply(Type, object_db_get_agg, [Backend, QueryType, DbOpts]) of
         {ok, Data} ->
             {ok, Data};
         {error, Error} ->
             {error, Error};
         not_exported ->
-            {error, {unknown_query, QueryType}}
+            {error, {unknown_query_type, QueryType}}
     end.
 
 

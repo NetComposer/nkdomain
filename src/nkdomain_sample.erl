@@ -19,7 +19,7 @@
 
 i() ->
     F = fun(I, Acc) -> lager:error("NKLOG I: ~p", [I]), {ok, Acc+1} end,
-    nkdomain_db:iterate({paths, "/dkv", #{sort=>rpath, deep=>true}}, F, 0).
+    nkdomain_db:iterate(core, {query_paths, "/dkv", #{sort=>rpath, deep=>true}}, F, 0).
 
 ts() ->
      Op = #{

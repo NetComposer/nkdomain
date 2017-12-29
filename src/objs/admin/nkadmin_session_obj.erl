@@ -316,7 +316,7 @@ object_handle_info(_Info, _State) ->
 
 %% @private
 do_switch_domain(DomainId, Path, Url, #obj_state{session=Session}=State) ->
-    case nkdomain_db:aggs({types, DomainId, #{deep=>true}}) of
+    case nkdomain_db:aggs(core, {query_types, DomainId, #{deep=>true}}) of
         {ok, _, TypeList} ->
             Url2 = case Url of
                 <<"#", U/binary>> -> U;
