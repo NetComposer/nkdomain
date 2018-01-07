@@ -70,11 +70,13 @@ make_path(Base, Type, ObjName) ->
         _ ->
             class(Type)
     end,
-    case Base of
+    Base2 = to_bin(Base),
+    ObjName2 = to_bin(ObjName),
+    case Base2 of
         <<"/">> ->
-            <<$/, Class/binary, $/, ObjName/binary>>;
+            <<$/, Class/binary, $/, ObjName2/binary>>;
         _ ->
-            <<Base/binary, $/, Class/binary, $/, ObjName/binary>>
+            <<Base2/binary, $/, Class/binary, $/, ObjName2/binary>>
     end.
 
 
