@@ -224,7 +224,7 @@ import_objects(FromIndex, StartPath, UserFun) ->
         sort => <<"path">>,
         filter_list => [{path, prefix, StartPath}]
     },
-    Fun = fun(#{obj_id:=ObjId, path:=Path}=Data, Acc) ->
+    Fun = fun(#{<<"obj_id">>:=ObjId, <<"path">>:=Path}=Data, Acc) ->
         case UserFun(Data) of
             continue ->
                 lager:info("Import skipping ~s (~s)", [Path, ObjId]),
