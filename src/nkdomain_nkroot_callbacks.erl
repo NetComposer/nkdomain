@@ -228,7 +228,7 @@ object_db_clean() ->
 
 
 -type core_query() ::
-    {query_graphql, Filters::term(), nkdomain_db:search_objs_opts()} |
+    {query_graphql, nkdomain:id(), Filters::term(), nkdomain_db:search_objs_opts()} |
     {query_alias, binary(), nkdomain_db:search_objs_opts()} |
     {query_paths, nkdomain:id(), nkdomain_db:search_objs_opts() | #{deep=>boolean(), subtypes=>[binary()], sort => path | rpath}} |
     {query_childs, nkdomain:id(), nkdomain_db:search_objs_opts() | #{sort => path | rpath}} |
@@ -239,8 +239,13 @@ object_db_clean() ->
 -spec object_db_get_query(module(), type()|core, core_query()|nkdomain_db:search_type(), nkdomain_db:opts()) ->
     {ok, term()} | {error, term()}.
 
-object_db_get_query(nkelastic, core, {query_graphql, Filters, Opts}, DbOpts) ->
-    {ok, {nkelastic, Filters, maps:merge(DbOpts, Opts)}};
+object_db_get_query(nkelastic, core, {query_graphql, Domain, Filters, Opts}, DbOpts) ->
+    case nkdomain_store_es_util:domain_filter(Domain, Opts) of
+        {ok, FilterList1} ->
+            {ok, {nkelastic, FilterList1++Filters, maps:merge(DbOpts, Opts)}};
+        {error, Error2} ->
+            {error, Error2}
+    end;
 
 object_db_get_query(nkelastic, core, {query_alias, Alias, Opts}, DbOpts) ->
     {ok, {nkelastic, [{aliases, eq, to_bin(Alias)}], maps:merge(DbOpts, Opts)}};

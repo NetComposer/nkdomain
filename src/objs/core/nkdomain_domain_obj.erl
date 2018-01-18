@@ -338,6 +338,7 @@ async_op({find_path, Base, Type, ObjName, From}, State) ->
     end,
     {noreply, State};
 
+%% Called from child domains
 async_op({child_counter, ChildDomain, Type, Counter}, State) ->
     #obj_state{session=Session} = State,
     #session{counters=Counters} = Session,

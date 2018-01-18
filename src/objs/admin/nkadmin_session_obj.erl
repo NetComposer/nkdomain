@@ -19,6 +19,15 @@
 %% -------------------------------------------------------------------
 
 %% @doc State Object
+%%
+%% Expects callbacks
+%% - admin_get_frame
+%% - admin_get_tree, by default calls:
+%%      - admin_get_categories
+
+
+
+
 -module(nkadmin_session_obj).
 -behavior(nkdomain_obj).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
@@ -315,9 +324,9 @@ object_handle_info(_Info, _State) ->
 %% ===================================================================
 
 %% @private
-do_switch_domain(DomainId, Path, Url, #obj_state{session=Session}=State) ->
+do_switch_domain(DomainId, DomainPath, Url, #obj_state{session=Session} = State) ->
     case nkdomain_db:aggs(core, {query_types, DomainId, #{deep=>true}}) of
-        {ok, _, TypeList} ->
+        {ok, _, TypeList, _Meta} ->
             Url2 = case Url of
                 <<"#", U/binary>> -> U;
                 _ -> Url
@@ -325,8 +334,8 @@ do_switch_domain(DomainId, Path, Url, #obj_state{session=Session}=State) ->
             Types = [Type || {Type, _Counter} <- TypeList],
             Session2 = Session#admin_session{
                 domain_id = DomainId,
-                base_path = Path,
-                url = case Url2 of <<>> -> Path; _ -> Url2 end,
+                base_path = DomainPath,
+                url = case Url2 of <<>> -> DomainPath; _ -> Url2 end,
                 detail = #{},
                 db_types = Types,
                 resources = [],

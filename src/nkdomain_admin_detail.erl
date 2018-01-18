@@ -56,7 +56,7 @@ element_action([?ADMIN_OBJ_ID, _SrvId, ObjId, Type, Path], selected, Value, Upda
             Other
     end;
 
-element_action([?ADMIN_TREE_SERVICES, Service], selected, _Value, Updates, Session) ->
+element_action([?ID_ADMIN_TREE_SERVICES, Service], selected, _Value, Updates, Session) ->
     lager:info("NKLOG Admin Service ~p selected", [Service]),
     Detail = get_dash_detail_test(),
     Item = #{
@@ -66,7 +66,7 @@ element_action([?ADMIN_TREE_SERVICES, Service], selected, _Value, Updates, Sessi
     },
     {ok, [Item|Updates], Session};
 
-element_action([?ADMIN_DETAIL_TYPE_VIEW, Type], updated, Value, Updates, Session) ->
+element_action([?ID_ADMIN_DETAIL_TYPE_VIEW, Type], updated, Value, Updates, Session) ->
     #{
         <<"obj_id">> := ObjId,
         <<"value">> := ObjValue
@@ -83,43 +83,43 @@ element_action([?ADMIN_DETAIL_TYPE_VIEW, Type], updated, Value, Updates, Session
             end
     end;
 
-element_action([?ADMIN_DETAIL_TYPE_VIEW, _Type], enable, #{<<"ids">>:=Ids}, Updates, Session) ->
+element_action([?ID_ADMIN_DETAIL_TYPE_VIEW, _Type], enable, #{<<"ids">>:=Ids}, Updates, Session) ->
     {Updates2, Session2} = type_view_enable(true, Ids, Updates, Session),
     {ok, Updates2, Session2};
 
-element_action([?ADMIN_DETAIL_TYPE_VIEW, _Type], disable, #{<<"ids">>:=Ids}, Updates, Session) ->
+element_action([?ID_ADMIN_DETAIL_TYPE_VIEW, _Type], disable, #{<<"ids">>:=Ids}, Updates, Session) ->
     {Updates2, Session2} = type_view_enable(false, Ids, Updates, Session),
     {ok, Updates2, Session2};
 
-element_action([?ADMIN_DETAIL_TYPE_VIEW, _Type], delete, #{<<"ids">>:=Ids}, Updates, Session) ->
+element_action([?ID_ADMIN_DETAIL_TYPE_VIEW, _Type], delete, #{<<"ids">>:=Ids}, Updates, Session) ->
     {Updates2, Session2} = type_view_delete(Ids, Updates, Session),
     {ok, Updates2, Session2};
 
-element_action([?ADMIN_DETAIL_TYPE_VIEW, Type], new, _Value, Updates, Session) ->
+element_action([?ID_ADMIN_DETAIL_TYPE_VIEW, Type], new, _Value, Updates, Session) ->
     {Updates2, Session2} = type_view_new(Type, Updates, Session),
     {ok, Updates2, Session2};
 
-element_action([?ADMIN_DETAIL_OBJ_VIEW, _Type, ObjId], enable, _Value, Updates, Session) ->
+element_action([?ID_ADMIN_DETAIL_OBJ_VIEW, _Type, ObjId], enable, _Value, Updates, Session) ->
     _ = type_view_enable(true, [ObjId], Updates, Session),
     {ok, Updates2, Session2} = selected_obj(ObjId, Updates, Session),
     {ok, Updates2, Session2};
 
-element_action([?ADMIN_DETAIL_OBJ_VIEW, _Type, ObjId], disable, _Value, Updates, Session) ->
+element_action([?ID_ADMIN_DETAIL_OBJ_VIEW, _Type, ObjId], disable, _Value, Updates, Session) ->
     _ = type_view_enable(false, [ObjId], Updates, Session),
     {ok, Updates2, Session2} = selected_obj(ObjId, Updates, Session),
     {ok, Updates2, Session2};
 
-element_action([?ADMIN_DETAIL_OBJ_VIEW, Type, ObjId], delete, _Value, Updates, #admin_session{base_path=Path} = Session) ->
+element_action([?ID_ADMIN_DETAIL_OBJ_VIEW, Type, ObjId], delete, _Value, Updates, #admin_session{base_path=Path} = Session) ->
     _ = type_view_delete([ObjId], Updates, Session),
     {ok, Updates2, Session2} = selected_type(Type, Path, Updates, Session),
     {ok, Updates2, Session2};
 
-element_action([?ADMIN_DETAIL_OBJ_VIEW, Type, ObjId], save, Value, Updates, #admin_session{base_path=Path} = Session) ->
+element_action([?ID_ADMIN_DETAIL_OBJ_VIEW, Type, ObjId], save, Value, Updates, #admin_session{base_path=Path} = Session) ->
     obj_view_save(Type, ObjId, Value, Session),
     {ok, Updates2, Session2} = selected_type(Type, Path, Updates, Session),
     {ok, Updates2, Session2};
 
-element_action([?ADMIN_DETAIL_OBJ_SUBVIEW, Type, ObjId, SubType], selected, _Value, Updates, Session) ->
+element_action([?ID_ADMIN_DETAIL_OBJ_SUBVIEW, Type, ObjId, SubType], selected, _Value, Updates, Session) ->
     obj_view_subview(Type, ObjId, SubType, Updates, Session);
 
 
@@ -410,34 +410,34 @@ get_dash_detail_test() ->
         }
     }.
 
-get_dash_detail_test2() ->
-    #{
-        class => <<"webix_ui">>,
-        id => <<"detail_test">>,
-        value => #{
-            view => <<"scrollview">>,
-            type => <<"space">>,
-            scroll => <<"xy">>,
-            id => <<"body">>,
-            css => <<"flex-tmp">>,
-            borderless => true,
-            body => #{
-                type => <<"clean">>,
-                rows => [
-                    #{
-                        type => <<"space">>,
-                        rows => [#{
-                            height => 220,
-                            type => <<"wide">>,
-                            cols => [
-                                get_chart_json(<<"chart_id14">>, <<"scatter">>, <<"Scatter 2">>, true)
-                            ]
-                        }]
-                    }
-                ]
-            }
-        }
-    }.
+%%get_dash_detail_test2() ->
+%%    #{
+%%        class => <<"webix_ui">>,
+%%        id => <<"detail_test">>,
+%%        value => #{
+%%            view => <<"scrollview">>,
+%%            type => <<"space">>,
+%%            scroll => <<"xy">>,
+%%            id => <<"body">>,
+%%            css => <<"flex-tmp">>,
+%%            borderless => true,
+%%            body => #{
+%%                type => <<"clean">>,
+%%                rows => [
+%%                    #{
+%%                        type => <<"space">>,
+%%                        rows => [#{
+%%                            height => 220,
+%%                            type => <<"wide">>,
+%%                            cols => [
+%%                                get_chart_json(<<"chart_id14">>, <<"scatter">>, <<"Scatter 2">>, true)
+%%                            ]
+%%                        }]
+%%                    }
+%%                ]
+%%            }
+%%        }
+%%    }.
 
 get_dashline() ->
     #{
@@ -593,86 +593,86 @@ get_dashline() ->
         }
     }.
 
-get_dashline_old() ->
-    #{
-        id => <<"dashline">>,
-        height => 136,
-        css => <<"dash-item">>,
-        type => <<"space">>,
-        template => #{
-            nkParseFunction => <<"
-                function(data) {
-                    var t = null;
-                    var items = data.items;
-                    var html = \"<div class='flex-tmp'>\";
-                    for (var i = 0; i < items.length; i++) {
-                        t = items[i];
-                        html += \"<div class='item \"+t.css+\"'>\";
-                        html += \"<div class='webix_icon icon \"+ t.icon+\"'></div>\";
-                        html += \"<div class='details'><div class='value'>\"+t.value+\"</div><div class='text'>\"+t.text+\"</div></div>\";
-                        html += \"<div class='footer'>View more <span class='webix_icon fa-angle-double-right'></span></div>\";
-                        html += \"</div>\";
-                    }
-                    html += '</div>';
-                    return html;
-                }
-            ">>
-        },
-        data => #{
-            items => [#{
-                id => 1,
-                text => <<"Nodes">>,
-                value => 250,
-                icon => <<"fa-cubes">>,
-                css => <<"dash-item nodes">>
-            }, #{
-                id => 2,
-                text => <<"Users">>,
-                value => 250,
-                icon => <<"fa-users">>,
-                css => <<"dash-item users">>
-            }, #{
-                id => 3,
-                text => <<"Domains">>,
-                value => 250,
-                icon => <<"fa-comment">>,
-                css => <<"dash-item domains">>
-            }, #{
-                id => 4,
-                text => <<"Sessions">>,
-                value => 250,
-                icon => <<"fa-comments">>,
-                css => <<"dash-item sessions">>
-            }]
-        },
-        onAfterRender => #{
-            nkParseFunction => <<"
-                function() {
-                    // Set interval
-                    var timer;
-                    timer = setInterval(function() {
-                        var line = $$('dashline');
-                        console.log('LINE: ', line);
-                        if (!line) {
-                            var count = 0;
-                            var start = 0;
-                            var now = true;
-                            //line.loadNext(count, start, null, 'wsChartProxy', now);
-                            //line.load('wsChartProxy');
-                        }
-                    }, 5000);
-                    var line = $$('dashline');
-                    if (line) {
-                        line.nkTimer = timer;
-                        line.attachEvent('onDestruct', function() {
-                            console.log('Interval cleared');
-                            clearInterval(this.nkTimer);
-                        })
-                    }
-                }
-            ">>
-        }
-    }.
+%%get_dashline_old() ->
+%%    #{
+%%        id => <<"dashline">>,
+%%        height => 136,
+%%        css => <<"dash-item">>,
+%%        type => <<"space">>,
+%%        template => #{
+%%            nkParseFunction => <<"
+%%                function(data) {
+%%                    var t = null;
+%%                    var items = data.items;
+%%                    var html = \"<div class='flex-tmp'>\";
+%%                    for (var i = 0; i < items.length; i++) {
+%%                        t = items[i];
+%%                        html += \"<div class='item \"+t.css+\"'>\";
+%%                        html += \"<div class='webix_icon icon \"+ t.icon+\"'></div>\";
+%%                        html += \"<div class='details'><div class='value'>\"+t.value+\"</div><div class='text'>\"+t.text+\"</div></div>\";
+%%                        html += \"<div class='footer'>View more <span class='webix_icon fa-angle-double-right'></span></div>\";
+%%                        html += \"</div>\";
+%%                    }
+%%                    html += '</div>';
+%%                    return html;
+%%                }
+%%            ">>
+%%        },
+%%        data => #{
+%%            items => [#{
+%%                id => 1,
+%%                text => <<"Nodes">>,
+%%                value => 250,
+%%                icon => <<"fa-cubes">>,
+%%                css => <<"dash-item nodes">>
+%%            }, #{
+%%                id => 2,
+%%                text => <<"Users">>,
+%%                value => 250,
+%%                icon => <<"fa-users">>,
+%%                css => <<"dash-item users">>
+%%            }, #{
+%%                id => 3,
+%%                text => <<"Domains">>,
+%%                value => 250,
+%%                icon => <<"fa-comment">>,
+%%                css => <<"dash-item domains">>
+%%            }, #{
+%%                id => 4,
+%%                text => <<"Sessions">>,
+%%                value => 250,
+%%                icon => <<"fa-comments">>,
+%%                css => <<"dash-item sessions">>
+%%            }]
+%%        },
+%%        onAfterRender => #{
+%%            nkParseFunction => <<"
+%%                function() {
+%%                    // Set interval
+%%                    var timer;
+%%                    timer = setInterval(function() {
+%%                        var line = $$('dashline');
+%%                        console.log('LINE: ', line);
+%%                        if (!line) {
+%%                            var count = 0;
+%%                            var start = 0;
+%%                            var now = true;
+%%                            //line.loadNext(count, start, null, 'wsChartProxy', now);
+%%                            //line.load('wsChartProxy');
+%%                        }
+%%                    }, 5000);
+%%                    var line = $$('dashline');
+%%                    if (line) {
+%%                        line.nkTimer = timer;
+%%                        line.attachEvent('onDestruct', function() {
+%%                            console.log('Interval cleared');
+%%                            clearInterval(this.nkTimer);
+%%                        })
+%%                    }
+%%                }
+%%            ">>
+%%        }
+%%    }.
 
 get_series_chart_json(#{id := ChartId, x := X, y := Y}=Opts) ->
     Type = maps:get(type, Opts, <<"line">>),
@@ -899,143 +899,143 @@ get_chart_json(#{id := ChartId, x := X, y := Y}=Opts) ->
     nkadmin_webix_chart:chart(Spec2, #{}).
 
 
-get_chart_json(ChartId, <<"scatter">>, Title, Dynamic) ->
-    Spec = #{
-        chart_id => ChartId,
-        chart_type => <<"scatter">>,
-        is_subchart => true,
-        header => #{
-            text => Title,
-            css => <<"chart_header">>
-        },
-        nk_charts => [<<"sales">>, <<"sales2">>, <<"sales3">>],
-        x_axis => #{
-            title => <<"Value A">>
-        },
-        x_value => <<"#year#">>,
-        y_axis => #{
-            title => <<"Value B">>
-        },
-        item => #{
-            radius => 3,
-            type => <<"s">>,
-            borderWidth => 2
-        },
-        legend => #{
-            layout => <<"y">>,
-            width => 75,
-            margin => 5,
-            marker => #{
-                type => <<"item">>
-            },
-            align => <<"right">>,
-            valign => <<"middle">>,
-            values => [#{
-                text => <<"Type A">>
-            }, #{
-                text => <<"Type B">>
-            }, #{
-                text => <<"Type C">>                
-            }]
-        },
-        charts => [#{
-            value => <<"#sales#">>,
-            item => #{
-                radius => 3,
-                type => <<"s">>,
-                borderColor => <<"#447900">>,
-                borderWidth => 2,
-                color => <<"#69ba00">>
-            }
-        }, #{
-            value => <<"#sales2#">>,
-            item => #{
-                radius => 3,
-                type => <<"s">>,
-                borderColor => <<"#0a796a">>,
-                borderWidth => 2,
-                color => <<"#4aa397">>
-            }
-        }, #{
-            value => <<"#sales3#">>,
-            item => #{
-                radius => 3,
-                type => <<"s">>,
-                borderColor => <<"#b7286c">>,
-                borderWidth => 2,
-                color => <<"#de619c">>
-            }
-        }],        
-        dynamic => Dynamic
-    },
-    nkadmin_webix_chart:chart(Spec, #{});
+%%get_chart_json(ChartId, <<"scatter">>, Title, Dynamic) ->
+%%    Spec = #{
+%%        chart_id => ChartId,
+%%        chart_type => <<"scatter">>,
+%%        is_subchart => true,
+%%        header => #{
+%%            text => Title,
+%%            css => <<"chart_header">>
+%%        },
+%%        nk_charts => [<<"sales">>, <<"sales2">>, <<"sales3">>],
+%%        x_axis => #{
+%%            title => <<"Value A">>
+%%        },
+%%        x_value => <<"#year#">>,
+%%        y_axis => #{
+%%            title => <<"Value B">>
+%%        },
+%%        item => #{
+%%            radius => 3,
+%%            type => <<"s">>,
+%%            borderWidth => 2
+%%        },
+%%        legend => #{
+%%            layout => <<"y">>,
+%%            width => 75,
+%%            margin => 5,
+%%            marker => #{
+%%                type => <<"item">>
+%%            },
+%%            align => <<"right">>,
+%%            valign => <<"middle">>,
+%%            values => [#{
+%%                text => <<"Type A">>
+%%            }, #{
+%%                text => <<"Type B">>
+%%            }, #{
+%%                text => <<"Type C">>
+%%            }]
+%%        },
+%%        charts => [#{
+%%            value => <<"#sales#">>,
+%%            item => #{
+%%                radius => 3,
+%%                type => <<"s">>,
+%%                borderColor => <<"#447900">>,
+%%                borderWidth => 2,
+%%                color => <<"#69ba00">>
+%%            }
+%%        }, #{
+%%            value => <<"#sales2#">>,
+%%            item => #{
+%%                radius => 3,
+%%                type => <<"s">>,
+%%                borderColor => <<"#0a796a">>,
+%%                borderWidth => 2,
+%%                color => <<"#4aa397">>
+%%            }
+%%        }, #{
+%%            value => <<"#sales3#">>,
+%%            item => #{
+%%                radius => 3,
+%%                type => <<"s">>,
+%%                borderColor => <<"#b7286c">>,
+%%                borderWidth => 2,
+%%                color => <<"#de619c">>
+%%            }
+%%        }],
+%%        dynamic => Dynamic
+%%    },
+%%    nkadmin_webix_chart:chart(Spec, #{});
 
-get_chart_json(ChartId, ChartType, Title, Dynamic) ->
-    Spec = #{
-        chart_id => ChartId,
-        chart_type => ChartType,
-        is_subchart => true,
-        header => #{
-            text => Title,
-            css => <<"chart_header">>
-        },
-        nk_charts => [<<"sales">>, <<"sales2">>, <<"sales3">>, <<"year">>],
-        value => <<"#sales#">>,
-%        item => #{
-%            borderColor => <<"#1293f8">>,
-%            color => <<"#ffffff">>
-%        },
-%        line => #{
-%            color => <<"#1293f8">>,
-%            width => 3
-%        },
-        x_axis => #{
-            start => 0,
-%            title => Title,
-            template => <<>>
-        },
-        removed_missed => true,
-        offset => 0,
-        y_axis => #{
-            start => 0,
-%            'end' => 100,
-            step => 10,
-            template => #{
-                nkParseFunction => <<"
-                    function(obj){
-                        return (obj%20?'':obj)
-                    }
-                ">>
-            }
-        },
-        alpha => 0.7,
-        fix_overflow => false,
-        shadow => false,
-        charts => [
-            #{
-                value => <<"#sales#">>,
-			    color => <<"#58dccd">>,
-			    tooltip => #{
-                    template => <<"#sales#">>
-                }
-			},
-            #{
-                value => <<"#sales2#">>,
-                color => <<"#a7ee70">>,
-                tooltip => #{
-                    template => <<"#sales2#">>
-                }
-            },
-            #{
-                value => <<"#sales3#">>,
-                color => <<"#36abee">>,
-                tooltip => #{
-                    template => <<"#sales3#">>
-                }
-            }
-        ],
-        dynamic => Dynamic,
-        animate_duration => 400,
-        nk_interval_time => 5000
-    },
-    nkadmin_webix_chart:chart(Spec, #{}).
+%%get_chart_json(ChartId, ChartType, Title, Dynamic) ->
+%%    Spec = #{
+%%        chart_id => ChartId,
+%%        chart_type => ChartType,
+%%        is_subchart => true,
+%%        header => #{
+%%            text => Title,
+%%            css => <<"chart_header">>
+%%        },
+%%        nk_charts => [<<"sales">>, <<"sales2">>, <<"sales3">>, <<"year">>],
+%%        value => <<"#sales#">>,
+%%%        item => #{
+%%%            borderColor => <<"#1293f8">>,
+%%%            color => <<"#ffffff">>
+%%%        },
+%%%        line => #{
+%%%            color => <<"#1293f8">>,
+%%%            width => 3
+%%%        },
+%%        x_axis => #{
+%%            start => 0,
+%%%            title => Title,
+%%            template => <<>>
+%%        },
+%%        removed_missed => true,
+%%        offset => 0,
+%%        y_axis => #{
+%%            start => 0,
+%%%            'end' => 100,
+%%            step => 10,
+%%            template => #{
+%%                nkParseFunction => <<"
+%%                    function(obj){
+%%                        return (obj%20?'':obj)
+%%                    }
+%%                ">>
+%%            }
+%%        },
+%%        alpha => 0.7,
+%%        fix_overflow => false,
+%%        shadow => false,
+%%        charts => [
+%%            #{
+%%                value => <<"#sales#">>,
+%%			    color => <<"#58dccd">>,
+%%			    tooltip => #{
+%%                    template => <<"#sales#">>
+%%                }
+%%			},
+%%            #{
+%%                value => <<"#sales2#">>,
+%%                color => <<"#a7ee70">>,
+%%                tooltip => #{
+%%                    template => <<"#sales2#">>
+%%                }
+%%            },
+%%            #{
+%%                value => <<"#sales3#">>,
+%%                color => <<"#36abee">>,
+%%                tooltip => #{
+%%                    template => <<"#sales3#">>
+%%                }
+%%            }
+%%        ],
+%%        dynamic => Dynamic,
+%%        animate_duration => 400,
+%%        nk_interval_time => 5000
+%%    },
+%%    nkadmin_webix_chart:chart(Spec, #{}).
