@@ -175,6 +175,7 @@ admin_event(_Event, _Updates, _Session) ->
 
 %% @doc
 admin_element_action(ElementIdParts, Action, Value, Updates, Session) ->
+    %lager:warning("NKLOG Action ~p", [ElementIdParts]),
     nkdomain_admin_tree:element_action(ElementIdParts, Action, Value, Updates, Session).
 
 
