@@ -24,8 +24,9 @@
 -export([get_data/3, get_agg_srv_id/2, get_agg_name/3, get_agg_term/3, table_filter/4]).
 -export([obj_id_url/1, obj_id_url/2, obj_path_url/2, table_entry/3]).
 -export([get_type_info/2, get_type_view_mod/2, get_obj_view_mod/2]).
--export([add_search_filter/3, add_time_filter/4, add_multiword_filter/3, get_file_url/2]).
+-export([add_filter/3, add_exists_filter/3, add_search_filter/3, add_time_filter/4, add_multiword_filter/3, get_file_url/2]).
 -export([make_type_view_id/1, make_type_view_subfilter_id/1, make_type_view_showdeleted_id/1, make_obj_view_id/2, make_view_subview_id/3]).
+-export([make_confirm/2, make_msg/2]).
 
 -include("nkdomain.hrl").
 -include("nkdomain_admin.hrl").
@@ -42,6 +43,9 @@
 
 
 %% @doc
+get_data([?ID_ADMIN_DETAIL_TYPE_VIEW, ?ID_ADMIN_TREE_ALL_OBJS], Spec, Session) ->
+    do_get_data(?ID_ADMIN_TREE_ALL_OBJS, #{}, Spec, Session);
+
 get_data([?ID_ADMIN_DETAIL_TYPE_VIEW, Type], Spec, Session) ->
     do_get_data(Type, #{}, Spec, Session);
 
@@ -56,30 +60,11 @@ get_data(_Parts, _Spec, Session) ->
 do_get_data(Type, Opts, Spec, Session) ->
     case get_type_view_mod(Type, Session) of
         {ok, Mod} ->
-            Start = maps:get(start, Spec, 0),
-            Size = case maps:find('end', Spec) of
-                {ok, End} when End>Start ->
-                    End-Start;
-                _ ->
-                    100
-            end,
-            Filter = maps:get(filter, Spec, #{}),
-            Sort = case maps:get(sort, Spec, undefined) of
-                #{
-                    id := SortId,
-                    dir := SortDir
-                } ->
-                    {SortId, to_bin(SortDir)};
-                undefined ->
-                    undefined
-            end,
-            %%  case Mod:table_data(FunSpec, Opts, Session) of
-            case nkdomain_admin_table:table_data(Type, Mod, Start, Size, Sort, Filter, Opts, Session) of
-
+            case nkdomain_admin_table:table_data(Type, Mod, Spec, Opts, Session) of
                 {ok, Total, Data} ->
                     Reply = #{
                         total_count => Total,
-                        pos => Start,
+                        pos => maps:get(start, Spec, 0),
                         data => Data
                     },
                     {ok, Reply, Session};
@@ -103,6 +88,9 @@ get_type_info(Type, _Session) ->
 
 
 %% @private
+get_type_view_mod(?ID_ADMIN_TREE_ALL_OBJS, _Session) ->
+    {ok, nkdomain_admin_all_objs_view};
+
 get_type_view_mod(Type, _Session) ->
     case ?CALL_NKROOT(object_admin_info, [Type]) of
         #{type_view_mod:=Mod} ->
@@ -226,11 +214,14 @@ table_filter(_Field, <<>>, _Info, Acc) ->
 table_filter(_Field, ?ADMIN_ALL_OBJS, _Info, Acc) ->
     {ok, Acc};
 
-%%table_filter({<<"nkBaseDomain">>, Path}, _Info, Acc) ->
-%%    {ok, [{<<"path">>, subdir, Path}|Acc]};
+table_filter(<<"nkBaseDomain">>, Path, _Info, Acc) ->
+    {ok, [{<<"path">>, subdir, Path}|Acc]};
 
 table_filter(<<"domain">>, Data, _Info, Acc) ->
     {ok, [{<<"domain_id">>, eq, Data}|Acc]};
+
+table_filter(<<"type">>, Data, _Info, Acc) ->
+    {ok, [{<<"type">>, eq, Data}|Acc]};
 
 %%table_filter({<<"service">>, Data}, _Info, Acc) ->
 %%    Root = to_bin(?NKROOT),
@@ -239,6 +230,9 @@ table_filter(<<"domain">>, Data, _Info, Acc) ->
 %%        _ -> Data
 %%    end,
 %%    {ok, [{<<"srv_id">>, eq, Data2}|Acc]};
+
+table_filter(<<"name">>, Data, _Info, Acc) ->
+    {ok, add_multiword_filter(<<"name_norm">>, Data, Acc)};
 
 table_filter(<<"obj_name">>, Data, _Info, Acc) ->
     {ok, add_search_filter(<<"obj_name">>, Data, Acc)};
@@ -291,8 +285,14 @@ table_entry(Type, Entry, Pos) ->
         <<"created_by">> := CreatedBy,
         <<"created_time">> := CreatedTime
     } = Entry,
-    %SrvId = maps:get(<<"srv_id">>, Entry, nkroot),
-    {ok, Domain, ShortName} = nkdomain_util:get_parts(Type, Path),
+    {Domain, ShortName} = case Type of
+        ?ID_ADMIN_TREE_ALL_OBJS ->
+            {ok, D, _Type, S} = nkdomain_util:get_parts(Path),
+            {D, S};
+        _ ->
+            {ok, D, S} = nkdomain_util:get_parts(Type, Path),
+            {D, S}
+    end,
     Enabled = maps:get(<<"enabled">>, Entry, true),
     %Root = nklib_util:to_binary(?NKROOT),
     %SrvId2 = case SrvId of
@@ -303,9 +303,8 @@ table_entry(Type, Entry, Pos) ->
         checkbox => <<"0">>,
         pos => Pos,
         id => ObjId,
-        %service => SrvId2,
         obj_name => obj_id_url(ObjId, ShortName),
-        name => maps:get(name, Entry, <<>>),
+        name => maps:get(<<"name">>, Entry, <<>>),
         domain => obj_path_url(Domain, Domain),
         created_by => obj_id_url(CreatedBy),
         created_time => CreatedTime,
@@ -332,6 +331,16 @@ obj_id_url(ObjId, Name) ->
 %% @doc
 obj_path_url(Path, Name) ->
     <<"<a href=\"#", Path/binary, "\">", Name/binary, "</a>">>.
+
+
+%% @private
+add_filter(Field, Data, Acc) ->
+    [{Field, eq, Data}|Acc].
+
+
+%% @private
+add_exists_filter(Field, Bool, Acc) ->
+    [{Field, exists, Bool}|Acc].
 
 
 %% @private
@@ -421,5 +430,46 @@ make_view_subview_id(Type, ObjId, SubView) ->
     nkadmin_util:make_id([?ID_ADMIN_DETAIL_OBJ_SUBVIEW, Type, ObjId, SubView]).
 
 
+%% @doc
+make_confirm(Title, Text) ->
+    #{
+        class => <<"popup">>,
+        value => #{
+            class => <<"webix_confirm">>,
+            % class => <<"webix_alert">>,
+            value => #{
+                title => to_bin(Title),
+                text => to_bin(Text),
+                ok => <<"OK">>,
+                cancel => <<"Cancel">>,
+                % type: "confirm-warning",
+                type => <<"confirm-error">>,
+                callback => #{
+                    nkParseFunction =>
+                    <<"'function(response) {console.log(\"RESPONSE (true/false): \", response);}'">>
+                }
+            }
+        }
+    }.
+
+
+%% @doc
+make_msg(Type, Msg) ->
+    #{
+        class => <<"popup">>,
+        value => #{
+            class =>  <<"webix_message">>,
+            value => #{
+                text => to_bin(Msg),
+                type => case Type of ok -> <<"ok">>; error -> <<"error">> end,
+                expire => 3000          % -1 for static
+            }
+        }
+    }.
+
+
+
+
+
 %% @private
-to_bin(K) -> nklib_util:to_binary(K).
+to_bin(R) -> nklib_util:to_binary(R).

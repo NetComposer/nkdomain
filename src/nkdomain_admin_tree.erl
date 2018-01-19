@@ -127,23 +127,24 @@ event(Event, Updates, Session) ->
 element_action([?ID_ADMIN_TREE_DASHBOARD], selected, _Value, Updates, Session) ->
     {Updates2, Session2} = nkadmin_util:update_detail(<<"/dashboard">>, #{}, Updates, Session),
     {Updates3, Session3} = nkadmin_util:update_url(Updates2, Session2),
-    {ok, Updates3, Session3};
+    Msg = nkdomain_admin_util:make_msg(error, <<"Not yet implemented">>),
+    {ok, [Msg|Updates3], Session3};
 
-%% "Domains & Groups"
+%% "Domains"
 element_action([?ID_ADMIN_TREE_DOMAINS], selected, _Value, Updates, Session) ->
-    {ok, Updates, Session};
-
-%% "All Domains" Same as selecting the type "domain"
-element_action([?ID_ADMIN_TREE_ALL_OBJS], selected, _Value, Updates, Session) ->
     nkdomain_admin_detail:selected_type(?DOMAIN_DOMAIN, <<"/">>, Updates, Session);
 
 element_action([?ID_ADMIN_TREE_DOMAINS_DOMAIN, _ObjId, Path], selected, _Value, Updates, Session) ->
     nkdomain_admin_detail:selected_type(?DOMAIN_DOMAIN, Path, Updates, Session);
 
+element_action([?ID_ADMIN_TREE_ALL_OBJS], selected, _Value, Updates, Session) ->
+    nkdomain_admin_detail:selected_type(?ID_ADMIN_TREE_ALL_OBJS, <<"/">>, Updates, Session);
+
 element_action([?ID_ADMIN_TREE_ALERTS], selected, _Value, Updates, Session) ->
     {Updates2, Session2} = nkadmin_util:update_detail(<<"/alerts">>, #{}, Updates, Session),
     {Updates3, Session3} = nkadmin_util:update_url(Updates2, Session2),
-    {ok, Updates3, Session3};
+    Msg = nkdomain_admin_util:make_msg(error, <<"Not yet implemented">>),
+    {ok, [Msg|Updates3], Session3};
 
 element_action([?ID_ADMIN_TREE_RESOURCES, Type], selected, _Value, Updates, Session) ->
     nkdomain_admin_detail:selected_type(Type, <<"/">>, Updates, Session);
@@ -190,7 +191,8 @@ get_domains(DomainList, Session) ->
     {ok, Items, Session2} = get_domain_items(DomainList, [], Session),
     Value = #{icon=><<"img/domains_and_groups.png">>, items=>Items},
     Element = nkadmin_util:menu_group(?ID_ADMIN_TREE_DOMAINS, Value, Session2),
-    {ok, Element, Session2}.
+    Session3 = nkadmin_util:set_key_data(?ID_ADMIN_TREE_DOMAINS, #{domain_ids=>DomainList}, Session2),
+    {ok, Element, Session3}.
 
 
 %% @private
@@ -220,11 +222,10 @@ get_domain_items([ObjId|Rest], Acc, Session) ->
 
 %% @private
 created_domain(ObjId, DomainId, Updates, #admin_session{domain_id=DomainId}=Session) ->
-    #{domain_ids:=DomList1} = nkadmin_util:get_key_data(?ID_ADMIN_TREE_ALL_OBJS, Session),
+    #{domain_ids:=DomList1} = nkadmin_util:get_key_data(?ID_ADMIN_TREE_DOMAINS, Session),
     DomList2 = nklib_util:store_value(ObjId, DomList1),
-    Session2 = nkadmin_util:set_key_data(?ID_ADMIN_TREE_ALL_OBJS, #{domain_ids=>DomList2}, Session),
-    {ok, Item, Session3} = get_domains(DomList2, Session2),
-    {[Item|Updates], Session3};
+    {ok, Item, Session2} = get_domains(DomList2, Session),
+    {[Item|Updates], Session2};
 
 created_domain(_ObjId, _DomainId, Updates, Session) ->
     {Updates, Session}.
@@ -232,7 +233,7 @@ created_domain(_ObjId, _DomainId, Updates, Session) ->
 
 %% @private
 updated_domain(ObjId, Updates, Session) ->
-    #{domain_ids:=DomList} = nkadmin_util:get_key_data(?ID_ADMIN_TREE_ALL_OBJS, Session),
+    #{domain_ids:=DomList} = nkadmin_util:get_key_data(?ID_ADMIN_TREE_DOMAINS, Session),
     case lists:member(ObjId, DomList) of
         true ->
             {ok, [Item], Session2} = get_domain_items([ObjId], [], Session),
@@ -244,13 +245,12 @@ updated_domain(ObjId, Updates, Session) ->
 
 %% @private
 deleted_domain(ObjId, Updates, Session) ->
-    #{domain_ids:=DomList} = nkadmin_util:get_key_data(?ID_ADMIN_TREE_ALL_OBJS, Session),
+    #{domain_ids:=DomList} = nkadmin_util:get_key_data(?ID_ADMIN_TREE_DOMAINS, Session),
     case lists:member(ObjId, DomList) of
         true ->
             DomList2 = DomList -- [ObjId],
-            Session2 = nkadmin_util:set_key_data(?ID_ADMIN_TREE_ALL_OBJS, #{domain_ids=>DomList2}, Session),
-            {ok, Item, Session3} = get_domains(DomList2, Session2),
-            {[Item|Updates], Session3};
+            {ok, Item, Session2} = get_domains(DomList2, Session),
+            {[Item|Updates], Session2};
         false ->
             {Updates, Session}
     end.

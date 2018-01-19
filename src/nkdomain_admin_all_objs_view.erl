@@ -20,7 +20,7 @@
 
 %% @doc User Object
 
--module(nkdomain_domain_obj_type_view).
+-module(nkdomain_admin_all_objs_view).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([view/2, fields/0, sort_field/1, filter_field/3, entry/2, element_updated/3]).
@@ -39,13 +39,29 @@ view(Path, _Session) ->
             },
             #{
                 id => domain,
-                fillspace => <<"1.5">>,
+                fillspace => <<"1.0">>,
                 type => text,
                 name => domain_column_domain,
                 is_html => true,
                 sort => true,
                 is_html => true,
                 options => get_agg_name(<<"domain_id">>, Path)
+            },
+            #{
+                id => type,
+                fillspace => <<"0.5">>,
+                type => text,
+                name => domain_column_type,
+                options => get_agg(<<"type">>, Path),
+                sort => true
+            },
+            #{
+                id => obj_name,
+                type => text,
+                fillspace => <<"0.5">>,
+                name => domain_column_id,
+                sort => true,
+                is_html => true % Will allow us to return HTML inside the column data
             },
             #{
                 id => name,
@@ -56,7 +72,6 @@ view(Path, _Session) ->
             },
             #{
                 id => created_by,
-                fillspace => <<"0.5">>,
                 type => text,
                 name => domain_column_created_by,
                 options => get_agg_name(<<"created_by">>, Path),
@@ -70,21 +85,22 @@ view(Path, _Session) ->
             }
         ],
         left_split => 1,
-%        right_split => 2,
+        %        right_split => 2,
         on_click => []
     }.
-
 
 
 %% @doc
 fields() ->
     [
-         <<"path">>,
-         <<"srv_id">>,
-         <<"created_time">>,
-         <<"created_by">>,
-         <<"enabled">>,
-         <<"name">>
+        <<"path">>,
+        <<"type">>,
+        <<"obj_name">>,
+        <<"srv_id">>,
+        <<"created_time">>,
+        <<"created_by">>,
+        <<"enabled">>,
+        <<"name">>
     ].
 
 
@@ -100,13 +116,15 @@ filter_field(_Field, _Data, Acc) ->
 %% @doc
 entry(Entry, Base) ->
     #{
+        <<"type">> := Type,
         <<"path">> := Path
     } = Entry,
+    {ok, Domain, _ShortName} = nkdomain_util:get_parts(Type, Path),
     Base#{
-        domain => nkdomain_admin_util:obj_path_url(Path, Path),
+        domain => nkdomain_admin_util:obj_path_url(Domain, Domain),
+        type => Type,
         name => maps:get(<<"name">>, Entry, <<>>)
     }.
-
 
 
 %% @private
@@ -121,3 +139,11 @@ element_updated(_ObjId, Value, _Session) ->
 %% @private
 get_agg_name(Field, Path) ->
     nkdomain_admin_util:get_agg_name(Field, <<>>, Path).
+
+
+%% @private
+get_agg(Field, Path) ->
+    nkdomain_admin_util:get_agg_term(Field, <<>>, Path).
+
+
+

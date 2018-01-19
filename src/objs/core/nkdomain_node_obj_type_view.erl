@@ -23,23 +23,15 @@
 -module(nkdomain_node_obj_type_view).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([view/2, table_data/3, element_updated/3]).
+-export([view/2, fields/0, sort_field/1, filter_field/3, entry/2, element_updated/3]).
 
 -include("nkdomain.hrl").
 -include("nkdomain_admin.hrl").
 -include_lib("nkadmin/include/nkadmin.hrl").
 
 %% @doc
-view(Path, Session) ->
-    TableId = nkdomain_admin_util:make_type_view_id(?DOMAIN_NODE),
-    SubDomainsFilterId = nkdomain_admin_util:make_type_view_subfilter_id(?DOMAIN_NODE),
-    DeletedFilterId = nkdomain_admin_util:make_type_view_delfilter_id(?DOMAIN_NODE),
-    Spec = #{
-        table_id => TableId,
-        subdomains_id => SubDomainsFilterId,
-        deleted_id => DeletedFilterId,
-        filters => [SubDomainsFilterId, DeletedFilterId],
-        base_domain => Path,
+view(Path, _Session) ->
+    #{
         columns => [
             #{
                 id => checkbox,
@@ -80,89 +72,109 @@ view(Path, Session) ->
         ],
         left_split => 1,
         on_click => []
-    },
-    Table = #{
-        id => TableId,
-        class => webix_ui,
-        value => nkadmin_webix_datatable:datatable(Spec, Session)
-    },
-    {Table, Session}.
+    }.
 
+
+
+fields() ->
+    [
+        <<"path">>,
+        <<"obj_name">>,
+        <<"created_time">>,
+        <<"created_by">>,
+        <<"enabled">>
+    ].
 
 
 %% @doc
-table_data(#{start:=Start, size:=Size, sort:=Sort, filter:=Filter}, _Opts, #admin_session{domain_id=DomainId}) ->
-    SortSpec = case Sort of
-        {<<"obj_name">>, Order} ->
-            <<Order/binary, ":obj_name">>;
-        {<<"domain">>, Order} ->
-            <<Order/binary, ":path">>;
-        {Field, Order} when Field==<<"created_time">> ->
-            <<Order/binary, $:, Field/binary>>;
-        _ ->
-            <<"desc:path">>
-    end,
-    %% Get the timezone_offset from the filter list and pass it to table_filter
-    Offset = maps:get(<<"timezone_offset">>, Filter, 0),
-    case table_filter(maps:to_list(Filter), #{timezone_offset => Offset}, #{type=>?DOMAIN_NODE}) of
-        {ok, Filters} -> 
-            % lager:warning("NKLOG Filters ~s", [nklib_json:encode_pretty(Filters)]),
-            FindSpec = #{
-                filters => Filters,
-                fields => [
-                    <<"path">>,
-                    <<"obj_name">>,
-                    <<"created_time">>,
-                    <<"created_by">>,
-                    <<"enabled">>
-                    ],
-                sort => SortSpec,
-                from => Start,
-                size => Size
-            },
-            SubDomainsFilterId = nkdomain_admin_util:make_type_view_subfilter_id(?DOMAIN_NODE),
-            Fun = case maps:get(SubDomainsFilterId, Filter, 1) of
-                0 -> search;
-                1 -> search_all
-            end,
-            case nkdomain_domain:Fun(DomainId, FindSpec) of
-                {ok, Total, List, _Meta} ->
-                    Data = table_iter(List, Start+1, []),
-                    {ok, Total, Data};
-                {error, Error} ->
-                    {error, Error}
-            end;
-        {error, Error} ->
-            {error, Error}
-    end.
+sort_field(_) -> <<>>.
 
 
-%% @private
-table_filter([], _Info, Acc) ->
-    {ok, Acc};
+%% @doc
+filter_field(_Field, _Data, Acc) ->
+    Acc.
 
-table_filter([Term|Rest], Info, Acc) ->
-    case nkdomain_admin_util:table_filter(Term, Info, Acc) of
-        {ok, Acc2} ->
-            table_filter(Rest, Info, Acc2);
-        {error, Error} ->
-            {error, Error};
-        unknown ->
-            case Term of
-                _ ->
-                    table_filter(Rest, Info, Acc)
-            end
-    end.
+
+%% @doc
+entry(_Entry, Base) ->
+    Base.
 
 
 
-%% @private
-table_iter([], _Pos, Acc) ->
-    lists:reverse(Acc);
-
-table_iter([Entry|Rest], Pos, Acc) ->
-    Data = nkdomain_admin_util:table_entry(?DOMAIN_NODE, Entry, Pos),
-    table_iter(Rest, Pos+1, [Data|Acc]).
+%%
+%%%% @doc
+%%table_data(#{start:=Start, size:=Size, sort:=Sort, filter:=Filter}, _Opts, #admin_session{domain_id=DomainId}) ->
+%%    SortSpec = case Sort of
+%%        {<<"obj_name">>, Order} ->
+%%            <<Order/binary, ":obj_name">>;
+%%        {<<"domain">>, Order} ->
+%%            <<Order/binary, ":path">>;
+%%        {Field, Order} when Field==<<"created_time">> ->
+%%            <<Order/binary, $:, Field/binary>>;
+%%        _ ->
+%%            <<"desc:path">>
+%%    end,
+%%    %% Get the timezone_offset from the filter list and pass it to table_filter
+%%    Offset = maps:get(<<"timezone_offset">>, Filter, 0),
+%%    case table_filter(maps:to_list(Filter), #{timezone_offset => Offset}, #{type=>?DOMAIN_NODE}) of
+%%        {ok, Filters} ->
+%%            % lager:warning("NKLOG Filters ~s", [nklib_json:encode_pretty(Filters)]),
+%%            FindSpec = #{
+%%                filters => Filters,
+%%                fields => [
+%%                    <<"path">>,
+%%                    <<"obj_name">>,
+%%                    <<"created_time">>,
+%%                    <<"created_by">>,
+%%                    <<"enabled">>
+%%                    ],
+%%                sort => SortSpec,
+%%                from => Start,
+%%                size => Size
+%%            },
+%%            SubDomainsFilterId = nkdomain_admin_util:make_type_view_subfilter_id(?DOMAIN_NODE),
+%%            Fun = case maps:get(SubDomainsFilterId, Filter, 1) of
+%%                0 -> search;
+%%                1 -> search_all
+%%            end,
+%%            case nkdomain_domain:Fun(DomainId, FindSpec) of
+%%                {ok, Total, List, _Meta} ->
+%%                    Data = table_iter(List, Start+1, []),
+%%                    {ok, Total, Data};
+%%                {error, Error} ->
+%%                    {error, Error}
+%%            end;
+%%        {error, Error} ->
+%%            {error, Error}
+%%    end.
+%%
+%%
+%%%% @private
+%%table_filter([], _Info, Acc) ->
+%%    {ok, Acc};
+%%
+%%table_filter([Term|Rest], Info, Acc) ->
+%%    case nkdomain_admin_util:table_filter(Term, Info, Acc) of
+%%        {ok, Acc2} ->
+%%            table_filter(Rest, Info, Acc2);
+%%        {error, Error} ->
+%%            {error, Error};
+%%        unknown ->
+%%            case Term of
+%%                _ ->
+%%                    table_filter(Rest, Info, Acc)
+%%            end
+%%    end.
+%%
+%%
+%%
+%%%% @private
+%%table_iter([], _Pos, Acc) ->
+%%    lists:reverse(Acc);
+%%
+%%table_iter([Entry|Rest], Pos, Acc) ->
+%%    Data = nkdomain_admin_util:table_entry(?DOMAIN_NODE, Entry, Pos),
+%%    table_iter(Rest, Pos+1, [Data|Acc]).
 
 
 %% @private
@@ -175,11 +187,6 @@ get_agg_name(Field, Path) ->
     nkdomain_admin_util:get_agg_name(Field, ?DOMAIN_NODE, Path).
 
 
-%% @private
-get_agg_srv_id(Path) ->
-    nkdomain_admin_util:get_agg_srv_id(?DOMAIN_NODE, Path).
-
-
-%% @private
-get_agg_term(Field, Path) ->
-    nkdomain_admin_util:get_agg_term(Field, ?DOMAIN_NODE, Path).
+%%%% @private
+%%get_agg_term(Field, Path) ->
+%%    nkdomain_admin_util:get_agg_term(Field, ?DOMAIN_NODE, Path).

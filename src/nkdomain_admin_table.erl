@@ -21,46 +21,90 @@
 %% @doc
 -module(nkdomain_admin_table).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
--export([table_data/8]).
+-export([table_view/4, table_data/5]).
 
-%%-include("nkdomain.hrl").
-%%-include("nkdomain_admin.hrl").
+-include("nkdomain.hrl").
+-include("nkdomain_admin.hrl").
 %%-include_lib("nkevent/include/nkevent.hrl").
 -include_lib("nkadmin/include/nkadmin.hrl").
 
 
 -define(LLOG(Type, Txt, Args), lager:Type("NkDOMAN Admin " ++ Txt, Args)).
-
+-define(DEFAULT_ORDER, [<<"asc:path">>, <<"asc:obj_name">>]).
 
 %% ===================================================================
 %% Public
 %% ===================================================================
 
 %% @doc
-table_data(Type, Mod, Start, Size, Sort, Filter, _Opts, #admin_session{domain_id=DomainId}) ->
-    %% lager:error("NKLOG FF ~p", [Filter]),
+table_view(Type, Mod, Path, Session) ->
+    Table1 = Mod:view(Path, Session),
+    TableId = nkdomain_admin_util:make_type_view_id(Type),
+    SubDomainsFilterId = nkdomain_admin_util:make_type_view_subfilter_id(Type),
+    DeletedFilterId = nkdomain_admin_util:make_type_view_showdeleted_id(Type),
+    Table2 = Table1#{
+        table_id => TableId,
+        subdomains_id => SubDomainsFilterId,
+        deleted_id => DeletedFilterId,
+        filters => [SubDomainsFilterId, DeletedFilterId],
+        base_domain => Path
+    },
+    #{
+        id => TableId,
+        class => webix_ui,
+        value => nkadmin_webix_datatable:datatable(Table2, Session)
+    }.
+
+
+
+%% @doc
+table_data(Type, Mod, Spec, _Opts, #admin_session{domain_id=DomainId}) ->
+    Start = maps:get(start, Spec, 0),
+    Size = case maps:find('end', Spec) of
+        {ok, End} when End>Start ->
+            End-Start;
+        _ ->
+            100
+    end,
+    Filter = maps:get(filter, Spec, #{}),
+    Sort = case maps:get(sort, Spec, undefined) of
+        #{
+            id := SortId,
+            dir := SortDir
+        } ->
+            {SortId, to_bin(SortDir)};
+        undefined ->
+            undefined
+    end,
+    % lager:error("NKLOG FF ~p", [Filter]),
     SortSpec = case Sort of
         {<<"obj_name">>, Order} ->
             <<Order/binary, ":obj_name">>;
         {<<"domain">>, Order} ->
             <<Order/binary, ":path">>;
+        {<<"type">>, Order} ->
+            <<Order/binary, ":type">>;
         {Field, Order} when Field==<<"created_time">> ->
             <<Order/binary, $:, Field/binary>>;
         {Field, Order} ->
             case erlang:function_exported(Mod, sort_field, 1) andalso Mod:sort_field(Field) of
                 false ->
-                    <<"desc:path">>;
+                    ?DEFAULT_ORDER;
                 <<>> ->
-                    <<"desc:path">>;
+                    ?DEFAULT_ORDER;
                 SubField ->
                     <<Order/binary, $:, SubField/binary>>
             end;
         _ ->
-            <<"desc:path">>
+            ?DEFAULT_ORDER
     end,
     %% Get the timezone_offset from the filter list and pass it to table_filter
     Offset = maps:get(<<"timezone_offset">>, Filter, 0),
-    case table_filter(maps:to_list(Filter), Mod, #{timezone_offset => Offset}, [{<<"type">>, eq, Type}]) of
+    Filters1 = case Type of
+        ?ID_ADMIN_TREE_ALL_OBJS -> [];
+        _ -> [{<<"type">>, eq, Type}]
+    end,
+    case table_filter(maps:to_list(Filter), Mod, #{timezone_offset => Offset}, Filters1) of
         {ok, Filters2} ->
             % lager:warning("NKLOG Filters ~s", [nklib_json:encode_pretty(Filters)]),
             FindOpts1 = #{
@@ -79,7 +123,6 @@ table_data(Type, Mod, Start, Size, Sort, Filter, _Opts, #admin_session{domain_id
                 0 -> FindOpts2;
                 1 -> FindOpts2#{get_deleted=>true}
             end,
-            %% lager:error("NKLOG FILTERD ~p", [Filters2]),
             case nkdomain_db:search(core, {query_graphql, DomainId, Filters2, FindOpts3}) of
                 {ok, Total, List, _Meta} ->
                     Data = table_iter(List, Mod, Type, Start+1, []),
@@ -127,4 +170,5 @@ table_iter([Entry|Rest], Mod, Type, Pos, Acc) ->
     table_iter(Rest, Mod, Type, Pos+1, [Data|Acc]).
 
 
-
+%% @private
+to_bin(K) -> nklib_util:to_binary(K).

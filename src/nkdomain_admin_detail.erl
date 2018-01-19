@@ -76,10 +76,12 @@ element_action([?ID_ADMIN_DETAIL_TYPE_VIEW, Type], updated, Value, Updates, Sess
         {ok, Update} ->
             case nkdomain:update(ObjId, Update) of
                 {ok, _} ->
-                    {ok, Updates, Session};
+                    Msg = nkdomain_admin_util:make_msg(ok, <<"Element updated">>),
+                    {ok, [Msg|Updates], Session};
                 {error, Error} ->
+                    Msg = nkdomain_admin_util:make_msg(error, <<"Element not updated">>),
                     ?LLOG(warning, "Object update error: ~p", [Error], Session),
-                    {ok, Updates, Session}
+                    {ok, [Msg|Updates], Session}
             end
     end;
 
@@ -145,7 +147,14 @@ element_action(_Elements, _Action, _Value, Updates, Session) ->
 %% ===================================================================
 
 
-%% @doc
+%% @doc Generates the table at the domain
+%% Table will ask for that, calling nkdomain_admin_util:get_data/3
+selected_type(?ID_ADMIN_TREE_ALL_OBJS, Path, Updates, Session) ->
+    Detail =nkdomain_admin_table:table_view(?ID_ADMIN_TREE_ALL_OBJS, nkdomain_admin_all_objs_view, Path, Session),
+    {Updates2, Session2} = nkadmin_util:update_detail(Path, Detail, Updates, Session),
+    {Updates3, Session3} = nkadmin_util:update_url(Updates2, Session2),
+    {ok, Updates3, Session3};
+
 selected_type(Type, Path, Updates, Session) ->
     Class = nkdomain_util:class(Type),
     DetailPath = case Type of
@@ -154,14 +163,14 @@ selected_type(Type, Path, Updates, Session) ->
     end,
     case nkdomain_admin_util:get_type_info(Type, Session) of
         {true, #{type_view_mod:=Mod}} ->
-            {Detail, Session2} = Mod:view(Path, Session),
-            {Updates3, Session3} = nkadmin_util:update_detail(DetailPath, Detail, Updates, Session2),
-            {Updates4, Session4} = nkadmin_util:update_url(Updates3, Session3),
-            {ok, Updates4, Session4};
+            Detail = nkdomain_admin_table:table_view(Type,  Mod, Path, Session),
+            {Updates2, Session2} = nkadmin_util:update_detail(DetailPath, Detail, Updates, Session),
+            {Updates3, Session3} = nkadmin_util:update_url(Updates2, Session2),
+            {ok, Updates3, Session3};
         _ ->
-            ?LLOG(notice, "type with no supported view: ~s", [Type], Session),
             {Updates2, Session2} = nkadmin_util:update_detail(DetailPath, #{}, Updates, Session),
-            {ok, Updates2, Session2}
+            Msg = nkdomain_admin_util:make_msg(error, <<"Not yet implemented">>),
+            {ok, [Msg|Updates2], Session2}
     end.
 
 
