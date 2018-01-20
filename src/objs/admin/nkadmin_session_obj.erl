@@ -27,7 +27,6 @@
 
 
 
-
 -module(nkadmin_session_obj).
 -behavior(nkdomain_obj).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').

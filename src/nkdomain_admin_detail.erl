@@ -42,7 +42,7 @@
 element_action([?ADMIN_OBJ_TYPE, Path, Type], selected, _Value, Updates, Session) ->
     selected_type(Type, Path, Updates, Session);
 
-element_action([?ADMIN_OBJ_ID, _SrvId, ObjId, Type, Path], selected, Value, Updates, Session) ->
+element_action([?ADMIN_OBJ_ID, ObjId, Type, Path], selected, Value, Updates, Session) ->
     case selected_obj(ObjId, Type, Path, Updates, Session) of
         {ok, Updates2, Session2} ->
             case Value of
@@ -117,6 +117,8 @@ element_action([?ID_ADMIN_DETAIL_OBJ_VIEW, Type, ObjId], delete, _Value, Updates
     {ok, Updates2, Session2};
 
 element_action([?ID_ADMIN_DETAIL_OBJ_VIEW, Type, ObjId], save, Value, Updates, #admin_session{base_path=Path} = Session) ->
+
+
     obj_view_save(Type, ObjId, Value, Session),
     {ok, Updates2, Session2} = selected_type(Type, Path, Updates, Session),
     {ok, Updates2, Session2};
@@ -202,8 +204,9 @@ selected_obj(ObjId, Type, ObjPath, Updates, Session) ->
                     {error, object_load_error, Session}
             end;
         not_found ->
+            Msg = nkdomain_admin_util:make_msg(error, "Not yet available"),
             ?LLOG(notice, "type with no supported view: ~s", [Type], Session),
-            {ok, Updates, Session}
+            {ok, [Msg|Updates], Session}
     end.
 
 
