@@ -39,9 +39,9 @@
 %% @doc
 table_view(Type, Mod, Path, Session) ->
     Table1 = Mod:view(Path, Session),
-    TableId = nkdomain_admin_util:make_type_view_id(Type),
-    SubDomainsFilterId = nkdomain_admin_util:make_type_view_subfilter_id(Type),
-    DeletedFilterId = nkdomain_admin_util:make_type_view_showdeleted_id(Type),
+    TableId = nkdomain_admin_util:make_type_view_id(Type, Path),
+    SubDomainsFilterId = nkdomain_admin_util:make_type_view_filter(Type, subdomains),
+    DeletedFilterId = nkdomain_admin_util:make_type_view_filter(Type, deleted),
     Table2 = Table1#{
         table_id => TableId,
         subdomains_id => SubDomainsFilterId,
@@ -113,8 +113,8 @@ table_data(Type, Mod, Spec, _Opts, #admin_session{domain_id=DomainId}) ->
                 from => Start,
                 size => Size
             },
-            SubDomainsFilterId = nkdomain_admin_util:make_type_view_subfilter_id(Type),
-            SubDomainsDeletedId = nkdomain_admin_util:make_type_view_showdeleted_id(Type),
+            SubDomainsFilterId = nkdomain_admin_util:make_type_view_filter(Type, subdomains),
+            SubDomainsDeletedId = nkdomain_admin_util:make_type_view_filter(Type, deleted),
             FindOpts2 = case maps:get(SubDomainsFilterId, Filter, 1) of
                 0 -> FindOpts1;
                 1 -> FindOpts1#{deep=>true}

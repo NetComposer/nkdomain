@@ -38,6 +38,8 @@
 -define(ID_ADMIN_TREE_SERVICES,        <<"domain_tree_services">>).
 
 -define(ID_ADMIN_DETAIL_TYPE_VIEW,     <<"domain_detail_type_view">>).
+-define(ID_ADMIN_DETAIL_TYPE_FILTER,   <<"domain_detail_type_filter">>).
+-define(ID_ADMIN_DETAIL_TYPE_NEW,      <<"domain_detail_type_new">>).
 -define(ID_ADMIN_DETAIL_OBJ_VIEW,      <<"domain_detail_obj_view">>).
 -define(ID_ADMIN_DETAIL_OBJ_SUBVIEW,   <<"domain_detail_obj_subview">>).
 

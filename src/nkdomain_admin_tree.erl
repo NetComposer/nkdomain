@@ -132,13 +132,16 @@ element_action([?ID_ADMIN_TREE_DASHBOARD], selected, _Value, Updates, Session) -
 
 %% "Domains"
 element_action([?ID_ADMIN_TREE_DOMAINS], selected, _Value, Updates, Session) ->
-    nkdomain_admin_detail:selected_type(?DOMAIN_DOMAIN, <<"/">>, Updates, Session);
+    {Updates2, Session2} = nkdomain_admin_detail:selected_type(?DOMAIN_DOMAIN, <<"/">>, Updates, Session),
+    {ok, Updates2, Session2};
 
 element_action([?ID_ADMIN_TREE_DOMAINS_DOMAIN, _ObjId, Path], selected, _Value, Updates, Session) ->
-    nkdomain_admin_detail:selected_type(?DOMAIN_DOMAIN, Path, Updates, Session);
+    {Updates2, Session2} = nkdomain_admin_detail:selected_type(?DOMAIN_DOMAIN, Path, Updates, Session),
+    {ok, Updates2, Session2};
 
 element_action([?ID_ADMIN_TREE_ALL_OBJS], selected, _Value, Updates, Session) ->
-    nkdomain_admin_detail:selected_type(?ID_ADMIN_TREE_ALL_OBJS, <<"/">>, Updates, Session);
+    {Updates2, Session2} = nkdomain_admin_detail:selected_type(?ID_ADMIN_TREE_ALL_OBJS, <<"/">>, Updates, Session),
+    {ok, Updates2, Session2};
 
 element_action([?ID_ADMIN_TREE_ALERTS], selected, _Value, Updates, Session) ->
     {Updates2, Session2} = nkadmin_util:update_detail(<<"/alerts">>, #{}, Updates, Session),
@@ -147,10 +150,12 @@ element_action([?ID_ADMIN_TREE_ALERTS], selected, _Value, Updates, Session) ->
     {ok, [Msg|Updates3], Session3};
 
 element_action([?ID_ADMIN_TREE_RESOURCES, Type], selected, _Value, Updates, Session) ->
-    nkdomain_admin_detail:selected_type(Type, <<"/">>, Updates, Session);
+    {Updates2, Session2} = nkdomain_admin_detail:selected_type(Type, <<"/">>, Updates, Session),
+    {ok, Updates2, Session2};
 
 element_action([?ID_ADMIN_TREE_SESSIONS, Type], selected, _Value, Updates, Session) ->
-    nkdomain_admin_detail:selected_type(Type, <<"/">>, Updates, Session);
+    {Updates2, Session2} = nkdomain_admin_detail:selected_type(Type, <<"/">>, Updates, Session),
+    {ok, Updates2, Session2};
 
 element_action(Id, Action, Value, Updates, Session) ->
     nkdomain_admin_detail:element_action(Id, Action, Value, Updates, Session).

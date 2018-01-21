@@ -25,8 +25,8 @@
 -export([obj_id_url/1, obj_id_url/2, obj_path_url/2, table_entry/3]).
 -export([get_type_info/2, get_type_view_mod/2, get_obj_view_mod/2]).
 -export([add_filter/3, add_exists_filter/3, add_search_filter/3, add_time_filter/4, add_multiword_filter/3, get_file_url/2]).
--export([make_type_view_id/1, make_type_view_subfilter_id/1, make_type_view_showdeleted_id/1, make_obj_view_id/2, make_view_subview_id/3]).
--export([make_confirm/2, make_msg/2, get_domains/1]).
+-export([make_type_view_id/2, make_type_view_filter/2, make_obj_view_id/2, make_view_subview_id/3]).
+-export([make_confirm/2, make_msg/2, make_msg_ext/4, get_domains/1]).
 
 -include("nkdomain.hrl").
 -include("nkdomain_admin.hrl").
@@ -43,10 +43,10 @@
 
 
 %% @doc
-get_data([?ID_ADMIN_DETAIL_TYPE_VIEW, ?ID_ADMIN_TREE_ALL_OBJS], Spec, Session) ->
+get_data([?ID_ADMIN_DETAIL_TYPE_VIEW, ?ID_ADMIN_TREE_ALL_OBJS, _Path], Spec, Session) ->
     do_get_data(?ID_ADMIN_TREE_ALL_OBJS, #{}, Spec, Session);
 
-get_data([?ID_ADMIN_DETAIL_TYPE_VIEW, Type], Spec, Session) ->
+get_data([?ID_ADMIN_DETAIL_TYPE_VIEW, Type, _Path], Spec, Session) ->
     do_get_data(Type, #{}, Spec, Session);
 
 get_data([?ID_ADMIN_DETAIL_OBJ_SUBVIEW, Type, ObjId, SubType, <<"table">>], Spec, Session) ->
@@ -409,17 +409,14 @@ get_file_url(FileId, #admin_session{http_auth_id=AuthId}) ->
 
 
 %% @doc
-make_type_view_id(Type) ->
-    nkadmin_util:make_id([?ID_ADMIN_DETAIL_TYPE_VIEW, Type]).
+make_type_view_id(Type, Path) ->
+    nkadmin_util:make_id([?ID_ADMIN_DETAIL_TYPE_VIEW, Type, Path]).
 
 
 %% @doc
-make_type_view_subfilter_id(Type) ->
-    nkadmin_util:make_id([make_type_view_id(Type), <<"subdomains">>]).
+make_type_view_filter(Type, Filter) ->
+    nkadmin_util:make_id([?ID_ADMIN_DETAIL_TYPE_FILTER, Type, to_bin(Filter)]).
 
-%% @doc
-make_type_view_showdeleted_id(Type) ->
-    nkadmin_util:make_id([make_type_view_id(Type), <<"deleted">>]).
 
 %% @doc
 make_obj_view_id(Type, ObjId) ->
@@ -466,6 +463,14 @@ make_msg(Type, Msg) ->
             }
         }
     }.
+
+
+%% @doc
+make_msg_ext(Type, Msg, Error, #admin_session{srv_id=SrvId}) ->
+    {Code, Txt} = nkservice_util:error(SrvId, Error),
+    Msg2 = <<Msg/binary, ": ", Txt/binary, " (", Code/binary, ")">>,
+    make_msg(Type, Msg2).
+
 
 %% @doc
 get_domains(Base) ->

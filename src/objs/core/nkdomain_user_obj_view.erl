@@ -23,7 +23,7 @@
 -module(nkdomain_user_obj_view).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([view/2, save/3]).
+-export([view/3, update/3, create/2]).
 
 -include("nkdomain.hrl").
 -include("nkdomain_admin.hrl").
@@ -36,170 +36,163 @@
 -define(CHAT_MESSAGE, <<"message">>).
 
 
-%% @doc
-view(#obj_id_ext{pid=Pid}, Session) ->
-    case nkdomain:get_obj(Pid) of
-        {ok, Obj} ->
+
+%% @private
+view(Obj, IsNew, Session) ->
+    ObjId = maps:get(obj_id, Obj, <<>>),
+    DomainId = maps:get(domain_id, Obj, <<>>),
+    ObjName = maps:get(obj_name, Obj, <<>>),
+    CreatedBy = maps:get(created_by, Obj, <<>>),
+    CreatedTime = maps:get(created_time, Obj, 0),
+    UpdatedBy = maps:get(updated_by, Obj, <<>>),
+    UpdatedTime = maps:get(updated_time, Obj, 0),
+    Enabled = maps:get(enabled, Obj, true),
+    User = maps:get(?DOMAIN_USER, Obj, #{}),
+    IconUrl = case maps:get(icon_id, Obj, <<>>) of
+        <<>> ->
+            <<"img/avatar.png">>;
+        IconId ->
+            nkdomain_admin_util:get_file_url(IconId, Session)
+    end,
+    IconImage = <<"<img class='photo' style='width:150px; height:150px;' src='", IconUrl/binary, "'/>">>,
+    FormId = nkdomain_admin_util:make_obj_view_id(?DOMAIN_USER, ObjId),
+    Spec = #{
+        form_id => FormId,
+        with_image => IconImage,
+        buttons => [
+            #{type => case Enabled of true -> disable; _ -> enable end},
+            #{type => delete},
+            #{type => save}
+        ],
+        groups => [
             #{
-                obj_id := ObjId,
-                domain_id := DomainId,
-                type := Type,
-                obj_name := ObjName,
-                created_by := CreatedBy,
-                created_time := CreatedTime,
-                updated_by := UpdatedBy,
-                updated_time := UpdatedTime,
-                ?DOMAIN_USER := User
-            } = Obj,
-            IconUrl = case maps:get(icon_id, Obj, <<>>) of
-                <<>> ->
-                    <<"img/avatar.png">>;
-                IconId ->
-                    nkdomain_admin_util:get_file_url(IconId, Session)
-            end,
-            IconImage = <<"<img class='photo' style='width:150px; height:150px;' src='", IconUrl/binary, "'/>">>,
-            FormId = nkdomain_admin_util:make_obj_view_id(?DOMAIN_USER, ObjId),
-            IsNew = true,
-            Enabled = maps:get(enabled, Obj, true),
-            Spec = #{
-                form_id => FormId,
-                with_image => IconImage,
-                buttons => [
-                    #{type => case Enabled of true -> disable; _ -> enable end},
-                    #{type => delete},
-                    #{type => save}
-                ],
-                groups => [
-                    #{
-                        header => <<"CREDENTIALS">>,
-                        values => [
-                            case IsNew of
-                                true ->
-                                    {ok, Domains} = nkdomain_admin_util:get_domains("/"),
-                                    Opts = [
-                                        #{id=>Id, value=>Value} ||
-                                        {Id, Value} <- [{<<"root">>, <<"/">>}|Domains]
-                                    ],
-                                    #{
-                                        id => <<"domain">>,
-                                        type => combo,
-                                        label => <<"Domain">>,
-                                        value => DomainId,
-                                        editable => true,
-                                        options => Opts
-                                    };
-                                false ->
-                                    DomainPath = case nkdomain_db:find(DomainId) of
-                                        #obj_id_ext{path=DP} -> DP;
-                                        _ -> <<>>
-                                    end,
-                                    #{
-                                        id => <<"domain">>,
-                                        type => text,
-                                        label => <<"Domain">>,
-                                        value => DomainPath,
-                                        editable => false
-                                    }
+                header => <<"CREDENTIALS">>,
+                values => [
+                    case IsNew of
+                        true ->
+                            {ok, Domains} = nkdomain_admin_util:get_domains("/"),
+                            Opts = [
+                                #{id=>Id, value=>Value} ||
+                                {Id, Value} <- [{<<"root">>, <<"/">>}|Domains]
+                            ],
+                            #{
+                                id => <<"domain">>,
+                                type => combo,
+                                label => <<"Domain">>,
+                                value => DomainId,
+                                editable => true,
+                                options => Opts
+                            };
+                        false ->
+                            DomainPath = case nkdomain_db:find(DomainId) of
+                                #obj_id_ext{path=DP} -> DP;
+                                _ -> <<>>
                             end,
                             #{
-                                id => <<"username">>,
+                                id => <<"domain">>,
                                 type => text,
-                                label => <<"Username">>,
-                                value => ObjName,
-                                editable => true
-                            },
-                            #{
-                                id => <<"email">>,
-                                type => text,
-                                label => <<"Email">>,
-                                value => maps:get(email, User, <<>>),
-                                editable => true
-                            },
-                            #{
-                                id => <<"password">>,
-                                type => password,
-                                label => <<"Password">>,
-                                editable => true
+                                label => <<"Domain">>,
+                                value => DomainPath,
+                                editable => false
                             }
-                        ]
+                    end,
+                    #{
+                        id => <<"username">>,
+                        type => text,
+                        label => <<"Username">>,
+                        value => ObjName,
+                        editable => true
                     },
                     #{
-                        header => <<"PERSONAL DATA">>,
-                        values => [
-                            #{
-                                id => <<"name">>,
-                                type => text,
-                                label => <<"First name">>,
-                                value => maps:get(name, User, <<>>),
-                                editable => true
-                            },
-                            #{
-                                id => <<"surname">>,
-                                type => text,
-                                label => <<"Last name">>,
-                                value => maps:get(surname, User, <<>>),
-                                editable => true
-                            },
-                            #{
-                                id => <<"phone">>,
-                                type => text,
-                                label => <<"Phone">>,
-                                value => maps:get(phone_t, User, <<>>),
-                                editable => true
-                            },
-                            #{
-                                id => <<"address">>,
-                                type => text,
-                                label => <<"Address">>,
-                                value => maps:get(address_t, User, <<>>),
-                                editable => true
-                            }
-                        ]
+                        id => <<"email">>,
+                        type => text,
+                        label => <<"Email">>,
+                        value => maps:get(email, User, <<>>),
+                        editable => true
                     },
                     #{
-                        header => <<"OTHER">>,
-                        values => [
-                            #{
-                                id => <<"created_by">>,
-                                type => html,
-                                label => <<"Created by">>,
-                                value => nkdomain_admin_util:obj_id_url(CreatedBy),
-                                editable => false
-                            },
-                            #{
-                                id => <<"created_time">>,
-                                type => date,
-                                label => <<"Created time">>,
-                                value => CreatedTime,
-                                editable => false
-                            },
-                            #{
-                                id => <<"updated_by">>,
-                                type => html,
-                                label => <<"Updated by">>,
-                                value => nkdomain_admin_util:obj_id_url(UpdatedBy),
-                                editable => false
-                            },
-                            #{
-                                id => <<"updated_time">>,
-                                type => date,
-                                label => <<"Updated time">>,
-                                value => UpdatedTime,
-                                editable => false
-                            }
-                        ]
+                        id => <<"password">>,
+                        type => password,
+                        label => <<"Password">>,
+                        editable => true
                     }
                 ]
             },
-            Data = #{
-                id => FormId,
-                class => webix_ui,
-                value => nkadmin_webix_form:form(Spec, Type, Session)
+            #{
+                header => <<"PERSONAL DATA">>,
+                values => [
+                    #{
+                        id => <<"name">>,
+                        type => text,
+                        label => <<"First name">>,
+                        value => maps:get(name, User, <<>>),
+                        editable => true
+                    },
+                    #{
+                        id => <<"surname">>,
+                        type => text,
+                        label => <<"Last name">>,
+                        value => maps:get(surname, User, <<>>),
+                        editable => true
+                    },
+                    #{
+                        id => <<"phone">>,
+                        type => text,
+                        label => <<"Phone">>,
+                        value => maps:get(phone_t, User, <<>>),
+                        editable => true
+                    },
+                    #{
+                        id => <<"address">>,
+                        type => text,
+                        label => <<"Address">>,
+                        value => maps:get(address_t, User, <<>>),
+                        editable => true
+                    }
+                ]
             },
-            {Data, Session};
-        {error, Error} ->
-            {error, Error}
-    end.
+            #{
+                header => <<"OTHER">>,
+                values => [
+                    #{
+                        id => <<"created_by">>,
+                        type => html,
+                        label => <<"Created by">>,
+                        value => nkdomain_admin_util:obj_id_url(CreatedBy),
+                        editable => false
+                    },
+                    #{
+                        id => <<"created_time">>,
+                        type => date,
+                        label => <<"Created time">>,
+                        value => CreatedTime,
+                        editable => false
+                    },
+                    #{
+                        id => <<"updated_by">>,
+                        type => html,
+                        label => <<"Updated by">>,
+                        value => nkdomain_admin_util:obj_id_url(UpdatedBy),
+                        editable => false
+                    },
+                    #{
+                        id => <<"updated_time">>,
+                        type => date,
+                        label => <<"Updated time">>,
+                        value => UpdatedTime,
+                        editable => false
+                    }
+                ]
+            }
+        ]
+    },
+    Data = #{
+        id => FormId,
+        class => webix_ui,
+        value => nkadmin_webix_form:form(Spec, ?DOMAIN_USER, Session)
+    },
+    {ok, Data, Session}.
+
 
 
 
@@ -225,15 +218,16 @@ view(#obj_id_ext{pid=Pid}, Session) ->
 
 
 
-save(ObjId, Data, _Session) ->
+update(ObjId, Data, _Session) ->
+    lager:error("NKLOG UPDATE ~p ~p", [ObjId, Data]),
     #{
         <<"username">> := UserName,
         <<"name">> := Name,
         <<"surname">> := SurName,
         <<"email">> := Email,
         <<"password">> := Pass,
-        <<"address_t">> := Address,
-        <<"phone_t">> := Phone
+        <<"address">> := Address,
+        <<"phone">> := Phone
     } = Data,
     UserUpdate1 = #{
         name => Name,
@@ -260,6 +254,39 @@ save(ObjId, Data, _Session) ->
             end;
         {error, Error} ->
             ?LLOG(notice, "could not update user ~s: ~p", [ObjId, Error]),
+            {error, Error}
+    end.
+
+
+create(Data, _Session) ->
+    lager:error("NKLOG CREATE ~p", [Data]),
+    #{
+        <<"domain">> := DomainId,
+        <<"username">> := UserName,
+        <<"name">> := Name,
+        <<"surname">> := SurName,
+        <<"email">> := Email,
+        <<"password">> := Pass,
+        <<"address">> := Address,
+        <<"phone">> := Phone
+    } = Data,
+    UserCreate = #{
+        type => ?DOMAIN_USER,
+        domain_id => DomainId,
+        obj_name => UserName,
+        ?DOMAIN_USER => #{
+            name => Name,
+            surname => SurName,
+            email => Email,
+            address_t => Address,
+            phone_t => Phone,
+            password => Pass
+        }
+    },
+    case nkdomain_obj_make:create(UserCreate) of
+        {ok, #obj_id_ext{obj_id=ObjId}, []} ->
+            {ok, ObjId};
+        {error, Error} ->
             {error, Error}
     end.
 
