@@ -1,6 +1,6 @@
 -module(nkdomain_image_job_obj).
 -export([object_info/0, object_parse/2, object_schema_types/0, object_es_mapping/0]).
--export([create/4, start/7]).
+-export([info/4, create/4, start/7]).
 -export([subscribe/2, unsubscribe/2, notify/2]).
 -include_lib("nkimage/include/nkimage.hrl").
 -include_lib("nkevent/include/nkevent.hrl").
@@ -78,6 +78,32 @@ nkevent(_SrvId, JobId, Body) ->
              obj_id=JobId,
              body = Body,
              srv_id=?NKROOT}.
+
+info(SrvId, Domain, UserId, #{file_id := FileId}=Req) ->
+    case nkdomain_image_processor_obj:get_default() of
+        {ok, ProcessorId, Processor} ->
+            case find_file_and_store(FileId) of
+                {ok, #{?DOMAIN_FILE:=#{ content_type := Mime }}=File, Store} ->
+                    case nkfile:download(SrvId, Store, File#{name=>FileId}) of
+                        {ok, _, Body} ->
+                            Req2 = Req#{body => Body,
+                                        from => Mime},
+                            case nkimage:process(SrvId, Processor, Req2) of
+                                {ok, Raw} ->
+                                    %% info responses are returned as raw json
+                                    {ok, nklib_json:decode(Raw)};
+                                {error, Error} ->
+                                    {error, Error}
+                            end;
+                        {error, Error} ->
+                            {error, Error}
+                    end;
+                {error, Error} ->
+                    {error, Error}
+            end;
+        {error, Error} -> 
+            {error, Error}
+    end.
 
 
 create(SrvId, Domain, UserId, #{file_id := FileId}=Req) -> 
