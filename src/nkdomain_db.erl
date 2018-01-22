@@ -349,7 +349,7 @@ iterate(Type, SearchType, Fun, Acc, Opts) ->
 
 %% @doc Internal aggregation
 -spec aggs(type()|core, aggregation_type()) ->
-    {ok, integer(), [{binary(), integer()}]} | {error, term()}.
+    {ok, integer(), [{binary(), integer()}], Meta::map()} | {error, term()}.
 
 aggs(Type, AggType) ->
     aggs(Type, AggType, #{}).
@@ -357,13 +357,13 @@ aggs(Type, AggType) ->
 
 %% @doc
 -spec aggs(type()|core, aggregation_type(), opts()) ->
-    {ok, integer(), [{binary(), integer()}]} | {error, term()}.
+    {ok, integer(), [{binary(), integer()}], Meta::map()} | {error, term()}.
 
 aggs(Type, AggType, Opts) ->
     SrvId = maps:get(srv_id, Opts, ?NKROOT),
     case ?CALL_SRV(SrvId, object_db_agg_objs, [SrvId, Type, AggType, Opts]) of
-        {ok, Total, Data, _Meta} ->
-            {ok, Total, Data};
+        {ok, Total, Data, Meta} ->
+            {ok, Total, Data, Meta};
         {error, Error} ->
             {error, Error}
     end.

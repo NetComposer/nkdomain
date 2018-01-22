@@ -204,7 +204,7 @@ do_clean_expired(EsOpts) ->
         filter_list => [{expires_time, lt, Time}, {'not', {is_deleted, eq, true}}],
         size => ?ES_ITER_SIZE
     },
-    Fun = fun(#{obj_id:=ObjId}, Acc) ->
+    Fun = fun(#{<<"obj_id">>:=ObjId}, Acc) ->
         ?CALL_NKROOT(object_do_expired, [ObjId]),
         {ok, Acc+1}
     end,

@@ -631,7 +631,6 @@ do_sync_op({update_name, _ObjName}, _From, #obj_state{id=#obj_id_ext{type=?DOMAI
     reply({error, domains_name_cannot_change}, State);
 
 do_sync_op({update_name, ObjName}, _From, #obj_state{obj=#{obj_name:=ObjName}}=State) ->
-    lager:error("NKLOG NO CHANGE"),
     reply({ok, ObjName}, do_refresh(State));
 
 do_sync_op({update_name, ObjName}, _From, #obj_state{is_enabled=IsEnabled, object_info=Info}=State) ->

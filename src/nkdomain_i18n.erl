@@ -43,7 +43,7 @@ i18n() -> #{
 
         "domain_tree_overview" => "Overview",
         "domain_tree_overview_dashboard" => "Dashboard",
-        "domain_tree_overview_domains" => "Domains & Groups",
+        "domain_tree_overview_domains" => "Domains",
         "domain_tree_overview_all_objs" => "All Objects",
         "domain_tree_overview_alerts" => "Alerts",
 
@@ -98,7 +98,7 @@ i18n() -> #{
 
         "domain_tree_overview" => "General",
         "domain_tree_overview_dashboard" => <<"Información"/utf8>>,
-        "domain_tree_overview_domains" => "Dominios & Grupos",
+        "domain_tree_overview_domains" => "Dominios",
         "domain_tree_overview_all_objs" => "Todos los Objetos",
         "domain_tree_overview_alerts" => "Alertas",
 

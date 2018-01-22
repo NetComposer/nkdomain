@@ -112,7 +112,7 @@ object_info() ->
 object_admin_info() ->
     #{
         class => resource,
-        weight => 100,
+        weight => 1000,
         type_view_mod => nkdomain_user_obj_type_view,
         obj_view_mod => nkdomain_user_obj_view
     }.

@@ -21,11 +21,12 @@
 %% @doc NkDomain service callback module
 -module(nkdomain_admin_util).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
--export([get_data/3, get_agg_srv_id/2, get_agg_name/3, get_agg_term/3, table_filter/3, table_filter_time/3]).
+-export([get_data/3, get_agg_srv_id/2, get_agg_name/3, get_agg_term/3, table_filter/4]).
 -export([obj_id_url/1, obj_id_url/2, obj_path_url/2, table_entry/3]).
 -export([get_type_info/2, get_type_view_mod/2, get_obj_view_mod/2]).
--export([search_spec/1, time/2, time2/2, get_file_url/2]).
--export([make_type_view_id/1, make_type_view_subfilter_id/1, make_type_view_delfilter_id/1, make_obj_view_id/2, make_view_subview_id/3]).
+-export([add_filter/3, add_exists_filter/3, add_search_filter/3, add_time_filter/4, add_multiword_filter/3, get_file_url/2]).
+-export([make_type_view_id/2, make_type_view_filter/2, make_obj_view_id/2, make_view_subview_id/3]).
+-export([make_confirm/2, make_msg/2, make_msg_ext/4, get_domains/1]).
 
 -include("nkdomain.hrl").
 -include("nkdomain_admin.hrl").
@@ -42,10 +43,13 @@
 
 
 %% @doc
-get_data([?ADMIN_DETAIL_TYPE_VIEW, Type], Spec, Session) ->
+get_data([?ID_ADMIN_DETAIL_TYPE_VIEW, ?ID_ADMIN_TREE_ALL_OBJS, _Path], Spec, Session) ->
+    do_get_data(?ID_ADMIN_TREE_ALL_OBJS, #{}, Spec, Session);
+
+get_data([?ID_ADMIN_DETAIL_TYPE_VIEW, Type, _Path], Spec, Session) ->
     do_get_data(Type, #{}, Spec, Session);
 
-get_data([?ADMIN_DETAIL_OBJ_SUBVIEW, Type, ObjId, SubType, <<"table">>], Spec, Session) ->
+get_data([?ID_ADMIN_DETAIL_OBJ_SUBVIEW, Type, ObjId, SubType, <<"table">>], Spec, Session) ->
     do_get_data(SubType, #{orig_type=>Type, obj_id=>ObjId}, Spec, Session);
 
 get_data(_Parts, _Spec, Session) ->
@@ -56,34 +60,11 @@ get_data(_Parts, _Spec, Session) ->
 do_get_data(Type, Opts, Spec, Session) ->
     case get_type_view_mod(Type, Session) of
         {ok, Mod} ->
-            Start = maps:get(start, Spec, 0),
-            Size = case maps:find('end', Spec) of
-                {ok, End} when End>Start ->
-                    End-Start;
-                _ ->
-                    100
-            end,
-            Filter = maps:get(filter, Spec, #{}),
-            Sort = case maps:get(sort, Spec, undefined) of
-                #{
-                    id := SortId,
-                    dir := SortDir
-                } ->
-                    {SortId, to_bin(SortDir)};
-                undefined ->
-                    undefined
-            end,
-            FunSpec = #{
-                start => Start,
-                size => Size,
-                filter => Filter,
-                sort => Sort
-            },
-            case Mod:table_data(FunSpec, Opts, Session) of
+            case nkdomain_admin_table:table_data(Type, Mod, Spec, Opts, Session) of
                 {ok, Total, Data} ->
                     Reply = #{
                         total_count => Total,
-                        pos => Start,
+                        pos => maps:get(start, Spec, 0),
                         data => Data
                     },
                     {ok, Reply, Session};
@@ -107,6 +88,9 @@ get_type_info(Type, _Session) ->
 
 
 %% @private
+get_type_view_mod(?ID_ADMIN_TREE_ALL_OBJS, _Session) ->
+    {ok, nkdomain_admin_all_objs_view};
+
 get_type_view_mod(Type, _Session) ->
     case ?CALL_NKROOT(object_admin_info, [Type]) of
         #{type_view_mod:=Mod} ->
@@ -204,20 +188,15 @@ get_agg_term(Field, Type, Path) ->
             #{}
     end.
 
-
 %% @private
 do_get_agg(Field, Type, Path) ->
-    lager:error("NKLOG Field, Type, Path ~p", [{Field, Type, Path}]),
-
-    Filter = case Type of
-        <<>> -> #{};
-        _ -> #{type => Type}
+    %% lager:error("NKLOG Field, Type, Path ~p", [{Field, Type, Path}]),
+    Spec1 = #{deep=>true, size=>50},
+    Spec2 = case Type of
+        <<>> -> Spec1;
+        _ -> Spec1#{type => Type}
     end,
-    Spec = #{
-        filters => Filter,
-        size => 50
-    },
-    case nkdomain:search_agg_field(Path, Field, Spec, true) of
+    case nkdomain_db:aggs(core, {query_values, Path, Field, Spec2}) of
         {ok, 0, _, _} ->
             {ok, [], false};
         {ok, _N, Data, #{agg_sum_other:=SumOther}} ->
@@ -228,83 +207,74 @@ do_get_agg(Field, Type, Path) ->
 
 
 
-
-
 %% @private
-table_filter({_Field, <<>>}, _Info, Acc) ->
+table_filter(_Field, <<>>, _Info, Acc) ->
     {ok, Acc};
 
-table_filter({_Field, ?ADMIN_ALL_OBJS}, _Info, Acc) ->
+table_filter(_Field, ?ADMIN_ALL_OBJS, _Info, Acc) ->
     {ok, Acc};
 
-table_filter({<<"nkBaseDomain">>, Path}, _Info, Acc) ->
-    {ok, Acc#{path => <<"childs_of:", Path/binary>>}};
+table_filter(<<"nkBaseDomain">>, Path, _Info, Acc) ->
+    {ok, [{<<"path">>, subdir, Path}|Acc]};
 
-table_filter({<<"domain">>, Data}, _Info, Acc) ->
-    {ok, Acc#{<<"domain_id">> => Data}};
+table_filter(<<"domain">>, Data, _Info, Acc) ->
+    {ok, [{<<"domain_id">>, eq, Data}|Acc]};
 
-table_filter({<<"service">>, Data}, _Info, Acc) ->
-    Root = to_bin(?NKROOT),
-    Data2 = case Data of
-        Root -> <<>>;
-        _ -> Data
-    end,
-    {ok, Acc#{<<"srv_id">> => Data2}};
+table_filter(<<"type">>, Data, _Info, Acc) ->
+    {ok, [{<<"type">>, eq, Data}|Acc]};
 
-table_filter({<<"obj_name">>, Data}, _Info, Acc) ->
-    {ok, Acc#{<<"obj_name">> => search_spec(Data)}};
+%%table_filter({<<"service">>, Data}, _Info, Acc) ->
+%%    Root = to_bin(?NKROOT),
+%%    Data2 = case Data of
+%%        Root -> <<>>;
+%%        _ -> Data
+%%    end,
+%%    {ok, [{<<"srv_id">>, eq, Data2}|Acc]};
 
-table_filter({<<"name">>, Data}, _Info, Acc) ->
-    {ok, Acc#{<<"name_norm">> => search_spec(Data)}};
+table_filter(<<"name">>, Data, _Info, Acc) ->
+    {ok, add_multiword_filter(<<"name_norm">>, Data, Acc)};
 
-table_filter({<<"created_by">>, Data}, _Info, Acc) ->
-    {ok, Acc#{<<"created_by">> => Data}};
+table_filter(<<"obj_name">>, Data, _Info, Acc) ->
+    {ok, add_search_filter(<<"obj_name">>, Data, Acc)};
 
-table_filter({<<"created_time">>, <<"custom">>}, _Info, _Acc) ->
+table_filter(<<"created_by">>, Data, _Info, Acc) ->
+    {ok, [{<<"created_by">>, eq, Data}|Acc]};
+
+table_filter(<<"created_time">>, <<"custom">>, _Info, _Acc) ->
     {error, date_needs_more_data};
 
-table_filter({<<"created_time">>, Data}, #{timezone_offset:=Offset}, Acc) ->
+table_filter(<<"created_time">>, Data, #{timezone_offset:=Offset}, Acc) ->
     Secs = Offset * 60,
-    Filter = case Data of
-        <<"today">> ->
-            time(today, Secs);
-        <<"yesterday">> ->
-            time(yesterday, Secs);
-        <<"last_7">> ->
-            time(last7, Secs);
-        <<"last_30">> ->
-            time(last30, Secs);
-        <<"custom">> ->
-            <<"">>;
-        _ ->
-            <<"">>
-    end,
-    {ok, Acc#{<<"created_time">> => Filter}};
+    {ok, add_time_filter(<<"created_time">>, Data, Secs, Acc)};
 
-table_filter(_, _Info, _Acc) ->
+table_filter(_Field, _Data, _Info, _Acc) ->
     unknown.
 
-%% @private
-table_filter_time(<<"custom">>, _Filter, _Acc) ->
-    {error, date_needs_more_data};
 
-table_filter_time(Data, Filter, Acc) ->
-    Secs = 60 * maps:get(<<"timezone_offset">>, Filter, 0),
-    TimeFilter = case Data of
-        <<"today">> ->
-            nkdomain_admin_util:time(today, Secs);
-        <<"yesterday">> ->
-            nkdomain_admin_util:time(yesterday, Secs);
-        <<"last_7">> ->
-            nkdomain_admin_util:time(last7, Secs);
-        <<"last_30">> ->
-            nkdomain_admin_util:time(last30, Secs);
-        <<"custom">> ->
-            <<"">>;
-        _ ->
-            <<"">>
-    end,
-    {ok, Acc#{<<"created_time">> => TimeFilter}}.
+
+
+
+%%%% @private
+%%table_filter_time(<<"custom">>, _Filter, _Acc) ->
+%%    {error, date_needs_more_data};
+%%
+%%table_filter_time(Data, Filter, Acc) ->
+%%    Secs = 60 * maps:get(<<"timezone_offset">>, Filter, 0),
+%%    TimeFilter = case Data of
+%%        <<"today">> ->
+%%            nkdomain_admin_util:time(today, Secs);
+%%        <<"yesterday">> ->
+%%            nkdomain_admin_util:time(yesterday, Secs);
+%%        <<"last_7">> ->
+%%            nkdomain_admin_util:time(last7, Secs);
+%%        <<"last_30">> ->
+%%            nkdomain_admin_util:time(last30, Secs);
+%%        <<"custom">> ->
+%%            <<"">>;
+%%        _ ->
+%%            <<"">>
+%%    end,
+%%    {ok, Acc#{<<"created_time">> => TimeFilter}}.
 
 
 %% @private
@@ -315,21 +285,26 @@ table_entry(Type, Entry, Pos) ->
         <<"created_by">> := CreatedBy,
         <<"created_time">> := CreatedTime
     } = Entry,
-    SrvId = maps:get(<<"srv_id">>, Entry, nkroot),
-    {ok, Domain, ShortName} = nkdomain_util:get_parts(Type, Path),
-    Enabled = maps:get(<<"enabled">>, Entry, true),
-    Root = nklib_util:to_binary(?NKROOT),
-    SrvId2 = case SrvId of
-        Root -> <<"(nkroot)">>;
-        _ -> SrvId
+    {Domain, ShortName} = case Type of
+        ?ID_ADMIN_TREE_ALL_OBJS ->
+            {ok, D, _Type, S} = nkdomain_util:get_parts(Path),
+            {D, S};
+        _ ->
+            {ok, D, S} = nkdomain_util:get_parts(Type, Path),
+            {D, S}
     end,
+    Enabled = maps:get(<<"enabled">>, Entry, true),
+    %Root = nklib_util:to_binary(?NKROOT),
+    %SrvId2 = case SrvId of
+    %    Root -> <<"(nkroot)">>;
+    %    _ -> SrvId
+    %end,
     #{
         checkbox => <<"0">>,
         pos => Pos,
         id => ObjId,
-        service => SrvId2,
         obj_name => obj_id_url(ObjId, ShortName),
-        name => maps:get(name, Entry, <<>>),
+        name => maps:get(<<"name">>, Entry, <<>>),
         domain => obj_path_url(Domain, Domain),
         created_by => obj_id_url(CreatedBy),
         created_time => CreatedTime,
@@ -358,47 +333,74 @@ obj_path_url(Path, Name) ->
     <<"<a href=\"#", Path/binary, "\">", Name/binary, "</a>">>.
 
 
-
+%% @private
+add_filter(Field, Data, Acc) ->
+    [{Field, eq, Data}|Acc].
 
 
 %% @private
-search_spec(<<">", _/binary>>=Data) -> Data;
-search_spec(<<"<", _/binary>>=Data) -> Data;
-search_spec(<<"!", _/binary>>=Data) -> Data;
-search_spec(Data) -> <<"prefix:", Data/binary>>.
+add_exists_filter(Field, Bool, Acc) ->
+    [{Field, exists, Bool}|Acc].
+
+
+%% @private
+add_search_filter(Field, <<">", Data/binary>>, Acc) ->
+    [{Field, gt, Data}|Acc];
+add_search_filter(Field, <<"<", Data/binary>>, Acc) ->
+    case binary:split(Data, <<"-">>) of
+        [A, B] ->
+            [{Field, gt, A}, {Field, lt, B}];
+        _ ->
+            [{Field, lt, Data}|Acc]
+    end;
+add_search_filter(Field, <<"!", Data/binary>>, Acc) ->
+    [{'not', {Field, eq, Data}}|Acc];
+add_search_filter(Field, Data, Acc) ->
+    [{Field, prefix, Data}|Acc].
 
 
 %% @doc
-time(Spec, SecsOffset) ->
+add_time_filter(Field, Spec, SecsOffset, Acc) ->
     Now = nklib_util:timestamp(),
     {{Y, M, D}, _} = nklib_util:timestamp_to_gmt(Now),
     TodayGMT = nklib_util:gmt_to_timestamp({{Y, M, D}, {0, 0, 0}}) * 1000,
     TodayS = TodayGMT + (SecsOffset * 1000),
     TodayE = TodayS + 24*60*60*1000 - 1,
     {S, E} = case Spec of
-        today ->
+        <<"today">> ->
             {TodayS, TodayE};
-        yesterday ->
+        <<"yesterday">> ->
             Sub = 24*60*60*1000,
             {TodayS-Sub, TodayE-Sub};
-        last7 ->
+        <<"last_7">> ->
             Sub = 7*24*60*60*1000,
             {TodayS-Sub, TodayE};
-        last30 ->
+        <<"last_30">> ->
             Sub = 30*24*60*60*1000,
             {TodayS-Sub, TodayE}
     end,
-    list_to_binary(["<", nklib_util:to_binary(S), "-", nklib_util:to_binary(E),">"]).
+    [{Field, gte, S}, {Field, lte, E}|Acc].
 
 
-%% @private Useful for testing
-time2(Spec, SecsOffset) ->
-    <<"<", R1/binary>> = time(Spec, SecsOffset),
-    [T1, R2] = binary:split(R1, <<"-">>),
-    [T2, _] = binary:split(R2, <<">">>),
-    T1B = nklib_util:timestamp_to_local(nklib_util:to_integer(T1) div 1000),
-    T2B = nklib_util:timestamp_to_local(nklib_util:to_integer(T2) div 1000),
-    {T1B, T2B}.
+%% @doc
+add_multiword_filter(Field, Data, Acc) ->
+    [
+        {Field, prefix, Word}
+        || Word <- nkdomain_store_es_util:normalize_multi(Data)
+    ] ++ Acc.
+
+
+
+
+
+%%%% @private Useful for testing
+%%time2(Spec, SecsOffset) ->
+%%    <<"<", R1/binary>> = time(Spec, SecsOffset),
+%%    [T1, R2] = binary:split(R1, <<"-">>),
+%%    [T2, _] = binary:split(R2, <<">">>),
+%%    T1B = nklib_util:timestamp_to_local(nklib_util:to_integer(T1) div 1000),
+%%    T2B = nklib_util:timestamp_to_local(nklib_util:to_integer(T2) div 1000),
+%%    {T1B, T2B}.
 
 
 %% @doc
@@ -407,28 +409,80 @@ get_file_url(FileId, #admin_session{http_auth_id=AuthId}) ->
 
 
 %% @doc
-make_type_view_id(Type) ->
-    nkadmin_util:make_id([?ADMIN_DETAIL_TYPE_VIEW, Type]).
+make_type_view_id(Type, Path) ->
+    nkadmin_util:make_id([?ID_ADMIN_DETAIL_TYPE_VIEW, Type, Path]).
 
 
 %% @doc
-%%make_type_view_subfilter_id(Id) ->
-%%    nkadmin_util:make_id([Id, <<"subdomains">>]).
+make_type_view_filter(Type, Filter) ->
+    nkadmin_util:make_id([?ID_ADMIN_DETAIL_TYPE_FILTER, Type, to_bin(Filter)]).
 
-make_type_view_subfilter_id(Type) ->
-    nkadmin_util:make_id([make_type_view_id(Type), <<"subdomains">>]).
-
-make_type_view_delfilter_id(Type) ->
-    nkadmin_util:make_id([make_type_view_id(Type), <<"deleted">>]).
 
 %% @doc
 make_obj_view_id(Type, ObjId) ->
-    nkadmin_util:make_id([?ADMIN_DETAIL_OBJ_VIEW, Type, ObjId]).
+    nkadmin_util:make_id([?ID_ADMIN_DETAIL_OBJ_VIEW, Type, ObjId]).
 
 %% @doc
 make_view_subview_id(Type, ObjId, SubView) ->
-    nkadmin_util:make_id([?ADMIN_DETAIL_OBJ_SUBVIEW, Type, ObjId, SubView]).
+    nkadmin_util:make_id([?ID_ADMIN_DETAIL_OBJ_SUBVIEW, Type, ObjId, SubView]).
+
+
+%% @doc
+make_confirm(Title, Text) ->
+    #{
+        class => <<"popup">>,
+        value => #{
+            class => <<"webix_confirm">>,
+            % class => <<"webix_alert">>,
+            value => #{
+                title => to_bin(Title),
+                text => to_bin(Text),
+                ok => <<"OK">>,
+                cancel => <<"Cancel">>,
+                % type: "confirm-warning",
+                type => <<"confirm-error">>,
+                callback => #{
+                    nkParseFunction =>
+                    <<"'function(response) {console.log(\"RESPONSE (true/false): \", response);}'">>
+                }
+            }
+        }
+    }.
+
+
+%% @doc
+make_msg(Type, Msg) ->
+    #{
+        class => <<"popup">>,
+        value => #{
+            class =>  <<"webix_message">>,
+            value => #{
+                text => to_bin(Msg),
+                type => case Type of ok -> <<"ok">>; error -> <<"error">> end,
+                expire => 3000          % -1 for static
+            }
+        }
+    }.
+
+
+%% @doc
+make_msg_ext(Type, Msg, Error, #admin_session{srv_id=SrvId}) ->
+    {Code, Txt} = nkservice_util:error(SrvId, Error),
+    Msg2 = <<Msg/binary, ": ", Txt/binary, " (", Code/binary, ")">>,
+    make_msg(Type, Msg2).
+
+
+%% @doc
+get_domains(Base) ->
+    case nkdomain:get_paths_type(Base, ?DOMAIN_DOMAIN) of
+        {ok, _, List} ->
+            {ok, [{ObjId, Path} || #{<<"obj_id">>:=ObjId, <<"path">>:=Path} <-List]};
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
 
 
 %% @private
-to_bin(K) -> nklib_util:to_binary(K).
+to_bin(R) -> nklib_util:to_binary(R).

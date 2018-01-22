@@ -181,8 +181,8 @@ object_es_mapping() ->
 object_parse(_Mode, _Obj) ->
     #{
         vsn => binary,
-        module => module,
-        function => atom,
+        module => binary,
+        function => binary,
         data => any,
         '__defaults' => #{vsn => 1, data => #{}}
     }.
@@ -209,14 +209,17 @@ object_sync_op({?MODULE, get_token_data}, _From, State) ->
 object_sync_op({?MODULE, execute}, _From, #obj_state{obj=Obj}=State) ->
     case Obj of
         #{?DOMAIN_TOKEN:=#{
-            module := Module,
-            function := Function
+            module := BinModule,
+            function := BinFunction
         }} ->
-            case erlang:function_exported(Module, Function, 1) of
-                true ->
-                    Reply = apply(Module, Function, [Obj]),
-                    {reply, Reply, State};
-                false ->
+            try
+                Module = binary_to_existing_atom(BinModule, utf8),
+                Function = binary_to_existing_atom(BinFunction, utf8),
+                true = erlang:function_exported(Module, Function, 1),
+                Reply = apply(Module, Function, [Obj]),
+                {reply, Reply, State}
+            catch
+                _:_ ->
                     {reply, {error, invalid_token}, State}
             end;
         _ ->

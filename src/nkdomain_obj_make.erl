@@ -88,6 +88,8 @@ make(Opts) ->
         {DomainId, DomainPath} = case nkdomain_db:find(Domain) of
             #obj_id_ext{type=?DOMAIN_DOMAIN, obj_id=DomainId0, path=DomainPath0} ->
                 {DomainId0, DomainPath0};
+            #obj_id_ext{} ->
+                throw({could_not_load_domain, Domain});
             {error, object_not_found} ->
                 throw({could_not_load_domain, Domain});
             {error, DomainError} ->

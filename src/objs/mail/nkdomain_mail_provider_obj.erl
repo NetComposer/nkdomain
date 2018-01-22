@@ -75,7 +75,7 @@ object_info() ->
 object_admin_info() ->
     #{
         class => resource,
-        weight => 9000
+        weight => 1601
     }.
 
 

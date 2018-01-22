@@ -23,23 +23,15 @@
 -module(nkdomain_file_obj_type_view).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([view/2, table_data/3, element_updated/3]).
+-export([view/2, fields/0, sort_field/1, filter_field/3, entry/2, element_updated/3]).
 
 -include("nkdomain.hrl").
 -include("nkdomain_admin.hrl").
 -include_lib("nkadmin/include/nkadmin.hrl").
 
 %% @doc
-view(Path, Session) ->
-    TableId = nkdomain_admin_util:make_type_view_id(?DOMAIN_FILE),
-    SubDomainsFilterId = nkdomain_admin_util:make_type_view_subfilter_id(?DOMAIN_FILE),
-    DeletedFilterId = nkdomain_admin_util:make_type_view_delfilter_id(?DOMAIN_FILE),
-    Spec = #{
-        table_id => TableId,
-        subdomains_id => SubDomainsFilterId,
-        deleted_id => DeletedFilterId,
-        filters => [SubDomainsFilterId, DeletedFilterId],
-        base_domain => Path,
+view(Path, _Session) ->
+    #{
         columns => [
             #{
                 id => checkbox,
@@ -52,13 +44,6 @@ view(Path, Session) ->
                 sort => true,
                 is_html => true,
                 options => get_agg_name(<<"domain_id">>, Path)
-            },
-            #{
-                id => service,
-                type => text,
-                name => domain_column_service,
-                sort => true,
-                options => get_agg_srv_id(Path)
             },
             #{
                 id => obj_name,
@@ -76,7 +61,7 @@ view(Path, Session) ->
                 editor => text
             },
             #{
-                id => type,
+                id => file_type,
                 type => text,
                 fillspace => <<"0.5">>,
                 name => domain_column_type,
@@ -84,7 +69,7 @@ view(Path, Session) ->
                 sort => true
             },
             #{
-                id => size,
+                id => file_size,
                 type => text,
                 fillspace => <<"0.5">>,
                 name => domain_column_size,
@@ -116,109 +101,41 @@ view(Path, Session) ->
         ],
         left_split => 1,
         on_click => []
-    },
-    Table = #{
-        id => TableId,
-        class => webix_ui,
-        value => nkadmin_webix_datatable:datatable(Spec, Session)
-    },
-    {Table, Session}.
-
+    }.
 
 
 %% @doc
-table_data(#{start:=Start, size:=Size, sort:=Sort, filter:=Filter}, _Opts, #admin_session{domain_id=DomainId}) ->
-    SortSpec = case Sort of
-        {<<"obj_name">>, Order} ->
-            <<Order/binary, ":obj_name">>;
-        {<<"domain">>, Order} ->
-            <<Order/binary, ":path">>;
-        {<<"service">>, Order} ->
-            <<Order/binary, ":srv_id">>;
-        {<<"name">>, Order} ->
-            <<Order/binary, ":user.name_sort">>;
-        {<<"type">>, Order} ->
-            <<Order/binary, ":file.content_type">>;
-        {<<"size">>, Order} ->
-            <<Order/binary, ":file.size">>;
-        {Field, Order} when Field==<<"created_time">> ->
-            <<Order/binary, $:, Field/binary>>;
-        _ ->
-            <<"desc:path">>
-    end,
-    %% Get the timezone_offset from the filter list and pass it to table_filter
-    Offset = maps:get(<<"timezone_offset">>, Filter, 0),
-    case table_filter(maps:to_list(Filter), #{timezone_offset => Offset}, #{type=>?DOMAIN_FILE}) of
-        {ok, Filters} -> 
-            % lager:warning("NKLOG Filters ~s", [nklib_json:encode_pretty(Filters)]),
-            FindSpec = #{
-                filters => Filters,
-                fields => [<<"path">>,
-                           <<"obj_name">>,
-                           <<"srv_id">>,
-                           <<"created_time">>,
-                           <<"created_by">>,
-                           <<"enabled">>,
-                           <<"file.content_type">>,
-                           <<"file.size">>,
-                           <<"file.store_id">>
-
-                ],
-                sort => SortSpec,
-                from => Start,
-                size => Size
-            },
-            SubDomainsFilterId = nkdomain_admin_util:make_type_view_subfilter_id(?DOMAIN_FILE),
-            Fun = case maps:get(SubDomainsFilterId, Filter, 1) of
-                0 -> search;
-                1 -> search_all
-            end,
-            case nkdomain_domain:Fun(DomainId, FindSpec) of
-                {ok, Total, List, _Meta} ->
-                    Data = table_iter(List, Start+1, []),
-                    {ok, Total, Data};
-                {error, Error} ->
-                    {error, Error}
-            end;
-        {error, Error} ->
-            {error, Error}
-    end.
+fields() ->
+    [
+        <<"path">>,
+        <<"obj_name">>,
+        <<"name">>,
+        <<"created_time">>,
+        <<"created_by">>,
+        <<"enabled">>,
+        <<"file.content_type">>,
+        <<"file.size">>,
+        <<"file.store_id">>
+    ].
 
 
-%% @private
-table_filter([], _Info, Acc) ->
-    {ok, Acc};
-
-table_filter([Term|Rest], Info, Acc) ->
-    case nkdomain_admin_util:table_filter(Term, Info, Acc) of
-        {ok, Acc2} ->
-            table_filter(Rest, Info, Acc2);
-        {error, Error} ->
-            {error, Error};
-        unknown ->
-            case Term of
-                {<<"type">>, Data} ->
-                    Acc2 = Acc#{<<"file.content_type">> => nkdomain_admin_util:search_spec(Data)},
-                    table_filter(Rest, Info, Acc2);
-                {<<"size">>, Data} ->
-                    Acc2 = Acc#{<<"file.size">> => nkdomain_admin_util:search_spec(Data)},
-                    table_filter(Rest, Info, Acc2);
-                {<<"store_id">>, Data} ->
-                    Acc2 = Acc#{<<"file.store_id">> => Data},
-                    table_filter(Rest, Info, Acc2);
-                _ ->
-                    table_filter(Rest, Info, Acc)
-            end
-    end.
+%% @doc
+sort_field(<<"type">>) -> <<"file.content_type">>;
+sort_field(<<"size">>) -> <<"file.size">>;
+sort_field(_) -> <<>>.
 
 
+%% @doc
+filter_field(<<"file_type">>, Data, Acc) ->
+    nkdomain_admin_util:add_filter(<<"file.content_type">>, Data, Acc);
+filter_field(<<"file_size">>, Data, Acc) ->
+    nkdomain_admin_util:add_search_filter(<<"file.size">>, Data, Acc);
+filter_field(_Field, _Data, Acc) ->
+    Acc.
 
-%% @private
-table_iter([], _Pos, Acc) ->
-    lists:reverse(Acc);
 
-table_iter([Entry|Rest], Pos, Acc) ->
-    Base = nkdomain_admin_util:table_entry(?DOMAIN_FILE, Entry, Pos),
+%% @doc
+entry(Entry, Base) ->
     #{
         ?DOMAIN_FILE := #{
             <<"content_type">> := Type,
@@ -227,12 +144,11 @@ table_iter([Entry|Rest], Pos, Acc) ->
         }
     } = Entry,
     Size2 = <<(nklib_util:to_binary(Size div 1024))/binary, "KB">>,
-    Data = Base#{
-        type => Type,
-        size => Size2,
+    Base#{
+        file_type => Type,
+        file_size => Size2,
         store_id => nkdomain_admin_util:obj_id_url(StoreId)
-    },
-    table_iter(Rest, Pos+1, [Data|Acc]).
+    }.
 
 
 %% @private
@@ -253,9 +169,6 @@ get_agg_name(Field, Path) ->
     nkdomain_admin_util:get_agg_name(Field, ?DOMAIN_FILE, Path).
 
 
-%% @private
-get_agg_srv_id(Path) ->
-    nkdomain_admin_util:get_agg_srv_id(?DOMAIN_FILE, Path).
 
 %% @private
 get_agg_term(Field, Path) ->

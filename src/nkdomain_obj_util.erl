@@ -223,7 +223,12 @@ link_to_session_server(Module, #obj_state{session_link={Mod, Pid}} = State) when
     % Stop the API Server if we fail abruptly
     ok = Mod:register(Pid, {nkdomain_stop, Module, self()}),
     % Monitor the API server, reduce usage count if it fails
-    nkdomain_obj:links_add(usage, {nkdomain_api_server, Pid}, State).
+    nkdomain_obj:links_add(usage, {nkdomain_api_server, Pid}, State);
+
+link_to_session_server(_Module, State) ->
+    State.
+
+
 
 
 %% @doc
