@@ -132,7 +132,8 @@ object_db_search_objs(SrvId, Type, SearchType, DbOpts) ->
         {ok, EsOpts} ->
             case ?CALL_SRV(SrvId, object_db_get_query, [nkelastic, Type, SearchType, DbOpts]) of
                 {ok, {nkelastic, Filters, Opts}} ->
-                    nkdomain_store_es_search:search_objs(Filters, Opts, EsOpts);
+                    ExtraFilters = maps:get(extra_filters, Opts, []),
+                    nkdomain_store_es_search:search_objs(Filters++ExtraFilters, Opts, EsOpts);
                 {error, Error} ->
                     {error, Error}
             end;
@@ -151,7 +152,8 @@ object_db_agg_objs(SrvId, Type, Spec, DbOpts) ->
         {ok, EsOpts} ->
             case ?CALL_SRV(SrvId, object_db_get_agg, [nkelastic, Type, Spec, DbOpts]) of
                 {ok, {nkelastic, Filters, Field, Opts}} ->
-                    nkdomain_store_es_search:search_agg_objs(Filters, Field, Opts, EsOpts);
+                    ExtraFilters = maps:get(extra_filters, Opts, []),
+                    nkdomain_store_es_search:search_agg_objs(Filters++ExtraFilters, Field, Opts, EsOpts);
                 {error, Error} ->
                     {error, Error}
             end;

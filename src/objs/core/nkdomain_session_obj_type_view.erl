@@ -30,7 +30,7 @@
 -include_lib("nkadmin/include/nkadmin.hrl").
 
 %% @doc
-view(Path, _Session) ->
+view(Path, Session) ->
     #{
         columns => [
             #{
@@ -44,7 +44,7 @@ view(Path, _Session) ->
                 name => domain_column_domain,
                 is_html => true,
                 sort => true,
-                options => get_agg_name(<<"domain_id">>, Path)
+                options => get_agg_name(<<"domain_id">>, Path, Session)
             },
             #{
                 id => obj_name,
@@ -59,7 +59,7 @@ view(Path, _Session) ->
                 type => text,
                 name => domain_column_created_by,
                 sort => true,
-                options => get_agg_name(<<"created_by">>, Path),
+                options => get_agg_name(<<"created_by">>, Path, Session),
                 is_html => true % Will allow us to return HTML inside the column data
             },
             #{
@@ -74,7 +74,7 @@ view(Path, _Session) ->
                 type => text,
                 fillspace => <<"0.5">>,
                 name => domain_column_local,
-                options => get_agg_term(<<"session.local">>, Path),
+                options => get_agg_term(<<"session.local">>, Path, Session),
                 sort => true
             },
             #{
@@ -82,7 +82,7 @@ view(Path, _Session) ->
                 type => text,
                 fillspace => <<"0.5">>,
                 name => domain_column_remote,
-                options => get_agg_term(<<"session.remote">>, Path),
+                options => get_agg_term(<<"session.remote">>, Path, Session),
                 sort => true
             }
         ],
@@ -237,12 +237,12 @@ element_updated(_ObjId, _Value, _Session) ->
 
 
 %% @private
-get_agg_name(Field, Path) ->
-    nkdomain_admin_util:get_agg_name(Field, ?DOMAIN_SESSION, Path).
+get_agg_name(Field, Path, Session) ->
+    nkdomain_admin_util:get_agg_name(Field, ?DOMAIN_SESSION, Path, Session).
 
 
 
 
 %% @private
-get_agg_term(Field, Path) ->
-    nkdomain_admin_util:get_agg_term(Field, ?DOMAIN_SESSION, Path).
+get_agg_term(Field, Path, Session) ->
+    nkdomain_admin_util:get_agg_term(Field, ?DOMAIN_SESSION, Path, Session).
