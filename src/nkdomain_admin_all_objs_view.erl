@@ -30,7 +30,7 @@
 -include_lib("nkadmin/include/nkadmin.hrl").
 
 %% @doc
-view(Path, _Session) ->
+view(Path, Session) ->
     #{
         columns => [
             #{
@@ -45,14 +45,14 @@ view(Path, _Session) ->
                 is_html => true,
                 sort => true,
                 is_html => true,
-                options => get_agg_name(<<"domain_id">>, Path)
+                options => get_agg_name(<<"domain_id">>, Path, Session)
             },
             #{
                 id => type,
                 fillspace => <<"0.5">>,
                 type => text,
                 name => domain_column_type,
-                options => get_agg(<<"type">>, Path),
+                options => get_agg(<<"type">>, Path, Session),
                 sort => true
             },
             #{
@@ -74,7 +74,7 @@ view(Path, _Session) ->
                 id => created_by,
                 type => text,
                 name => domain_column_created_by,
-                options => get_agg_name(<<"created_by">>, Path),
+                options => get_agg_name(<<"created_by">>, Path, Session),
                 is_html => true % Will allow us to return HTML inside the column data
             },
             #{
@@ -137,13 +137,13 @@ element_updated(_ObjId, Value, _Session) ->
 
 
 %% @private
-get_agg_name(Field, Path) ->
-    nkdomain_admin_util:get_agg_name(Field, <<>>, Path).
+get_agg_name(Field, Path, Session) ->
+    nkdomain_admin_util:get_agg_name(Field, <<>>, Path, Session).
 
 
 %% @private
-get_agg(Field, Path) ->
-    nkdomain_admin_util:get_agg_term(Field, <<>>, Path).
+get_agg(Field, Path, Session) ->
+    nkdomain_admin_util:get_agg_term(Field, <<>>, Path, Session).
 
 
 

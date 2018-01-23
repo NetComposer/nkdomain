@@ -58,7 +58,7 @@ table_view(Type, Mod, Path, Session) ->
 
 
 %% @doc
-table_data(Type, Mod, Spec, _Opts, #admin_session{domain_id=DomainId}) ->
+table_data(Type, Mod, Spec, _Opts, #admin_session{domain_id=DomainId}=AdminSession) ->
     Start = maps:get(start, Spec, 0),
     Size = case maps:find('end', Spec) of
         {ok, End} when End>Start ->
@@ -123,7 +123,8 @@ table_data(Type, Mod, Spec, _Opts, #admin_session{domain_id=DomainId}) ->
                 0 -> FindOpts2;
                 1 -> FindOpts2#{get_deleted=>true}
             end,
-            case nkdomain_db:search(core, {query_graphql, DomainId, Filters2, FindOpts3}) of
+%            case nkdomain_db:search(core, {query_graphql, DomainId, Filters2, FindOpts3}) of
+            case nkdomain_admin_util:db_search(core, {query_graphql, DomainId, Filters2, FindOpts3}, AdminSession) of
                 {ok, Total, List, _Meta} ->
                     Data = table_iter(List, Mod, Type, Start+1, []),
                     {ok, Total, Data};

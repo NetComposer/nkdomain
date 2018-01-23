@@ -24,7 +24,7 @@
 
 -export([find/1, find/2, find_loaded/1, read/1, read/2, load/1, load/2]).
 -export([delete/1, delete/2, hard_delete/1, hard_delete/2]).
--export([search/2, iterate/4, aggs/2]).
+-export([search/2, iterate/4, aggs/2, aggs/3]).
 -export_type([search_obj/0, search_objs_opts/0]).
 
 -include("nkdomain.hrl").

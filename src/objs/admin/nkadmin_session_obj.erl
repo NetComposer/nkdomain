@@ -64,6 +64,7 @@
     session_events => [binary()],
     domain_id => binary(),
     http_auth_id => binary(),
+    extra_filters => [extra_filter()],
     url => binary()
 }.
 
@@ -89,7 +90,7 @@ start(DomainId, UserId, Opts) ->
         ?DOMAIN_SESSION => #{}
     },
     Opts2 = maps:with([session_link, session_events], Opts),
-    Opts3 = Opts2#{meta => maps:with([languaje, http_auth_id], Opts)},
+    Opts3 = Opts2#{meta => maps:with([language, http_auth_id, extra_filters], Opts)},
     case nkdomain_obj_make:create(Obj, Opts3) of
         {ok, #obj_id_ext{obj_id=SessId, pid=Pid}, _} ->
             AdminDomainId = maps:get(domain_id, Opts, DomainId),
@@ -196,7 +197,8 @@ object_init(#obj_state{effective_srv_id=SrvId, domain_id=DomainId, id=Id, obj=Ob
         srv_id = SrvId,
         user_id = UserId,
         language = maps:get(language, Meta, <<"en">>),
-        http_auth_id = maps:get(http_auth_id, Meta, <<>>)
+        http_auth_id = maps:get(http_auth_id, Meta, <<>>),
+        extra_filters = maps:get(extra_filters, Meta, [])
     },
     ok = nkdomain_user:register_session(UserId, DomainId, ?DOMAIN_ADMIN_SESSION, SessId, #{}),
     State2 = nkdomain_obj_util:link_to_session_server(?MODULE, State),
@@ -334,7 +336,8 @@ object_do_active(_Id) ->
 
 %% @private
 do_switch_domain(DomainId, DomainPath, Url, #obj_state{session=Session} = State) ->
-    case nkdomain_db:aggs(core, {query_types, DomainId, #{deep=>true}}) of
+    %case nkdomain_db:aggs(core, {query_types, DomainId, #{deep=>true}}) of
+    case nkdomain_admin_util:db_aggs(core, {query_types, DomainId, #{deep=>true}}, Session) of
         {ok, _, TypeList, _Meta} ->
             Url2 = case Url of
                 <<"#", U/binary>> -> U;
@@ -475,9 +478,22 @@ do_get_chart_data(<<"total_users">>, _Spec, State) ->
         <<"query">> => #{
             <<"bool">> => #{
                 <<"filter">> => [#{ 
-                    <<"term">> => #{
-                        <<"type">> => <<"user">>
-                    }
+                    <<"bool">> => #{
+                        <<"must_not">> => [#{
+                            <<"prefix">> => #{
+                                <<"path">> => <<"/dkv">>
+                            }
+                        },#{
+                            <<"prefix">> => #{
+                                <<"path">> => <<"/sphera">>
+                            }
+                        }],
+                        <<"filter">> => [#{
+                            <<"term">> => #{
+                                <<"type">> => <<"user">>
+                            }
+                        }]
+                    }       
                 }]
             }
         }
@@ -499,9 +515,22 @@ do_get_chart_data(<<"total_messages">>, _Spec, State) ->
         <<"query">> => #{
             <<"bool">> => #{
                 <<"filter">> => [#{ 
-                    <<"term">> => #{
-                        <<"type">> => <<"message">>
-                    }
+                    <<"bool">> => #{
+                        <<"must_not">> => [#{
+                            <<"prefix">> => #{
+                                <<"path">> => <<"/dkv">>
+                            }
+                        },#{
+                            <<"prefix">> => #{
+                                <<"path">> => <<"/sphera">>
+                            }
+                        }],
+                        <<"filter">> => [#{
+                            <<"term">> => #{
+                                <<"type">> => <<"message">>
+                            }
+                        }]
+                    }       
                 }]
             }
         }
@@ -523,9 +552,22 @@ do_get_chart_data(<<"total_files">>, _Spec, State) ->
         <<"query">> => #{
             <<"bool">> => #{
                 <<"filter">> => [#{ 
-                    <<"term">> => #{
-                        <<"type">> => <<"file">>
-                    }
+                    <<"bool">> => #{
+                        <<"must_not">> => [#{
+                            <<"prefix">> => #{
+                                <<"path">> => <<"/dkv">>
+                            }
+                        },#{
+                            <<"prefix">> => #{
+                                <<"path">> => <<"/sphera">>
+                            }
+                        }],
+                        <<"filter">> => [#{
+                            <<"term">> => #{
+                                <<"type">> => <<"file">>
+                            }
+                        }]
+                    }       
                 }]
             }
         }
@@ -547,13 +589,26 @@ do_get_chart_data(<<"activity_stats_line_chart">>, _Spec, State) ->
         <<"query">> => #{
             <<"bool">> => #{
                 <<"filter">> => [#{ 
-                    <<"terms">> => #{
-                        <<"message.type">> => [<<"text">>, <<"media.call">>]
-                    }
-                }, #{
-                    <<"term">> => #{
-                        <<"type">> => <<"message">>
-                    }
+                    <<"bool">> => #{
+                        <<"must_not">> => [#{
+                            <<"prefix">> => #{
+                                <<"path">> => <<"/dkv">>
+                            }
+                        },#{
+                            <<"prefix">> => #{
+                                <<"path">> => <<"/sphera">>
+                            }
+                        }],
+                        <<"filter">> => [#{ 
+                            <<"terms">> => #{
+                                <<"message.type">> => [<<"text">>, <<"media.call">>]
+                            }
+                        }, #{
+                            <<"term">> => #{
+                                <<"type">> => <<"message">>
+                            }
+                        }]
+                    }       
                 }]
             }
         },
@@ -667,9 +722,22 @@ do_get_chart_data(<<"sent_files_barh_chart">>, _Spec, State) ->
         <<"query">> => #{
             <<"bool">> => #{
                 <<"filter">> => [#{ 
-                    <<"term">> => #{
-                        <<"type">> => <<"file">>
-                    }
+                    <<"bool">> => #{
+                        <<"must_not">> => [#{
+                            <<"prefix">> => #{
+                                <<"path">> => <<"/dkv">>
+                            }
+                        },#{
+                            <<"prefix">> => #{
+                                <<"path">> => <<"/sphera">>
+                            }
+                        }],
+                        <<"filter">> => [#{
+                            <<"term">> => #{
+                                <<"type">> => <<"file">>
+                            }
+                        }]
+                    }       
                 }]
             }
         },
@@ -709,13 +777,26 @@ do_get_chart_data(<<"conversations_barh_chart">>, _Spec, State) ->
         <<"query">> => #{
             <<"bool">> => #{
                 <<"filter">> => [#{ 
-                    <<"terms">> => #{
-                        <<"conversation.type">> => [<<"one2one">>, <<"channel">>, <<"private">>]
-                    }
-                }, #{
-                    <<"term">> => #{
-                        <<"type">> => <<"conversation">>
-                    }
+                    <<"bool">> => #{
+                        <<"must_not">> => [#{
+                            <<"prefix">> => #{
+                                <<"path">> => <<"/dkv">>
+                            }
+                        },#{
+                            <<"prefix">> => #{
+                                <<"path">> => <<"/sphera">>
+                            }
+                        }],
+                        <<"filter">> => [#{ 
+                            <<"terms">> => #{
+                                <<"conversation.type">> => [<<"one2one">>, <<"channel">>, <<"private">>]
+                            }
+                        }, #{
+                            <<"term">> => #{
+                                <<"type">> => <<"conversation">>
+                            }
+                        }]
+                    }       
                 }]
             }
         },
@@ -752,13 +833,26 @@ do_get_chart_data(<<"top_users_list_chart">>, _Spec, State) ->
         <<"query">> => #{
             <<"bool">> => #{
                 <<"filter">> => [#{ 
-                    <<"terms">> => #{
-                        <<"message.type">> => [<<"text">>]
-                    }
-                }, #{
-                    <<"term">> => #{
-                        <<"type">> => <<"message">>
-                    }
+                    <<"bool">> => #{
+                        <<"must_not">> => [#{
+                            <<"prefix">> => #{
+                                <<"path">> => <<"/dkv">>
+                            }
+                        },#{
+                            <<"prefix">> => #{
+                                <<"path">> => <<"/sphera">>
+                            }
+                        }],
+                        <<"filter">> => [#{ 
+                            <<"terms">> => #{
+                                <<"message.type">> => [<<"text">>]
+                            }
+                        }, #{
+                            <<"term">> => #{
+                                <<"type">> => <<"message">>
+                            }
+                        }]
+                    }       
                 }]
             }
         },
@@ -809,14 +903,27 @@ do_get_chart_data(<<"top_channels_list_chart">>, _Spec, State) ->
         <<"size">> => 9999,
         <<"query">> => #{
             <<"bool">> => #{
-                <<"filter">> => [#{
-                    <<"terms">> => #{
-                        <<"conversation.type">> => [<<"channel">>]
-                    }
-                }, #{
-                    <<"term">> => #{
-                        <<"type">> => <<"conversation">>
-                    }
+                <<"filter">> => [#{ 
+                    <<"bool">> => #{
+                        <<"must_not">> => [#{
+                            <<"prefix">> => #{
+                                <<"path">> => <<"/dkv">>
+                            }
+                        },#{
+                            <<"prefix">> => #{
+                                <<"path">> => <<"/sphera">>
+                            }
+                        }],
+                        <<"filter">> => [#{ 
+                            <<"terms">> => #{
+                                <<"conversation.type">> => [<<"channel">>]
+                            }
+                        }, #{
+                            <<"term">> => #{
+                                <<"type">> => <<"conversation">>
+                            }
+                        }]
+                    }       
                 }]
             }
         }
