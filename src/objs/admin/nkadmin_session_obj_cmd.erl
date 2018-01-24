@@ -55,6 +55,7 @@ cmd(<<"start">>, #nkreq{session_module=nkapi_server, session_id=WsSessId}=Req) -
             Opts2 = Opts1#{
                 session_link => {nkapi_server, Pid},
                 session_events => maps:get(session_events, Data, ?ADMIN_DEF_EVENT_TYPES),
+                extra_filters => [{'not', {<<"path">>, prefix, <<"/sphera">>}}, {'not', {<<"path">>, prefix, <<"/dkv">>}}], % TODO: properly add these new filters
                 http_auth_id => WsSessId            % To get files
             },
             case nkadmin_session_obj:start(DomainId, UserId, Opts2) of

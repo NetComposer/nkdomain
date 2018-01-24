@@ -21,12 +21,13 @@
 %% @doc NkDomain service callback module
 -module(nkdomain_admin_util).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
--export([get_data/3, get_agg_srv_id/2, get_agg_name/3, get_agg_term/3, table_filter/4]).
+-export([get_data/3, get_agg_srv_id/3, get_agg_name/4, get_agg_term/4, table_filter/4]).
+-export([db_search/3, db_aggs/3, db_aggs/4]).
 -export([obj_id_url/1, obj_id_url/2, obj_path_url/2, table_entry/3]).
 -export([get_type_info/2, get_type_view_mod/2, get_obj_view_mod/2]).
 -export([add_filter/3, add_exists_filter/3, add_search_filter/3, add_time_filter/4, add_multiword_filter/3, get_file_url/2]).
 -export([make_type_view_id/2, make_type_view_filter/2, make_obj_view_id/2, make_view_subview_id/3]).
--export([make_confirm/2, make_msg/2, make_msg_ext/4, get_domains/1]).
+-export([make_confirm/2, make_msg/2, make_msg_ext/4, get_domains/2]).
 
 -include("nkdomain.hrl").
 -include("nkdomain_admin.hrl").
@@ -77,6 +78,23 @@ do_get_data(Type, Opts, Spec, Session) ->
     end.
 
 
+%% @doc
+db_search(ObjType, {QueryType, Domain, Opts}, #admin_session{extra_filters=ExtraFilters}) ->
+    nkdomain_db:search(ObjType, {QueryType, Domain, Opts#{extra_filters => ExtraFilters}});
+
+%% @doc
+db_search(ObjType, {QueryType, Domain, Filters, Opts}, #admin_session{extra_filters=ExtraFilters}) ->
+    nkdomain_db:search(ObjType, {QueryType, Domain, Filters, Opts#{extra_filters => ExtraFilters}}).
+
+
+%% @doc
+db_aggs(Type, AggType, AdminSession) ->
+    db_aggs(Type, AggType, #{}, AdminSession).
+
+db_aggs(Type, AggType, Opts, #admin_session{extra_filters=ExtraFilters}) ->
+    nkdomain_db:aggs(Type, AggType, Opts#{extra_filters=>ExtraFilters}).
+
+
 %% @private
 get_type_info(Type, _Session) ->
     case ?CALL_NKROOT(object_admin_info, [Type]) of
@@ -110,8 +128,8 @@ get_obj_view_mod(Type, _Session) ->
 
 
 %% @private
-get_agg_srv_id(Type, Path) ->
-    case do_get_agg(<<"srv_id">>, Type, Path) of
+get_agg_srv_id(Type, Path, Session) ->
+    case do_get_agg(<<"srv_id">>, Type, Path, Session) of
         {ok, Data, OverFlow} ->
             SrvIds1 = lists:map(
                 fun({S, _Num}) ->
@@ -134,8 +152,8 @@ get_agg_srv_id(Type, Path) ->
     end.
 
 %% @doc
-get_agg_name(Field, Type, Path) ->
-    case do_get_agg(Field, Type, Path) of
+get_agg_name(Field, Type, Path, Session) ->
+    case do_get_agg(Field, Type, Path, Session) of
         {ok, Data, OverFlow} ->
             List1 = lists:foldl(
                 fun({ObjId, _Num}, Acc) ->
@@ -172,8 +190,8 @@ get_agg_name(Field, Type, Path) ->
 
 
 %% @doc
-get_agg_term(Field, Type, Path) ->
-    case do_get_agg(Field, Type, Path) of
+get_agg_term(Field, Type, Path, Session) ->
+    case do_get_agg(Field, Type, Path, Session) of
         {ok, Data, OverFlow} ->
             List1 = lists:sort([{Name, Name} || {Name, _Num} <- Data]),
             List2 = [{?ADMIN_ALL_OBJS, <<>>}|List1],
@@ -189,14 +207,15 @@ get_agg_term(Field, Type, Path) ->
     end.
 
 %% @private
-do_get_agg(Field, Type, Path) ->
+do_get_agg(Field, Type, Path, Session) ->
     %% lager:error("NKLOG Field, Type, Path ~p", [{Field, Type, Path}]),
     Spec1 = #{deep=>true, size=>50},
     Spec2 = case Type of
         <<>> -> Spec1;
         _ -> Spec1#{type => Type}
     end,
-    case nkdomain_db:aggs(core, {query_values, Path, Field, Spec2}) of
+    %case nkdomain_db:aggs(core, {query_values, Path, Field, Spec2}) of
+    case db_aggs(core, {query_values, Path, Field, Spec2}, Session) of
         {ok, 0, _, _} ->
             {ok, [], false};
         {ok, _N, Data, #{agg_sum_other:=SumOther}} ->
@@ -473,8 +492,8 @@ make_msg_ext(Type, Msg, Error, #admin_session{srv_id=SrvId}) ->
 
 
 %% @doc
-get_domains(Base) ->
-    case nkdomain:get_paths_type(Base, ?DOMAIN_DOMAIN) of
+get_domains(Base, AdminSession) ->
+    case nkdomain:get_paths_type(Base, ?DOMAIN_DOMAIN, AdminSession) of
         {ok, _, List} ->
             {ok, [{ObjId, Path} || #{<<"obj_id">>:=ObjId, <<"path">>:=Path} <-List]};
         {error, Error} ->

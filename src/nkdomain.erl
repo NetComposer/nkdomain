@@ -39,7 +39,7 @@
 -export([enable/2, update/2, update_name/2, delete/1, send_info/3]).
 -export([get_roles/1, add_roles/3, remove_roles/3]).
 -export([get_types/1]).
--export([get_paths/1, get_paths_type/2, remove_path/1, remove_path_type/2, print_path_type/2]).
+-export([get_paths/1, get_paths_type/2, get_paths_type/3, remove_path/1, remove_path_type/2, print_path_type/2]).
 -export([get_childs/1, get_childs_type/2, remove_with_childs/1]).
 -export([clean/0]).
 -export([print_fun/0, delete_fun/0]).
@@ -304,6 +304,20 @@ get_paths(Id) ->
 
 get_paths_type(Id, Type) ->
     case nkdomain_db:search(core, {query_paths, Id, #{deep=>true, type=>Type, sort=>path, size=>100}}) of
+        {ok, Total, Data, _Meta} ->
+            {ok, Total, Data};
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
+%% @doc Gets objects under a path with a type, sorted by path
+-spec get_paths_type(id(), type(), term()) ->
+    {ok, integer(), [#{binary() => term()}]} | {error, term()}.
+
+get_paths_type(Id, Type, Session) ->
+    %case nkdomain_db:search(core, {query_paths, Id, #{deep=>true, type=>Type, sort=>path, size=>100}}) of
+    case nkdomain_admin_util:db_search(core, {query_paths, Id, #{deep=>true, type=>Type, sort=>path, size=>100}}, Session) of
         {ok, Total, Data, _Meta} ->
             {ok, Total, Data};
         {error, Error} ->

@@ -70,7 +70,7 @@ view(Obj, IsNew, Session) ->
                 values => [
                     case IsNew of
                         true ->
-                            {ok, Domains} = nkdomain_admin_util:get_domains("/"),
+                            {ok, Domains} = nkdomain_admin_util:get_domains("/", Session),
                             Opts = [
                                 #{id=>Id, value=>Value} ||
                                 {Id, Value} <- [{<<"root">>, <<"/">>}|Domains]
