@@ -135,7 +135,7 @@ entry(Entry, Base) ->
     } = Entry,
     Email = maps:get(<<"email">>, User, <<>>),
     Base#{
-        user_name => Name,
+        user_name => Name,              %% Column names
         user_surname => Surname,
         email => Email
     }.
