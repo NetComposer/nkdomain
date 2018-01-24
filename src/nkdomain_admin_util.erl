@@ -27,7 +27,7 @@
 -export([get_type_info/2, get_type_view_mod/2, get_obj_view_mod/2]).
 -export([add_filter/3, add_exists_filter/3, add_search_filter/3, add_time_filter/4, add_multiword_filter/3, get_file_url/2]).
 -export([make_type_view_id/2, make_type_view_filter/2, make_obj_view_id/2, make_view_subview_id/3]).
--export([make_confirm/2, make_msg/2, make_msg_ext/4, get_domains/1]).
+-export([make_confirm/2, make_msg/2, make_msg_ext/4, get_domains/2]).
 
 -include("nkdomain.hrl").
 -include("nkdomain_admin.hrl").
@@ -492,8 +492,8 @@ make_msg_ext(Type, Msg, Error, #admin_session{srv_id=SrvId}) ->
 
 
 %% @doc
-get_domains(Base) ->
-    case nkdomain:get_paths_type(Base, ?DOMAIN_DOMAIN) of
+get_domains(Base, AdminSession) ->
+    case nkdomain:get_paths_type(Base, ?DOMAIN_DOMAIN, AdminSession) of
         {ok, _, List} ->
             {ok, [{ObjId, Path} || #{<<"obj_id">>:=ObjId, <<"path">>:=Path} <-List]};
         {error, Error} ->
