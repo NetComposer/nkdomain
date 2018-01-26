@@ -945,9 +945,7 @@ do_send_push(SrvId, Push, State) ->
 find_push_devices(SrvId, State) ->
     #obj_state{session=Session} = State,
     #session{push_devices=Devices} = Session,
-    % TODO: Temporal fix to send a push to all registered devices
-    %[Device || #push_device{srv_id=S}=Device <- Devices, S==SrvId].
-    Devices.
+    [Device || #push_device{srv_id=S}=Device <- Devices, S==SrvId].
 
 
 %% @private
