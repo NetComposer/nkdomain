@@ -42,7 +42,7 @@
 -export([get_paths/1, get_paths_type/2, get_paths_type/3, remove_path/1, remove_path_type/2, print_path_type/2]).
 -export([get_childs/1, get_childs_type/2, remove_with_childs/1]).
 -export([clean/0]).
--export([print_fun/0, delete_fun/0]).
+-export([print_fun/0, delete_fun/0, recursive_delete_fun/0]).
 -export_type([obj_id/0, obj_name/0, obj/0, path/0, id/0, type/0, role/0, role_spec/0]).
 -export_type([timestamp/0]).
 
@@ -386,7 +386,7 @@ get_childs_type(Id, Type) ->
 remove_with_childs(Id) ->
     case nkdomain_db:find(Id) of
         #obj_id_ext{obj_id=ObjId} ->
-            case nkdomain_db:iterate(core, {query_childs, ObjId, #{sort=>rpath, get_deleted=>true}}, delete_fun(), 0) of
+            case nkdomain_db:iterate(core, {query_childs, ObjId, #{sort=>rpath, get_deleted=>true}}, recursive_delete_fun(), 0) of
                 {ok, Count} ->
                     case nkdomain_db:hard_delete(ObjId) of
                         ok ->
@@ -428,6 +428,18 @@ delete_fun() ->
             ok ->
                 lager:info("Deleted object ~s (~s)", [Path, ObjId]),
                 {ok, Acc+1};
+            {error, Error} ->
+                lager:info("Could node deleted object ~s (~s): ~p", [Path, ObjId, Error]),
+                {ok, Acc}
+        end
+    end.
+
+recursive_delete_fun() ->
+    fun(#{<<"obj_id">>:=ObjId, <<"path">>:=Path}, Acc) ->
+        case nkdomain:remove_with_childs(ObjId) of
+            {ok, NAcc} ->
+                lager:info("Deleted object ~s (~s)", [Path, ObjId]),
+                {ok, Acc+NAcc};
             {error, Error} ->
                 lager:info("Could node deleted object ~s (~s): ~p", [Path, ObjId, Error]),
                 {ok, Acc}

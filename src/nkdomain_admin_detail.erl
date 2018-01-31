@@ -265,9 +265,9 @@ type_view_delete(Type, [Id|Rest], Updates, Session) ->
             ?LLOG(warning, "could not delete ~s: ~p", [Id, Error], Session),
             nkdomain_admin_util:make_msg(error, <<"Could not delete object ", Id/binary>>);
         not_exported ->
-            case nkdomain:delete(Id) of
-                ok ->
-                    ?LLOG(info, "object deleted: ~s", [Id], Session),
+            case nkdomain:remove_with_childs(Id) of
+                {ok, Childs} ->
+                    ?LLOG(info, "object deleted: ~s (with ~p Childs)", [Id, (Childs-1)], Session),
                     nkdomain_admin_util:make_msg(ok, <<"Object ", Id/binary, " deleted">>);
                 {error, Error} ->
                     ?LLOG(warning, "could not delete ~s: ~p", [Id, Error], Session),

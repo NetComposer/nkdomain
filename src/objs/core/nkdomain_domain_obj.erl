@@ -107,7 +107,7 @@ object_parse(_Mode, _Obj) ->
     #{
         defaults => map,
         configs => map,
-        '__defaults' => #{defaults => #{}, confif => #{}}
+        '__defaults' => #{defaults => #{}, config => #{}}
     }.
 
 

@@ -38,9 +38,9 @@
 
 
 %% @private
-view(Obj, IsNew, Session) ->
+view(Obj, IsNew, #admin_session{domain_id=Domain}=Session) ->
     ObjId = maps:get(obj_id, Obj, <<>>),
-    DomainId = maps:get(domain_id, Obj, <<>>),
+    DomainId = maps:get(domain_id, Obj, Domain),
     ObjName = maps:get(obj_name, Obj, <<>>),
     CreatedBy = maps:get(created_by, Obj, <<>>),
     CreatedTime = maps:get(created_time, Obj, 0),
@@ -60,8 +60,8 @@ view(Obj, IsNew, Session) ->
         form_id => FormId,
         with_image => IconImage,
         buttons => [
-            #{type => case Enabled of true -> disable; _ -> enable end},
-            #{type => delete},
+            #{type => case Enabled of true -> disable; _ -> enable end, disabled => IsNew},
+            #{type => delete, disabled => IsNew},
             #{type => save}
         ],
         groups => [
