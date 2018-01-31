@@ -1046,7 +1046,20 @@ find_url(Url, Session) ->
     case nkadmin_util:get_special_url(Url, Session) of
         undefined ->
             #admin_session{base_path=Base} = Session,
-            Url2 = nkdomain_util:append(Base, Url),
+            Url2 = case binary:split(Url, Base) of
+                [_, _] ->
+                    % Url already contains Base
+                    Url;
+                _ ->
+                    case binary:split(Base, Url) of
+                        [_, _] ->
+                            % Url is Base parent
+                            % /sipstorm  ->  /sipstorm/c4
+                            Url;
+                        _ ->
+                            nkdomain_util:append(Base, Url)
+                    end
+            end,
             case nkdomain_db:find(Url2) of
                 #obj_id_ext{obj_id=ObjId, type=Type, path=Path} ->
                     {ok, [?ADMIN_OBJ_ID, ObjId, Type, Path]};

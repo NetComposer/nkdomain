@@ -254,15 +254,29 @@ get_srv_id(Obj) ->
 
 %% @doc
 append(PathA, PathB) ->
+    ASize = byte_size(PathA) - 1,
     PathA1 = case to_bin(PathA) of
         <<"/">> -> <<>>;
+        <<P1:ASize/binary, "/">> -> P1;
         P1 -> P1
     end,
     PathB2 = case to_bin(PathB) of
         <<"/", Rest/binary>> -> Rest;
         P2 -> P2
     end,
-    <<PathA1/binary, $/, PathB2/binary>>.
+    B2Size = byte_size(PathB2) - 1,
+    PathB3 = case PathB2 of
+        <<P3:B2Size/binary, "/">> -> P3;
+        P3 -> P3
+    end,
+    case PathB3 of
+        <<>> when PathA1 == <<>> ->
+            <<$/>>;
+        <<>> ->
+            <<PathA1/binary>>;
+        _ ->
+            <<PathA1/binary, $/, PathB3/binary>>
+    end.
 
 
 %% @doc

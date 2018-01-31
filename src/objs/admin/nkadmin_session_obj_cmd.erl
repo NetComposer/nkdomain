@@ -51,11 +51,23 @@ cmd(<<"start">>, #nkreq{session_module=nkapi_server, session_id=WsSessId}=Req) -
     #nkreq{data=Data, session_pid=Pid, user_id=UserId} = Req,
     case nkdomain_api_util:get_id(?DOMAIN_DOMAIN, domain_id, Data, Req) of
         {ok, DomainId} ->
+            {ok, _, _, DomainPath, _} = nkdomain:find(DomainId),
+            % TODO: properly add these new filters
+            ExtraFilters = case DomainPath of
+                <<"/sphera", _/binary>> ->
+                    [{'not', {<<"path">>, prefix, <<"/sipstorm">>}}, {'not', {<<"path">>, prefix, <<"/dkv">>}}];
+                <<"/dkv", _/binary>> ->
+                    [{'not', {<<"path">>, prefix, <<"/sipstorm">>}}, {'not', {<<"path">>, prefix, <<"/sphera">>}}];
+                <<"/sipstorm", _/binary>> ->
+                    [{'not', {<<"path">>, prefix, <<"/sphera">>}}, {'not', {<<"path">>, prefix, <<"/dkv">>}}];
+                _ ->
+                    [{'not', {<<"path">>, prefix, <<"/sphera">>}}, {'not', {<<"path">>, prefix, <<"/dkv">>}}]
+            end,
             Opts1 = maps:with([domain_id, url, language], Data),
             Opts2 = Opts1#{
                 session_link => {nkapi_server, Pid},
                 session_events => maps:get(session_events, Data, ?ADMIN_DEF_EVENT_TYPES),
-                extra_filters => [{'not', {<<"path">>, prefix, <<"/sphera">>}}, {'not', {<<"path">>, prefix, <<"/dkv">>}}], % TODO: properly add these new filters
+                extra_filters => ExtraFilters,
                 http_auth_id => WsSessId            % To get files
             },
             case nkadmin_session_obj:start(DomainId, UserId, Opts2) of

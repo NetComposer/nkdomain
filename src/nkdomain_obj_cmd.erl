@@ -88,8 +88,8 @@ cmd(<<"stop">>, Type, #nkreq{data=Data} = Req) ->
 cmd(<<"delete">>, Type, #nkreq{data=Data} = Req) ->
     case nkdomain_api_util:get_id(Type, Data, Req) of
         {ok, Id} ->
-            case nkdomain:delete(Id) of
-                ok ->
+            case nkdomain:remove_with_childs(Id) of
+                {ok, _Total} ->
                     {ok, #{}};
                 {error, Error} ->
                     {error, Error}
