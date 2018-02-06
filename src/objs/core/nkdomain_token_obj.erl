@@ -26,9 +26,9 @@
 
 -export([create/3]).
 -export([object_info/0, object_es_mapping/0, object_parse/2, object_send_event/2,
-         object_sync_op/3, object_async_op/2]).
+         object_stop/2, object_sync_op/3, object_async_op/2]).
 -export([object_admin_info/0]).
--export([get_token_data/1, consume_token/2, execute_token/1]).
+-export([get_token_data/1, set_token_data/2, add_tag/2, consume_token/2, execute_token/1, execute_token/2]).
 -export([object_execute/5, object_schema/1, object_query/3, object_mutation/3]).
 
 -include("nkdomain.hrl").
@@ -111,7 +111,12 @@ check_ttl(TokenOpts) ->
 
 %% @doc
 execute_token(Id) ->
-    nkdomain_obj:sync_op(Id, {?MODULE, execute}).
+    nkdomain_obj:sync_op(Id, {?MODULE, execute, #{}}).
+
+
+%% @doc
+execute_token(Id, Opts) when is_map(Opts) ->
+    nkdomain_obj:sync_op(Id, {?MODULE, execute, Opts}).
 
 
 %% @doc
@@ -123,6 +128,15 @@ consume_token(Id, Reason) ->
 get_token_data(Id) ->
     nkdomain_obj:sync_op(Id, {?MODULE, get_token_data}).
 
+
+%% @doc
+set_token_data(Id, Data) ->
+    nkdomain_obj:sync_op(Id, {?MODULE, set_token_data, Data}).
+
+
+%% @doc
+add_tag(Id, Tag) ->
+    nkdomain_obj:sync_op(Id, {?MODULE, add_tag, Tag}).
 
 
 %% ===================================================================
@@ -194,19 +208,37 @@ object_send_event(_Event, State) ->
 
 
 %% @private
-object_sync_op({?MODULE, get_token_data}, _From, State) ->
-    #obj_state{domain_id=DomainId, obj=Obj} = State,
-    #{?DOMAIN_TOKEN:=#{data:=TokenData}, expires_time:=ExpiresTime, created_time:=CreatedTime} = Obj,
-    Reply = #{
-        domain_id => DomainId,
-        pid => self(),
-        data => TokenData,
-        created_time => CreatedTime,
-        expires_time => ExpiresTime
-    },
-    {reply, {ok, Reply}, State};
+object_stop(Reason, #obj_state{obj=Obj}=State) ->
+    case Obj of
+        #{?DOMAIN_TOKEN:=#{
+            module := BinModule,
+            function := BinFunction
+        }} ->
+            Module = binary_to_existing_atom(BinModule, utf8),
+            Function = binary_to_existing_atom(BinFunction, utf8),
+            try
+                case erlang:function_exported(Module, Function, 3) of
+                    true ->
+                        apply(Module, Function, [Reason, Obj, #{}]);
+                    false ->
+                        ?LLOG(warning, "function not exported ~p:~p/3", [Module, Function])
+                end
+            catch
+                error:CError ->
+                    Trace = erlang:get_stacktrace(),
+                    ?LLOG(warning, "could not execute function'~p:~p/3': ~p (~p)", [Module, Function, CError, Trace]);
+                ExcType:ExcError ->
+                    Trace = erlang:get_stacktrace(),
+                    ?LLOG(warning, "could not execute function'~p:~p/3': ~p:~p (~p)", [Module, Function, ExcType, ExcError, Trace])
+            end;
+        _ ->
+            ok
+    end,
+    {ok, State}.
 
-object_sync_op({?MODULE, execute}, _From, #obj_state{obj=Obj}=State) ->
+
+%% @private
+object_sync_op({?MODULE, execute, Opts}, _From, #obj_state{obj=Obj}=State) ->
     case Obj of
         #{?DOMAIN_TOKEN:=#{
             module := BinModule,
@@ -215,9 +247,18 @@ object_sync_op({?MODULE, execute}, _From, #obj_state{obj=Obj}=State) ->
             try
                 Module = binary_to_existing_atom(BinModule, utf8),
                 Function = binary_to_existing_atom(BinFunction, utf8),
-                true = erlang:function_exported(Module, Function, 1),
-                Reply = apply(Module, Function, [Obj]),
-                {reply, Reply, State}
+                true = erlang:function_exported(Module, Function, 3),
+                Reply = apply(Module, Function, [object_executed, Obj, Opts]),
+                Tags = maps:get(tags, Obj, []),
+                Tags2 = case lists:member(<<"executed">>, Tags) of
+                    true ->
+                        Tags;
+                    false ->
+                        [<<"executed">>|Tags]
+                end,
+                State2 = State#obj_state{obj=Obj#{tags=>Tags2}, is_dirty=true},
+                State3 = nkdomain_obj_util:do_save_timer(State2),
+                {reply, Reply, State3}
             catch
                 _:_ ->
                     {reply, {error, invalid_token}, State}
@@ -237,6 +278,39 @@ object_sync_op({?MODULE, consume, Reason}, From, State) ->
     % Process user events before detecting token down
     timer:sleep(500),
     {stop, {object_consumed, Reason}, State};
+
+object_sync_op({?MODULE, get_token_data}, _From, State) ->
+    #obj_state{domain_id=DomainId, obj=Obj} = State,
+    #{?DOMAIN_TOKEN:=#{data:=TokenData}, expires_time:=ExpiresTime, created_time:=CreatedTime} = Obj,
+    Reply = #{
+        domain_id => DomainId,
+        pid => self(),
+        data => TokenData,
+        created_time => CreatedTime,
+        expires_time => ExpiresTime
+    },
+    {reply, {ok, Reply}, State};
+
+object_sync_op({?MODULE, set_token_data, Data}, _From, State) ->
+    #obj_state{domain_id=DomainId, obj=Obj} = State,
+    #{?DOMAIN_TOKEN:=Token} = Obj,
+    Token2 = Token#{data => Data},
+    Obj2 = Obj#{?DOMAIN_TOKEN => Token2},
+    State2 = State#obj_state{obj=Obj2, is_dirty=true},
+    State3 = nkdomain_obj_util:do_save_timer(State2),
+    {reply, {ok, #{}}, State3};
+
+object_sync_op({?MODULE, add_tag, Tag}, _From, #obj_state{obj=Obj}=State) ->
+    Tags = maps:get(tags, Obj, []),
+    Tags2 = case lists:member(Tag, Tags) of
+        true ->
+            Tags;
+        false ->
+            [Tag|Tags]
+    end,
+    State2 = State#obj_state{obj=Obj#{tags=>Tags2}, is_dirty=true},
+    State3 = nkdomain_obj_util:do_save_timer(State2),
+    {reply, {ok, Tags2}, State3};
 
 object_sync_op(_Op, _From, _State) ->
     continue.
