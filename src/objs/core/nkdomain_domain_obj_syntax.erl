@@ -76,6 +76,13 @@ syntax(<<"unload_childs">>, Syntax) ->
         id => binary
     };
 
+
+syntax(<<"delete_childs_of_type">>, Syntax) ->
+    Syntax#{
+        id => binary,
+	type => binary
+    };
+
 syntax(Cmd, Syntax) ->
     nkdomain_obj_syntax:syntax(Cmd, ?DOMAIN_DOMAIN, Syntax).
 

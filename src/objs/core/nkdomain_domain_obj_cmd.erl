@@ -130,6 +130,16 @@ cmd(<<"unload_childs">>, #nkreq{data=Data}=Req) ->
             Error
     end;
 
+
+cmd(<<"delete_childs_of_type">>, #nkreq{data=#{ type := Type }=Data}=Req) ->
+    case get_domain(Data, Req) of
+        {ok, Id} ->
+		nkdomain:remove_path_type(Id, Type),
+		{ok, #{}};
+        Error ->
+            Error
+   end;
+
 cmd(Cmd, Req) ->
     nkdomain_obj_cmd:cmd(Cmd, ?DOMAIN_DOMAIN, Req).
 
