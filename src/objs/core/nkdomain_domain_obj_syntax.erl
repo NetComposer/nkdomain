@@ -83,6 +83,12 @@ syntax(<<"delete_childs_of_type">>, Syntax) ->
 	type => binary
     };
 
+syntax(<<"create_child">>, Syntax) ->
+    Syntax#{
+        path => binary,
+	data => map
+    };
+
 syntax(Cmd, Syntax) ->
     nkdomain_obj_syntax:syntax(Cmd, ?DOMAIN_DOMAIN, Syntax).
 

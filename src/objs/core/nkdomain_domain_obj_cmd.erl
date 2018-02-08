@@ -140,6 +140,15 @@ cmd(<<"delete_childs_of_type">>, #nkreq{data=#{ type := Type }=Data}=Req) ->
             Error
    end;
 
+cmd(<<"create_child">>, #nkreq{data=#{ path := Path, data := ChildData }=Data}=Req) ->
+   Obj = ChildData#{ path => Path },
+   case nkdomain_obj_make:create(Obj) of 
+	{ok, #obj_id_ext{obj_id=ObjId}, _} ->
+	    {ok, #{ id => ObjId }};
+	Error -> 
+	    Error
+   end; 
+
 cmd(Cmd, Req) ->
     nkdomain_obj_cmd:cmd(Cmd, ?DOMAIN_DOMAIN, Req).
 
