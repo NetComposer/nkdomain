@@ -75,7 +75,9 @@ object_info() ->
 object_admin_info() ->
     #{
         class => resource,
-        weight => 1601
+        weight => 1601,
+        type_view_mod => nkdomain_mail_provider_obj_type_view,
+        obj_view_mod => nkdomain_mail_provider_obj_view
     }.
 
 
