@@ -18,9 +18,9 @@
 %%
 %% -------------------------------------------------------------------
 
-%% @doc File Store Object View
+%% @doc Image Processor Object View
 
--module(nkdomain_file_store_obj_view).
+-module(nkdomain_image_processor_obj_view).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([view/3, update/3, create/2]).
@@ -28,10 +28,11 @@
 -include("nkdomain.hrl").
 -include("nkdomain_admin.hrl").
 -include_lib("nkadmin/include/nkadmin.hrl").
+-include_lib("nkimage/include/nkimage.hrl").
 
 
 -define(LLOG(Type, Txt, Args),
-    lager:Type("Nkdomain File.Store " ++ Txt, Args)).
+    lager:Type("Nkdomain Image.Processor " ++ Txt, Args)).
 
 
 
@@ -45,24 +46,16 @@ view(Obj, IsNew, #admin_session{domain_id=Domain}=Session) ->
     UpdatedBy = maps:get(updated_by, Obj, <<>>),
     UpdatedTime = maps:get(updated_time, Obj, 0),
     Enabled = maps:get(enabled, Obj, true),
-    FileStore = maps:get(?DOMAIN_FILE_STORE, Obj, #{}),
-    Class = nklib_util:to_binary(maps:get(class, FileStore, <<"filesystem">>)),
-    VisibleBatch = case Class of
-        <<"filesystem">> ->
-            <<"filesystem">>;
-        _ ->
-            <<"aws">>
-    end,
-    Encryption = maps:get(encryption, FileStore, <<>>),
-    Config = maps:get(config, FileStore, #{}),
+    ImageProcessor = maps:get(?IMAGE_PROCESSOR, Obj, #{}),
+    Class = nklib_util:to_binary(maps:get(class, ImageProcessor, <<"pillow">>)),
+    VisibleBatch = Class,
+    Encryption = maps:get(encryption, ImageProcessor, <<>>),
+    Config = maps:get(config, ImageProcessor, #{}),
     CfgPath = maps:get(path, Config, <<>>),
-    CfgAwsId = maps:get(aws_id, Config, <<>>),
-    CfgBucket = maps:get(bucket, Config, <<>>),
-    CfgBucketAccess = maps:get(bucket_access, Config, <<"auto">>),
     CfgHost = maps:get(host, Config, <<>>),
     CfgPort = maps:get(port, Config, 443),
     CfgScheme = maps:get(scheme, Config, <<"https">>),
-    FormId = nkdomain_admin_util:make_obj_view_id(?DOMAIN_FILE_STORE, ObjId),
+    FormId = nkdomain_admin_util:make_obj_view_id(?IMAGE_PROCESSOR, ObjId),
     Spec = #{
         form_id => FormId,
         buttons => [
@@ -73,7 +66,7 @@ view(Obj, IsNew, #admin_session{domain_id=Domain}=Session) ->
         visible_batch => VisibleBatch,
         groups => [
             #{
-                header => ?DOMAIN_FILE_STORE,
+                header => ?IMAGE_PROCESSOR,
                 values => [
                     case IsNew of
                         true ->
@@ -117,84 +110,19 @@ view(Obj, IsNew, #admin_session{domain_id=Domain}=Session) ->
                         label => <<"Class">>,
                         value => Class,
                         options => [#{
-                            <<"id">> => <<"filesystem">>,
-                            <<"value">> => <<"filesystem (LOCAL STORE)">>
-                        }, #{
-                            <<"id">> => <<"s3">>,
-                            <<"value">> => <<"s3 (AWS)">>
-                        }, #{
-                            <<"id">> => <<"s3_mini">>,
-                            <<"value">> => <<"s3_mini (AWS)">>
+                            <<"id">> => <<"pillow">>,
+                            <<"value">> => <<"pillow">>
                         }],
                         onChange => class_on_change(FormId),
                         required => true,
                         editable => true %IsNew
-                    },
-                    #{
-                        id => <<"encryption">>,
-                        type => combo,
-                        label => <<"Encryption">>,
-                        value => Encryption,
-                        options => [<<>>, <<"aes_cfb128">>, <<"aes_cbc256">>],
-                        editable => true
                     }
                 ]
             },
             #{
-                header => <<"LOCAL STORE">>,
-                batch => <<"filesystem">>,
+                header => <<"CONFIGURATION">>,
+                %batch => <<"pillow">>,
                 values => [
-                    #{
-                        id => <<"path">>,
-                        type => text,
-                        label => <<"Path">>,
-                        value => CfgPath,
-                        required => true,
-                        editable => true
-                    }
-                ]
-            },
-            #{
-                header => <<"AWS STORE">>,
-                batch => <<"aws">>,
-                values => [
-                    #{
-                        id => <<"aws_id">>,
-                        type => text,
-                        label => <<"AWS ID">>,
-                        value => CfgAwsId,
-                        required => true,
-                        editable => true
-                    },
-                    #{
-                        id => <<"aws_secret">>,
-                        type => password,
-                        label => <<"AWS secret">>,
-                        value => <<>>,
-                        required => IsNew,
-                        editable => true
-                    },
-                    #{
-                        id => <<"bucket">>,
-                        type => text,
-                        label => <<"Bucket">>,
-                        value => CfgBucket,
-                        required => true,
-                        editable => true
-                    },
-                    #{
-                        id => <<"bucket_access">>,
-                        type => combo,
-                        label => <<"Bucket access">>,
-                        value => CfgBucketAccess,
-                        options => [
-                            <<"auto">>,
-                            <<"path">>,
-                            <<"virtual_hosted">>
-                        ],
-                        hidden => IsNew,
-                        editable => false
-                    },
                     #{
                         id => <<"host">>,
                         type => text,
@@ -217,6 +145,14 @@ view(Obj, IsNew, #admin_session{domain_id=Domain}=Session) ->
                         label => <<"Scheme">>,
                         value => CfgScheme,
                         options => [<<"http">>, <<"https">>],
+                        editable => true
+                    },
+                    #{
+                        id => <<"path">>,
+                        type => text,
+                        label => <<"Path">>,
+                        value => CfgPath,
+                        required => false,
                         editable => true
                     }
                 ]
@@ -259,7 +195,7 @@ view(Obj, IsNew, #admin_session{domain_id=Domain}=Session) ->
     Data = #{
         id => FormId,
         class => webix_ui,
-        value => nkadmin_webix_form:form(Spec, ?DOMAIN_FILE_STORE, Session)
+        value => nkadmin_webix_form:form(Spec, ?IMAGE_PROCESSOR, Session)
     },
     {ok, Data, Session}.
 
@@ -269,54 +205,25 @@ view(Obj, IsNew, #admin_session{domain_id=Domain}=Session) ->
 update(ObjId, Data, _Session) ->
     #{
         <<"obj_name">> := ObjName,
-        <<"class">> := Class,
-        <<"encryption">> := Encryption
+        <<"class">> := Class
     } = Data,
-    Update = case Encryption of
-        <<>> ->
-            maps:without([<<"encryption">>], Data);
-        _ ->
-            Data
-    end,
-    Data2 = case Data of
-        #{<<"aws_secret">> := <<>>} when Class =/= <<"filesystem">> ->
-            case nkdomain:get_obj(ObjId) of
-                {ok, #{?DOMAIN_FILE_STORE := #{config := #{aws_secret := OldPassword}}}} ->
-                    Data#{<<"aws_secret">> => OldPassword};
-                {ok, _Obj} ->
-                    ?LLOG(warning, "couldn't find aws_secret field in: ~p", [_Obj]),
-                    Data;
-                {error, _Error} ->
-                    ?LLOG(warning, "couldn't load object old aws_secret because: ~p", [_Error]),
-                    Data
-            end;
-        _ ->
-            Data
-    end,
-    Config = case Class of
-        <<"filesystem">> ->
-            maps:with([<<"path">>], Data);
-        <<"s3">> ->
-            maps:with([<<"aws_id">>, <<"aws_secret">>, <<"bucket">>, <<"bucket_access">>, <<"host">>, <<"port">>, <<"scheme">>], Data2);
-        <<"s3_mini">> ->
-            maps:with([<<"aws_id">>, <<"aws_secret">>, <<"bucket">>, <<"bucket_access">>, <<"host">>, <<"port">>, <<"scheme">>], Data2)
-    end,
-    Update2 = Update#{
+    Config = maps:with([<<"host">>, <<"port">>, <<"scheme">>, <<"path">>], Data),
+    Update = #{
         <<"class">> => Class,
         <<"config">> => Config
     },
-    case nkdomain:update(ObjId, #{?DOMAIN_FILE_STORE => Update2}) of
+    case nkdomain:update(ObjId, #{?IMAGE_PROCESSOR => Update}) of
         {ok, _} ->
             case nkdomain:update_name(ObjId, ObjName) of
                 {ok, _} ->
-                    ?LLOG(notice, "file.store ~s updated", [ObjId]),
+                    ?LLOG(notice, "image.processor ~s updated", [ObjId]),
                     ok;
                 {error, Error} ->
-                    ?LLOG(notice, "could not update file.store ~s: ~p", [ObjId, Error]),
+                    ?LLOG(notice, "could not update image.processor ~s: ~p", [ObjId, Error]),
                     {error, Error}
             end;
         {error, Error} ->
-            ?LLOG(notice, "could not update file.store ~s: ~p", [ObjId, Error]),
+            ?LLOG(notice, "could not update image.processor ~s: ~p", [ObjId, Error]),
             {error, Error}
     end.
 
@@ -326,28 +233,14 @@ create(Data, _Session) ->
     #{
         <<"domain">> := DomainId,
         <<"obj_name">> := ObjName,
-        <<"class">> := Class,
-        <<"encryption">> := Encryption
+        <<"class">> := Class
     } = Data,
-    Config = case Class of
-        <<"filesystem">> ->
-            maps:with([<<"path">>], Data);
-        <<"s3">> ->
-            maps:with([<<"aws_id">>, <<"aws_secret">>, <<"bucket">>, <<"bucket_access">>, <<"host">>, <<"port">>, <<"scheme">>], Data);
-        <<"s3_mini">> ->
-            maps:with([<<"aws_id">>, <<"aws_secret">>, <<"bucket">>, <<"bucket_access">>, <<"host">>, <<"port">>, <<"scheme">>], Data)
-    end,
-    FileStore = case Encryption of
-        <<>> ->
-            #{};
-        _ ->
-            #{encryption => Encryption}
-    end,
+    Config = maps:with([<<"host">>, <<"port">>, <<"scheme">>, <<"path">>], Data),
     Create = #{
-        type => ?DOMAIN_FILE_STORE,
+        type => ?IMAGE_PROCESSOR,
         domain_id => DomainId,
         obj_name => ObjName,
-        ?DOMAIN_FILE_STORE => FileStore#{
+        ?IMAGE_PROCESSOR => #{
             class => Class,
             config => Config
         }
@@ -362,13 +255,9 @@ create(Data, _Session) ->
 
 
 
-%% private
+%% @private
 class_on_change(FormId) ->
     <<"function() {
         var value = this.getValue();
-        if (value === 'filesystem') {
-            $$('", FormId/binary, "').showBatch('filesystem');
-        } else {
-            $$('", FormId/binary, "').showBatch('aws');
-        }
+        $$('", FormId/binary, "').showBatch(value);
     }">>.
