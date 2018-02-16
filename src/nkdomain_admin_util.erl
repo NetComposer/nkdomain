@@ -28,6 +28,7 @@
 -export([add_filter/3, add_exists_filter/3, add_search_filter/3, add_time_filter/4, add_multiword_filter/3, get_file_url/2]).
 -export([make_type_view_id/2, make_type_view_filter/2, make_obj_view_id/2, make_view_subview_id/3]).
 -export([make_confirm/2, make_msg/2, make_msg_ext/4, get_domains/2]).
+-export([get_size_bin/1]).
 
 -include("nkdomain.hrl").
 -include("nkdomain_admin.hrl").
@@ -224,6 +225,52 @@ do_get_agg(Field, Type, Path, Session) ->
             {error, Error}
     end.
 
+%% @doc
+get_size_bin(Size) ->
+    KB = 1024,
+    MB = KB * 1024,
+    GB = MB * 1024,
+    {Integer, Rest, Tag} = case Size of
+        _ when Size > GB ->
+            Int = Size div GB,
+            Float = (Size / GB) - Int,
+            {Int, Float, <<" GB">>};
+        _ when Size > MB ->
+            Int = Size div MB,
+            Float = (Size / MB) - Int,
+            {Int, Float, <<" MB">>};
+        _ when Size > KB ->
+            Int = Size div KB,
+            Float = (Size / KB) - Int,
+            {Int, Float, <<" KB">>};
+        _ ->
+            {Size, 0, <<" B">>}
+    end,
+    case Rest of
+        0 ->
+            <<(nklib_util:to_binary(Integer))/binary, Tag/binary>>;
+        _ ->
+            Rest2 = get_chars_from_binary(2, 2, nklib_util:to_binary(Rest)),
+            <<(nklib_util:to_binary(Integer))/binary, ".", Rest2/binary, Tag/binary>>
+    end.
+
+
+%% @private
+get_chars_from_binary(Start, Chars, <<_C/utf8, Bin/binary>>) when Start > 0 ->
+    get_chars_from_binary(Start-1, Chars, Bin);
+
+get_chars_from_binary(0, _Chars, <<>>) ->
+    <<>>;
+
+get_chars_from_binary(0, 0, _) ->
+    <<>>;
+
+get_chars_from_binary(0, Chars, <<C/utf8, Bin/binary>>) when Chars > 0 ->
+    Rest = get_chars_from_binary(0, (Chars - 1), Bin),
+    <<C/utf8, Rest/binary>>;
+
+get_chars_from_binary(_, _, _) ->
+    <<>>.
 
 
 %% @private
