@@ -31,7 +31,7 @@
 
 
 -define(LLOG(Type, Txt, Args),
-    lager:Type("NkDOMAN Admin User " ++ Txt, Args)).
+    lager:Type("NkDOMAIN Admin User " ++ Txt, Args)).
 
 -define(CHAT_MESSAGE, <<"message">>).
 
@@ -42,23 +42,30 @@ view(Obj, IsNew, #admin_session{domain_id=Domain}=Session) ->
     ObjId = maps:get(obj_id, Obj, <<>>),
     DomainId = maps:get(domain_id, Obj, Domain),
     ObjName = maps:get(obj_name, Obj, <<>>),
-    CreatedBy = maps:get(created_by, Obj, <<>>),
-    CreatedTime = maps:get(created_time, Obj, 0),
-    UpdatedBy = maps:get(updated_by, Obj, <<>>),
-    UpdatedTime = maps:get(updated_time, Obj, 0),
     Enabled = maps:get(enabled, Obj, true),
     User = maps:get(?DOMAIN_USER, Obj, #{}),
-    IconUrl = case maps:get(icon_id, Obj, <<>>) of
+    IconId = maps:get(icon_id, Obj, <<>>),
+    IconUrl = case IconId of
         <<>> ->
             <<"img/avatar.png">>;
         IconId ->
             nkdomain_admin_util:get_file_url(IconId, Session)
     end,
-    IconImage = <<"<img class='photo' style='width:150px; height:150px;' src='", IconUrl/binary, "'/>">>,
+    IconImage = <<"<img class='photo' style='padding: 0px 10% 0 10%; width:80%; height:auto;' src='", IconUrl/binary, "'/>">>,
     FormId = nkdomain_admin_util:make_obj_view_id(?DOMAIN_USER, ObjId),
-    Spec = #{
+    Base = case IconId of
+        <<>> ->
+            case IsNew of
+                true ->
+                    #{};
+                false ->
+                    #{with_image => IconImage}
+            end;
+        _ ->
+            #{with_image => IconImage}
+    end,
+    Spec = Base#{
         form_id => FormId,
-        with_image => IconImage,
         buttons => [
             #{type => case Enabled of true -> disable; _ -> enable end, disabled => IsNew},
             #{type => delete, disabled => IsNew},
@@ -101,6 +108,7 @@ view(Obj, IsNew, #admin_session{domain_id=Domain}=Session) ->
                         type => text,
                         label => <<"Username">>,
                         value => ObjName,
+                        required => true,
                         editable => true
                     },
                     #{
@@ -108,12 +116,14 @@ view(Obj, IsNew, #admin_session{domain_id=Domain}=Session) ->
                         type => text,
                         label => <<"Email">>,
                         value => maps:get(email, User, <<>>),
+                        required => true,
                         editable => true
                     },
                     #{
                         id => <<"password">>,
                         type => password,
                         label => <<"Password">>,
+                        required => IsNew,
                         editable => true
                     }
                 ]
@@ -126,6 +136,7 @@ view(Obj, IsNew, #admin_session{domain_id=Domain}=Session) ->
                         type => text,
                         label => <<"First name">>,
                         value => maps:get(name, User, <<>>),
+                        required => true,
                         editable => true
                     },
                     #{
@@ -151,39 +162,7 @@ view(Obj, IsNew, #admin_session{domain_id=Domain}=Session) ->
                     }
                 ]
             },
-            #{
-                header => <<"OTHER">>,
-                values => [
-                    #{
-                        id => <<"created_by">>,
-                        type => html,
-                        label => <<"Created by">>,
-                        value => nkdomain_admin_util:obj_id_url(CreatedBy),
-                        editable => false
-                    },
-                    #{
-                        id => <<"created_time">>,
-                        type => date,
-                        label => <<"Created time">>,
-                        value => CreatedTime,
-                        editable => false
-                    },
-                    #{
-                        id => <<"updated_by">>,
-                        type => html,
-                        label => <<"Updated by">>,
-                        value => nkdomain_admin_util:obj_id_url(UpdatedBy),
-                        editable => false
-                    },
-                    #{
-                        id => <<"updated_time">>,
-                        type => date,
-                        label => <<"Updated time">>,
-                        value => UpdatedTime,
-                        editable => false
-                    }
-                ]
-            }
+            nkadmin_webix_form:creation_fields(Obj, IsNew)
         ]
     },
     Data = #{

@@ -42,9 +42,9 @@ create(SrvId, Domain, UserId, #{file_id := FileId}=Req) ->
     end.
 
 
-info(SrvId, Domain, UserId, #{file_id := FileId}=Req) ->
+info(SrvId, _Domain, _UserId, #{file_id := FileId}=Req) ->
     case nkdomain_image_processor_obj:get_default() of
-        {ok, ProcessorId, Processor} ->
+        {ok, _ProcessorId, Processor} ->
             case find_file_and_store(FileId) of
                 {ok, #{?DOMAIN_FILE:=#{ content_type := Mime }}=File, Store} ->
                     case nkfile:download(SrvId, Store, File#{name=>FileId}) of

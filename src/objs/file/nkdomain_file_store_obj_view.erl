@@ -40,10 +40,6 @@ view(Obj, IsNew, #admin_session{domain_id=Domain}=Session) ->
     ObjId = maps:get(obj_id, Obj, <<>>),
     DomainId = maps:get(domain_id, Obj, Domain),
     ObjName = maps:get(obj_name, Obj, <<>>),
-    CreatedBy = maps:get(created_by, Obj, <<>>),
-    CreatedTime = maps:get(created_time, Obj, 0),
-    UpdatedBy = maps:get(updated_by, Obj, <<>>),
-    UpdatedTime = maps:get(updated_time, Obj, 0),
     Enabled = maps:get(enabled, Obj, true),
     FileStore = maps:get(?DOMAIN_FILE_STORE, Obj, #{}),
     Class = nklib_util:to_binary(maps:get(class, FileStore, <<"filesystem">>)),
@@ -118,13 +114,13 @@ view(Obj, IsNew, #admin_session{domain_id=Domain}=Session) ->
                         value => Class,
                         options => [#{
                             <<"id">> => <<"filesystem">>,
-                            <<"value">> => <<"filesystem (LOCAL STORE)">>
+                            <<"value">> => <<"filesystem">>
                         }, #{
                             <<"id">> => <<"s3">>,
-                            <<"value">> => <<"s3 (AWS)">>
+                            <<"value">> => <<"s3">>
                         }, #{
                             <<"id">> => <<"s3_mini">>,
-                            <<"value">> => <<"s3_mini (AWS)">>
+                            <<"value">> => <<"s3_mini">>
                         }],
                         onChange => class_on_change(FormId),
                         required => true,
@@ -155,7 +151,7 @@ view(Obj, IsNew, #admin_session{domain_id=Domain}=Session) ->
                 ]
             },
             #{
-                header => <<"AWS STORE">>,
+                header => <<"S3 COMPATIBLE STORE">>,
                 batch => <<"aws">>,
                 values => [
                     #{
@@ -221,39 +217,7 @@ view(Obj, IsNew, #admin_session{domain_id=Domain}=Session) ->
                     }
                 ]
             },
-            #{
-                header => <<"OTHER">>,
-                values => [
-                    #{
-                        id => <<"created_by">>,
-                        type => html,
-                        label => <<"Created by">>,
-                        value => nkdomain_admin_util:obj_id_url(CreatedBy),
-                        editable => false
-                    },
-                    #{
-                        id => <<"created_time">>,
-                        type => date,
-                        label => <<"Created time">>,
-                        value => CreatedTime,
-                        editable => false
-                    },
-                    #{
-                        id => <<"updated_by">>,
-                        type => html,
-                        label => <<"Updated by">>,
-                        value => nkdomain_admin_util:obj_id_url(UpdatedBy),
-                        editable => false
-                    },
-                    #{
-                        id => <<"updated_time">>,
-                        type => date,
-                        label => <<"Updated time">>,
-                        value => UpdatedTime,
-                        editable => false
-                    }
-                ]
-            }
+            nkadmin_webix_form:creation_fields(Obj, IsNew)
         ]
     },
     Data = #{

@@ -55,13 +55,13 @@ cmd(<<"start">>, #nkreq{session_module=nkapi_server, session_id=WsSessId}=Req) -
             % TODO: properly add these new filters
             ExtraFilters = case DomainPath of
                 <<"/sphera", _/binary>> ->
-                    [{'not', {<<"path">>, prefix, <<"/sipstorm">>}}, {'not', {<<"path">>, prefix, <<"/dkv">>}}];
+                    [{'not', {<<"path">>, prefix, <<"/sipstorm">>}}, {'not', {<<"path">>, prefix, <<"/dkv">>}}, {'not', {<<"srv_id">>, prefix, <<"sipstorm">>}}, {'not', {<<"srv_id">>, prefix, <<"dkv">>}}];
                 <<"/dkv", _/binary>> ->
-                    [{'not', {<<"path">>, prefix, <<"/sipstorm">>}}, {'not', {<<"path">>, prefix, <<"/sphera">>}}];
+                    [{'not', {<<"path">>, prefix, <<"/sipstorm">>}}, {'not', {<<"path">>, prefix, <<"/sphera">>}}, {'not', {<<"srv_id">>, prefix, <<"sipstorm">>}}, {'not', {<<"srv_id">>, prefix, <<"sphera">>}}];
                 <<"/sipstorm", _/binary>> ->
-                    [{'not', {<<"path">>, prefix, <<"/sphera">>}}, {'not', {<<"path">>, prefix, <<"/dkv">>}}];
+                    [{'not', {<<"path">>, prefix, <<"/sphera">>}}, {'not', {<<"path">>, prefix, <<"/dkv">>}}, {'not', {<<"srv_id">>, prefix, <<"sphera">>}}, {'not', {<<"srv_id">>, prefix, <<"dkv">>}}];
                 _ ->
-                    [{'not', {<<"path">>, prefix, <<"/sphera">>}}, {'not', {<<"path">>, prefix, <<"/dkv">>}}]
+                    [{'not', {<<"path">>, prefix, <<"/sphera">>}}, {'not', {<<"path">>, prefix, <<"/dkv">>}}, {'not', {<<"srv_id">>, prefix, <<"sphera">>}}, {'not', {<<"srv_id">>, prefix, <<"dkv">>}}]
             end,
             Opts1 = maps:with([domain_id, url, language], Data),
             Opts2 = Opts1#{

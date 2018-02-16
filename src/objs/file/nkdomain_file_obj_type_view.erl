@@ -143,7 +143,8 @@ entry(Entry, Base) ->
             <<"store_id">> := StoreId
         }
     } = Entry,
-    Size2 = <<(nklib_util:to_binary(Size div 1024))/binary, "KB">>,
+    %Size2 = <<(nklib_util:to_binary(Size div 1024))/binary, "KB">>,
+    Size2 = nkdomain_admin_util:get_size_bin(Size),
     Base#{
         file_type => Type,
         file_size => Size2,

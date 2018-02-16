@@ -41,10 +41,6 @@ view(Obj, IsNew, #admin_session{domain_id=Domain}=Session) ->
     ObjId = maps:get(obj_id, Obj, <<>>),
     DomainId = maps:get(domain_id, Obj, Domain),
     ObjName = maps:get(obj_name, Obj, <<>>),
-    CreatedBy = maps:get(created_by, Obj, <<>>),
-    CreatedTime = maps:get(created_time, Obj, 0),
-    UpdatedBy = maps:get(updated_by, Obj, <<>>),
-    UpdatedTime = maps:get(updated_time, Obj, 0),
     Enabled = maps:get(enabled, Obj, true),
     ImageJob = maps:get(?IMAGE_JOB, Obj, #{}),
 %    VisibleBatch = <<>>,
@@ -197,39 +193,7 @@ view(Obj, IsNew, #admin_session{domain_id=Domain}=Session) ->
                     }
                 ]
             },
-            #{
-                header => <<"OTHER">>,
-                values => [
-                    #{
-                        id => <<"created_by">>,
-                        type => html,
-                        label => <<"Created by">>,
-                        value => nkdomain_admin_util:obj_id_url(CreatedBy),
-                        editable => false
-                    },
-                    #{
-                        id => <<"created_time">>,
-                        type => date,
-                        label => <<"Created time">>,
-                        value => CreatedTime,
-                        editable => false
-                    },
-                    #{
-                        id => <<"updated_by">>,
-                        type => html,
-                        label => <<"Updated by">>,
-                        value => nkdomain_admin_util:obj_id_url(UpdatedBy),
-                        editable => false
-                    },
-                    #{
-                        id => <<"updated_time">>,
-                        type => date,
-                        label => <<"Updated time">>,
-                        value => UpdatedTime,
-                        editable => false
-                    }
-                ]
-            }
+            nkadmin_webix_form:creation_fields(Obj, IsNew)
         ]
     },
     Data = #{
