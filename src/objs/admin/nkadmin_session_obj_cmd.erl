@@ -53,16 +53,21 @@ cmd(<<"start">>, #nkreq{session_module=nkapi_server, session_id=WsSessId}=Req) -
         {ok, DomainId} ->
             {ok, _, _, DomainPath, _} = nkdomain:find(DomainId),
             % TODO: properly add these new filters
-            ExtraFilters = case DomainPath of
-                <<"/sphera", _/binary>> ->
-                    [{'not', {<<"path">>, prefix, <<"/sipstorm">>}}, {'not', {<<"path">>, prefix, <<"/dkv">>}}, {'not', {<<"srv_id">>, prefix, <<"sipstorm">>}}, {'not', {<<"srv_id">>, prefix, <<"dkv">>}}];
+            AllDomains = [<<"/sipstorm">>, <<"/sphera">>, <<"/dkv">>, <<"/mde">>],
+            AllServices = [<<"sipstorm">>, <<"sphera">>, <<"dkv">>, <<"mde">>],
+            {FilterDomains, FilterServices} = case DomainPath of
                 <<"/dkv", _/binary>> ->
-                    [{'not', {<<"path">>, prefix, <<"/sipstorm">>}}, {'not', {<<"path">>, prefix, <<"/sphera">>}}, {'not', {<<"srv_id">>, prefix, <<"sipstorm">>}}, {'not', {<<"srv_id">>, prefix, <<"sphera">>}}];
+                    {lists:delete(<<"/dkv">>, AllDomains), lists:delete(<<"dkv">>, AllServices)};
+                <<"/mde", _/binary>> ->
+                    {lists:delete(<<"/mde">>, AllDomains), lists:delete(<<"mde">>, AllServices)};
                 <<"/sipstorm", _/binary>> ->
-                    [{'not', {<<"path">>, prefix, <<"/sphera">>}}, {'not', {<<"path">>, prefix, <<"/dkv">>}}, {'not', {<<"srv_id">>, prefix, <<"sphera">>}}, {'not', {<<"srv_id">>, prefix, <<"dkv">>}}];
+                    {lists:delete(<<"/sipstorm">>, AllDomains), lists:delete(<<"sipstorm">>, AllServices)};
+                <<"/sphera", _/binary>> ->
+                    {lists:delete(<<"/sphera">>, AllDomains), lists:delete(<<"sphera">>, AllServices)};
                 _ ->
-                    [{'not', {<<"path">>, prefix, <<"/sphera">>}}, {'not', {<<"path">>, prefix, <<"/dkv">>}}, {'not', {<<"srv_id">>, prefix, <<"sphera">>}}, {'not', {<<"srv_id">>, prefix, <<"dkv">>}}]
+                    {lists:delete(<<"/sipstorm">>, AllDomains), lists:delete(<<"sipstorm">>, AllServices)}
             end,
+            ExtraFilters = get_extra_filters(FilterDomains, FilterServices),
             Opts1 = maps:with([domain_id, url, language], Data),
             Opts2 = Opts1#{
                 session_link => {nkapi_server, Pid},
@@ -155,3 +160,15 @@ cmd(Cmd, Req) ->
 %% Internal
 %% ===================================================================
 
+%% @private
+get_extra_filters(Domains, Services) ->
+    get_extra_filters(Domains, Services, []).
+
+get_extra_filters([D|Domains], Services, Acc) ->
+    get_extra_filters(Domains, Services, [{'not', {<<"path">>, prefix, D}}|Acc]);
+
+get_extra_filters([], [S|Services], Acc) ->
+    get_extra_filters([], Services, [{'not', {<<"srv_id">>, prefix, S}}|Acc]);
+
+get_extra_filters([], [], Acc) ->
+    Acc.
