@@ -53,16 +53,11 @@ view(Obj, IsNew, #admin_session{domain_id=Domain}=Session) ->
     end,
     IconImage = <<"<img class='photo' style='padding: 0px 10% 0 10%; width:80%; height:auto;' src='", IconUrl/binary, "'/>">>,
     FormId = nkdomain_admin_util:make_obj_view_id(?DOMAIN_USER, ObjId),
-    Base = case IconId of
-        <<>> ->
-            case IsNew of
-                true ->
-                    #{};
-                false ->
-                    #{with_image => IconImage}
-            end;
-        _ ->
-            #{with_image => IconImage}
+    Base = case IsNew of
+        true ->
+            #{};
+        false ->
+            #{with_image => IconImage, with_css => <<"photo">>, with_file_types => ["png", "jpg", "jpeg", "gif"]}
     end,
     Spec = Base#{
         form_id => FormId,
@@ -221,7 +216,9 @@ update(ObjId, Data, _Session) ->
         _ ->
             UserUpdate1#{password=>Pass}
     end,
-    case nkdomain:update(ObjId, #{?DOMAIN_USER => UserUpdate2}) of
+    Base = maps:with([<<"icon_id">>], Data),
+    Base2 = Base#{?DOMAIN_USER => UserUpdate2},
+    case nkdomain:update(ObjId, Base2) of
         {ok, _} ->
             case nkdomain:update_name(ObjId, UserName) of
                 {ok, _} ->

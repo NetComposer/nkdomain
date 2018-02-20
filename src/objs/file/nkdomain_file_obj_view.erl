@@ -85,7 +85,7 @@ view(Obj, IsNew, #admin_session{domain_id=Domain}=Session) ->
         buttons => [
             #{type => case Enabled of true -> disable; _ -> enable end, disabled => IsNew},
             #{type => delete, disabled => IsNew},
-            #{type => save}
+            #{type => save, disabled => IsNew}
         ],
         groups => [
             #{
@@ -195,6 +195,14 @@ view(Obj, IsNew, #admin_session{domain_id=Domain}=Session) ->
                         value => LinksValue,
                         hidden => LinksValue =:= <<>>,
                         editable => false
+                    },
+                    #{
+                        id => <<"upload_button">>,
+                        type => button,
+                        label => <<"Select file and upload">>,
+                        hidden => not IsNew,
+                        disable => not IsNew,
+                        onClick => nkadmin_webix_form:js_fun_icon_upload_form(FormId, #{domain_field => <<"domain">>, store_id_field => <<"new_store_id">>})
                     }
                 ]
             },
@@ -207,6 +215,8 @@ view(Obj, IsNew, #admin_session{domain_id=Domain}=Session) ->
         value => nkadmin_webix_form:form(Spec, ?DOMAIN_FILE, Session)
     },
     {ok, Data, Session}.
+
+
 
 
 
@@ -247,33 +257,12 @@ update(ObjId, Data, _Session) ->
     end.
 
 
-create(Data, _Session) ->
+create(#{<<"icon_id">>:=ObjId}=Data, Session) ->
     lager:error("NKLOG CREATE ~p", [Data]),
-    #{
-        <<"domain">> := DomainId,
-        <<"username">> := UserName,
-        <<"name">> := Name,
-        <<"surname">> := SurName,
-        <<"email">> := Email,
-        <<"password">> := Pass,
-        <<"address">> := Address,
-        <<"phone">> := Phone
-    } = Data,
-    Create = #{
-        type => ?DOMAIN_FILE,
-        domain_id => DomainId,
-        obj_name => UserName,
-        ?DOMAIN_FILE => #{
-            name => Name,
-            surname => SurName,
-            email => Email,
-            address_t => Address,
-            phone_t => Phone,
-            password => Pass
-        }
-    },
-    case nkdomain_obj_make:create(Create) of
-        {ok, #obj_id_ext{obj_id=ObjId}, []} ->
+    % ObjId is the object_id of the uploaded file
+    % That file was uploaded to the domain/file.store selected in the form
+    case update(ObjId, Data, Session) of
+        ok ->
             {ok, ObjId};
         {error, Error} ->
             {error, Error}
