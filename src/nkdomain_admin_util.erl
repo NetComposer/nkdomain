@@ -22,6 +22,7 @@
 -module(nkdomain_admin_util).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -export([get_data/3, get_agg_srv_id/3, get_agg_name/4, get_agg_term/4, table_filter/4]).
+-export([get_agg_term_with_defaults/5]).
 -export([db_search/3, db_aggs/3, db_aggs/4]).
 -export([obj_id_url/1, obj_id_url/2, obj_path_url/2, table_entry/3]).
 -export([get_type_info/2, get_type_view_mod/2, get_obj_view_mod/2]).
@@ -224,6 +225,39 @@ do_get_agg(Field, Type, Path, Session) ->
         {error, Error} ->
             {error, Error}
     end.
+
+
+%% @doc
+get_agg_term_with_defaults(Field, Type, Path, Defaults, Session) ->
+    case do_get_agg(Field, Type, Path, Session) of
+        {ok, Data, OverFlow} ->
+            Data2 = merge_lists_unique(Defaults, [Name || {Name, _Num} <- Data]),
+            List1 = lists:sort([{Name, Name} || Name <- Data2]),
+            List2 = [{?ADMIN_ALL_OBJS, <<>>}|List1],
+            List3 = case OverFlow of
+                false ->
+                    List2;
+                true ->
+                    List2++[{?ADMIN_ALL_OBJS, <<"...">>}]
+            end,
+            [#{id => I, value => V}||{I, V} <- List3];
+        {error, _Error} ->
+            #{}
+    end.
+
+
+%% @private
+merge_lists_unique([], List2) ->
+    List2;
+
+merge_lists_unique([L|List1], List2) ->
+    case lists:member(L, List2) of
+        true ->
+            merge_lists_unique(List1, List2);
+        false ->
+            merge_lists_unique(List1, [L|List2])
+    end.
+
 
 %% @doc
 get_size_bin(Size) ->
