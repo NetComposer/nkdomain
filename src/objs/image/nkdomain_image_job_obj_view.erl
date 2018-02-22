@@ -160,9 +160,12 @@ view(Obj, IsNew, #admin_session{domain_id=Domain}=Session) ->
                     },
                     #{
                         id => <<"new_input">>,
-                        type => text,
+                        type => combo,
                         label => <<"Input">>,
                         value => Input,
+                        suggest_type => ?DOMAIN_FILE,
+                        suggest_field => <<"name">>,
+                        suggest_template => <<"#name# (#file_type#, #file_size#)">>,
                         required => true,
                         hidden => (not IsNew),
                         editable => IsNew

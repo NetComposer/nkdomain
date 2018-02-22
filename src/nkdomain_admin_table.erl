@@ -73,6 +73,8 @@ table_data(Type, Mod, Spec, _Opts, #admin_session{domain_id=DomainId}=AdminSessi
             dir := SortDir
         } ->
             {SortId, to_bin(SortDir)};
+        #{} ->
+            undefined;
         undefined ->
             undefined
     end,
