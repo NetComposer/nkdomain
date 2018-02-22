@@ -79,7 +79,7 @@ start(SrvId, Domain, UserId, File, Store, Processor,  #{ obj_id := JobId,
                                             Store, File, 
                                             JobData, OutputFileId, byte_size(Body)) of 
                         ok -> 
-                            case finish(JobId, OutputFileId) of
+                            case finish_ok(JobId, OutputFileId) of
                                 {ok, Job2} ->
                                     notify(JobId, Job2),
                                     {ok, Job2};
@@ -93,12 +93,12 @@ start(SrvId, Domain, UserId, File, Store, Processor,  #{ obj_id := JobId,
                     {error, Error}
             end;
         {error, Error} -> 
-            case finish(JobId) of
+            case finish_error(JobId, Error) of
                 {ok, Job2} -> 
                     notify(JobId, Job2),
                     {ok, Job2};
-                {error, Error} ->
-                    {error, Error}
+                {error, Error2} ->
+                    {error, Error2}
             end
     end.
 
@@ -283,12 +283,17 @@ finish_with(JobId, Data) ->
     end.
 
 
-finish(JobId, OutputId) -> 
+finish_ok(JobId, OutputId) -> 
     finish_with(JobId, #{ status => <<"finished">>,
                                    progress => 100,
                                    output => OutputId }).
 
-finish(JobId) -> 
+finish_error(JobId, ErrorCode) -> 
+    finish_with(JobId, #{ status => <<"error">>,
+                                   progress => 0,
+                                   output => ErrorCode }).
+
+finish_error(JobId) -> 
     finish_with(JobId, #{ status => <<"error">>,
                                    progress => 0,
                                    output => <<>> }).

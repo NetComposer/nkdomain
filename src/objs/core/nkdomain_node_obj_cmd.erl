@@ -26,6 +26,7 @@
 
 
 -include("nkdomain.hrl").
+-include_lib("nkservice/include/nkservice.hrl").
 
 
 %% ===================================================================
@@ -33,6 +34,14 @@
 %% ===================================================================
 
 %% @doc
+cmd(<<"load_objs">>, #nkreq{data=#{ objs := Objs}} = Req) ->
+    case nkdomain_node:make_objs(Objs) of 
+        ok -> 
+            {ok, #{}};
+        {error, Error} -> 
+            {error, Error}
+    end;
+
 cmd(Cmd, Req) ->
     nkdomain_obj_cmd:cmd(Cmd, ?DOMAIN_NODE, Req).
 

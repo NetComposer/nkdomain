@@ -149,6 +149,18 @@ cmd(<<"create_child">>, #nkreq{data=#{ path := Path, data := ChildData }=Data}=R
 	    Error
    end; 
 
+cmd(<<"create_link">>, #nkreq{data=#{ from := ChildPath, to_parent := ParentPath }=Data}=Req) ->
+   Obj = #{
+        path => ChildPath,
+        parent_id => ParentPath
+   },	
+   case nkdomain_obj_make:create(Obj) of 
+	{ok, #obj_id_ext{obj_id=ObjId}, _} ->
+	    {ok, #{ id => ObjId }};
+	Error -> 
+	    Error
+   end; 
+
 cmd(Cmd, Req) ->
     nkdomain_obj_cmd:cmd(Cmd, ?DOMAIN_DOMAIN, Req).
 

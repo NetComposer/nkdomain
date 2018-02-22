@@ -58,6 +58,10 @@ register_startup_fun(Fun) ->
 make_objs([]) ->
     ok;
 
+make_objs([#{<<"path">>:=Path} = Obj|Rest]) ->
+    Obj2 = maps:remove(<<"path">>, Obj),
+    make_objs([Obj2#{ path => Path}|Rest]);
+
 make_objs([#{path:=Path} = Obj|Rest]) ->
     case nkdomain_obj_make:create(Obj) of
         {error, {object_already_exists, _ObjId}} ->

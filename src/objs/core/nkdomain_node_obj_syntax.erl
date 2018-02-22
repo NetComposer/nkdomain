@@ -32,6 +32,10 @@
 %% Syntax
 %% ===================================================================
 
+syntax(<<"load_objs">>, Syntax) ->
+    Syntax#{
+        objs => list
+    };
 
 syntax(Cmd, Syntax) ->
     nkdomain_obj_syntax:syntax(Cmd, ?DOMAIN_NODE, Syntax).

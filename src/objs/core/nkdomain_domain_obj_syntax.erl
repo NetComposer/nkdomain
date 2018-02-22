@@ -89,6 +89,12 @@ syntax(<<"create_child">>, Syntax) ->
 	data => map
     };
 
+syntax(<<"create_link">>, Syntax) ->
+    Syntax#{
+        from => binary,
+	to_parent => binary
+    };
+
 syntax(Cmd, Syntax) ->
     nkdomain_obj_syntax:syntax(Cmd, ?DOMAIN_DOMAIN, Syntax).
 
