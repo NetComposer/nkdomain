@@ -38,7 +38,7 @@
 
 
 %% @private
-view(Obj, IsNew, #admin_session{domain_id=Domain}=Session) ->
+view(Obj, IsNew, #admin_session{user_id=UserId, domain_id=Domain}=Session) ->
     ObjId = maps:get(obj_id, Obj, <<>>),
     DomainId = maps:get(domain_id, Obj, Domain),
     ObjName = maps:get(obj_name, Obj, <<>>),
@@ -53,6 +53,7 @@ view(Obj, IsNew, #admin_session{domain_id=Domain}=Session) ->
     end,
     IconImage = <<"<img class='photo' style='padding: 0px 10% 0 10%; width:80%; height:auto;' src='", IconUrl/binary, "'/>">>,
     FormId = nkdomain_admin_util:make_obj_view_id(?DOMAIN_USER, ObjId),
+    IsAuthorized = ObjId =/= <<"admin">> orelse UserId =:= <<"admin">>,
     Base = case IsNew of
         true ->
             #{};
@@ -62,9 +63,9 @@ view(Obj, IsNew, #admin_session{domain_id=Domain}=Session) ->
     Spec = Base#{
         form_id => FormId,
         buttons => [
-            #{type => case Enabled of true -> disable; _ -> enable end, disabled => IsNew},
-            #{type => delete, disabled => IsNew},
-            #{type => save}
+            #{type => case Enabled of true -> disable; _ -> enable end, disabled => IsNew or (not IsAuthorized)},
+            #{type => delete, disabled => IsNew or (not IsAuthorized)},
+            #{type => save, disabled => not IsAuthorized}
         ],
         groups => [
             #{
@@ -111,7 +112,7 @@ view(Obj, IsNew, #admin_session{domain_id=Domain}=Session) ->
                         type => text,
                         label => <<"Email">>,
                         value => maps:get(email, User, <<>>),
-                        required => true,
+                        required => ObjId =/= <<"admin">>,
                         editable => true
                     },
                     #{
@@ -191,9 +192,12 @@ view(Obj, IsNew, #admin_session{domain_id=Domain}=Session) ->
 %%    {ok, [Update|Updates], Session}.
 
 
+update(<<"admin">>, Data, #admin_session{user_id=UserId}=_Session) when UserId =/= <<"admin">> ->
+    ?LLOG(warning, "unauthorized update for the admin user session ~p", [_Session]),
+    {error, unauthorized};
 
 update(ObjId, Data, _Session) ->
-    lager:error("NKLOG UPDATE ~p ~p", [ObjId, Data]),
+    ?LLOG(info, "NKLOG UPDATE ~p ~p", [ObjId, Data]),
     #{
         <<"username">> := UserName,
         <<"name">> := Name,
@@ -235,7 +239,7 @@ update(ObjId, Data, _Session) ->
 
 
 create(Data, _Session) ->
-    lager:error("NKLOG CREATE ~p", [Data]),
+    ?LLOG(info, "NKLOG CREATE ~p", [Data]),
     #{
         <<"domain">> := DomainId,
         <<"username">> := UserName,

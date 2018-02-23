@@ -91,19 +91,24 @@ start(DomainId, UserId, Opts) ->
     },
     Opts2 = maps:with([session_link, session_events], Opts),
     Opts3 = Opts2#{meta => maps:with([language, http_auth_id, extra_filters], Opts)},
-    case nkdomain_obj_make:create(Obj, Opts3) of
-        {ok, #obj_id_ext{obj_id=SessId, pid=Pid}, _} ->
-            AdminDomainId = maps:get(domain_id, Opts, DomainId),
-            Url = maps:get(url, Opts, <<>>),
-            case switch_domain(Pid, AdminDomainId, Url) of
-                {ok, Updates} ->
-                    {ok, SessId, Pid, Updates};
+    case nkdomain_admin_util:is_authorized(UserId) of
+        true ->
+            case nkdomain_obj_make:create(Obj, Opts3) of
+                {ok, #obj_id_ext{obj_id=SessId, pid=Pid}, _} ->
+                    AdminDomainId = maps:get(domain_id, Opts, DomainId),
+                    Url = maps:get(url, Opts, <<>>),
+                    case switch_domain(Pid, AdminDomainId, Url) of
+                        {ok, Updates} ->
+                            {ok, SessId, Pid, Updates};
+                        {error, Error} ->
+                            nkdomain:unload(Pid, start_error),
+                            {error, Error}
+                    end;
                 {error, Error} ->
-                    nkdomain:unload(Pid, start_error),
                     {error, Error}
             end;
-        {error, Error} ->
-            {error, Error}
+        false ->
+            {error, unauthorized}
     end.
 
 
