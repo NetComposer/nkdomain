@@ -355,12 +355,20 @@ table_filter(<<"obj_name">>, Data, _Info, Acc) ->
 table_filter(<<"created_by">>, Data, _Info, Acc) ->
     {ok, [{<<"created_by">>, eq, Data}|Acc]};
 
-table_filter(<<"created_time">>, <<"custom">>, _Info, _Acc) ->
+table_filter(TimeField, <<"custom">>, _Info, _Acc)
+        when TimeField =:= <<"created_time">>
+        orelse TimeField =:= <<"updated_time">>
+        orelse TimeField =:= <<"deleted_time">>
+        orelse TimeField =:= <<"expires_time">> ->
     {error, date_needs_more_data};
 
-table_filter(<<"created_time">>, Data, #{timezone_offset:=Offset}, Acc) ->
+table_filter(TimeField, Data, #{timezone_offset:=Offset}, Acc)
+        when TimeField =:= <<"created_time">>
+        orelse TimeField =:= <<"updated_time">>
+        orelse TimeField =:= <<"deleted_time">>
+        orelse TimeField =:= <<"expires_time">> ->
     Secs = Offset * 60,
-    {ok, add_time_filter(<<"created_time">>, Data, Secs, Acc)};
+    {ok, add_time_filter(TimeField, Data, Secs, Acc)};
 
 table_filter(_Field, _Data, _Info, _Acc) ->
     unknown.
