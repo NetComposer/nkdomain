@@ -157,7 +157,8 @@ object_admin_info() ->
     #{
         class => session,
         weight => 5000,
-        type_view_mod => nkdomain_token_obj_type_view
+        type_view_mod => nkdomain_token_obj_type_view,
+        obj_view_mod => nkdomain_token_obj_view
     }.
 
 
