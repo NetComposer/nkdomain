@@ -43,6 +43,7 @@ view(Obj, IsNew, #admin_session{user_id=UserId, domain_id=Domain}=Session) ->
     DomainId = maps:get(domain_id, Obj, Domain),
     ObjName = maps:get(obj_name, Obj, <<>>),
     Enabled = maps:get(enabled, Obj, true),
+    Tags = maps:get(tags, Obj, []),
     User = maps:get(?DOMAIN_USER, Obj, #{}),
     IconId = maps:get(icon_id, Obj, <<>>),
     IconUrl = case IconId of
@@ -121,6 +122,14 @@ view(Obj, IsNew, #admin_session{user_id=UserId, domain_id=Domain}=Session) ->
                         label => <<"Password">>,
                         required => IsNew,
                         editable => true
+                    },
+                    #{
+                        id => <<"tags">>,
+                        type => multicombo,
+                        label => <<"Tags">>,
+                        value => binary:list_to_bin(lists:join(<<",">>, Tags)),
+                        options => [#{id => <<"admin">>, value => <<"admin">>}],
+                        editable => true
                     }
                 ]
             },
@@ -196,7 +205,7 @@ update(<<"admin">>, Data, #admin_session{user_id=UserId}=_Session) when UserId =
     ?LLOG(warning, "unauthorized update for the admin user session ~p", [_Session]),
     {error, unauthorized};
 
-update(ObjId, Data, _Session) ->
+update(ObjId, Data, #admin_session{user_id=UserId}=_Session) ->
     ?LLOG(info, "NKLOG UPDATE ~p ~p", [ObjId, Data]),
     #{
         <<"username">> := UserName,
@@ -205,7 +214,8 @@ update(ObjId, Data, _Session) ->
         <<"email">> := Email,
         <<"password">> := Pass,
         <<"address">> := Address,
-        <<"phone">> := Phone
+        <<"phone">> := Phone,
+        <<"tags">> := TagsStr
     } = Data,
     UserUpdate1 = #{
         name => Name,
@@ -221,7 +231,13 @@ update(ObjId, Data, _Session) ->
             UserUpdate1#{password=>Pass}
     end,
     Base = maps:with([<<"icon_id">>], Data),
-    Base2 = Base#{?DOMAIN_USER => UserUpdate2},
+    Base2 = case nkdomain_admin_util:is_authorized(UserId) of
+        true ->
+            Tags = binary:split(TagsStr, <<",">>, [global]),
+            Base#{tags => Tags, ?DOMAIN_USER => UserUpdate2};
+        false ->
+            Base#{?DOMAIN_USER => UserUpdate2}
+    end,
     case nkdomain:update(ObjId, Base2) of
         {ok, _} ->
             case nkdomain:update_name(ObjId, UserName) of
