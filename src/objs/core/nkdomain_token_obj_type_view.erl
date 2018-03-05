@@ -47,7 +47,7 @@ view(Path, Session) ->
                 options => get_agg_name(<<"domain_id">>, Path, Session)
             },
             #{
-                id => obj_id,
+                id => obj_name,
                 type => text,
                 fillspace => <<"0.5">>,
                 name => domain_column_id,
@@ -78,7 +78,7 @@ view(Path, Session) ->
                 sort => true
             },
             #{
-                id => expires,
+                id => expires_time,
                 type => date,
                 fillspace => <<"0.5">>,
                 name => domain_column_expires,
@@ -98,6 +98,7 @@ fields() ->
         <<"obj_name">>,
         <<"created_time">>,
         <<"created_by">>,
+        <<"deleted_time">>,
         <<"enabled">>,
         <<"expires_time">>,
         <<"subtype">>
@@ -116,11 +117,17 @@ filter_field(_Field, _Data, Acc) ->
 %% @doc
 entry(Entry, Base) ->
     #{
-        <<"expires_time">> := Expires,
         <<"subtype">> := SubType
     } = Entry,
+    DeletedTime = maps:get(<<"deleted_time">>, Entry, <<>>),
+    Expires = case DeletedTime of
+        <<>> ->
+            maps:get(<<"expires_time">>, Entry, <<>>);
+        _ ->
+            DeletedTime
+    end,
     Base#{
-        expires => Expires,
+        expires_time => Expires,
         subtype => nklib_util:bjoin(SubType, <<", ">>)
     }.
 
@@ -224,8 +231,6 @@ element_updated(_ObjId, _Value, _Session) ->
 %% @private
 get_agg_name(Field, Path, Session) ->
     nkdomain_admin_util:get_agg_name(Field, ?DOMAIN_TOKEN, Path, Session).
-
-
 
 
 %% @private
