@@ -44,7 +44,8 @@ element_action([?ADMIN_OBJ_TYPE, Path, Type], selected, _Value, Updates, Session
     {ok, Updates2, Session2};
 
 element_action([?ADMIN_OBJ_ID, ObjId, Type, Path], selected, Value, Updates, Session) ->
-    {Updates2, Session2} = selected_obj(ObjId, Type, Path, Updates, Session),
+    IsObjId = maps:get(is_obj_id, Value, false),
+    {Updates2, Session2} = selected_obj(ObjId, Type, Path, IsObjId, Updates, Session),
     case Value of
         #{update_url:=true} ->
             {Updates3, Session3} = nkadmin_util:update_url(Updates2, Session2),
@@ -181,7 +182,7 @@ selected_type(Type, Path, Updates, Session) ->
 selected_obj(ObjId, Updates, Session) ->
     case nkdomain_db:find(ObjId) of
         #obj_id_ext{type=Type, path=Path} ->
-            selected_obj(ObjId, Type, Path, Updates, Session);
+            selected_obj(ObjId, Type, Path, false, Updates, Session);
         {error, Error} ->
             ?LLOG(notice, "error reading object ~s (~p)", [ObjId, Error], Session),
             {ok, Updates, Session}
@@ -189,10 +190,10 @@ selected_obj(ObjId, Updates, Session) ->
 
 
 %% @doc
-selected_obj(_ObjId, ?DOMAIN_DOMAIN, ObjPath, Updates, Session) ->
+selected_obj(_ObjId, ?DOMAIN_DOMAIN, ObjPath, false, Updates, Session) ->
     selected_type(?DOMAIN_DOMAIN, ObjPath, Updates, Session);
 
-selected_obj(ObjId, Type, ObjPath, Updates, Session) ->
+selected_obj(ObjId, Type, ObjPath, _Value, Updates, Session) ->
     case nkdomain:get_obj(ObjId) of
         {ok, Obj} ->
             case call_obj_view(Type, view, [Obj, false], Session) of

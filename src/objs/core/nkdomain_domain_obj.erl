@@ -70,7 +70,8 @@ object_admin_info() ->
     #{
         %class => session,
         %weight => 2000,
-        type_view_mod => nkdomain_domain_obj_type_view
+        type_view_mod => nkdomain_domain_obj_type_view,
+        obj_view_mod => nkdomain_domain_obj_view
     }.
 
 

@@ -39,13 +39,21 @@ view(Path, Session) ->
             },
             #{
                 id => domain,
-                fillspace => <<"1.5">>,
+                fillspace => <<"1.0">>,
                 type => text,
                 name => domain_column_domain,
                 is_html => true,
                 sort => true,
                 is_html => true,
                 options => get_agg_name(<<"domain_id">>, Path, Session)
+            },
+            #{
+                id => obj_name,
+                type => text,
+                fillspace => <<"0.5">>,
+                name => domain_column_id,
+                sort => true,
+                is_html => true % Will allow us to return HTML inside the column data
             },
             #{
                 id => name,
