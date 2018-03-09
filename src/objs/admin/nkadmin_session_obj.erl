@@ -247,7 +247,13 @@ object_sync_op({?MODULE, element_action, <<"url">>, updated, Url}, _From, State)
     #obj_state{session=Session} = State,
     case find_url(Url, Session) of
         {ok, Parts} ->
-            case do_element_action(Parts, selected, #{update_url=>false}, State) of
+            IsObjId = case Url of
+                <<"_id/", _/binary>> ->
+                    true;
+                _ ->
+                    false
+            end,
+            case do_element_action(Parts, selected, #{is_obj_id => IsObjId, update_url=>false}, State) of
                 {ok, Reply, State2} ->
                     {reply, {ok, Reply}, State2};
                 {error, Error, State2} ->
@@ -407,7 +413,13 @@ do_get_domain_detail(Updates, Session, State) ->
     #admin_session{url=Url} = Session,
     case find_url(Url, Session) of
         {ok, Parts} ->
-            case handle(admin_element_action, [Parts, selected, <<>>, Updates], Session) of
+            IsObjId = case Url of
+                <<"_id/", _/binary>> ->
+                    true;
+                _ ->
+                    false
+            end,
+            case handle(admin_element_action, [Parts, selected, #{is_obj_id => IsObjId}, Updates], Session) of
                 {ok, Updates2, Session2} ->
                     {ok, Updates2, Session2};
                 {error, Error, Session2} ->
