@@ -228,7 +228,7 @@ selected_obj(ObjId, Type, ObjPath, _Value, Updates, Session) ->
 type_view_enable(_Enable, _Type, [], Updates, Session) ->
     {Updates, Session};
 
-type_view_enable(Enable, Type, [<<"admin">>|Rest], Updates, #admin_session{user_id=UserId}=Session) when UserId =/= <<"admin">> ->
+type_view_enable(Enable, Type, [<<"admin">>|Rest], Updates, #admin_session{user_id=_UserId}=Session) ->
     Op = case Enable of
         true -> <<"enable">>;
         false -> <<"disable">>
@@ -266,7 +266,7 @@ type_view_enable(Enable, Type, [Id|Rest], Updates, Session) ->
 type_view_delete(_Type, [], Updates, Session) ->
     {Updates, Session};
 
-type_view_delete(Type, [<<"admin">>|Rest], Updates, #admin_session{user_id=UserId}=Session) when UserId =/= <<"admin">> ->
+type_view_delete(Type, [<<"admin">>|Rest], Updates, #admin_session{user_id=UserId}=Session) ->
     ?LLOG(warning, "could not delete ~s: ~p", [<<"admin">>, <<"unauthorized">>], Session),
     Msg = nkdomain_admin_util:make_msg(error, <<"Could not delete object \"admin\"">>),
     type_view_delete(Type, Rest, [Msg|Updates], Session);

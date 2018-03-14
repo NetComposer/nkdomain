@@ -54,7 +54,8 @@ view(Obj, IsNew, #admin_session{user_id=UserId, domain_id=Domain}=Session) ->
     end,
     IconImage = <<"<img class='photo' style='padding: 0px 10% 0 10%; width:80%; height:auto;' src='", IconUrl/binary, "'/>">>,
     FormId = nkdomain_admin_util:make_obj_view_id(?DOMAIN_USER, ObjId),
-    IsAuthorized = ObjId =/= <<"admin">> orelse UserId =:= <<"admin">>,
+    %IsAuthorized = ObjId =/= <<"admin">> orelse UserId =:= <<"admin">>,
+    IsAuthorized = ObjId =/= <<"admin">>,
     Base = case IsNew of
         true ->
             #{};
