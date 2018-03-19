@@ -30,7 +30,7 @@
 -export([make_type_view_id/2, make_type_view_filter/2, make_obj_view_id/2, make_view_subview_id/3]).
 -export([make_confirm/2, make_msg/2, make_msg_ext/4, get_domains/2]).
 -export([get_size_bin/1]).
--export([is_authorized/1]).
+-export([is_authorized/1, get_client_id/1]).
 
 -include("nkdomain.hrl").
 -include("nkdomain_admin.hrl").
@@ -303,6 +303,23 @@ is_authorized(UserId) ->
             false
     end.
 
+
+%% @doc
+get_client_id(#admin_session{srv_id=SrvId}=Session) ->
+    SrvIdBin = nklib_util:to_binary(SrvId),
+    case SrvIdBin of
+        <<"dkv", _/binary>> ->
+            <<"dkv">>;
+        <<"mde", _/binary>> ->
+            <<"mde">>;
+        <<"sipstorm", _/binary>> ->
+            <<"sipstorm">>;
+        <<"sphera", _/binary>> ->
+            <<"sphera">>;
+        _ ->
+            <<"sipstorm">>
+    end.
+        
 
 %% @private
 get_chars_from_binary(Start, Chars, <<_C/utf8, Bin/binary>>) when Start > 0 ->

@@ -25,6 +25,7 @@
 
 
 -export([get_config/2, set_config/3, apply_config/3, get_default/2, set_default/3]).
+-export([get_recursive_config/3]).
 -export([find_path/1, find_path/2, unload_childs/1, get_childs_type/2]).
 -export([get_all_counters/1, get_counter/2]).
 -export([sync_op/2, async_op/2]).
@@ -144,6 +145,35 @@ get_default(DomainId, Key) ->
 
 set_default(DomainId, Key, Val) when is_map(Val) ->
     sync_op(DomainId, {set_default, nklib_util:to_binary(Key), Val}).
+
+
+%% @doc Get a key recursively from this domain to the root
+-spec get_recursive_config(nkdomain:id(), Key::binary(), list()) ->
+    {ok, list()} | {error, term()}.
+
+get_recursive_config(<<"root">>, Key, Base) when is_list(Base) ->
+    join_config_with(<<"root">>, Key, Base);
+
+get_recursive_config(DomainId, Key, Base) when is_list(Base) ->
+    {ok, NewBase} = join_config_with(DomainId, Key, Base),
+    case nkdomain:get_obj(DomainId) of
+        {ok, #{parent_id := ParentDomain}} ->
+            get_recursive_config(ParentDomain, Key, NewBase);
+        {error, Error} ->
+            lager:warning("nkdomain_domain:get_recursive_config Couldn't load parent for ~p", [DomainId]),
+            {error, Error}
+    end.
+
+
+%% @private
+join_config_with(DomainId, Key, Base) when is_list(Base) ->
+    case sync_op(DomainId, {get_config, nklib_util:to_binary(Key)}) of
+        {ok, Map} when is_map(Map) ->
+            List = maps:to_list(Map),
+            {ok, List ++ Base};
+        {error, Error} ->
+            {error, Error}
+    end.
 
 
 %% @doc Finds a child object with this path
