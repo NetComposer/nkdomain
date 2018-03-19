@@ -54,8 +54,8 @@ view(Obj, IsNew, #admin_session{user_id=UserId, domain_id=Domain}=Session) ->
     end,
     IconImage = <<"<img class='photo' style='padding: 0px 10% 0 10%; width:80%; height:auto;' src='", IconUrl/binary, "'/>">>,
     FormId = nkdomain_admin_util:make_obj_view_id(?DOMAIN_USER, ObjId),
-    %IsAuthorized = ObjId =/= <<"admin">> orelse UserId =:= <<"admin">>,
-    IsAuthorized = ObjId =/= <<"admin">>,
+    IsAdminObj = ObjId =:= <<"admin">>,
+    IsAuthorized = (not IsAdminObj) orelse UserId =:= <<"admin">>,
     Base = case IsNew of
         true ->
             #{};
@@ -65,8 +65,8 @@ view(Obj, IsNew, #admin_session{user_id=UserId, domain_id=Domain}=Session) ->
     Spec = Base#{
         form_id => FormId,
         buttons => [
-            #{type => case Enabled of true -> disable; _ -> enable end, disabled => IsNew or (not IsAuthorized)},
-            #{type => delete, disabled => IsNew or (not IsAuthorized)},
+            #{type => case Enabled of true -> disable; _ -> enable end, disabled => IsNew or IsAdminObj},
+            #{type => delete, disabled => IsNew or IsAdminObj},
             #{type => save, disabled => not IsAuthorized}
         ],
         groups => [
