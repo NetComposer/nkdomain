@@ -41,6 +41,7 @@
 view(Obj, IsNew, #admin_session{user_id=UserId, domain_id=DefDomain, srv_id=SrvId}=Session) ->
     ObjId = maps:get(obj_id, Obj, <<>>),
     DomainId = maps:get(domain_id, Obj, DefDomain),
+    {ok, <<"domain">>, _, DomainPath, _} = nkdomain:find(DomainId),
     ObjName = maps:get(obj_name, Obj, <<>>),
     Name = maps:get(name, Obj, <<>>),
     Description = maps:get(description, Obj, <<>>),
@@ -58,15 +59,97 @@ view(Obj, IsNew, #admin_session{user_id=UserId, domain_id=DefDomain, srv_id=SrvI
     Domain = maps:get(?DOMAIN_DOMAIN, Obj, #{}),
     Configs = maps:get(configs, Domain, #{}),
     DefChanMap = maps:get(<<"default_channels_", ClientId/binary>>, Configs, #{<<"list">> => []}),
-    DefaultChannels = case DefChanMap of
-        #{<<"list">> := L} ->
-            L;
-        #{list := L} ->
-            L
-    end,
+    #{<<"list">> := DefaultChannels} = DefChanMap,
     DefaultChannelsBin = lists:join(<<",">>, DefaultChannels),
     DefaultChannelsOpts = get_convs_opts(DefaultChannels),
     FormId = nkdomain_admin_util:make_obj_view_id(?DOMAIN_DOMAIN, ObjId),
+    HasAlerts = case DomainPath of
+        <<"/sipstorm/c4", _/binary>> -> %% TODO: Change to client specific domain
+            true;
+        _ ->
+            false
+    end,
+    AlertList = maps:get(<<"alerts_", ClientId/binary>>, Configs, #{<<"list">> => []}),
+    #{<<"list">> := Alerts} = AlertList,
+    {FinalPos, AlertFields} = lists:foldl(fun(M, {Pos, Acc}) ->
+        PosBin = nklib_util:to_binary(Pos),
+        Button = get_alert_button(FormId, PosBin, <<"Delete alert ", PosBin/binary>>, <<"trash">>, <<"Undo">>, <<"undo">>, false),
+        Check = #{
+            id => <<"alert_checkbox_", PosBin/binary>>,
+            type => checkbox,
+            label => <<"Is enabled?">>,
+            value => maps:get(<<"enabled">>, M, true),
+            editable => true
+        },
+        Channels = maps:get(<<"channels">>, M, []),
+        ChannelsBin = lists:join(<<",">>, Channels),
+        ChannelsOpts = get_convs_opts(Channels),
+        Chan = #{
+            id => <<"alert_channels_", PosBin/binary>>,
+            type => multicombo,
+            label => <<"Send to channels">>,
+            value => ChannelsBin,
+            suggest_type => ?CHAT_CONVERSATION,
+            suggest_field => <<"name">>,
+            suggest_filters => #{
+                conversation_type => <<"channel">>
+            },
+            suggest_template => <<"#name#">>,
+            options => ChannelsOpts,
+            required => true,
+            editable => true
+        },
+        Msg = #{
+            id => <<"alert_message_", PosBin/binary>>,
+            type => text,
+            label => <<"Alert message ", PosBin/binary>>,
+            value => maps:get(<<"text">>, M, <<>>),
+            required => true,
+            editable => true
+        },
+        {Pos+1, [Button, Check, Chan, Msg | Acc]}
+    end,
+        {1, []},
+        Alerts
+    ),
+    FinalPosBin = nklib_util:to_binary(FinalPos),
+    NewAlertField = [
+        get_alert_button(FormId, FinalPosBin, <<"Cancel">>, <<"times">>, <<"Define new alert">>, <<"plus">>, true),
+        #{
+            id => <<"alert_message_", FinalPosBin/binary>>,
+            type => text,
+            label => <<"New alert message">>,
+            value => <<>>,
+            required => true,
+            hidden => true,
+            editable => true
+        },
+        #{
+            id => <<"alert_channels_", FinalPosBin/binary>>,
+            type => multicombo,
+            label => <<"Send to channels">>,
+            value => <<>>,
+            suggest_type => ?CHAT_CONVERSATION,
+            suggest_field => <<"name">>,
+            suggest_filters => #{
+                conversation_type => <<"channel">>
+            },
+            suggest_template => <<"#name#">>,
+            options => [],
+            required => true,
+            hidden => true,
+            editable => true
+        },
+        #{
+            id => <<"alert_checkbox_", FinalPosBin/binary>>,
+            type => checkbox,
+            label => <<"Is enabled?">>,
+            value => true,
+            hidden => true,
+            editable => true
+        }
+    ],
+    AlertFields2 = lists:reverse(AlertFields) ++ NewAlertField,
     Base = case IsNew of
         true ->
             #{};
@@ -158,6 +241,11 @@ view(Obj, IsNew, #admin_session{user_id=UserId, domain_id=DefDomain, srv_id=SrvI
                     }
                 ]
             },
+            #{
+                header => <<"ALERTS">>,
+                hidden => IsNew or (not HasAlerts),
+                values => AlertFields2
+            },
             nkadmin_webix_form:creation_fields(Obj, IsNew)
         ]
     },
@@ -183,11 +271,26 @@ update(ObjId, Data, #admin_session{user_id=UserId}=Session) ->
             Other
     end,
     DefChanMap = #{<<"list">> => DefaultChannelsList},
+    AlertIds = filter_by_prefix(<<"alert_message_">>, maps:keys(Data)),
+    Alerts = get_alerts(AlertIds, Data),
+    AlertsMap = #{<<"list">> => Alerts},
     ClientId = nkdomain_admin_util:get_client_id(Session),
     case nkdomain:update(ObjId, Base) of
         {ok, _} ->
             ?LLOG(notice, "domain ~s updated", [ObjId]),
-            nkdomain_domain:set_config(ObjId, <<"default_channels_", ClientId/binary>>, DefChanMap);
+            case nkdomain_domain:set_config(ObjId, <<"default_channels_", ClientId/binary>>, DefChanMap) of
+                ok ->
+                    case nkdomain_domain:set_config(ObjId, <<"alerts_", ClientId/binary>>, AlertsMap) of
+                        ok ->
+                            ok;
+                        {error, Error} ->
+                            ?LLOG(notice, "could not update domain ~s: ~p", [ObjId, Error]),
+                            {error, Error}
+                    end;
+                {error, Error} ->
+                    ?LLOG(notice, "could not update domain ~s: ~p", [ObjId, Error]),
+                    {error, Error}
+            end;
         {error, Error} ->
             ?LLOG(notice, "could not update domain ~s: ~p", [ObjId, Error]),
             {error, Error}
@@ -233,3 +336,106 @@ get_convs_opts([Id|Ids], Acc) ->
             ?LLOG(warning, "Unknown ID found: ~p", [Id]),
             get_convs_opts(Ids, [#{id => Id, name => Id} | Acc])
     end.
+
+
+%% @private
+filter_by_prefix(Prefix, List) when is_list(List) ->
+    PrefixBin = nklib_util:to_binary(Prefix),
+    filter_by_prefix(PrefixBin, List, []).
+
+%% @private
+filter_by_prefix(_, [], Acc) ->
+    lists:reverse(Acc);
+
+filter_by_prefix(Prefix, [L | List], Acc) ->
+    Size = size(Prefix),
+    case L of
+        <<Prefix:Size/binary, Rest/binary>> ->
+            filter_by_prefix(Prefix, List, [Rest| Acc]);
+        _ ->
+            filter_by_prefix(Prefix, List, Acc)
+    end.
+
+%% @private
+get_alerts(Ids, Data) ->
+    get_alerts(Ids, Data, []).
+
+%% @private
+get_alerts([], _, Acc) ->
+    lists:reverse(Acc);
+
+get_alerts([Id|Ids], Data, Acc) ->
+    ButtonKey = <<"alert_button_", Id/binary>>,
+    case Data of
+        #{ButtonKey := true} ->
+            get_alerts(Ids, Data, Acc);
+        _ ->
+            Msg = maps:get(<<"alert_message_", Id/binary>>, Data, <<>>),
+            Channels = maps:get(<<"alert_channels_", Id/binary>>, Data, []),
+            ChannelsList = case binary:split(Channels, <<",">>, [global]) of
+                [<<>>] ->
+                    [];
+                Other ->
+                    Other
+            end,
+            Check = maps:get(<<"alert_checkbox_", Id/binary>>, Data, false),
+            case {Msg, ChannelsList} of
+                {<<>>, _} ->
+                    get_alerts(Ids, Data, Acc);
+                {_, []} ->
+                    get_alerts(Ids, Data, Acc);
+                _ ->
+                    Alert = #{
+                        <<"text">> => Msg,
+                        <<"channels">> => ChannelsList,
+                        <<"enabled">> => Check
+                    },
+                    get_alerts(Ids, Data, [Alert|Acc])
+            end
+    end.
+
+
+%% @private
+get_alert_button(FormId, Pos, DisabledLabel, DisabledIcon, EnabledLabel, EnabledIcon, State) ->
+    PosBin = nklib_util:to_binary(Pos),
+    {DefaultLabel, DefaultIcon} = case State of
+        false ->
+            {DisabledLabel, DisabledIcon};
+        true ->
+            {EnabledLabel, EnabledIcon}
+    end,
+    #{
+        id => <<"alert_button_", PosBin/binary>>,
+        type => button,
+        button_type => <<"iconButton">>,
+        button_icon => DefaultIcon,
+        value => State,
+        label => <<DefaultLabel/binary>>,
+        onClick => <<"
+            function() {
+                var form = $$('", FormId/binary, "');
+                if (form && form.elements) {
+                    var alert_check = form.elements.alert_checkbox_", PosBin/binary, ";
+                    var alert_msg = form.elements.alert_message_", PosBin/binary, ";
+                    var alert_chan = form.elements.alert_channels_", PosBin/binary, ";
+                    if (!this.getValue()) {
+                        alert_check.hide();
+                        alert_msg.hide();
+                        alert_chan.hide();
+                        this.setValue(true);
+                        this.data.label = '", EnabledLabel/binary, "';
+                        this.data.icon = '", EnabledIcon/binary, "';
+                        this.refresh();
+                    } else {
+                        alert_check.show();
+                        alert_msg.show();
+                        alert_chan.show();
+                        this.setValue(false);
+                        this.data.label = '", DisabledLabel/binary, "';
+                        this.data.icon = '", DisabledIcon/binary, "';
+                        this.refresh();
+                    }
+                }
+            }
+        ">>
+    }.
