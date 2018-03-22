@@ -58,10 +58,10 @@ view(Obj, IsNew, #admin_session{user_id=UserId, domain_id=DefDomain, srv_id=SrvI
     ClientId = nkdomain_admin_util:get_client_id(Session),
     Domain = maps:get(?DOMAIN_DOMAIN, Obj, #{}),
     Configs = maps:get(configs, Domain, #{}),
-    DefChanMap = maps:get(<<"default_channels_", ClientId/binary>>, Configs, #{<<"list">> => []}),
-    #{<<"list">> := DefaultChannels} = DefChanMap,
-    DefaultChannelsBin = lists:join(<<",">>, DefaultChannels),
-    DefaultChannelsOpts = get_convs_opts(DefaultChannels),
+    DefConvMap = maps:get(<<"default_conversations_", ClientId/binary>>, Configs, #{<<"list">> => []}),
+    #{<<"list">> := DefaultConvs} = DefConvMap,
+    DefaultConvsBin = lists:join(<<",">>, DefaultConvs),
+    DefaultConvsOpts = get_convs_opts(DefaultConvs),
     FormId = nkdomain_admin_util:make_obj_view_id(?DOMAIN_DOMAIN, ObjId),
     HasAlerts = case DomainPath of
         <<"/sipstorm/c4", _/binary>> -> %% TODO: Change to client specific domain
@@ -81,21 +81,21 @@ view(Obj, IsNew, #admin_session{user_id=UserId, domain_id=DefDomain, srv_id=SrvI
             value => maps:get(<<"enabled">>, M, true),
             editable => true
         },
-        Channels = maps:get(<<"channels">>, M, []),
-        ChannelsBin = lists:join(<<",">>, Channels),
-        ChannelsOpts = get_convs_opts(Channels),
+        Convs = maps:get(<<"conversations">>, M, []),
+        ConvsBin = lists:join(<<",">>, Convs),
+        ConvsOpts = get_convs_opts(Convs),
         Chan = #{
-            id => <<"alert_channels_", PosBin/binary>>,
+            id => <<"alert_convs_", PosBin/binary>>,
             type => multicombo,
             label => <<"Send to channels">>,
-            value => ChannelsBin,
+            value => ConvsBin,
             suggest_type => ?CHAT_CONVERSATION,
             suggest_field => <<"name">>,
             suggest_filters => #{
                 conversation_type => <<"channel">>
             },
             suggest_template => <<"#name#">>,
-            options => ChannelsOpts,
+            options => ConvsOpts,
             required => true,
             editable => true
         },
@@ -125,7 +125,7 @@ view(Obj, IsNew, #admin_session{user_id=UserId, domain_id=DefDomain, srv_id=SrvI
             editable => true
         },
         #{
-            id => <<"alert_channels_", FinalPosBin/binary>>,
+            id => <<"alert_convs_", FinalPosBin/binary>>,
             type => multicombo,
             label => <<"Send to channels">>,
             value => <<>>,
@@ -225,17 +225,17 @@ view(Obj, IsNew, #admin_session{user_id=UserId, domain_id=DefDomain, srv_id=SrvI
                 hidden => IsNew,
                 values => [
                     #{
-                        id => <<"default_channels">>,
+                        id => <<"default_convs">>,
                         type => multicombo,
                         label => <<"Default channels">>,
-                        value => DefaultChannelsBin,
+                        value => DefaultConvsBin,
                         suggest_type => ?CHAT_CONVERSATION,
                         suggest_field => <<"name">>,
                         suggest_filters => #{
                             conversation_type => <<"channel">>
                         },
                         suggest_template => <<"#name#">>,
-                        options => DefaultChannelsOpts,
+                        options => DefaultConvsOpts,
                         hidden => IsNew,
                         editable => true
                     }
@@ -263,14 +263,14 @@ view(Obj, IsNew, #admin_session{user_id=UserId, domain_id=DefDomain, srv_id=SrvI
 update(ObjId, Data, #admin_session{user_id=UserId}=Session) ->
     ?LLOG(info, "NKLOG UPDATE ~p ~p", [ObjId, Data]),
     Base = maps:with([<<"name">>, <<"description">>, <<"icon_id">>], Data),
-    DefaultChannels = maps:get(<<"default_channels">>, Data, []),
-    DefaultChannelsList = case binary:split(DefaultChannels, <<",">>, [global]) of
+    DefaultConvs = maps:get(<<"default_convs">>, Data, []),
+    DefaultConvsList = case binary:split(DefaultConvs, <<",">>, [global]) of
         [<<>>] ->
             [];
         Other ->
             Other
     end,
-    DefChanMap = #{<<"list">> => DefaultChannelsList},
+    DefConvMap = #{<<"list">> => DefaultConvsList},
     AlertIds = filter_by_prefix(<<"alert_message_">>, maps:keys(Data)),
     Alerts = get_alerts(AlertIds, Data),
     AlertsMap = #{<<"list">> => Alerts},
@@ -278,7 +278,7 @@ update(ObjId, Data, #admin_session{user_id=UserId}=Session) ->
     case nkdomain:update(ObjId, Base) of
         {ok, _} ->
             ?LLOG(notice, "domain ~s updated", [ObjId]),
-            case nkdomain_domain:set_config(ObjId, <<"default_channels_", ClientId/binary>>, DefChanMap) of
+            case nkdomain_domain:set_config(ObjId, <<"default_conversations_", ClientId/binary>>, DefConvMap) of
                 ok ->
                     case nkdomain_domain:set_config(ObjId, <<"alerts_", ClientId/binary>>, AlertsMap) of
                         ok ->
@@ -371,15 +371,15 @@ get_alerts([Id|Ids], Data, Acc) ->
             get_alerts(Ids, Data, Acc);
         _ ->
             Msg = maps:get(<<"alert_message_", Id/binary>>, Data, <<>>),
-            Channels = maps:get(<<"alert_channels_", Id/binary>>, Data, []),
-            ChannelsList = case binary:split(Channels, <<",">>, [global]) of
+            Convs = maps:get(<<"alert_convs_", Id/binary>>, Data, []),
+            ConvsList = case binary:split(Convs, <<",">>, [global]) of
                 [<<>>] ->
                     [];
                 Other ->
-                    Other
+                    lists:filter(fun(L) -> L =/= <<>> end, Other)
             end,
             Check = maps:get(<<"alert_checkbox_", Id/binary>>, Data, false),
-            case {Msg, ChannelsList} of
+            case {Msg, ConvsList} of
                 {<<>>, _} ->
                     get_alerts(Ids, Data, Acc);
                 {_, []} ->
@@ -387,7 +387,7 @@ get_alerts([Id|Ids], Data, Acc) ->
                 _ ->
                     Alert = #{
                         <<"text">> => Msg,
-                        <<"channels">> => ChannelsList,
+                        <<"conversations">> => ConvsList,
                         <<"enabled">> => Check
                     },
                     get_alerts(Ids, Data, [Alert|Acc])
@@ -417,7 +417,7 @@ get_alert_button(FormId, Pos, DisabledLabel, DisabledIcon, EnabledLabel, Enabled
                 if (form && form.elements) {
                     var alert_check = form.elements.alert_checkbox_", PosBin/binary, ";
                     var alert_msg = form.elements.alert_message_", PosBin/binary, ";
-                    var alert_chan = form.elements.alert_channels_", PosBin/binary, ";
+                    var alert_chan = form.elements.alert_convs_", PosBin/binary, ";
                     if (!this.getValue()) {
                         alert_check.hide();
                         alert_msg.hide();
