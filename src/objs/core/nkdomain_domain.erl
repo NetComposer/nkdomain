@@ -151,16 +151,24 @@ set_default(DomainId, Key, Val) when is_map(Val) ->
 -spec get_recursive_config(nkdomain:id(), Key::binary(), list()) ->
     {ok, list()} | {error, term()}.
 
+get_recursive_config(<<"/">>, Key, Base) ->
+    get_recursive_config(<<"root">>, Key, Base);
+
 get_recursive_config(<<"root">>, Key, Base) when is_list(Base) ->
     join_config_with(<<"root">>, Key, Base);
 
 get_recursive_config(DomainId, Key, Base) when is_list(Base) ->
-    {ok, NewBase} = join_config_with(DomainId, Key, Base),
-    case nkdomain:get_obj(DomainId) of
-        {ok, #{parent_id := ParentDomain}} ->
-            get_recursive_config(ParentDomain, Key, NewBase);
+    case join_config_with(DomainId, Key, Base) of
+        {ok, NewBase} ->
+            case nkdomain:get_obj(DomainId) of
+                {ok, #{parent_id := ParentDomain}} ->
+                    get_recursive_config(ParentDomain, Key, NewBase);
+                {error, Error} ->
+                    lager:warning("nkdomain_domain:get_recursive_config Couldn't load parent for ~p", [DomainId]),
+                    {error, Error}
+            end;
         {error, Error} ->
-            lager:warning("nkdomain_domain:get_recursive_config Couldn't load parent for ~p", [DomainId]),
+            lager:warning("nkdomain_domain:get_recursive_config Couldn't load config for ~p", [DomainId]),
             {error, Error}
     end.
 
