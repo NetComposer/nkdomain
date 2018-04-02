@@ -41,7 +41,10 @@
 view(Obj, IsNew, #admin_session{user_id=UserId, domain_id=DefDomain, srv_id=SrvId}=Session) ->
     ObjId = maps:get(obj_id, Obj, <<>>),
     DomainId = maps:get(domain_id, Obj, DefDomain),
-    {ok, <<"domain">>, _, DomainPath, _} = nkdomain:find(DomainId),
+    DomainPath = case nkdomain_db:find(DomainId) of
+        #obj_id_ext{path=DP} -> DP;
+        _ -> <<>>
+    end,
     ObjName = maps:get(obj_name, Obj, <<>>),
     Name = maps:get(name, Obj, <<>>),
     Description = maps:get(description, Obj, <<>>),
@@ -63,22 +66,39 @@ view(Obj, IsNew, #admin_session{user_id=UserId, domain_id=DefDomain, srv_id=SrvI
     DefaultConvsBin = lists:join(<<",">>, DefaultConvs),
     DefaultConvsOpts = get_convs_opts(DefaultConvs),
     FormId = nkdomain_admin_util:make_obj_view_id(?DOMAIN_DOMAIN, ObjId),
-    HasAlerts = case DomainPath of
-        <<"/sipstorm/c4", _/binary>> -> %% TODO: Change to client specific domain
-            true;
+    AlertsStatusParent = get_domain_alerts_status(DomainId, ClientId),
+    AlertStatMap = maps:get(<<"alerts_status_", ClientId/binary>>, Configs, #{<<"list">> => []}),
+    #{<<"list">> := DefaultAlertStat} = AlertStatMap,
+    AlertsStatus = case DefaultAlertStat of
+        [B|_] when is_boolean(B) ->
+            B;
+        _ ->
+            true
+    end,
+    HasAlerts = case ClientId of
+        <<"sipstorm">> ->
+            AlertsStatusParent;
         _ ->
             false
+    end,
+    VisibleBatch = case IsNew or (not HasAlerts) or (not AlertsStatus) of
+        true ->
+            <<>>;
+        false ->
+            <<"alerts_config">>
     end,
     AlertList = maps:get(<<"alerts_", ClientId/binary>>, Configs, #{<<"list">> => []}),
     #{<<"list">> := Alerts} = AlertList,
     {FinalPos, AlertFields} = lists:foldl(fun(M, {Pos, Acc}) ->
         PosBin = nklib_util:to_binary(Pos),
-        Button = get_alert_button(FormId, PosBin, <<"Delete alert ", PosBin/binary>>, <<"trash">>, <<"Undo">>, <<"undo">>, false),
+        Button = get_alert_button(FormId, PosBin, <<"Delete alert ", PosBin/binary>>, <<"trash">>, <<"Undo">>, <<"undo">>, false, not AlertsStatusParent),
         Check = #{
             id => <<"alert_checkbox_", PosBin/binary>>,
             type => checkbox,
             label => <<"Is enabled?">>,
             value => maps:get(<<"enabled">>, M, true),
+            hidden => IsNew or (not HasAlerts),
+            batch => <<"alerts_config">>,
             editable => true
         },
         Convs = maps:get(<<"conversations">>, M, []),
@@ -96,6 +116,7 @@ view(Obj, IsNew, #admin_session{user_id=UserId, domain_id=DefDomain, srv_id=SrvI
             },
             suggest_template => <<"#name#">>,
             options => ConvsOpts,
+            batch => <<"alerts_config">>,
             required => true,
             editable => true
         },
@@ -104,6 +125,7 @@ view(Obj, IsNew, #admin_session{user_id=UserId, domain_id=DefDomain, srv_id=SrvI
             type => text,
             label => <<"Alert message ", PosBin/binary>>,
             value => maps:get(<<"text">>, M, <<>>),
+            batch => <<"alerts_config">>,
             required => true,
             editable => true
         },
@@ -114,13 +136,14 @@ view(Obj, IsNew, #admin_session{user_id=UserId, domain_id=DefDomain, srv_id=SrvI
     ),
     FinalPosBin = nklib_util:to_binary(FinalPos),
     NewAlertField = [
-        get_alert_button(FormId, FinalPosBin, <<"Cancel">>, <<"times">>, <<"Define new alert">>, <<"plus">>, true),
+        get_alert_button(FormId, FinalPosBin, <<"Cancel">>, <<"times">>, <<"Define new alert">>, <<"plus">>, true, not AlertsStatusParent),
         #{
             id => <<"alert_message_", FinalPosBin/binary>>,
             type => text,
             label => <<"New alert message">>,
             value => <<>>,
             required => true,
+            batch => <<"alerts_config">>,
             hidden => true,
             editable => true
         },
@@ -137,6 +160,7 @@ view(Obj, IsNew, #admin_session{user_id=UserId, domain_id=DefDomain, srv_id=SrvI
             suggest_template => <<"#name#">>,
             options => [],
             required => true,
+            batch => <<"alerts_config">>,
             hidden => true,
             editable => true
         },
@@ -145,6 +169,7 @@ view(Obj, IsNew, #admin_session{user_id=UserId, domain_id=DefDomain, srv_id=SrvI
             type => checkbox,
             label => <<"Is enabled?">>,
             value => true,
+            batch => <<"alerts_config">>,
             hidden => true,
             editable => true
         }
@@ -163,6 +188,7 @@ view(Obj, IsNew, #admin_session{user_id=UserId, domain_id=DefDomain, srv_id=SrvI
             #{type => delete, disabled => IsNew},
             #{type => save}
         ],
+        visibleBatch => VisibleBatch,
         groups => [
             #{
                 header => ?DOMAIN_DOMAIN,
@@ -183,10 +209,6 @@ view(Obj, IsNew, #admin_session{user_id=UserId, domain_id=DefDomain, srv_id=SrvI
                                 options => Opts
                             };
                         false ->
-                            DomainPath = case nkdomain_db:find(DomainId) of
-                                #obj_id_ext{path=DP} -> DP;
-                                _ -> <<>>
-                            end,
                             #{
                                 id => <<"domain">>,
                                 type => text,
@@ -238,12 +260,15 @@ view(Obj, IsNew, #admin_session{user_id=UserId, domain_id=DefDomain, srv_id=SrvI
                         options => DefaultConvsOpts,
                         hidden => IsNew,
                         editable => true
-                    }
+                    },
+                    get_alerts_status_button(FormId, <<"alerts_section">>, IsNew or (not HasAlerts), AlertsStatus, AlertsStatusParent)
                 ]
             },
             #{
+                id => <<"alerts_section">>,
                 header => <<"ALERTS">>,
-                hidden => IsNew or (not HasAlerts),
+                batch => <<"alerts_config">>,
+                hidden => IsNew or (not HasAlerts) or (not AlertsStatus),
                 values => AlertFields2
             },
             nkadmin_webix_form:creation_fields(Obj, IsNew)
@@ -274,18 +299,37 @@ update(ObjId, Data, #admin_session{user_id=UserId}=Session) ->
     AlertIds = filter_by_prefix(<<"alert_message_">>, maps:keys(Data)),
     Alerts = get_alerts(AlertIds, Data),
     AlertsMap = #{<<"list">> => Alerts},
+    AlertsStatus = case Data of
+        #{<<"alerts_status_button">> := true} ->
+            true;
+        _ ->
+            false
+    end,
+    AlertsStatusMap = #{<<"list">> => [AlertsStatus]},
     ClientId = nkdomain_admin_util:get_client_id(Session),
     case nkdomain:update(ObjId, Base) of
         {ok, _} ->
             ?LLOG(notice, "domain ~s updated", [ObjId]),
             case nkdomain_domain:set_config(ObjId, <<"default_conversations_", ClientId/binary>>, DefConvMap) of
                 ok ->
-                    case nkdomain_domain:set_config(ObjId, <<"alerts_", ClientId/binary>>, AlertsMap) of
+                    case AlertsStatus of
+                        true ->
+                            case nkdomain_domain:set_config(ObjId, <<"alerts_", ClientId/binary>>, AlertsMap) of
+                                ok ->
+                                    ok;
+                                {error, Error} ->
+                                    ?LLOG(notice, "could not update domain ~s: ~p", [ObjId, Error]),
+                                    {error, Error}
+                            end;
+                        _ ->
+                            ok
+                    end,
+                    case nkdomain_domain:set_config(ObjId, <<"alerts_status_", ClientId/binary>>, AlertsStatusMap) of
                         ok ->
                             ok;
-                        {error, Error} ->
-                            ?LLOG(notice, "could not update domain ~s: ~p", [ObjId, Error]),
-                            {error, Error}
+                        {error, Error2} ->
+                            ?LLOG(notice, "could not update domain ~s: ~p", [ObjId, Error2]),
+                            {error, Error2}
                     end;
                 {error, Error} ->
                     ?LLOG(notice, "could not update domain ~s: ~p", [ObjId, Error]),
@@ -396,7 +440,7 @@ get_alerts([Id|Ids], Data, Acc) ->
 
 
 %% @private
-get_alert_button(FormId, Pos, DisabledLabel, DisabledIcon, EnabledLabel, EnabledIcon, State) ->
+get_alert_button(FormId, Pos, DisabledLabel, DisabledIcon, EnabledLabel, EnabledIcon, State, Enabled) ->
     PosBin = nklib_util:to_binary(Pos),
     {DefaultLabel, DefaultIcon} = case State of
         false ->
@@ -411,6 +455,8 @@ get_alert_button(FormId, Pos, DisabledLabel, DisabledIcon, EnabledLabel, Enabled
         button_icon => DefaultIcon,
         value => State,
         label => <<DefaultLabel/binary>>,
+        batch => <<"alerts_config">>,
+        disabled => not Enabled,
         onClick => <<"
             function() {
                 var form = $$('", FormId/binary, "');
@@ -439,3 +485,76 @@ get_alert_button(FormId, Pos, DisabledLabel, DisabledIcon, EnabledLabel, Enabled
             }
         ">>
     }.
+
+%% @private
+get_alerts_status_button(FormId, SectionId, Hidden, Status, Enabled) ->
+    EnabledLabel = <<"Disable alerts">>,
+    DisabledLabel = <<"Enable alerts">>,
+    EnabledIcon = <<"fa-ban">>,
+    DisabledIcon = <<"fa-circle-thin">>,
+    {Label, Icon} = case Status of
+        true ->
+            {EnabledLabel, EnabledIcon};
+        _ ->
+            {DisabledLabel, DisabledIcon}
+    end,
+    #{
+        id => <<"alerts_status_button">>,
+        type => button,
+        button_type => <<"iconButton">>,
+        button_icon => Icon,
+        value => Status,
+        label => Label,
+        hidden => Hidden,
+        disabled => not Enabled,
+        onClick => <<"
+            function() {
+                var form = $$('", FormId/binary, "');
+                var section = $$('", SectionId/binary, "');
+                if (form && section) {
+                    if (!this.getValue()) {
+                        this.setValue(true);
+                        this.data.label = '", EnabledLabel/binary, "';
+                        this.data.icon = '", EnabledIcon/binary, "';
+                        this.refresh();
+                        form.showBatch('alerts_config');
+                        section.showBatch('alerts_config');
+                        var values = form.getValues({disabled:true, hidden:true});
+                        var i = 1;
+                        while (values && values.hasOwnProperty('alert_button_'+i)) {
+                            if (!values['alert_button_'+i]) {
+                                // SHOWING BUTTON i
+                                form.elements['alert_message_'+i].show();
+                                form.elements['alert_convs_'+i].show();
+                                form.elements['alert_checkbox_'+i].show();
+                            } else {
+                                // HIDING BUTTON i
+                                form.elements['alert_message_'+i].hide();
+                                form.elements['alert_convs_'+i].hide();
+                                form.elements['alert_checkbox_'+i].hide();
+                            }
+                            i++;
+                        }
+                    } else {
+                        this.setValue(false);
+                        this.data.label = '", DisabledLabel/binary, "';
+                        this.data.icon = '", DisabledIcon/binary, "';
+                        this.refresh();
+                        form.showBatch('');
+                        section.showBatch('');
+                    }
+                }
+            }
+        ">>
+    }.
+
+%% @private
+get_domain_alerts_status(Domain, ClientId) ->
+    case nkdomain_domain:get_recursive_config(Domain, <<"alerts_status_", ClientId/binary>>, []) of
+        {ok, List} ->
+            DefaultAlerts = lists:flatten([Cs || {<<"list">>, Cs} <- List]),
+            lists:foldl(fun(L, Acc) -> L and Acc end, true, DefaultAlerts);
+        {error, Error} ->
+            ?LLOG(error, "get_domain_alerts_status: ~p", [Error]),
+            false
+    end.
