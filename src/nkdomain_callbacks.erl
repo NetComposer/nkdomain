@@ -1062,17 +1062,17 @@ nkservice_rest_http(<<"nkroot_graphql">>, Method, Path, Req) ->
 
 nkservice_rest_http(_Id, get, [<<"_file">>, FileId], Req) ->
     case nkdomain_file_obj:http_get(FileId, Req) of
-        {ok, CT, Bin} ->
-            {http, 200, [{<<"Content-Type">>, CT}], Bin};
+        {ok, CT, Bin, Req2} ->
+            {http, 200, [{<<"Content-Type">>, CT}], Bin, Req2};
         {error, Error} ->
             nkservice_rest_http:reply_json({error, Error}, Req)
     end;
 
 nkservice_rest_http(_Id, post, [<<"_file">>], Req) ->
     case nkdomain_file_obj:http_post(Req) of
-        {ok, ObjId, Path, _Obj} ->
+        {ok, ObjId, Path, _Obj, Req2} ->
             Reply = #{obj_id=>ObjId, path=>Path},
-            nkservice_rest_http:reply_json({ok, Reply}, Req);
+            nkservice_rest_http:reply_json({ok, Reply}, Req2);
         {error, Error} ->
             nkservice_rest_http:reply_json({error, Error}, Req)
     end;
