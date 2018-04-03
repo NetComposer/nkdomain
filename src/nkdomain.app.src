@@ -9,18 +9,15 @@
         yamerl,
         nkrole,
         nkservice,
-        nkevent,
-        nkapi,
         nkelastic,
         nkmail,
-        nkfile,
-        nkadmin,
-        nktranscoder,
-        nkimage,
-        p1_pgsql,
-        graphql,
-        mnesia,
-        iso8601
+        nkfile
+        %nkadmin,
+        %graphql,
+        %iso8601
+        %nktranscoder,
+        %nkimage,
+        %nkevent,
     ]},
     {env, [
     ]}
