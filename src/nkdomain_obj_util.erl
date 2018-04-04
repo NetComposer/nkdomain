@@ -150,7 +150,11 @@ search_syntax(Base) ->
             #{
                 fields => {list, binary},
                 default_operator => {atom, ['OR', 'AND']}
-            }
+            },
+        get_deleted => boolean,
+        '__defaults' => #{
+            get_deleted => false
+        }
     }.
 
 
