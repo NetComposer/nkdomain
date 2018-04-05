@@ -389,18 +389,24 @@ sync_op({check_pass, _Pass}, _From, #obj_state{is_enabled=false}=State) ->
 
 sync_op({check_pass, Pass}, _From, #obj_state{id=Id, obj=Obj}=State) ->
     #obj_id_ext{obj_id=UserId} = Id,
-    Reply = case Obj of
-        #{domain_id:=DomainId, ?DOMAIN_USER:=#{password:=UserPass}} ->
-            case UserPass of
-                Pass ->
-                    {true, UserId, DomainId};
-                _ ->
-                    false
-            end;
-        #{domain_id:=DomainId} ->
-            {true, UserId, DomainId}
+    Tags = maps:get(tags, Obj, []),
+    Reply = case lists:member(?TAG_DEACTIVATED, Tags) of
+        true ->
+            {error, object_is_disabled};
+        false ->
+            case Obj of
+            #{domain_id:=DomainId, ?DOMAIN_USER:=#{password:=UserPass}} ->
+                case UserPass of
+                    Pass ->
+                        {ok, {true, UserId, DomainId}};
+                    _ ->
+                        {ok, false}
+                end;
+            #{domain_id:=DomainId} ->
+                {ok, {true, UserId, DomainId}}
+        end
     end,
-    {reply, {ok, Reply}, State};
+    {reply, Reply, State};
 
 sync_op({check_device, _Pass}, _From, #obj_state{is_enabled=false}=State) ->
     {reply, {error, object_is_disabled}, State};
