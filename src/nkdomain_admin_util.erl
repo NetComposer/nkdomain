@@ -295,20 +295,14 @@ is_authorized(<<"admin">>) ->
     true;
 
 is_authorized(UserId) ->
-    case nkdomain:get_obj(UserId) of
-        {ok, User} ->
-            Tags = maps:get(tags, User, []),
-            lists:member(<<"admin">>, Tags);
-        {error, _Error} ->
-            false
-    end.
+    has_tag(UserId, ?TAG_ADMIN).
 
 
 %% @doc
-has_tag(UserId, Tag) ->
-    case nkdomain:get_obj(UserId) of
-        {ok, User} ->
-            Tags = maps:get(tags, User, []),
+has_tag(ObjId, Tag) ->
+    case nkdomain:get_obj(ObjId) of
+        {ok, Obj} ->
+            Tags = maps:get(tags, Obj, []),
             lists:member(Tag, Tags);
         {error, _Error} ->
             false

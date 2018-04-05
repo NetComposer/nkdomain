@@ -129,8 +129,8 @@ view(Obj, IsNew, #admin_session{user_id=UserId, domain_id=Domain}=Session) ->
                         type => multicombo,
                         label => <<"Tags">>,
                         value => binary:list_to_bin(lists:join(<<",">>, Tags)),
-                        options => [#{id => <<"admin">>, value => <<"admin">>}],
-                        editable => true
+                        options => [?TAG_ADMIN, ?TAG_DEACTIVATED],
+                        editable => not IsAdminObj
                     }
                 ]
             },
@@ -232,11 +232,13 @@ update(ObjId, Data, #admin_session{user_id=UserId}=_Session) ->
             UserUpdate1#{password=>Pass}
     end,
     Base = maps:with([<<"icon_id">>], Data),
-    Base2 = case nkdomain_admin_util:is_authorized(UserId) of
-        true ->
+    Base2 = case {ObjId, nkdomain_admin_util:is_authorized(UserId)} of
+        {<<"admin">>, true} ->
+            Base#{?DOMAIN_USER => UserUpdate2};
+        {_, true} ->
             Tags = binary:split(TagsStr, <<",">>, [global]),
             Base#{tags => Tags, ?DOMAIN_USER => UserUpdate2};
-        false ->
+        {_, false} ->
             Base#{?DOMAIN_USER => UserUpdate2}
     end,
     case nkdomain:update(ObjId, Base2) of
