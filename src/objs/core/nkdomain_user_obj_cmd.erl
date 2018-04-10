@@ -58,12 +58,13 @@ cmd(<<"get_info">>, #nkreq{srv_id=SrvId, data=Data}=Req) ->
 cmd(<<"get_token">>, Req) ->
     #nkreq{
         session_id = SessId,
-        session_meta = SessMeta
+        session_meta = SessMeta,
+        data = #{id := UserId}
     } = Req,
     SessMeta2 = maps:with([session_id, local, remote], SessMeta),
     SessMeta3 = SessMeta2#{session_id=>SessId},
     Req2 = Req#nkreq{session_meta = SessMeta3},
-    case nkdomain_api_util:token_login(Req2) of
+    case nkdomain_api_util:token_login(UserId, Req2) of
         {ok, TokenId, TTL} ->
             {ok, #{<<"token_id">>=>TokenId, <<"ttl">>=>TTL}};
         {error, Error} ->
