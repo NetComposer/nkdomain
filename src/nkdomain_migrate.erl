@@ -28,6 +28,9 @@
 -export([move_users_from_to/2]).
 -include("nkdomain.hrl").
 
+-define(MAX_TRIES, 5).
+-define(WAIT_TIME, 2000).
+
 -define(LLOG(Type, Txt, Args),
     lager:Type("NkDOMAIN migrate: "++Txt, Args)).
 
@@ -150,7 +153,7 @@ move_users_from_to(FromDomain, ToDomain) ->
         {ok, {FromId, FromPath}, {ToId, ToPath}} ->
             Res = case nkdomain_store_es_util:get_opts() of
                 {ok, ESOpts} ->
-                    case nkdomain_db:iterate(core, {query_paths, FromId, #{type=>?DOMAIN_USER, deep=>true, sort=>path, get_deleted=>true}}, move_fun(ESOpts, ?DOMAIN_USER, FromId, FromPath, ToId, ToPath), 0) of
+                    case nkdomain_db:iterate(core, {query_paths, FromId, #{type=>?DOMAIN_USER, deep=>false, sort=>path, get_deleted=>true}}, move_fun(ESOpts, ?DOMAIN_USER, FromId, FromPath, ToId, ToPath), 0) of
                         {ok, Count} ->
                             {ok, Count};
                         {error, Error2} ->
@@ -196,7 +199,7 @@ move_fun(ESOpts, Type, FromId, _FromPath, ToId, ToPath) ->
                         Acc;
                     {ok, #{<<"domain_id">>:=FromId, <<"parent_id">>:=FromId, <<"obj_name">>:=ObjName, <<"path">>:=OldPath}=Obj, _} ->
                         NewPath = case ToPath of
-                            <<"/">> ->
+                            <<$/>> ->
                                 <<$/, (nkdomain_util:class(Type))/binary, $/, ObjName/binary>>;
                             _ ->
                                 <<ToPath/binary, $/, (nkdomain_util:class(Type))/binary, $/, ObjName/binary>>
@@ -236,7 +239,7 @@ move_fun(ESOpts, Type, FromId, _FromPath, ToId, ToPath) ->
 
 %% @private
 wait_for_unload(DomainPath) ->
-    wait_for_unload(DomainPath, 1, #{wait_time => 2000, max_tries => 5}).
+    wait_for_unload(DomainPath, 1, #{wait_time => ?WAIT_TIME, max_tries => ?MAX_TRIES}).
 
 wait_for_unload(_, Tries, #{max_tries := MaxTries}) when Tries > MaxTries ->
     ?LLOG(error, "Maximum number of tries reached", []),
@@ -262,7 +265,7 @@ is_loaded(_, _, []) ->
 
 is_loaded(DomainPath, DomainSize, [{_Type, _ObjId, Path, _Pid}|LoadedObjs]) ->
     case Path of
-        <<DomainPath:DomainSize/binary, "/", _/binary>> ->
+        <<DomainPath:DomainSize/binary, $/, _/binary>> ->
             ?LLOG(notice, "Found ~p", [Path]),
             true;
         _ ->
