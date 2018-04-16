@@ -228,18 +228,29 @@ move_fun(ESOpts, Type, FromId, _FromPath, ToId, ToPath) ->
                     {ok, #{<<"obj_id">>:=<<"admin">>}, _} ->
                         ?LLOG(warning, "Ignoring object ~s (~s)", [Path, ObjId]),
                         Acc;
-                    {ok, #{<<"domain_id">>:=FromId, <<"parent_id">>:=FromId, <<"obj_name">>:=ObjName, <<"path">>:=OldPath}=Obj, _} ->
+                    {ok, #{<<"domain_id">>:=FromId, <<"parent_id">>:=ParentId, <<"obj_name">>:=ObjName, <<"path">>:=OldPath}=Obj, _} ->
                         NewPath = case ToPath of
                             <<$/>> ->
                                 <<$/, (nkdomain_util:class(Type))/binary, $/, ObjName/binary>>;
                             _ ->
                                 <<ToPath/binary, $/, (nkdomain_util:class(Type))/binary, $/, ObjName/binary>>
                         end,
-                        Obj2 = Obj#{
-                            <<"domain_id">> => ToId,
-                            <<"parent_id">> => ToId,
-                            <<"path">> => NewPath
-                        },
+                        Obj2 = case FromId =:= ParentId of
+                            true ->
+                                % Original object parent_id and domain_id match
+                                Obj#{
+                                    <<"domain_id">> => ToId,
+                                    <<"parent_id">> => ToId,
+                                    <<"path">> => NewPath
+                                };
+                            false ->
+                                % Original object parent_id is different from domain_id
+                                % Keep original parent_id and change domain_id
+                                Obj#{
+                                    <<"domain_id">> => ToId,
+                                    <<"path">> => NewPath
+                                }
+                        end,
                         case nkdomain_db:find(NewPath) of 
                             #obj_id_ext{obj_id=_} ->
                                 ?LLOG(error, "New path ~p already exists", [NewPath]),
@@ -273,7 +284,7 @@ move_users([], _, _, _, Completed, Failed) ->
     {ok, {lists:reverse(Completed), lists:reverse(Failed)}};
 
 move_users([User|Users], DomainId, DomainPath, ESOpts, Completed, Failed) ->
-    case move_user(User, DomainId, DomainPath, ESOpts) of
+    case move_object(User, DomainId, DomainPath, ESOpts) of
         ok ->
             move_users(Users, DomainId, DomainPath, ESOpts, [User|Completed], Failed);
         {error, Error} ->
@@ -284,34 +295,45 @@ move_users([User|Users], DomainId, DomainPath, ESOpts, Completed, Failed) ->
 move_user(Obj, Domain, ESOpts) ->
     case nkdomain_db:load(Domain) of
         #obj_id_ext{obj_id=DomainId, path=DomainPath, type=?DOMAIN_DOMAIN} ->
-            move_user(Obj, DomainId, DomainPath, ESOpts);
+            move_object(Obj, DomainId, DomainPath, ESOpts);
         #obj_id_ext{} ->
             {error, {domain_unknown, Domain}};
         {error, Error} ->
             {error, Error}
     end.
 
-move_user(Obj, DomainId, DomainPath, ESOpts) ->
+move_object(Obj, DomainId, DomainPath, ESOpts) ->
     case nkelastic:get(Obj, ESOpts) of
         {ok, #{<<"obj_id">>:=<<"admin">>}, _} ->
             {error, unauthorized};
         {ok, #{<<"domain_id">>:=DomainId}, _} ->
             ok;
-        {ok, #{<<"obj_id">>:=ObjId, <<"type">>:=?DOMAIN_USER, <<"domain_id">>:=FromId, <<"parent_id">>:=FromId, <<"obj_name">>:=ObjName, <<"path">>:=OldPath}=ObjData, _} -> 
+        {ok, #{<<"obj_id">>:=ObjId, <<"type">>:=Type, <<"domain_id">>:=FromId, <<"parent_id">>:=ParentId, <<"obj_name">>:=ObjName, <<"path">>:=OldPath}=ObjData, _} -> 
             %% Disable origin domain and unload its childs
             Result = case disable_and_unload_domain(FromId) of
                 ok ->
                     NewPath = case DomainPath of
                         <<$/>> ->
-                            <<$/, (nkdomain_util:class(?DOMAIN_USER))/binary, $/, ObjName/binary>>;
+                            <<$/, (nkdomain_util:class(Type))/binary, $/, ObjName/binary>>;
                         _ ->
-                            <<DomainPath/binary, $/, (nkdomain_util:class(?DOMAIN_USER))/binary, $/, ObjName/binary>>
+                            <<DomainPath/binary, $/, (nkdomain_util:class(Type))/binary, $/, ObjName/binary>>
                     end,
-                    ObjData2 = ObjData#{
-                        <<"domain_id">> => DomainId,
-                        <<"parent_id">> => DomainId,
-                        <<"path">> => NewPath
-                    },
+                    ObjData2 = case FromId =:= ParentId of
+                        true ->
+                            % Original object parent_id and domain_id match
+                            ObjData#{
+                                <<"domain_id">> => DomainId,
+                                <<"parent_id">> => DomainId,
+                                <<"path">> => NewPath
+                            };
+                        false ->
+                            % Original object parent_id is different from domain_id
+                            % Keep original parent_id and change domain_id
+                            ObjData#{
+                                <<"domain_id">> => DomainId,
+                                <<"path">> => NewPath
+                            }
+                    end,
                     case nkdomain_db:find(NewPath) of
                         #obj_id_ext{obj_id=_} ->
                             ?LLOG(error, "New path ~p already exists", [NewPath]),
