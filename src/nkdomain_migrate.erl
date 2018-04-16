@@ -25,7 +25,7 @@
 
 -export([import_7_to_8/1, print/1]).
 -export([import_8_to_9/1]).
--export([move_users_from_to/2]).
+-export([move_users_from_to/2, move_user/2, move_users/2]).
 -include("nkdomain.hrl").
 
 -define(MAX_TRIES, 5).
@@ -169,6 +169,37 @@ move_users_from_to(FromDomain, ToDomain) ->
     end.
 
 
+%% @doc
+move_users(Ids, Domain) ->
+    case nkdomain_store_es_util:get_opts() of
+        {ok, ESOpts} ->
+            case nkdomain_db:load(Domain) of
+                #obj_id_ext{obj_id=DomainId, path=DomainPath, type=?DOMAIN_DOMAIN} ->
+                    {ok, {Completed, Failed}} = move_users(Ids, DomainId, DomainPath, ESOpts, [], []),
+                    {ok, #{completed => Completed, failed => Failed}};
+                #obj_id_ext{} ->
+                    {error, {domain_unknown, Domain}};
+                {error, Error} ->
+                    {error, Error}
+            end;
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
+%% @doc
+move_user(<<"admin">>, _) ->
+    {error, unauthorized};
+
+move_user(Obj, Domain) ->
+    case nkdomain_store_es_util:get_opts() of
+        {ok, ESOpts} ->
+            move_user(Obj, Domain, ESOpts);
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
 %% ===================================================================
 %% Util
 %% ===================================================================
@@ -235,6 +266,102 @@ move_fun(ESOpts, Type, FromId, _FromPath, ToId, ToPath) ->
                 Acc
         end,
         {ok, Acc2}
+    end.
+
+%% @private
+move_users([], _, _, _, Completed, Failed) ->
+    {ok, {lists:reverse(Completed), lists:reverse(Failed)}};
+
+move_users([User|Users], DomainId, DomainPath, ESOpts, Completed, Failed) ->
+    case move_user(User, DomainId, DomainPath, ESOpts) of
+        ok ->
+            move_users(Users, DomainId, DomainPath, ESOpts, [User|Completed], Failed);
+        {error, Error} ->
+            move_users(Users, DomainId, DomainPath, ESOpts, Completed, [{User, Error}|Failed])
+    end.
+
+%% @private
+move_user(Obj, Domain, ESOpts) ->
+    case nkdomain_db:load(Domain) of
+        #obj_id_ext{obj_id=DomainId, path=DomainPath, type=?DOMAIN_DOMAIN} ->
+            move_user(Obj, DomainId, DomainPath, ESOpts);
+        #obj_id_ext{} ->
+            {error, {domain_unknown, Domain}};
+        {error, Error} ->
+            {error, Error}
+    end.
+
+move_user(Obj, DomainId, DomainPath, ESOpts) ->
+    case nkelastic:get(Obj, ESOpts) of
+        {ok, #{<<"obj_id">>:=<<"admin">>}, _} ->
+            {error, unauthorized};
+        {ok, #{<<"domain_id">>:=DomainId}, _} ->
+            ok;
+        {ok, #{<<"obj_id">>:=ObjId, <<"type">>:=?DOMAIN_USER, <<"domain_id">>:=FromId, <<"parent_id">>:=FromId, <<"obj_name">>:=ObjName, <<"path">>:=OldPath}=ObjData, _} -> 
+            %% Disable origin domain and unload its childs
+            Result = case disable_and_unload_domain(FromId) of
+                ok ->
+                    NewPath = case DomainPath of
+                        <<$/>> ->
+                            <<$/, (nkdomain_util:class(?DOMAIN_USER))/binary, $/, ObjName/binary>>;
+                        _ ->
+                            <<DomainPath/binary, $/, (nkdomain_util:class(?DOMAIN_USER))/binary, $/, ObjName/binary>>
+                    end,
+                    ObjData2 = ObjData#{
+                        <<"domain_id">> => DomainId,
+                        <<"parent_id">> => DomainId,
+                        <<"path">> => NewPath
+                    },
+                    case nkdomain_db:find(NewPath) of
+                        #obj_id_ext{obj_id=_} ->
+                            ?LLOG(error, "New path ~p already exists", [NewPath]),
+                            {error, {object_already_exists, NewPath}};
+                        {error, _Error} ->
+                            %% NewPath is not used
+                            case nkelastic:put(ObjId, ObjData2, ESOpts) of
+                                {ok, _} ->
+                                    ?LLOG(info, "Moved object ~p from ~p to ~p", [ObjId, OldPath, NewPath]),
+                                    ok;
+                                {error, Error} ->
+                                    ?LLOG(error, "~p while saving modified object ~p", [Error, ObjId]),
+                                    {error, Error}
+                            end
+                    end;
+                {error, Error} ->
+                    {error, Error}
+            end,
+            enable_domain(FromId),
+            Result;
+        {ok, #{}, _} ->
+            {error, invalid_object_type};
+        {error, Error} ->
+            {error, Error}
+    end.
+
+%% @private
+enable_domain(Domain) ->
+    nkdomain:enable(Domain, true).
+
+%% @private
+disable_and_unload_domain(Domain) ->
+    case nkdomain_db:load(Domain) of
+        #obj_id_ext{obj_id=DomainId, path=DomainPath, type=?DOMAIN_DOMAIN} ->
+            %% Disable domain
+            case nkdomain:enable(DomainId, false) of
+                ok ->
+                    %% Unload domain childs
+                    nkdomain_domain:unload_childs(DomainId),
+                    case wait_for_unload(DomainPath) of
+                        ok ->
+                            ok;
+                        {error, Error} ->
+                            {error, Error}
+                    end;
+                {error, Error} ->
+                    {error, Error}
+            end;
+        #obj_id_ext{} ->
+            {error, {domain_unknown, Domain}}
     end.
 
 %% @private
