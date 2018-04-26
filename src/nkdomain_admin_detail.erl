@@ -128,6 +128,22 @@ element_action([?ID_ADMIN_DETAIL_OBJ_VIEW, Type, ObjId], save, Value, Updates, #
 element_action([?ID_ADMIN_DETAIL_OBJ_SUBVIEW, Type, ObjId, SubType], selected, _Value, Updates, Session) ->
     obj_view_subview(Type, ObjId, SubType, Updates, Session);
 
+element_action([?ID_ADMIN_FRAME_DOMAIN_NAME], selected, _Value, Updates, #admin_session{domain_id=DomainId, base_path=BasePath}=Session) ->
+    {Updates2, Session2} = selected_obj(DomainId, ?DOMAIN_DOMAIN, BasePath, true, Updates, Session),
+    % We force the URL to be "/"
+    {Updates3, Session3} = nkadmin_util:update_url(Updates2, Session2#admin_session{url = <<"/">>}),
+    {ok, Updates3, Session3};
+
+element_action([?ID_ADMIN_FRAME_USER_MENU_ACCOUNT], selected, _Value, Updates, #admin_session{user_id=UserId}=Session) ->
+    case nkdomain_db:find(UserId) of
+        #obj_id_ext{type=Type, path=Path} ->
+            {Updates2, Session2} = selected_obj(UserId, Type, Path, true, Updates, Session),
+            {Updates3, Session3} = nkadmin_util:update_url(Updates2, Session2),
+            {ok, Updates3, Session3};
+        {error, _Error} ->
+            lager:error("NKLOG Admin User not found ~p", [_Error]),
+            {ok, Updates, Session}
+    end;
 
 %%element_action([?ADMIN_DETAIL_OBJ_VIEW, <<"user">>, _Id, <<"messages">>]=M, selected, _Value, Updates, Session) ->
 %%    lager:error("NKLOG SELECTEC"),
