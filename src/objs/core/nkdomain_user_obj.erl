@@ -527,6 +527,15 @@ sync_op({get_presence, Type, DomainPath}, _From, State) ->
     Reply = do_get_presence(Type, DomainPath, State),
     {reply, Reply, State};
 
+sync_op({get_push_devices, SrvId}, _From, State) ->
+    Devices = find_push_devices(SrvId, State),
+    PushDevices = [
+        PushData#{
+            updated_time => UpdatedTime
+        }
+    || #push_device{push_data = PushData, updated_time = UpdatedTime} <- Devices],
+    {reply, {ok, PushDevices}, State};
+
 sync_op(_Op, _From, _State) ->
     continue.
 
