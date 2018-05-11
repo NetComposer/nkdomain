@@ -132,7 +132,13 @@ object_init(#obj_state{id=ObjIdExt}=State) ->
     Ref = nkdomain_proc:monitor(),
     case ObjIdExt of
         #obj_id_ext{obj_id = <<"root">>} ->
-            ok = nkdomain_proc:register(ObjIdExt);
+            case nkdomain_proc:register(ObjIdExt) of
+                ok ->
+                    ok;
+                {error, {already_registered, OldPid}} ->
+                    ?LLOG(warning, "Already registered in ~p, new ~p old ~p", [ObjIdExt, OldPid, self()], State),
+                    error(already_registered1)
+            end;
         _ ->
             ok
     end,

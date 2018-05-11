@@ -115,7 +115,6 @@ start_link() ->
 
 
 -record(state, {
-    master_pid = undefined :: pid()
 }).
 
 
@@ -124,9 +123,8 @@ start_link() ->
     {ok, #state{}} | {error, term()}.
 
 init([]) ->
-    Master = find_master(100),
     ets:new(?MODULE, [named_table, protected]),
-    {ok, #state{master_pid=Master}}.
+    {ok, #state{}}.
 
 
 %% @private
@@ -140,16 +138,22 @@ handle_call({register, #obj_id_ext{obj_id=ObjId, path=Path, pid=Pid}=ObjIdExt}, 
             case do_find_path(Path) of
                 not_found ->
                     do_insert(ObjIdExt);
-                #obj_id_ext{pid=Pid} ->
+                #obj_id_ext{obj_id=ObjId, pid=Pid} ->
                     do_remove(ObjId),
                     do_insert(ObjIdExt);
-                #obj_id_ext{pid=OldPid} ->
+                #obj_id_ext{obj_id=ObjId, pid=OldPid} ->
+%%                    ?LLOG(warning, "registering ~p but ~p was already registered (~p)", [Pid, OldPid, Path]),
+%%                    do_remove(ObjId),
+%%                    do_insert(ObjIdExt)
                     {error, {already_registered, OldPid}}
             end;
-        #obj_id_ext{pid=Pid} ->
+        #obj_id_ext{obj_id=ObjId, pid=Pid} ->
             do_remove(ObjId),
             do_insert(ObjIdExt);
-        #obj_id_ext{pid=OldPid} ->
+        #obj_id_ext{obj_id=ObjId, pid=OldPid} ->
+%%            ?LLOG(warning, "registering ~p but ~p was already registered (~p)", [Pid, OldPid, Path]),
+%%            do_remove(ObjId),
+%%            do_insert(ObjIdExt)
             {error, {already_registered, OldPid}}
     end,
     {reply, Reply, State};
@@ -180,10 +184,6 @@ handle_cast(Msg, State) ->
 %% @private
 -spec handle_info(term(), #state{}) ->
     {noreply, #state{}} | {stop, term(), #state{}}.
-
-handle_info({'DOWN', _Ref, process, Pid, _Reason}, #state{master_pid=Pid}=State) ->
-    self() ! find_master,
-    {noreply, State#state{master_pid=undefined}};
 
 handle_info({'DOWN', _Ref, process, Pid, _Reason}, State) ->
     case ets:lookup(?MODULE, {pid, Pid}) of
@@ -223,27 +223,6 @@ terminate(_Reason, _State) ->
 %% ===================================================================
 %% Internal
 %% ===================================================================
-
-%% @private
-find_master(0) ->
-    error(no_master_process);
-
-find_master(Iters) ->
-    case global:whereis_name(?MODULE) of
-        Pid when is_pid(Pid) ->
-            monitor(process, Pid),
-            ?LLOG(notice, "new master is ~p", [Pid]),
-            Pid;
-        undefined ->
-            case global:register_name(?MODULE, self(), fun global:random_notify_name/3) of
-                yes ->
-                    ?LLOG(notice, "WE are the new master (~p)", [self()]),
-                    self();
-                no ->
-                    timer:sleep(100),
-                    find_master(Iters-1)
-            end
-    end.
 
 
 %% @private
@@ -296,7 +275,7 @@ do_remove(ObjId) ->
     term() | {error, timeout|process_not_found|object_not_found|term()}.
 
 do_call(Op) ->
-    do_call(Op, 5).
+    do_call(Op, 5000).
 
 
 %% @doc
@@ -304,32 +283,8 @@ do_call(Op) ->
     term() | {error, timeout|process_not_found|object_not_found|term()}.
 
 do_call(Op, Timeout) ->
-    do_call(Op, Timeout, 60).
+    gen_server:call(?MODULE, Op, Timeout).
 
-
-%% @private
-do_call(_Op, _Timeout, 0) ->
-    error(nkdomain_proc_master_not_found);
-
-do_call(Op, Timeout, Tries) ->
-    case global:whereis_name(?MODULE) of
-        Pid when is_pid(Pid) ->
-            case nkservice_util:call(Pid, Op, Timeout) of
-                {error, Error} when Error==timeout; Error==process_not_found ->
-                    do_call_retry(Op, Error, Timeout, Tries);
-                Other ->
-                    Other
-            end;
-        undefined ->
-            do_call_retry(Op, undefined, Timeout, Tries)
-    end.
-
-
-%% @private
-do_call_retry(Op, Error, Timeout, Tries) ->
-    ?LLOG(notice, "SyncOP failed (~p, ~p), retrying...", [Error, Op]),
-    timer:sleep(1000),
-    do_call(Op, Timeout, Tries-1).
 
 
 
