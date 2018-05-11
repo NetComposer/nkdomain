@@ -30,7 +30,7 @@
 -export([make_type_view_id/2, make_type_view_filter/2, make_obj_view_id/2, make_view_subview_id/3]).
 -export([make_confirm/2, make_msg/2, make_msg_ext/4, get_domains/2]).
 -export([get_size_bin/1]).
--export([is_authorized/1, get_client_id/1]).
+-export([is_authorized/1, has_tag/2, get_tags/1, get_client_id/1]).
 
 -include("nkdomain.hrl").
 -include("nkdomain_admin.hrl").
@@ -295,12 +295,27 @@ is_authorized(<<"admin">>) ->
     true;
 
 is_authorized(UserId) ->
-    case nkdomain:get_obj(UserId) of
-        {ok, User} ->
-            Tags = maps:get(tags, User, []),
-            lists:member(<<"admin">>, Tags);
+    has_tag(UserId, ?TAG_ADMIN).
+
+
+%% @doc
+has_tag(ObjId, Tag) ->
+    case nkdomain:get_obj(ObjId) of
+        {ok, Obj} ->
+            Tags = maps:get(tags, Obj, []),
+            lists:member(Tag, Tags);
         {error, _Error} ->
             false
+    end.
+
+
+%% @doc
+get_tags(ObjId) ->
+    case nkdomain:get_obj(ObjId) of
+        {ok, Obj} ->
+            {ok, maps:get(tags, Obj, [])};
+        {error, Error} ->
+            {error, Error}
     end.
 
 

@@ -94,7 +94,8 @@
 -export([get_sessions/1, get_sessions/2, get_presence/3, update_presence/3]).
 -export([register_session/5, unregister_session/2, launch_session_notifications/2, set_status/4, get_status/3]).
 -export([add_token_notification/4, remove_token_notification/3]).
--export([add_push_device/5, remove_push_device/2, send_push/3, remove_all_push_devices/1]).
+-export([add_push_device/5, remove_push_device/2, send_push/3, remove_all_push_devices/1,
+         get_push_devices/2]).
 -export([sync_op/2, async_op/2]).
 
 -export_type([events/0, push_msg/0, push_device_id/0, push_device_data/0]).
@@ -450,6 +451,11 @@ remove_push_device(Id, DeviceId) ->
 %% @doc
 remove_all_push_devices(Id) ->
     async_op(Id, {remove_push_devices}).
+
+
+%% @doc
+get_push_devices(Id, SrvId) ->
+    sync_op(Id, {get_push_devices, SrvId}).
 
 
 %% @doc

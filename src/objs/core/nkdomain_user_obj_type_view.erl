@@ -106,6 +106,7 @@ fields() ->
      <<"created_time">>,
      <<"created_by">>,
      <<"enabled">>,
+     <<"tags">>,
      <<"user.name">>, <<"user.surname">>, <<"user.email">>].
 
 
@@ -134,10 +135,14 @@ entry(Entry, Base) ->
           } = User
     } = Entry,
     Email = maps:get(<<"email">>, User, <<>>),
+    Tags = maps:get(<<"tags">>, Entry, []),
+    Activated = not lists:member(?TAG_DEACTIVATED, Tags),
     Base#{
         user_name => Name,              %% Column names
         user_surname => Surname,
-        email => Email
+        email => Email,
+        tags => Tags,
+        activated => Activated
     }.
 
 
