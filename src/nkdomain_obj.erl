@@ -88,7 +88,7 @@
         type => nkdomain:type(),                        %% Mandatory!
         schema_type => nkdomain_graphql:schema_type(),
         permanent => boolean(),
-        save_time => integer(),                         %% secs
+        save_time => integer(),                         %% msecs
         default_ttl => integer(),                       %% msecs
         stop_after_disabled => boolean(),               %% Default false
         remove_after_stop => boolean(),
