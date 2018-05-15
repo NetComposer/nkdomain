@@ -287,7 +287,7 @@ set_next_status_timer(Time, #obj_state{obj=Obj, next_status_timer=Timer}=State) 
 
 %% @private
 do_save_timer(#obj_state{is_dirty=true, object_info=Info, save_timer=undefined}=State) ->
-    Time = 1000 * maps:get(save_time, Info, ?DEFAULT_SAVE_TIME),
+    Time = maps:get(save_time, Info, ?DEFAULT_SAVE_TIME),
     Ref = erlang:send_after(Time, self(), nkdomain_obj_save_timer),
     State#obj_state{timer=Ref};
 
