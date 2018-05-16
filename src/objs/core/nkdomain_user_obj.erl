@@ -630,6 +630,10 @@ async_op({remove_push_devices}, State) ->
     State2 = do_remove_all_push_devices(State),
     {noreply, State2};
 
+async_op({remove_push_devices, SrvId}, State) ->
+    State2 = do_remove_push_devices(SrvId, State),
+    {noreply, State2};
+
 async_op(_Op, _State) ->
     continue.
 
@@ -920,7 +924,7 @@ add_push(DomainPath, SrvId, DeviceId, PushData, State) ->
                 domain_path = DomainPath,
                 srv_id = SrvId,
                 device_id = DeviceId,
-                push_data = PushData,
+                push_data = nkdomain_util:atom_keys_to_binary(PushData),
                 updated_time = Now
             }
     end,
@@ -939,6 +943,15 @@ remove_push(DeviceId, State) ->
 
 
 %% @private
+do_remove_push_devices(SrvId, State) ->
+    #obj_state{session=Session} = State,
+    #session{push_devices=Devices} = Session,
+    Devices2 = [Device || #push_device{srv_id=S}=Device <- Devices, S=/=SrvId],
+    Session2 = Session#session{push_devices = Devices2},
+    State#obj_state{session=Session2, is_dirty=true}.
+
+
+%% @private
 do_remove_all_push_devices(State) ->
     #obj_state{session=Session} = State,
     Session2 = Session#session{push_devices=[]},
@@ -947,13 +960,24 @@ do_remove_all_push_devices(State) ->
 
 %% @doc
 do_send_push(SrvId, Push, State) ->
-    Devices = find_push_devices(SrvId, State),
+    Devices = case is_push_available(SrvId, State) of
+        true ->
+            find_push_devices(SrvId, State);
+        false ->
+            []
+    end,
     lists:foreach(
         fun(#push_device{device_id=DeviceId, push_data=PushDevice}) ->
             ?LLOG(info, "sending PUSH (~s): ~p", [SrvId, Push]),
             SrvId:object_send_push(DeviceId, PushDevice, Push)
         end,
         Devices).
+
+
+%% @doc
+is_push_available(SrvId, #obj_state{obj=Obj}) ->
+    Tags = maps:get(tags, Obj, []),
+    not lists:member(?TAG_DEACTIVATED, Tags).
 
 
 %% @private
