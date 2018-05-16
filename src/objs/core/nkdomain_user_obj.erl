@@ -947,13 +947,24 @@ do_remove_all_push_devices(State) ->
 
 %% @doc
 do_send_push(SrvId, Push, State) ->
-    Devices = find_push_devices(SrvId, State),
+    Devices = case is_push_available(SrvId, State) of
+        true ->
+            find_push_devices(SrvId, State);
+        false ->
+            []
+    end,
     lists:foreach(
         fun(#push_device{device_id=DeviceId, push_data=PushDevice}) ->
             ?LLOG(info, "sending PUSH (~s): ~p", [SrvId, Push]),
             SrvId:object_send_push(DeviceId, PushDevice, Push)
         end,
         Devices).
+
+
+%% @doc
+is_push_available(SrvId, #obj_state{obj=Obj}) ->
+    Tags = maps:get(tags, Obj, []),
+    not lists:member(?TAG_DEACTIVATED, Tags).
 
 
 %% @private
