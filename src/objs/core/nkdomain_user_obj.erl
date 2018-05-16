@@ -630,6 +630,10 @@ async_op({remove_push_devices}, State) ->
     State2 = do_remove_all_push_devices(State),
     {noreply, State2};
 
+async_op({remove_push_devices, SrvId}, State) ->
+    State2 = do_remove_push_devices(SrvId, State),
+    {noreply, State2};
+
 async_op(_Op, _State) ->
     continue.
 
@@ -935,6 +939,15 @@ remove_push(DeviceId, State) ->
     #session{push_devices=PushDevices1} = Session,
     PushDevices2 = lists:keydelete(DeviceId, #push_device.device_id, PushDevices1),
     Session2 = Session#session{push_devices = PushDevices2},
+    State#obj_state{session=Session2, is_dirty=true}.
+
+
+%% @private
+do_remove_push_devices(SrvId, State) ->
+    #obj_state{session=Session} = State,
+    #session{push_devices=Devices} = Session,
+    Devices2 = [Device || #push_device{srv_id=S}=Device <- Devices, S=/=SrvId],
+    Session2 = Session#session{push_devices = Devices2},
     State#obj_state{session=Session2, is_dirty=true}.
 
 
