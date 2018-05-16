@@ -920,7 +920,7 @@ add_push(DomainPath, SrvId, DeviceId, PushData, State) ->
                 domain_path = DomainPath,
                 srv_id = SrvId,
                 device_id = DeviceId,
-                push_data = PushData,
+                push_data = nkdomain_util:atom_keys_to_binary(PushData),
                 updated_time = Now
             }
     end,

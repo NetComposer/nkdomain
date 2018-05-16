@@ -26,6 +26,7 @@
 -export([append/2, get_srv_id/1, add_destroyed/3]).
 -export([timestamp/0, remove_nulls/1]).
 -export([parse_obj_id/1, parse_obj_ids/1]).
+-export([atom_keys_to_binary/1]).
 -export_type([error/0]).
 
 -type error() ::
@@ -354,6 +355,14 @@ do_parse_obj_ids([Key|Rest], Acc) ->
         error ->
             error
     end.
+
+
+
+%% @doc
+atom_keys_to_binary(Map) ->
+    List = maps:to_list(Map),
+    List2 = [{to_bin(Key), Value} || {Key, Value} <- List],
+    maps:from_list(List2).
 
 
 
