@@ -286,7 +286,7 @@ view(Obj, IsNew, #admin_session{user_id=UserId, domain_id=DefDomain, srv_id=SrvI
 
 
 update(ObjId, Data, #admin_session{user_id=UserId}=Session) ->
-    ?LLOG(info, "NKLOG UPDATE ~p ~p", [ObjId, Data]),
+    %?LLOG(notice, "NKLOG UPDATE ~p ~p", [ObjId, Data]),
     Base = maps:with([<<"name">>, <<"description">>, <<"icon_id">>], Data),
     DefaultConvs = maps:get(<<"default_convs">>, Data, []),
     DefaultConvsList = case binary:split(DefaultConvs, <<",">>, [global]) of
@@ -342,7 +342,7 @@ update(ObjId, Data, #admin_session{user_id=UserId}=Session) ->
 
 
 create(Data, _Session) ->
-    ?LLOG(info, "NKLOG CREATE ~p", [Data]),
+    %?LLOG(notice, "NKLOG CREATE ~p", [Data]),
     #{
         <<"domain">> := DomainId,
         <<"obj_name">> := ObjName,

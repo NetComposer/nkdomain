@@ -286,7 +286,7 @@ update(ObjId, Data, _Session) ->
 
 
 create(Data, _Session) ->
-    %lager:error("NKLOG CREATE ~p", [Data]),
+    %lager:notice("NKLOG CREATE ~p", [Data]),
     #{
         <<"domain">> := DomainId,
         <<"obj_name">> := ObjName,
@@ -316,7 +316,7 @@ create(Data, _Session) ->
             config => Config
         }
     },
-    lager:error("NKLOG CREATE ~p", [Create]),
+    %lager:notice("NKLOG CREATE ~p", [Create]),
     case nkdomain_obj_make:create(Create) of
         {ok, #obj_id_ext{obj_id=ObjId}, []} ->
             {ok, ObjId};

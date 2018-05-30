@@ -222,7 +222,7 @@ view(Obj, IsNew, #admin_session{domain_id=Domain}=Session) ->
 
 
 update(ObjId, Data, _Session) ->
-    lager:error("NKLOG UPDATE ~p ~p", [ObjId, Data]),
+    %lager:notice("NKLOG UPDATE ~p ~p", [ObjId, Data]),
     #{
         <<"object_name">> := ObjName,
         <<"name">> := Name,
@@ -258,7 +258,7 @@ update(ObjId, Data, _Session) ->
 
 
 create(#{<<"icon_id">>:=ObjId}=Data, Session) ->
-    lager:error("NKLOG CREATE ~p", [Data]),
+    %lager:notice("NKLOG CREATE ~p", [Data]),
     % ObjId is the object_id of the uploaded file
     % That file was uploaded to the domain/file.store selected in the form
     case update(ObjId, Data, Session) of

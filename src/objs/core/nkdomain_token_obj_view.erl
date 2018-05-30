@@ -155,7 +155,7 @@ update(ObjId, Data, _Session) ->
 
 
 create(_Data, _Session) ->
-    %lager:error("NKLOG CREATE ~p", [Data]),
+    %lager:notice("NKLOG CREATE ~p", [Data]),
     {error, not_implemented}.
 
 %    #{
@@ -172,7 +172,7 @@ create(_Data, _Session) ->
 %            <<"input">> => NewInput
 %        }
 %    },
-%    lager:error("NKLOG CREATE ~p", [Create]),
+%    lager:notice("NKLOG CREATE ~p", [Create]),
 %    case nkdomain_obj_make:create(Create) of
 %        {ok, #obj_id_ext{obj_id=ObjId}, []} ->
 %            {ok, ObjId};

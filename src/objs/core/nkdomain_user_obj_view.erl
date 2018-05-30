@@ -258,7 +258,7 @@ update(ObjId, Data, #admin_session{user_id=UserId}=_Session) ->
 
 
 create(Data, _Session) ->
-    ?LLOG(info, "NKLOG CREATE ~p", [Data]),
+    %?LLOG(notice, "NKLOG CREATE ~p", [Data]),
     #{
         <<"domain">> := DomainId,
         <<"username">> := UserName,
