@@ -101,6 +101,26 @@ view(Obj, IsNew, #admin_session{user_id=UserId, domain_id=DefDomain, srv_id=SrvI
             batch => <<"alerts_config">>,
             editable => true
         },
+        PhoneValue = maps:get(<<"phone">>, M, <<>>),
+        HasPhone = (PhoneValue =/= <<>>) and maps:get(<<"call_phone">>, M, false),
+        Phone = #{
+            id => <<"alert_phone_", PosBin/binary>>,
+            type => text,
+            label => <<"Phone number">>,
+            value => PhoneValue,
+            required => false,
+            batch => <<"alerts_config">>,
+            editable => true
+        },
+        CallPhone = #{
+            id => <<"alert_call_phone_", PosBin/binary>>,
+            type => checkbox,
+            label => <<"Call phone?">>,
+            value => HasPhone,
+            hidden => IsNew or (not HasAlerts),
+            batch => <<"alerts_config">>,
+            editable => true
+        },
         Convs = maps:get(<<"conversations">>, M, []),
         ConvsBin = lists:join(<<",">>, Convs),
         ConvsOpts = get_convs_opts(Convs),
@@ -129,7 +149,7 @@ view(Obj, IsNew, #admin_session{user_id=UserId, domain_id=DefDomain, srv_id=SrvI
             required => true,
             editable => true
         },
-        {Pos+1, [Button, Check, Chan, Msg | Acc]}
+        {Pos+1, [Button, Phone, CallPhone, Check, Chan, Msg | Acc]}
     end,
         {1, []},
         Alerts
@@ -162,6 +182,25 @@ view(Obj, IsNew, #admin_session{user_id=UserId, domain_id=DefDomain, srv_id=SrvI
             required => true,
             batch => <<"alerts_config">>,
             hidden => true,
+            editable => true
+        },
+        #{
+            id => <<"alert_call_phone_", FinalPosBin/binary>>,
+            type => checkbox,
+            label => <<"Call phone?">>,
+            value => false,
+            hidden => true,
+            batch => <<"alerts_config">>,
+            editable => true
+        },
+        #{
+            id => <<"alert_phone_", FinalPosBin/binary>>,
+            type => text,
+            label => <<"Phone number">>,
+            value => <<>>,
+            required => false,
+            hidden => true,
+            batch => <<"alerts_config">>,
             editable => true
         },
         #{
@@ -423,6 +462,9 @@ get_alerts([Id|Ids], Data, Acc) ->
                     lists:filter(fun(L) -> L =/= <<>> end, Other)
             end,
             Check = maps:get(<<"alert_checkbox_", Id/binary>>, Data, false),
+            HasPhone = maps:get(<<"alert_call_phone_", Id/binary>>, Data, false),
+            Phone = maps:get(<<"alert_phone_", Id/binary>>, Data, <<>>),
+            HasPhone2 = (Phone =/= <<>>) and HasPhone,
             case {Msg, ConvsList} of
                 {<<>>, _} ->
                     get_alerts(Ids, Data, Acc);
@@ -432,7 +474,9 @@ get_alerts([Id|Ids], Data, Acc) ->
                     Alert = #{
                         <<"text">> => Msg,
                         <<"conversations">> => ConvsList,
-                        <<"enabled">> => Check
+                        <<"enabled">> => Check,
+                        <<"phone">> => Phone,
+                        <<"call_phone">> => HasPhone2
                     },
                     get_alerts(Ids, Data, [Alert|Acc])
             end
@@ -462,10 +506,14 @@ get_alert_button(FormId, Pos, DisabledLabel, DisabledIcon, EnabledLabel, Enabled
                 var form = $$('", FormId/binary, "');
                 if (form && form.elements) {
                     var alert_check = form.elements.alert_checkbox_", PosBin/binary, ";
+                    var alert_call_phone = form.elements.alert_call_phone_", PosBin/binary, ";
+                    var alert_phone = form.elements.alert_phone_", PosBin/binary, ";
                     var alert_msg = form.elements.alert_message_", PosBin/binary, ";
                     var alert_chan = form.elements.alert_convs_", PosBin/binary, ";
                     if (!this.getValue()) {
                         alert_check.hide();
+                        alert_call_phone.hide();
+                        alert_phone.hide();
                         alert_msg.hide();
                         alert_chan.hide();
                         this.setValue(true);
@@ -474,6 +522,8 @@ get_alert_button(FormId, Pos, DisabledLabel, DisabledIcon, EnabledLabel, Enabled
                         this.refresh();
                     } else {
                         alert_check.show();
+                        alert_call_phone.show();
+                        alert_phone.show();
                         alert_msg.show();
                         alert_chan.show();
                         this.setValue(false);
@@ -526,11 +576,15 @@ get_alerts_status_button(FormId, SectionId, Hidden, Status, Enabled) ->
                                 // SHOWING BUTTON i
                                 form.elements['alert_message_'+i].show();
                                 form.elements['alert_convs_'+i].show();
+                                form.elements['alert_call_phone_'+i].show();
+                                form.elements['alert_phone_'+i].show();
                                 form.elements['alert_checkbox_'+i].show();
                             } else {
                                 // HIDING BUTTON i
                                 form.elements['alert_message_'+i].hide();
                                 form.elements['alert_convs_'+i].hide();
+                                form.elements['alert_call_phone_'+i].hide();
+                                form.elements['alert_phone_'+i].hide();
                                 form.elements['alert_checkbox_'+i].hide();
                             }
                             i++;
