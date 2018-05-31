@@ -74,7 +74,7 @@ object_info() ->
 object_admin_info() ->
     #{
         class => resource,
-        weight => 1101,
+        weight => 1900,
         type_view_mod => nkdomain_file_store_obj_type_view,
         obj_view_mod => nkdomain_file_store_obj_view
     }.
