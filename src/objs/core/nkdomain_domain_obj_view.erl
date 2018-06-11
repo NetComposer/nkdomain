@@ -134,7 +134,7 @@ view(Obj, IsNew, #admin_session{user_id=UserId, domain_id=DefDomain, srv_id=SrvI
             suggest_filters => #{
                 conversation_type => <<"channel">>
             },
-            suggest_template => <<"#name#">>,
+            suggest_template => <<"#name# (#domain#)">>,
             options => ConvsOpts,
             batch => <<"alerts_config">>,
             required => true,
@@ -295,7 +295,7 @@ view(Obj, IsNew, #admin_session{user_id=UserId, domain_id=DefDomain, srv_id=SrvI
                         suggest_filters => #{
                             conversation_type => <<"channel">>
                         },
-                        suggest_template => <<"#name#">>,
+                        suggest_template => <<"#name# (#domain#)">>,
                         options => DefaultConvsOpts,
                         hidden => IsNew,
                         editable => true
@@ -413,11 +413,18 @@ get_convs_opts([], Acc) ->
 
 get_convs_opts([Id|Ids], Acc) ->
     case nkdomain:get_name(Id) of
-        {ok, #{obj_id:=ObjId, name:=Name}} ->
-            get_convs_opts(Ids, [#{id => ObjId, name => Name} | Acc]);
+        {ok, #{obj_id:=ObjId, name:=Name, path:=Path}} ->
+            Domain = case nkdomain_util:get_parts(?CHAT_CONVERSATION, Path) of
+                {ok, D, _S} ->
+                    D;
+                _ ->
+                    Path
+            end,
+            DomainURL = nkdomain_admin_util:obj_path_url(Domain, Domain),
+            get_convs_opts(Ids, [#{id => ObjId, name => Name, domain => DomainURL} | Acc]);
         {error, _Error} ->
             ?LLOG(warning, "Unknown ID found: ~p", [Id]),
-            get_convs_opts(Ids, [#{id => Id, name => Id} | Acc])
+            get_convs_opts(Ids, [#{id => Id, name => Id, domain => <<>>} | Acc])
     end.
 
 
