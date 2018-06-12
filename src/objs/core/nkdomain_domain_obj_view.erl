@@ -177,7 +177,7 @@ view(Obj, IsNew, #admin_session{user_id=UserId, domain_id=DefDomain, srv_id=SrvI
             suggest_filters => #{
                 conversation_type => <<"channel">>
             },
-            suggest_template => <<"#name#">>,
+            suggest_template => <<"#name# (#domain#)">>,
             options => [],
             required => true,
             batch => <<"alerts_config">>,
