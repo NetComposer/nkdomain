@@ -806,7 +806,7 @@ do_get_chart_data(<<"conversations_barh_chart">>, _Spec, State) ->
                         }],
                         <<"filter">> => [#{ 
                             <<"terms">> => #{
-                                <<"conversation.type">> => [<<"one2one">>, <<"channel">>, <<"private">>]
+                                <<"conversation.type">> => [<<"self">>, <<"one2one">>, <<"channel">>, <<"private">>]
                             }
                         }, #{
                             <<"term">> => #{
