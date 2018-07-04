@@ -117,6 +117,7 @@
 
 -define(TAG_ADMIN, <<"admin">>).
 -define(TAG_DEACTIVATED, <<"deactivated">>).
+-define(TAG_PENDING_INVITE, <<"pending_invite">>).
 
 
 
