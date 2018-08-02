@@ -182,6 +182,7 @@
         parent_id => nkdomain:id(),
         created_by => nkdomain:id(),
         ttl => integer(),
+        tags => [binary()],
         name => binary(),
         surname => binary(),
         email => binary()
@@ -199,7 +200,7 @@
     {ok, #obj_id_ext{}, [Unknown::binary()]} | {error, term()}.
 
 create(Domain, Opts) ->
-    Base = maps:with([parent_id, created_by, ttl], Opts),
+    Base = maps:with([parent_id, created_by, ttl, tags], Opts),
     User = maps:with([name, surname, email], Opts),
     Obj = Base#{
         type => ?DOMAIN_USER,

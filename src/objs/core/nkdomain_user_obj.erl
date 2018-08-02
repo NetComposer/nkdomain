@@ -245,12 +245,23 @@ object_es_unparse(Obj, Base) ->
 
 
 -type query() ::
-    {query_user_email, binary(), nkdomain_db:search_objs_opts()}.
+    {query_user_email, binary(), nkdomain_db:search_objs_opts()} |
+    {query_user_tag, binary(), nkdomain_db:search_objs_opts()}.
+
 
 
 %% @private
 object_db_get_query(nkelastic, {query_user_email, Email, Opts}, DbOpts) ->
     Filters = [{[?DOMAIN_USER, ".email"], eq, to_bin(Email)}],
+    Opts2 = maps:with([size, get_deleted], Opts),
+    Opts3 = Opts2#{
+        type => ?DOMAIN_USER
+    },
+    {ok, {nkelastic, Filters, maps:merge(DbOpts, Opts3)}};
+
+%% @private
+object_db_get_query(nkelastic, {query_user_tag, Tag, Opts}, DbOpts) ->
+    Filters = [{["tags"], eq, to_bin(Tag)}],
     Opts2 = maps:with([size, get_deleted], Opts),
     Opts3 = Opts2#{
         type => ?DOMAIN_USER
