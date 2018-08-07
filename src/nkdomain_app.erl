@@ -86,6 +86,10 @@ stop(_) ->
 
 %% @doc
 maybe_start_nkroot() ->
+    maybe_start_nkroot2(0).
+
+%% @private
+maybe_start_nkroot2(Counter) ->
     case get(start_nkroot) of
         true ->
             case nkdomain_nkroot_svc:start() of
@@ -93,7 +97,23 @@ maybe_start_nkroot() ->
                     lager:info("NkDOMAIN root started");
                 {error, Error} ->
                     lager:error("NkDOMAN root could not start: ~p", [Error]),
-                    error(service_start_error)
+                    WaitTime = get(wait_db_secs, 0),
+                    Retries = get(wait_db_retries, 0),
+                    case Counter < Retries of
+                        true ->
+                            Counter2 = case Retries of
+                                infinity ->
+                                    lager:info("NkDOMAIN retrying in ~p seconds"),
+                                    Counter;
+                                _ ->
+                                    lager:info("NkDOMAIN retrying in ~p seconds (~p tries left)", [Retries - Counter]),
+                                    Counter + 1
+                            end,
+                            timer:sleep(WaitTime * 1000),
+                            maybe_start_nkroot2(Counter2);
+                        false ->
+                            error(service_start_error)
+                    end
             end;
         false ->
             lager:warning("NkDOMAIN root domain not started")

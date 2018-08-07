@@ -86,6 +86,8 @@ syntax() ->
     #{
         server_vsn => binary,
         start_nkroot => boolean,
+        wait_db_secs => {integer, 1, 3600},
+        wait_db_retries => {integer, 0, 100},
         load_schema => boolean,
         listen_ip => host,
         listen_port => {integer, 1, 65535},
@@ -107,6 +109,8 @@ syntax() ->
         '__defaults' => #{
             server_vsn => <<"v0.0.3">>,
             start_nkroot => false,
+            wait_db_secs => 0,
+            wait_db_retries => 0,
             load_schema => false,
             listen_ip => <<"127.0.0.1">>,
             listen_port => 9301,
