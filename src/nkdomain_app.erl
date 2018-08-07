@@ -103,10 +103,10 @@ maybe_start_nkroot2(Counter) ->
                         true ->
                             Counter2 = case Retries of
                                 infinity ->
-                                    lager:info("NkDOMAIN retrying in ~p seconds"),
+                                    lager:info("NkDOMAIN retrying in ~p seconds", [WaitTime]),
                                     Counter;
                                 _ ->
-                                    lager:info("NkDOMAIN retrying in ~p seconds (~p tries left)", [Retries - Counter]),
+                                    lager:info("NkDOMAIN retrying in ~p seconds (~p tries left)", [WaitTime, (Retries - Counter)]),
                                     Counter + 1
                             end,
                             timer:sleep(WaitTime * 1000),
