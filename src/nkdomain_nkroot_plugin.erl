@@ -86,7 +86,7 @@ syntax() ->
     #{
         server_vsn => binary,
         start_nkroot => boolean,
-        wait_db_secs => {integer, 1, 3600},
+        wait_db_secs => {integer, 0, 3600},
         wait_db_retries => {integer, 0, 100},
         load_schema => boolean,
         listen_ip => host,
