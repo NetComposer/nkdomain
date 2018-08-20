@@ -175,11 +175,17 @@ update(ObjId, Data, _Session) ->
         <<"password">> := Password,
         <<"force_tls">> := ForceTLS
     } = Data,
-    Config = maps:with([<<"relay">>, <<"username">>, <<"password">>, <<"force_tls">>], Data),
+    Config = maps:with([<<"relay">>, <<"username">>, <<"force_tls">>], Data),
+    Config2 = case Password of
+        <<>> ->
+            Config;
+        _ ->
+            Config#{password=>Password}
+    end,
     Update = #{
         <<"class">> => Class,
         <<"from">> => From,
-        <<"config">> => Config
+        <<"config">> => Config2
     },
     case nkdomain:update(ObjId, #{?DOMAIN_MAIL_PROVIDER => Update}) of
         {ok, _} ->

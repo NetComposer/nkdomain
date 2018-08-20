@@ -332,7 +332,7 @@ update(ObjId, Data, #admin_session{user_id=UserId}=Session) ->
         [<<>>] ->
             [];
         Other ->
-            Other
+            lists:filter(fun(L) -> L =/= <<>> end, Other)
     end,
     DefConvMap = #{<<"list">> => DefaultConvsList},
     AlertIds = filter_by_prefix(<<"alert_message_">>, maps:keys(Data)),
