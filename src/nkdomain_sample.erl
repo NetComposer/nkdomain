@@ -332,6 +332,8 @@ domain_find_all_users() ->
 domain_unload_childs(Id) ->
     cmd(<<"objects/domain/unload_childs"/utf8>>, #{id=>Id}).
 
+domain_clean() ->
+    cmd(<<"objects/domain/clean"/utf8>>, #{}).        
 
 session_get() ->
     cmd(<<"objects/session/get"/utf8>>, #{}).
