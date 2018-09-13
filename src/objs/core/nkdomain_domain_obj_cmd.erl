@@ -161,6 +161,9 @@ cmd(<<"create_link">>, #nkreq{data=#{ from := ChildPath, to_parent := ParentPath
 	    Error
    end; 
 
+cmd(<<"clean">>, _Req) ->
+    nkdomain:clean();
+
 cmd(Cmd, Req) ->
     nkdomain_obj_cmd:cmd(Cmd, ?DOMAIN_DOMAIN, Req).
 
