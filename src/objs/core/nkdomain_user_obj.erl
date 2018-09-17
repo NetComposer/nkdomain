@@ -534,6 +534,10 @@ sync_op({get_status, SrvId, DomainPath}, _From, State) ->
     Reply = do_get_status(SrvId, DomainPath, State),
     {reply, Reply, State};
 
+sync_op({get_presence, Type}, _From, State) ->
+    Reply = do_get_presence(Type, State),
+    {reply, Reply, State};
+
 sync_op({get_presence, Type, DomainPath}, _From, State) ->
     Reply = do_get_presence(Type, DomainPath, State),
     {reply, Reply, State};
@@ -684,6 +688,25 @@ do_update_presence(Type, Path, State) ->
             do_event({presence_updated, Type, Path, UserPresence}, State);
         {error, _Error} ->
             State
+    end.
+
+
+%% @private Gets presence status from all sessions with Type and call presence_fun() to get current
+%% presence status
+do_get_presence(Type, State) ->
+    #obj_state{id=Id, session=Session} = State,
+    #obj_id_ext{obj_id=UserId} =Id,
+    #session{user_sessions=UserSessions, user_session_presence=PresFuns} = Session,
+    case maps:find(Type, PresFuns) of
+        {ok, Fun} ->
+            PresenceList = [
+                P || #user_session{type=T, presence=P}
+                     <- UserSessions, T==Type
+            ],
+            {ok, Presence} = Fun(UserId, PresenceList),
+            {ok, Presence};
+        error ->
+            {error, unknown_presence}
     end.
 
 

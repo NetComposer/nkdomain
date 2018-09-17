@@ -91,7 +91,7 @@
 
 -export([create/2, auth/2, make_token/4, get_name/1, get_info/2]).
 -export([user_pass/1]).
--export([get_sessions/1, get_sessions/2, get_presence/3, update_presence/3]).
+-export([get_sessions/1, get_sessions/2, get_presence/2, get_presence/3, update_presence/3]).
 -export([register_session/5, unregister_session/2, launch_session_notifications/2, set_status/4, get_status/3]).
 -export([add_token_notification/4, remove_token_notification/3]).
 -export([add_push_device/5, remove_push_device/2, send_push/3, remove_all_push_devices/1, remove_push_devices/2,
@@ -346,6 +346,14 @@ get_sessions(UserId) ->
 
 get_sessions(UserId, Type) ->
     sync_op(UserId, {get_sessions, nklib_util:to_binary(Type)}).
+
+
+%% @doc
+-spec get_presence(nkdomain:id(), nkdomain:type()) ->
+    {ok, user_presence()} | {error, term()}.
+
+get_presence(Id, Type) ->
+    sync_op(Id, {get_presence, Type}).
 
 
 %% @doc
