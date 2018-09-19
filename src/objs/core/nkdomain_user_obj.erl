@@ -419,7 +419,7 @@ sync_op({check_pass, Pass}, _From, #obj_state{id=Id, obj=Obj}=State) ->
     end,
     {reply, Reply, State};
 
-sync_op({check_device, _Pass}, _From, #obj_state{is_enabled=false}=State) ->
+sync_op({check_device, _DeviceId}, _From, #obj_state{is_enabled=false}=State) ->
     {reply, {error, object_is_disabled}, State};
 
 sync_op({check_device, DeviceId}, _From, #obj_state{id=Id, obj=Obj}=State) ->
@@ -431,6 +431,14 @@ sync_op({check_device, DeviceId}, _From, #obj_state{id=Id, obj=Obj}=State) ->
         _ ->
             {reply, {ok, false}, State}
     end;
+
+sync_op({dont_check}, _From, #obj_state{is_enabled=false}=State) ->
+    {reply, {error, object_is_disabled}, State};
+
+sync_op({dont_check}, _From, #obj_state{id=Id, obj=Obj}=State) ->
+    #obj_id_ext{obj_id=UserId} = Id,
+    #{domain_id:=DomainId} = Obj,
+    {reply, {ok, {true, UserId, DomainId}}, State};
 
 sync_op({get_info, Opts}, _From, #obj_state{obj=Obj}=State) ->
     Base = nkdomain_obj_util:get_obj_name(State),

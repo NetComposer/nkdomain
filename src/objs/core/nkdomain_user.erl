@@ -119,7 +119,12 @@
 %% Types
 %% ===================================================================
 
--type auth_opts() :: #{password=>binary()}.
+-type auth_opts() ::
+    #{
+        force_auth => boolean(),
+        password => binary(),
+        sso_device_id => binary()
+    }.
 
 -type sess_opts() ::
     #{
@@ -223,9 +228,19 @@ create(Domain, Opts) ->
 
 %% @doc
 -spec auth(User::binary(), auth_opts()) ->
-
     {ok, UserId::nkdomain:obj_id(), DomainId::nkdomain:obj_id()} |
     {error, user_not_found|term()}.
+
+auth(User, #{force_auth:=true}) ->
+    case sync_op(User, {dont_check}) of
+        {ok, {true, UserId, DomainId}} ->
+            {ok, UserId, DomainId};
+        {ok, false} ->
+            timer:sleep(?INVALID_PASSWORD_TIME),
+            {error, invalid_password};
+        {error, Error} ->
+            {error, Error}
+    end;
 
 auth(User, #{password:=Pass}) ->
     Pass2 = user_pass(Pass),
