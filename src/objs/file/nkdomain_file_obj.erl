@@ -187,8 +187,9 @@ http_post(Domain, StoreId, Name, Req) ->
     end.
 
 
-update(FileId, Data) -> 
-    nkdomain:update(FileId, #{?DOMAIN_FILE => Data}).
+update(FileId, Data) ->
+    Base = maps:with([tags], Data),
+    nkdomain:update(FileId, Base#{?DOMAIN_FILE => maps:without([tags], Data)}).
 
 
 %% @doc
