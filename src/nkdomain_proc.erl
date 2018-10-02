@@ -49,7 +49,7 @@
 
 %% @doc
 -spec register(#obj_id_ext{}) ->
-    ok | {already_registered, pid()}.
+    ok | {already_registered, pid()} | object_already_exists.
 
 register(#obj_id_ext{pid=Pid}=ObjIdExt) when is_pid(Pid) ->
     do_call({register, ObjIdExt}).
@@ -145,7 +145,10 @@ handle_call({register, #obj_id_ext{obj_id=ObjId, path=Path, pid=Pid}=ObjIdExt}, 
 %%                    ?LLOG(warning, "registering ~p but ~p was already registered (~p)", [Pid, OldPid, Path]),
 %%                    do_remove(ObjId),
 %%                    do_insert(ObjIdExt)
-                    {error, {already_registered, OldPid}}
+                    {error, {already_registered, OldPid}};
+                #obj_id_ext{obj_id=_OldObjId, pid=_OldPid} ->
+                    ?LLOG(warning, "registering ~p (~s) but ~p (~s) was already registered with the same path (~p)", [Pid, ObjId, _OldPid, _OldObjId, Path]),
+                    {error, object_already_exists}
             end;
         #obj_id_ext{obj_id=ObjId, pid=Pid} ->
             do_remove(ObjId),
