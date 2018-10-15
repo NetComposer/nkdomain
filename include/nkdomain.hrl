@@ -119,6 +119,12 @@
 -define(TAG_DEACTIVATED, <<"deactivated">>).
 -define(TAG_PENDING_INVITE, <<"pending_invite">>).
 
+-define(TAG_MAIL_FROM, <<"mail_from">>).
+-define(TAG_MAIL_TO, <<"mail_to">>).
+-define(TAG_MAIL_SUBJECT, <<"mail_subject">>).
+-define(TAG_MAIL_BODY, <<"mail_body">>).
+-define(TAG_MAIL_CONTENT_TYPE, <<"mail_content_type">>).
+-define(TAG_MAIL_SENT, <<"mail_sent">>).
 
 
 -endif.
