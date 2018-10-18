@@ -206,7 +206,7 @@
 
 create(Domain, Opts) ->
     Base = maps:with([obj_name, parent_id, created_by, ttl, tags], Opts),
-    User = maps:with([name, surname, email], Opts),
+    User = maps:with([name, surname, email, password], Opts),
     Obj = Base#{
         type => ?DOMAIN_USER,
         domain_id => Domain,
