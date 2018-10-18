@@ -17,7 +17,6 @@
         nkadmin,
         nktranscoder,
         nkimage,
-        nkchat,
         p1_pgsql,
         graphql,
         mnesia,
