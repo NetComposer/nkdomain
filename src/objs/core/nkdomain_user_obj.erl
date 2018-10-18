@@ -1009,7 +1009,11 @@ do_send_push(SrvId, Push, #obj_state{id=Id, obj=Obj}=State) ->
         false ->
             []
     end,
-    SrvId:object_send_external_push(UserId, Push),
+    spawn(fun() ->
+        % This spawn will prevent a deadlock if the callback tries
+        % to call this user object
+        SrvId:object_send_external_push(UserId, Push)
+    end),
     lists:foreach(
         fun(#push_device{device_id=DeviceId, push_data=PushDevice}) ->
             ?LLOG(info, "sending PUSH (~s): ~p", [SrvId, Push]),
