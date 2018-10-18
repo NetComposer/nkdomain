@@ -29,7 +29,7 @@
 -export([object_graphql_query/4, object_graphql_mutation/4, object_graphql_execute/4]).
 -export([object_syntax/1, object_create/5, object_parse/2, object_update/1]).
 -export([object_do_active/2, object_do_expired/1]).
--export([object_send_push/3]).
+-export([object_send_push/3, object_send_external_push/2]).
 -export([object_init/1, object_terminate/2, object_stop/2,
          object_event/2, object_reg_event/4, object_sync_op/3, object_async_op/2,
          object_save/1, object_delete/1, object_link_down/2, object_enabled/2, object_next_status_timer/1,
@@ -539,6 +539,17 @@ object_do_expired(ObjId) ->
 
 object_send_push(_PushDeviceId, _PushDevice, _PushMsg) ->
     lager:notice("NkDOMAIN unimplemented push: ~p", [_PushMsg]),
+    {error, not_implemented}.
+
+
+
+
+%% @doc
+-spec object_send_external_push(obj_id(), nkdomain_user:push_msg()) ->
+    ok | {error, term()}.
+
+object_send_external_push(_UserId, _PushMsg) ->
+    %lager:notice("NkDOMAIN unimplemented external push(~p): ~p", [_UserId, _PushMsg]),
     {error, not_implemented}.
 
 

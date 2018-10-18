@@ -1001,13 +1001,15 @@ do_remove_all_push_devices(State) ->
 
 
 %% @doc
-do_send_push(SrvId, Push, State) ->
+do_send_push(SrvId, Push, #obj_state{id=Id, obj=Obj}=State) ->
+    #obj_id_ext{obj_id=UserId} = Id,
     Devices = case is_push_available(SrvId, State) of
         true ->
             find_push_devices(SrvId, State);
         false ->
             []
     end,
+    SrvId:object_send_external_push(UserId, Push),
     lists:foreach(
         fun(#push_device{device_id=DeviceId, push_data=PushDevice}) ->
             ?LLOG(info, "sending PUSH (~s): ~p", [SrvId, Push]),
