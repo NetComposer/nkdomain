@@ -26,7 +26,13 @@
 -export([import_7_to_8/1, print/1]).
 -export([import_8_to_9/1]).
 -export([move_users_from_to/2, move_user/2, move_users/2]).
+-export([change_field_value/6]).
+-export([get_root_field_fun/1, put_root_field_fun/1]).
+-export([get_subfield_fun/2, put_subfield_fun/2]).
+-export([fix_push_srv_id/2]).
+
 -include("nkdomain.hrl").
+-include_lib("nkchat/include/nkchat.hrl").
 
 -define(MAX_TRIES, 5).
 -define(WAIT_TIME, 2000).
@@ -198,6 +204,89 @@ move_user(Obj, Domain) ->
         {error, Error} ->
             {error, Error}
     end.
+
+
+%% @doc
+change_field_value(Domain, Type, GetFieldFun, PutFieldFun, NewValue, Opts) ->
+    NewValueBin = nklib_util:to_binary(NewValue),
+    Deep = maps:get(deep, Opts, false),
+    Sort = maps:get(sort, Opts, path),
+    GetDeleted = maps:get(get_deleted, Opts, true),
+    Result = case nkdomain_db:load(Domain) of
+        #obj_id_ext{obj_id=DId, path=DPath, type=?DOMAIN_DOMAIN} ->
+            case nkdomain:enable(DId, false) of
+                ok ->
+                    %% Loaded domain and disabled it
+                    ?LLOG(notice, "Fixing objects from ~p (~p)", [DPath, DId]),
+                    %% Unload domain childs
+                    nkdomain_domain:unload_childs(DId),
+                    case wait_for_unload(DPath) of
+                        ok ->
+                            {ok, {DId, DPath}};
+                        {error, Error} ->
+                            {error, Error}
+                    end;
+                {error, Error} ->
+                    {error, Error}
+            end;
+        {error, Error} ->
+            {error, Error};
+        _ ->
+            {error, invalid_object_type}
+    end,
+    case Result of
+        {ok, {DomainId, _DomainPath}} ->
+            Res = case nkdomain_store_es_util:get_opts() of
+                {ok, ESOpts} ->
+                    case nkdomain_db:iterate(core, {query_paths, DomainId, Opts#{type=>Type, deep=>Deep, sort=>Sort, get_deleted=>GetDeleted}}, change_field_value_fun(ESOpts, Type, DomainId, GetFieldFun, PutFieldFun, NewValueBin, maps:with([debug], Opts)), 0) of
+                        {ok, Count} ->
+                            {ok, Count};
+                        {error, Error2} ->
+                            {error, Error2}
+                    end;
+                {error, Error2} ->
+                    {error, Error2}
+            end,
+            nkdomain:enable(DomainId, true),
+            Res;
+        {error, Error2} ->
+            {error, Error2}
+    end.
+
+
+%% @public
+get_root_field_fun(FieldName) ->
+    fun(Obj) ->
+        maps:get(FieldName, Obj, <<>>)
+    end.
+
+
+%% @public
+put_root_field_fun(FieldName) ->
+    fun(Obj, NewValue) ->
+        Obj#{FieldName => NewValue}
+    end.
+
+
+%% @public
+get_subfield_fun(FieldParent, FieldName) ->
+    fun(Obj) ->
+        maps:get(FieldName, maps:get(FieldParent, Obj, #{}), <<>>)
+    end.
+
+
+%% @public
+put_subfield_fun(FieldParent, FieldName) ->
+    fun(Obj, NewValue) ->
+        Parent = maps:get(FieldParent, Obj, #{}),
+        Obj#{FieldParent => Parent#{FieldName => NewValue}}
+    end.
+
+
+%% @public
+fix_push_srv_id(Domain, PushSrvId) ->
+    PushSrvIdBin = nklib_util:to_binary(PushSrvId),
+    change_field_value(Domain, ?CHAT_CONVERSATION, get_subfield_fun(?CHAT_CONVERSATION, <<"push_srv_id">>), put_subfield_fun(?CHAT_CONVERSATION, <<"push_srv_id">>), PushSrvIdBin, #{deep => true}). 
 
 
 %% ===================================================================
@@ -419,4 +508,44 @@ is_loaded(DomainPath, DomainSize, [{_Type, _ObjId, Path, _Pid}|LoadedObjs]) ->
             true;
         _ ->
             is_loaded(DomainPath, DomainSize, LoadedObjs)
+    end.
+
+
+%% @private
+change_field_value_fun(ESOpts, Type, DomainId, GetFieldFun, PutFieldFun, NewValue, Opts) ->
+    Debug = maps:get(debug, Opts, false),
+    fun(#{<<"obj_id">>:=ObjId, <<"path">>:=Path}, Acc) ->
+        Acc2 = case nkelastic:get(ObjId, ESOpts) of
+            {ok, #{<<"type">>:=Type}=Obj, _} ->
+                OldValue = GetFieldFun(Obj),
+                case OldValue of
+                    NewValue ->
+                        ?LLOG(info, "Ignoring object ~s (~s): already has field value ~s", [Path, ObjId, NewValue]),
+                        Acc;
+                    _ ->
+                        Obj2 = PutFieldFun(Obj, NewValue),
+                        case Debug of
+                            false ->
+                                case nkelastic:put(ObjId, Obj2, ESOpts) of
+                                    {ok, _} ->
+                                        ?LLOG(notice, "Changed object ~s (~s)", [Path, ObjId]),
+                                        Acc+1;
+                                    {error, Error2} ->
+                                        ?LLOG(error, "~p while saving modified object ~s: ~p", [Error2, ObjId, Obj2]),
+                                        Acc
+                                end;
+                            true ->
+                                ?LLOG(notice, "[DEBUG ON] Would change object ~s (~s) with ~p", [Path, ObjId, Obj2]),
+                                Acc+1
+                        end
+                end;
+            {ok, _Obj, _} ->
+                Type2 = maps:get(<<"type">>, _Obj, undefined),
+                ?LLOG(warning, "Ignoring object ~s (~s) was type ~p instead of ~p", [Path, ObjId, Type2, Type]),
+                Acc;
+            {error, Error} ->
+                ?LLOG(error, "~p while getting object ~s (~s)", [Error, Path, ObjId]),
+                Acc
+        end,
+        {ok, Acc2}
     end.
