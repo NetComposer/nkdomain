@@ -512,7 +512,7 @@ is_loaded(DomainPath, DomainSize, [{_Type, _ObjId, Path, _Pid}|LoadedObjs]) ->
 
 
 %% @private
-change_field_value_fun(ESOpts, Type, DomainId, GetFieldFun, PutFieldFun, NewValue, Opts) ->
+change_field_value_fun(ESOpts, Type, _DomainId, GetFieldFun, PutFieldFun, NewValue, Opts) ->
     Debug = maps:get(debug, Opts, false),
     fun(#{<<"obj_id">>:=ObjId, <<"path">>:=Path}, Acc) ->
         Acc2 = case nkelastic:get(ObjId, ESOpts) of
