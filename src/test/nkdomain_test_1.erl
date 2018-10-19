@@ -1166,7 +1166,7 @@ event_test() ->
         <<"lastTimestamp">> := Time1,
         <<"source">> := #{
             <<"component">> := <<"nkdomain">>,
-            <<"host">> := <<"nkdomain@127.0.0.1">>
+            <<"host">> := _
         }
     } = Ev1,
 

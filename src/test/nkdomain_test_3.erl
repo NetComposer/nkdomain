@@ -44,7 +44,7 @@
 % create bucket1
 % Use create_test_data before
 file_test_s3() ->
-
+    nkdomain_test_util:create_test_data(),
     api(#{verb=>deletecollection, domain=>"a-nktest", resource=>files}),
     api(#{verb=>deletecollection, domain=>"a-nktest", resource=>fileproviders}),
 

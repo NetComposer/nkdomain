@@ -782,9 +782,9 @@ file_test() ->
     {ok, F3} = api(#{verb=>update, body=>Y3}),
     #{<<"metadata">> := #{<<"annotations">> := #{<<"ann1">>:=<<"v1">>}}} = F3,
 
-    % Not supported by filesystem
-    {422, #{<<"reason">> := <<"storage_class_invalid">>}} = http_get("/domains/a-nktest/files/f1/_downloadLink"),
-
+    % Filesystem uses standard downloads
+    {200, #{<<"url">> := Url}} = http_get("/domains/a-nktest/files/f1/_downloadLink"),
+    <<"_download">> = lists:last(binary:split(Url, <<"/">>, [global])),
 
     % Send direct to _upload
     {ok, {{_, 400, _}, _Hds, Body4}} = httpc:request(post, {nkdomain_test_util:http_url("/domains/a-nktest/files/f1/_upload"), [], "ct2", <<"321">>}, [], []),
