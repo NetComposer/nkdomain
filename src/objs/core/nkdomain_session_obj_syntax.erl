@@ -40,6 +40,7 @@ syntax(<<"start">>, Syntax) ->
         role => binary,
         role_id => binary,
         meta => map,
+        force_auth => boolean,
         '__mandatory' => [id]
     };
 
