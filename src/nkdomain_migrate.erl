@@ -32,8 +32,9 @@
 -export([fix_push_srv_id/2]).
 
 -include("nkdomain.hrl").
--include_lib("nkchat/include/nkchat.hrl").
-
+%% Instead of importing nkchat.hrl we define ?CHAT_CONVERSATION
+%%-include_lib("nkchat/include/nkchat.hrl").
+-define(CHAT_CONVERSATION, <<"conversation">>).
 -define(MAX_TRIES, 5).
 -define(WAIT_TIME, 2000).
 
