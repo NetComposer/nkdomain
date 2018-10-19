@@ -1,6 +1,6 @@
 %% -------------------------------------------------------------------
 %%
-%% Copyright (c) 2017 Carlos Gonzalez Florido.  All Rights Reserved.
+%% Copyright (c) 2018 Carlos Gonzalez Florido.  All Rights Reserved.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -25,88 +25,34 @@
 %% Defines
 %% ===================================================================
 
--define(NKROOT, nkroot).
--define(ADD_TO_OBJ(Key, Val, Obj), maps:put(Key, Val, Obj)).
--define(ADD_TO_OBJ(Update, Obj), maps:merge(Obj, Update)).
--define(ADD_TO_OBJ_DEEP(Update, Obj), nklib_util:map_merge(Update, Obj)).
--define(REMOVE_FROM_OBJ(Key, Obj), maps:remove(Key, Obj)).
+-define(PACKAGE_CLASS_DOMAIN, <<"Domains">>).
+-define(DOMAIN_PKG_ID, <<"domains-pkg">>).
+-define(DOMAIN_PKG_ID_API, <<"domains-pkg-api">>).
+-define(DOMAIN_PKG_ID_GRAPHIQL, <<"domains-pkg-graphiql">>).
+-define(DOMAIN_PKG_ID_FILE, <<"nkdomain-file">>).
+-define(DOMAIN_PKG_ID_NOTIFY, <<"nkdomain-notify">>).
 
--define(CALL_NKROOT(Fun, Args), apply(?NKROOT, Fun, Args)).
+-define(ROOT_SRV, 'nkdomain-root').
 
-%-define(STATE, obj_state).
+-define(GROUP_CORE, <<"core">>).
+-define(GROUP_CORE_V1A1, <<"v1a1">>).
+-define(GROUP_SEARCH, <<"search">>).
 
--record(obj_id_ext, {
-    type :: nkdomain:type(),
-    obj_id :: nkdomain:obj_id(),
-    obj_name :: nkdomain:obj_name(),
-    path :: nkdomain:path(),
-    pid :: pid() | undefined
-}).
+-define(RES_CORE_DOMAINS, <<"domains">>).
+-define(RES_CORE_EVENTS, <<"events">>).
+-define(RES_CORE_USERS, <<"users">>).
+-define(RES_CORE_CONTACTS, <<"contacts">>).
+-define(RES_CORE_TOKENS, <<"tokens">>).
+-define(RES_CORE_CONFIGMAPS, <<"configmaps">>).
+-define(RES_CORE_TASKS, <<"tasks">>).
+-define(RES_CORE_SESSIONS, <<"sessions">>).
+-define(RES_CORE_FILES, <<"files">>).
+-define(RES_CORE_FILE_PROVIDERS, <<"fileproviders">>).
+-define(RES_CORE_NODES, <<"nodes">>).
 
+-define(KIND_CORE_DOMAIN, <<"Domain">>).
+-define(KIND_CORE_EVENT, <<"Event">>).
 
--record(obj_state, {
-    id :: #obj_id_ext{},
-    module :: module(),
-    effective_srv_id :: module(),           % If on disk, will be used (if loaded)
-    domain_id :: nkdomain:obj_id(),
-    parent_id :: nkdomain:obj_id(),
-    object_info :: nkdomain_obj:object_info(),
-    obj :: nkdomain:obj(),
-    is_dirty :: boolean(),
-    is_enabled :: boolean(),
-    started :: nklib_util:m_timestamp(),
-    childs :: #{nkdomain:obj_id() => {nkdomain:type(), pid()}},
-    usage_links :: nklib_links:link(),
-    event_links :: nklib_links:link(),
-    session_events :: [binary()],
-    session_link :: nklib_links:link(),
-    meta :: map(),                      % Object load metadata
-    session :: term(),                  % Session-specific run-time data
-    stop_reason = false :: false | nkservice:error(),
-    unload_policy :: permanent | {expires, nklib_util:m_timestamp()} | {ttl, integer()},
-    timer :: reference(),
-    domain_pid :: pid(),
-    domain_enabled :: boolean(),
-    parent_pid :: pid(),
-    parent_enabled :: boolean(),
-    save_timer :: reference(),
-    next_status_timer :: reference()
-}).
-
-
--record(nkdomain_config_cache, {
-    db_store :: binary(),
-    file_store :: binary,
-    email_provider :: binary(),
-    transcoder_server :: binary(),
-    image_processor :: binary()
-}).
-
-
-
--define(DOMAIN_USER, <<"user">>).
--define(DOMAIN_DOMAIN, <<"domain">>).
--define(DOMAIN_SESSION, <<"session">>).
--define(DOMAIN_TOKEN, <<"token">>).
--define(DOMAIN_CONFIG, <<"config">>).
--define(DOMAIN_SERVICE, <<"service">>).
--define(DOMAIN_TASK, <<"task">>).
--define(DOMAIN_ALERT, <<"alert">>).
--define(DOMAIN_DEVICE, <<"device">>).
--define(DOMAIN_NODE, <<"node">>).
--define(DOMAIN_LOCATION, <<"location">>).
-
-
-
-
--define(DOMAIN_MAIL, <<"mail">>).
--define(DOMAIN_MAIL_PROVIDER, <<"mail.provider">>).
--define(DOMAIN_FILE, <<"file">>).
--define(DOMAIN_FILE_STORE, <<"file.store">>).
-
--define(DOMAIN_EVENT_CLASS, <<"domain">>).
--define(DEF_TOKEN_TTL, 8*60*60).
--define(MAX_TOKEN_TTL, 30*24*60*60).
 
 -endif.
 

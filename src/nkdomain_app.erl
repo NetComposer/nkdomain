@@ -1,6 +1,6 @@
 %% -------------------------------------------------------------------
 %%
-%% Copyright (c) 2017 Carlos Gonzalez Florido.  All Rights Reserved.
+%% Copyright (c) 2018 Carlos Gonzalez Florido.  All Rights Reserved.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -23,10 +23,12 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -behaviour(application).
 
--export([start/0, start/1, start/2, stop/1, maybe_start_nkroot/0, reload/0]).
+-export([start/0, start/1, start/2, stop/1]).
+-export([start_service/0, stop_service/0, reload_service/0]).
 -export([get/1, get/2, put/2, del/1]).
--export([register_types/0]).
+-export([plugins/0]).
 
+-include_lib("nkservice/include/nkservice.hrl").
 -include("nkdomain.hrl").
 
 -define(APP, nkdomain).
@@ -62,15 +64,34 @@ start(Type) ->
 %% @private OTP standard start callback
 %% Last application must call maybe_start_nkroot
 start(_Type, _Args) ->
-    Syntax = nkdomain_nkroot_plugin:syntax(),
+    Syntax = #{
+        baseSrv => binary,
+        adminPass => binary,
+        apiUrl => binary,
+        makeGraphqlSchema => boolean,
+        graphiqlUrl => binary,
+        dbDriver => {atom, [cockroachdb, elasticsearch]},
+        dbUrl => binary,
+        dbDatabase => binary,
+        serviceDbHeartbeat => boolean,
+        serviceDbMaxHeartbeatTime => pos_integer,  % secs
+        '__mandatory' => [baseSrv, dbDriver, dbUrl, dbDatabase]
+    },
     case nklib_config:load_env(?APP, Syntax) of
         {ok, _} ->
+            BaseSrvId = case get(baseSrv) of
+                <<>> ->
+                    ?ROOT_SRV;
+                D0 ->
+                    D1 = list_to_binary([D0, $., nklib_util:to_binary(?ROOT_SRV)]),
+                    binary_to_atom(D1, utf8)
+            end,
+            put(baseSrv, BaseSrvId),
             {ok, Pid} = nkdomain_sup:start_link(),
+            ok = nkservice_util:register_package(?PACKAGE_CLASS_DOMAIN, nkdomain),
             {ok, Vsn} = application:get_key(nkdomain, vsn),
             lager:info("NkDOMAIN v~s has started.", [Vsn]),
-            nkdomain_i18n:reload(),
-            register_types(),
-            reload(),
+            start_service(),
             {ok, Pid};
         {error, Error} ->
             lager:error("Error parsing config: ~p", [Error]),
@@ -84,36 +105,92 @@ stop(_) ->
     ok.
 
 
-%% @doc
-maybe_start_nkroot() ->
-    case get(start_nkroot) of
-        true ->
-            case nkdomain_nkroot_svc:start() of
-                {ok, _} ->
-                    lager:info("NkDOMAIN root started");
-                {error, Error} ->
-                    lager:error("NkDOMAN root could not start: ~p", [Error]),
-                    error(service_start_error)
+%% @doc Starts the base service
+%% In nkdomain_plugin we will create the actors
+start_service() ->
+    BaseSrvId = get(baseSrv),
+    cockroachdb = get(dbDriver),
+    Spec = #{
+        plugins => plugins(),
+        debug_actors => [all, core, "core:user"],
+        domain => <<"root">>,
+        packages => [
+            #{
+                id => db,
+                class => 'PgSQL',
+                config => #{
+                    targets => [
+                        #{
+                            url => get(dbUrl),
+                            pool => 16
+                        }
+                    ],
+                    actorPersistence => true,
+                    database => get(dbDatabase),
+                    debug => true
+                }
+            },
+            #{
+                id => ?DOMAIN_PKG_ID_FILE,
+                class => 'File'
+            },
+%%            #{
+%%                id => ?DOMAIN_PKG_ID_NOTIFY,
+%%                class => 'Notify'
+%%            },
+            #{
+                id => ?DOMAIN_PKG_ID,
+                class => 'Domains',
+                config => #{
+                    apiUrl => get(apiUrl),
+                    apiUrlOpts => #{},
+                    apiDebug => [erlang, http, nkpacket],
+                    % apiDebug => [erlang, http, nkpacket],
+                    % Options used by graphql plugin
+                    makeGraphqlSchema => get(makeGraphqlSchema, true),
+                    graphiqlUrl => get(graphiqlUrl, undefined)
+                }
+            }
+        ]
+    },
+    ok = nkservice:start(BaseSrvId, Spec).
+
+
+stop_service() ->
+    BaseSrvId = get(baseSrv),
+    nkservice:stop(BaseSrvId).
+
+
+reload_service() ->
+    BaseSrvId = get(baseSrv),
+    case nkservice:update(BaseSrvId, #{}) of
+        ok ->
+            case ?CALL_SRV(BaseSrvId, service) of
+                #{packages:=#{?DOMAIN_PKG_ID:=#{config:=#{makeGraphqlSchema:=true}}}} ->
+                    lager:info("loading GraphQL schema"),
+                    nkservice_graphql:load_schema(BaseSrvId);
+                _ ->
+                    ok
             end;
-        false ->
-            lager:warning("NkDOMAIN root domain not started")
+        {error, Error} ->
+            {error, Error}
     end.
 
 
-%% @doc Register our types
-register_types() ->
-    nkdomain_reg:register_modules([
-        nkdomain_domain_obj, nkdomain_user_obj, nkdomain_session_obj, nkdomain_config_obj,
-        nkdomain_token_obj, nkdomain_service_obj, nkdomain_task_obj, nkdomain_alert_obj,
-        nkdomain_device_obj, nkdomain_node_obj, nkdomain_location_obj, nkdomain_mail_obj, 
-        nkdomain_mail_provider_obj, nkdomain_file_store_obj, nkdomain_file_obj, nkadmin_session_obj,
-        nkdomain_transcoder_server_obj, nkdomain_transcoder_job_obj, 
-        nkdomain_image_processor_obj, nkdomain_image_job_obj ]).
+plugins() ->
+    [
+        nknotify_sms_aws_sns,
+        nknotify_sms_twilio,
+        nknotify_sms_netelip,
+        nknotify_push_gorush,
+        nknotify_push_aws_sns,
+        nknotify_push_twilio,
+        nknotify_fax_twilio,
+        nknotify_mail_smtp
+    ].
 
 
-%% @doc
-reload() ->
-    nklib_reloader:reload_app(?APP).
+
 
 %% @doc gets a configuration value
 get(Key) ->

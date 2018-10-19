@@ -60,5 +60,10 @@ docs:
 
 
 shell:
-	$(REBAR) shell --config config/shell.config --name $(APP)@127.0.0.1 --setcookie nk --apps $(APP)
+	$(REBAR) shell --config config/shell.config --name $(APP)@127.0.0.1 --setcookie nk --apps nknotify,$(APP)
 
+remsh:
+	erl -name remsh@127.0.0.1 -setcookie nk -remsh $(APP)@127.0.0.1
+
+remsh2:
+	erl -name remsh2@127.0.0.1 -setcookie nk -remsh $(APP)@127.0.0.1

@@ -6,18 +6,12 @@
     {mod, {nkdomain_app, []}},
     {applications, [
         pbkdf2,
+        hackney,
         yamerl,
-        nkrole,
         nkservice,
         nkelastic,
         nkmail,
         nkfile
-        %nkadmin,
-        %graphql,
-        %iso8601
-        %nktranscoder,
-        %nkimage,
-        %nkevent,
     ]},
     {env, [
     ]}

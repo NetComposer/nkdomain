@@ -18,31 +18,31 @@
 %%
 %% -------------------------------------------------------------------
 
-%% @private Main supervisor
--module(nkdomain_sup).
+%% @doc NkDomain ConfigMap OpenAPI
+-module(nkdomain_configmap_actor_openapi).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
--behaviour(supervisor).
 
--export([init/1, start_link/0]).
+-behavior(nkdomain_openapi).
+
+-export([paths/1, schemas/1]).
 
 -include("nkdomain.hrl").
 
 
-%% @private
-start_link() ->
-    ChildsSpec = [
-        {nkdomain_api_events,
-            {nkdomain_api_events, start_link, [?ROOT_SRV]},
-            permanent,
-             5000,
-            worker,
-            [nkdomain_api_events]}
-    ],
-    supervisor:start_link({local, ?MODULE}, ?MODULE, {{one_for_one, 10, 60}, ChildsSpec}).
+
+%% ===================================================================
+%% Behaviour callbacks
+%% ===================================================================
+
+paths(SrvId) ->
+    nkdomain_openapi_paths:paths(SrvId, "core", "v1a1", ?RES_CORE_CONFIGMAPS, #{}).
 
 
-%% @private
-init(ChildSpecs) ->
-    {ok, ChildSpecs}.
-
-
+schemas(SrvId) ->
+    Spec = #{
+        description => <<"An Actor to store configuration information.">>,
+        fields => #{
+            data => nkdomain_openapi_schemas:actor_schema_data()
+        }
+    },
+    nkdomain_openapi_schemas:actor_schema(SrvId, "core", "v1a1", ?RES_CORE_CONFIGMAPS, Spec).
