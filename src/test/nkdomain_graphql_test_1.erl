@@ -675,7 +675,7 @@ event_test() ->
             },
             <<"source">> := #{
                 <<"component">> := <<"nkdomain">>,
-                <<"host">> := <<"nkdomain@127.0.0.1">>
+                <<"host">> := _
             },
             <<"metadata">> := #{
                 <<"creationTime">> := T2,
@@ -699,7 +699,7 @@ event_test() ->
             },
             <<"source">> := #{
                 <<"component">> := <<"nkdomain">>,
-                <<"host">> := <<"nkdomain@127.0.0.1">>
+                <<"host">> := _
             },
             <<"metadata">> := #{
                 <<"creationTime">> := T3,
@@ -723,7 +723,7 @@ event_test() ->
             },
             <<"source">> := #{
                 <<"component">> := <<"nkdomain">>,
-                <<"host">> := <<"nkdomain@127.0.0.1">>
+                <<"host">> := _
             },
             <<"metadata">> := #{
                 <<"creationTime">> := T4,
@@ -747,7 +747,7 @@ event_test() ->
             },
             <<"source">> := #{
                 <<"component">> := <<"nkdomain">>,
-                <<"host">> := <<"nkdomain@127.0.0.1">>
+                <<"host">> := _
             },
             <<"metadata">> := #{
                 <<"creationTime">> := T0,
@@ -771,7 +771,7 @@ event_test() ->
             },
             <<"source">> := #{
                 <<"component">> := <<"nkdomain">>,
-                <<"host">> := <<"nkdomain@127.0.0.1">>
+                <<"host">> := _
             },
             <<"metadata">> := #{
                 <<"creationTime">> := T1,
