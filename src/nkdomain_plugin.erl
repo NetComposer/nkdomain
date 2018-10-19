@@ -33,6 +33,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([plugin_deps/0, plugin_config/3, plugin_start/4, plugin_update/5]).
+-export([get_config/1]).
 -export([get_domain_cache/2, get_external_urls/1, get_groups/1, get_resources/2,
          get_resource_module/3, get_resource_config/3,
          find_resource/3, get_modules/1]).
@@ -75,6 +76,7 @@ plugin_config(?PACKAGE_CLASS_DOMAIN, #{id:=Id, config:=Config}=Spec, _Service) -
         apiDebug => {list, {atom, [erlang, ws, http, nkpacket]}},
         debug_groups => {list, binary},
         pbkdfIters => {integer, 1, 100},
+        adminPass => binary,
         '__mandatory' => [],
         '__allow_unknown' => true
     },
@@ -179,6 +181,13 @@ core_graphql_modules() ->
 %% ===================================================================
 %% Getters
 %% ===================================================================
+
+
+%% @doc
+get_config(SrvId) ->
+    #{packages:=#{?DOMAIN_PKG_ID:=#{config:=Config}}} = ?CALL_SRV(SrvId, service),
+    Config.
+
 
 -type cache_key() ::
     domain |

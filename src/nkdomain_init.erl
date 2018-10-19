@@ -129,12 +129,14 @@ check_admin(SrvId, Domain, DomUID) ->
 %% @private
 create_admin(SrvId, ActorId, DomUID) ->
     #actor_id{domain=Domain} = ActorId,
+    Config = nkdomain_plugin:get_config(SrvId),
+    Pass = maps:get(adminPass, Config, <<>>),
     Actor = #actor{
         id = ActorId,
         data = #{
             <<"kind">> => <<"User">>,
             <<"spec">> => #{
-                <<"password">> => nkdomain_app:get(adminPass, <<>>)
+                <<"password">> => Pass
             }
         },
         metadata = #{

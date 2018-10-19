@@ -1065,7 +1065,7 @@ contact_test() ->
             },
             <<"fts">> := #{
                 <<"fullName">> := <<"My Náme My Surname"/utf8>>
-            }=Meta1
+            }
         },
         <<"status">> := #{<<"isActivated">>:=true}
     } = CT1,

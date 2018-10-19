@@ -10,7 +10,6 @@
         yamerl,
         nkservice,
         nkelastic,
-        nkmail,
         nkfile
     ]},
     {env, [
