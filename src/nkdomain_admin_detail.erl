@@ -665,7 +665,7 @@ get_dashline() ->
             }]
         },
         nkIntervalTime => 5000,
-        nkDynamic => false,
+        nkDynamic => true,
         nkIntervalFunction => #{
             nkParseFunction => <<"
                 function(id) {

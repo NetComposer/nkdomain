@@ -525,6 +525,55 @@ do_get_chart_data(<<"total_users">>, _Spec, State) ->
             {error, error, State}
     end;
 
+%% @private
+do_get_chart_data(<<"users_online">>, _Spec, State) ->
+    {ok, Opts} = nkdomain_store_es_util:get_opts(),
+    Query = #{
+        <<"size">> => 0,
+        <<"query">> => #{
+            <<"bool">> => #{
+                <<"filter">> => [#{ 
+                    <<"bool">> => #{
+                        <<"must_not">> => [#{
+                            <<"prefix">> => #{
+                                <<"path">> => <<"/dkv">>
+                            }
+                        },#{
+                            <<"prefix">> => #{
+                                <<"path">> => <<"/sphera">>
+                            }
+                        }, #{
+                            <<"term">> => #{
+                                <<"is_deleted">> => true
+                            }
+                        }],
+                        <<"filter">> => [#{
+                            <<"term">> => #{
+                                <<"type">> => <<"chat.session">>
+                            }
+                        }]
+                    }       
+                }]
+            }
+        },
+        <<"aggs">> => #{
+            <<"online">> => #{
+                <<"cardinality">> => #{
+                    <<"field">> => <<"created_by">>
+                }
+            }
+        }
+    },
+    case nkelastic:search(Query, Opts) of
+        {ok, _Hits, _, Aggs, _} ->
+            %lager:notice("RESPONSE: HITS ~p, ~p~n", [_Hits, Aggs]),
+            Online = maps:get(<<"online">>, Aggs, #{}),
+            UsersOnline = maps:get(<<"value">>, Online, 0),
+            {ok, #{<<"users_online">> => #{value => UsersOnline, delta => 0}}, State};
+        _ ->
+            {error, error, State}
+    end;
+
 do_get_chart_data(<<"total_messages">>, _Spec, State) ->
     {ok, Opts} = nkdomain_store_es_util:get_opts(),
     Query = #{
