@@ -751,12 +751,8 @@ do_get_chart_data(<<"video_calls_barh_chart">>, _Spec, State) ->
         <<"query">> => #{
             <<"bool">> => #{
                 <<"filter">> => [#{ 
-                    <<"terms">> => #{
-                        <<"message.type">> => [<<"media.call">>]
-                    }
-                }, #{
                     <<"term">> => #{
-                        <<"type">> => <<"message">>
+                        <<"type">> => <<"media.call">>
                     }
                 }]
             }
@@ -764,17 +760,22 @@ do_get_chart_data(<<"video_calls_barh_chart">>, _Spec, State) ->
         <<"aggs">> => #{
             <<"total_duration">> => #{
                 <<"sum">> => #{
-                    <<"field">> => <<"message.body.duration">>
+                    <<"field">> => <<"media.call.duration">>
                 }
             }
         }
     },
     case nkelastic:search(Query, Opts) of
-        {ok, _Total, _Hits, _Aggs, _Meta} ->
+        {ok, _Total, _Hits, Aggs, _Meta} ->
+            %lager:notice("Total ~p, Hits ~p, Aggs ~p, Meta ~p", [_Total, _Hits, Aggs, _Meta]),
+            TotalDuration = maps:get(<<"total_duration">>, Aggs, #{}),
+            Seconds = maps:get(<<"value">>, TotalDuration, 0),
+            %Minutes = ceiling(Seconds/60),
+            Minutes = round(Seconds/60, 1),
             Data = [
-                #{ minutes => 2050, type => <<"Total">> },
-                #{ minutes => 700, type => <<"VideoC.">> },
-                #{ minutes => 1400, type => <<"Calls">> }
+                #{ minutes => Minutes, type => <<"Total">> }
+                %#{ minutes => 700, type => <<"VideoC.">> },
+                %#{ minutes => 1400, type => <<"Calls">> }
             ],
             {ok, #{data => Data}, State};
         _ ->
@@ -1203,3 +1204,9 @@ get_id_parts(ElementId) ->
 %% @private
 handle(Fun, Args, #admin_session{srv_id=SrvId}=Session) ->
     apply(SrvId, Fun, Args++[Session]).
+
+
+%% @private
+round(Number, Precision) ->
+    P = math:pow(10, Precision),
+    round(Number * P) / P.

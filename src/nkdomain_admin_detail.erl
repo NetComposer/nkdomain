@@ -453,12 +453,12 @@ get_dash_detail_test() ->
                                             text => <<"Messages">>,
                                             color => <<"#73cfd8">>
                                         },
-                                        #{
-                                            value => <<"audio">>,
-                                            value_hashed => <<"#audio#">>,
-                                            text => <<"Calls">>,
-                                            color => <<"#98d774">>
-                                        },
+                                        %#{
+                                        %    value => <<"audio">>,
+                                        %    value_hashed => <<"#audio#">>,
+                                        %    text => <<"Calls">>,
+                                        %    color => <<"#98d774">>
+                                        %},
                                         #{
                                             value => <<"video">>,
                                             value_hashed => <<"#video#">>,
@@ -476,7 +476,7 @@ get_dash_detail_test() ->
                                 get_chart_json(#{
                                     id => <<"video_calls_barh_chart">>,
                                     header => #{
-                                        text => <<"Video Calls & Calls">>,
+                                        text => <<"Video Calls">>,
                                         css => <<"chart_header">>
                                     },
                                     type => <<"barH">>,
@@ -487,7 +487,7 @@ get_dash_detail_test() ->
                                     y => #{
                                         value => <<"type">>
                                     },
-                                    dynamic => false
+                                    dynamic => true
                                 }),
                                 get_chart_json(#{
                                     id => <<"sent_files_barh_chart">>,
@@ -503,7 +503,7 @@ get_dash_detail_test() ->
                                     y => #{
                                         value => <<"type">>
                                     },
-                                    dynamic => false
+                                    dynamic => true
                                 }),
                                 get_chart_json(#{
                                     id => <<"conversations_barh_chart">>,
@@ -519,7 +519,7 @@ get_dash_detail_test() ->
                                     y => #{
                                         value => <<"type">>
                                     },
-                                    dynamic => false
+                                    dynamic => true
                                 })
                             ]
                         }, #{
