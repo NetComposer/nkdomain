@@ -453,16 +453,10 @@ get_dash_detail_test() ->
                                             text => <<"Messages">>,
                                             color => <<"#73cfd8">>
                                         },
-                                        %#{
-                                        %    value => <<"audio">>,
-                                        %    value_hashed => <<"#audio#">>,
-                                        %    text => <<"Calls">>,
-                                        %    color => <<"#98d774">>
-                                        %},
                                         #{
-                                            value => <<"video">>,
-                                            value_hashed => <<"#video#">>,
-                                            text => <<"Video Calls">>,
+                                            value => <<"calls">>,
+                                            value_hashed => <<"#calls#">>,
+                                            text => <<"Calls">>,
                                             color => <<"#ff665f">>
                                         }]
                                     },
@@ -476,7 +470,7 @@ get_dash_detail_test() ->
                                 get_chart_json(#{
                                     id => <<"video_calls_barh_chart">>,
                                     header => #{
-                                        text => <<"Video Calls">>,
+                                        text => <<"Calls">>,
                                         css => <<"chart_header">>
                                     },
                                     type => <<"barH">>,

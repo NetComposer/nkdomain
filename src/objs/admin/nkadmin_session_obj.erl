@@ -734,8 +734,7 @@ do_get_chart_data(<<"activity_stats_line_chart">>, _Spec, State) ->
                     #{
                         <<"month">> => maps:get(<<"key">>, Bucket),
                         <<"messages">> => maps:get(<<"text">>, Map1, 0),
-                        <<"audio">> => maps:get(<<"media.call">>, Map1, 0),
-                        <<"video">> => maps:get(<<"media.call">>, Map1, 0)
+                        <<"calls">> => maps:get(<<"media.call">>, Map1, 0)
                     }
                 end,
                 Buckets),
