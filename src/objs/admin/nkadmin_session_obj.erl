@@ -525,6 +525,55 @@ do_get_chart_data(<<"total_users">>, _Spec, State) ->
             {error, error, State}
     end;
 
+%% @private
+do_get_chart_data(<<"users_online">>, _Spec, State) ->
+    {ok, Opts} = nkdomain_store_es_util:get_opts(),
+    Query = #{
+        <<"size">> => 0,
+        <<"query">> => #{
+            <<"bool">> => #{
+                <<"filter">> => [#{ 
+                    <<"bool">> => #{
+                        <<"must_not">> => [#{
+                            <<"prefix">> => #{
+                                <<"path">> => <<"/dkv">>
+                            }
+                        },#{
+                            <<"prefix">> => #{
+                                <<"path">> => <<"/sphera">>
+                            }
+                        }, #{
+                            <<"term">> => #{
+                                <<"is_deleted">> => true
+                            }
+                        }],
+                        <<"filter">> => [#{
+                            <<"term">> => #{
+                                <<"type">> => <<"chat.session">>
+                            }
+                        }]
+                    }       
+                }]
+            }
+        },
+        <<"aggs">> => #{
+            <<"online">> => #{
+                <<"cardinality">> => #{
+                    <<"field">> => <<"created_by">>
+                }
+            }
+        }
+    },
+    case nkelastic:search(Query, Opts) of
+        {ok, _Hits, _, Aggs, _} ->
+            %lager:notice("RESPONSE: HITS ~p, ~p~n", [_Hits, Aggs]),
+            Online = maps:get(<<"online">>, Aggs, #{}),
+            UsersOnline = maps:get(<<"value">>, Online, 0),
+            {ok, #{<<"users_online">> => #{value => UsersOnline, delta => 0}}, State};
+        _ ->
+            {error, error, State}
+    end;
+
 do_get_chart_data(<<"total_messages">>, _Spec, State) ->
     {ok, Opts} = nkdomain_store_es_util:get_opts(),
     Query = #{
@@ -685,8 +734,7 @@ do_get_chart_data(<<"activity_stats_line_chart">>, _Spec, State) ->
                     #{
                         <<"month">> => maps:get(<<"key">>, Bucket),
                         <<"messages">> => maps:get(<<"text">>, Map1, 0),
-                        <<"audio">> => maps:get(<<"media.call">>, Map1, 0),
-                        <<"video">> => maps:get(<<"media.call">>, Map1, 0)
+                        <<"calls">> => maps:get(<<"media.call">>, Map1, 0)
                     }
                 end,
                 Buckets),
@@ -702,12 +750,8 @@ do_get_chart_data(<<"video_calls_barh_chart">>, _Spec, State) ->
         <<"query">> => #{
             <<"bool">> => #{
                 <<"filter">> => [#{ 
-                    <<"terms">> => #{
-                        <<"message.type">> => [<<"media.call">>]
-                    }
-                }, #{
                     <<"term">> => #{
-                        <<"type">> => <<"message">>
+                        <<"type">> => <<"media.call">>
                     }
                 }]
             }
@@ -715,17 +759,22 @@ do_get_chart_data(<<"video_calls_barh_chart">>, _Spec, State) ->
         <<"aggs">> => #{
             <<"total_duration">> => #{
                 <<"sum">> => #{
-                    <<"field">> => <<"message.body.duration">>
+                    <<"field">> => <<"media.call.duration">>
                 }
             }
         }
     },
     case nkelastic:search(Query, Opts) of
-        {ok, _Total, _Hits, _Aggs, _Meta} ->
+        {ok, _Total, _Hits, Aggs, _Meta} ->
+            %lager:notice("Total ~p, Hits ~p, Aggs ~p, Meta ~p", [_Total, _Hits, Aggs, _Meta]),
+            TotalDuration = maps:get(<<"total_duration">>, Aggs, #{}),
+            Seconds = maps:get(<<"value">>, TotalDuration, 0),
+            %Minutes = ceiling(Seconds/60),
+            Minutes = round(Seconds/60, 1),
             Data = [
-                #{ minutes => 2050, type => <<"Total">> },
-                #{ minutes => 700, type => <<"VideoC.">> },
-                #{ minutes => 1400, type => <<"Calls">> }
+                #{ minutes => Minutes, type => <<"Total">> }
+                %#{ minutes => 700, type => <<"VideoC.">> },
+                %#{ minutes => 1400, type => <<"Calls">> }
             ],
             {ok, #{data => Data}, State};
         _ ->
@@ -1154,3 +1203,9 @@ get_id_parts(ElementId) ->
 %% @private
 handle(Fun, Args, #admin_session{srv_id=SrvId}=Session) ->
     apply(SrvId, Fun, Args++[Session]).
+
+
+%% @private
+round(Number, Precision) ->
+    P = math:pow(10, Precision),
+    round(Number * P) / P.
