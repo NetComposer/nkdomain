@@ -473,15 +473,15 @@ handle_info(nkdomain_obj_save_timer, #obj_state{is_dirty=true}=State) ->
 handle_info(nkdomain_obj_save_timer, State) ->
     {noreply, State};
 
-handle_info({'DOWN', _Ref, process, Pid, _Reason}, #obj_state{parent_pid=Pid}=State) ->
-    ?LLOG(notice, "parent has failed", [], State),
+handle_info({'DOWN', _Ref, process, Pid, Reason}, #obj_state{parent_pid=Pid}=State) ->
+    ?LLOG(notice, "parent has failed because: ~p", [Reason], State),
     self() ! nkdomain_find_parent,
     {_, State2} = do_save(parent_down, State),
     State3 = do_enabled(State2#obj_state{parent_pid=undefined, parent_enabled=false}),
     noreply(State3);
 
-handle_info({'DOWN', _Ref, process, Pid, _Reason}, #obj_state{domain_pid=Pid}=State) ->
-    ?LLOG(notice, "domain has failed", [], State),
+handle_info({'DOWN', _Ref, process, Pid, Reason}, #obj_state{domain_pid=Pid}=State) ->
+    ?LLOG(notice, "domain has failed because: ~p", [Reason], State),
     self() ! nkdomain_find_domain,
     {_, State2} = do_save(domain_down, State),
     State3 = do_enabled(State2#obj_state{domain_pid=undefined, domain_enabled=false}),
