@@ -26,6 +26,7 @@
 -export([import_7_to_8/1, print/1]).
 -export([import_8_to_9/1]).
 -export([move_users_from_to/2, move_user/2, move_users/2]).
+-export([delete_missing_user_content/1, delete_missing_user_content/2]).
 -export([change_field_value/6]).
 -export([get_root_field_fun/1, put_root_field_fun/1]).
 -export([get_subfield_fun/2, put_subfield_fun/2]).
@@ -290,6 +291,36 @@ fix_push_srv_id(Domain, PushSrvId) ->
     change_field_value(Domain, ?CHAT_CONVERSATION, get_subfield_fun(?CHAT_CONVERSATION, <<"push_srv_id">>), put_subfield_fun(?CHAT_CONVERSATION, <<"push_srv_id">>), PushSrvIdBin, #{deep => true}). 
 
 
+
+%% ===================================================================
+%% Delete user content
+%% ===================================================================
+
+
+%% @public
+delete_missing_user_content(Domain) ->
+    delete_missing_user_content(Domain, false).
+
+
+%% @public
+delete_missing_user_content(Domain, ForceDelete) when is_boolean(ForceDelete) ->
+    case nkdomain_db:find(Domain) of
+        #obj_id_ext{obj_id=DomainId, type=?DOMAIN_DOMAIN} ->
+            case nkdomain_db:iterate(core, {query_paths, DomainId, #{deep=>true, sort=>rpath, get_deleted=>false}}, recursive_delete_fun(ForceDelete), 0) of
+                {ok, N} when ForceDelete =:= true, N > 0 ->
+                    nkdomain_domain:unload_childs(Domain),
+                    {ok, N};
+                Other ->
+                    Other
+            end;
+        #obj_id_ext{obj_id=_ObjId} ->
+            {error, domain_unknown};
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
+
 %% ===================================================================
 %% Util
 %% ===================================================================
@@ -368,6 +399,151 @@ move_fun(ESOpts, Type, FromId, _FromPath, ToId, ToPath) ->
         end,
         {ok, Acc2}
     end.
+
+%% @private
+recursive_delete_fun(ForceDelete) ->
+    fun(#{<<"obj_id">>:=Id}, Acc) ->
+        case nkdomain_db:read(Id) of
+            {ok, #obj_id_ext{obj_id=ObjId}, Obj} ->
+                case is_deletable(Obj, ForceDelete) of
+                    true ->
+                        case ForceDelete of
+                            false ->
+                                ?LLOG(warning, "(DEBUG) Object ~s would be deleted", [ObjId]),
+                                {ok, Acc+1};
+                            true ->
+                                before_deleting(ObjId, Obj),
+                                case nkdomain:remove_with_childs(ObjId) of
+                                    {ok, NAcc} ->
+                                        ?LLOG(info, "Deleted object ~s", [ObjId]),
+                                        {ok, Acc+NAcc};
+                                    {error, object_not_found} ->
+                                        {ok, Acc};
+                                    {error, Error} ->
+                                        ?LLOG(error, "Couldn't delete object ~s: ~p", [ObjId, Error]),
+                                        {ok, Acc}
+                                end
+                        end;
+                    false ->
+                        {ok, Acc}
+                end;
+            {error, _Error} ->
+                {ok, Acc}
+        end
+    end.
+
+%% @private
+is_deletable(#{type:=Type, created_by:=UserId}=Obj, ForceDelete) when Type =:= <<"conversation">>; Type =:= <<"message">> ->
+    case object_exists(UserId) of
+        false ->
+            true;
+        true ->
+            case Obj of
+                #{<<"conversation">> := #{obj_name_follows_members := true, members := MemberList}} ->
+                    MemberIds = [MId || #{member_id := MId} <- MemberList],
+                    not objects_exist(MemberIds);
+                #{obj_id := ConvId, <<"conversation">> := #{members := Members}} ->
+                    MemberIds = [MId || #{member_id := MId} <- Members],
+                    lists:map(fun(M) ->
+                        case object_exists(M) of
+                            false when ForceDelete =:= true ->
+                                case nkchat_conversation:remove_member(ConvId, M, #{silent => true}) of
+                                    ok ->
+                                        ?LLOG(info, "Removed member ~s from conversation ~s", [M, ConvId]);
+                                    {error, Error} ->
+                                        ?LLOG(error, "While removing member ~s from conversation ~s: ~p", [M, ConvId, Error])
+                                end;
+                            false ->
+                                ?LLOG(warning, "(DEBUG) User ~s would be removed from conversation ~s", [M, ConvId]);
+                            true ->
+                                ok
+                        end
+                    end,
+                    MemberIds
+                    ),
+                    false;
+                #{<<"message">> := Msg, parent_id := ParentId} ->
+                    Ids = search_user_ids_in_msg(Msg),
+                    (not object_exists(ParentId)) orelse (not objects_exist(Ids));
+                _ ->
+                    false
+            end;
+        {error, Error} ->
+            ?LLOG(error, "Error ~p while search ~p", [Error, UserId]),
+            false
+    end;
+
+is_deletable(_Obj, _) ->
+    false.
+
+
+%% @private
+before_deleting(ConvId, #{type := <<"conversation">>, <<"conversation">> := #{obj_name_follows_members := false}}) ->
+    case nkchat_conversation:remove_all_members(ConvId) of
+        ok ->
+            ?LLOG(info, "Members from conversation ~s has been removed", [ConvId]),
+            ok;
+        {error, Error} ->
+            ?LLOG(error, "Couldn't remove all members from ~s because: ~p", [ConvId, Error]),
+            {error, Error}
+    end;
+
+before_deleting(MsgId, #{type := <<"message">>}) ->
+    case nkdomain:delete(MsgId) of
+        ok ->
+            ok;
+        {error, Error} ->
+            {error, Error}
+    end;
+
+before_deleting(_ObjId, _Obj) ->
+    ok.
+
+
+%% @private
+objects_exist(Ids) ->
+    Ids2 = [object_exists(Id) || Id <- Ids],
+    lists:foldl(fun(B, Acc) ->
+        Acc andalso B
+    end,
+    true,
+    Ids2).
+
+
+%% @private
+object_exists(Id) ->
+    case nkdomain:find(Id) of
+        {ok, _Type, _ObjId, _Path, _PID} ->
+            true;
+        {error, object_not_found} ->
+            false;
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
+%% @private
+search_user_ids_in_msg(Msg) ->
+    List1 = case Msg of
+        #{body := #{<<"member_id">> := Id1}} ->
+            [Id1];
+        _ ->
+            []
+    end,
+    List2 = case Msg of
+        #{body := #{<<"quote">> := #{<<"user_id">> := Id2}}} ->
+            [Id2 | List1];
+        _ ->
+            List1
+    end,
+    List3 = case Msg of
+        #{body := #{<<"members">> := Ids3}} ->
+            Ids3 ++ List2;
+        _ ->
+            List2
+    end,
+    List3.
+
 
 %% @private
 move_users([], _, _, _, Completed, Failed) ->
