@@ -61,9 +61,9 @@ request(SrvId, #{resource:=<<"_uids">>, group:=Group, vsn:=Vsn, name:=UID}=ApiRe
             {error, actor_not_found};
         _ ->
             ?API_DEBUG("reading UID: ~s", [UID]),
-            case nkservice_actor_db:find(SrvId, UID) of
+            case nkservice_actor:find({SrvId, UID}) of
                 {ok, #actor_id{domain=Domain, group=Group2, vsn=Vsn2, resource=Res, name=Name}, _} ->
-                    case nkdomain_domain:get_domain_data(SrvId, Domain) of
+                    case nkdomain_register:get_domain_data(SrvId, Domain) of
                         {ok, DomSrvId, _DomUID} ->
                             Vsn3 = case Group==Group2 of
                                 true ->
@@ -100,7 +100,7 @@ request(SrvId, #{verb:=Verb, group:=Group, vsn:=Vsn}=ApiReq) ->
         end,
         #{domain:=Domain, resource:=Resource} = ApiReq2,
         ?API_DEBUG("incoming '~p' ~s (~p)", [Verb, Resource, ApiReq2]),
-        ActorSrvId = case nkdomain_domain:get_domain_data(SrvId, Domain) of
+        ActorSrvId = case nkdomain_register:get_domain_data(SrvId, Domain) of
             {ok, DomSrvId, _DomUID} ->
                 DomSrvId;
             {error, {domain_is_disabled, DisabledDomain}} ->
@@ -144,7 +144,8 @@ request(SrvId, #{verb:=Verb, group:=Group, vsn:=Vsn}=ApiReq) ->
         end,
         % At this point, the Verb, API Group and version are compatible with the
         % Actor configuration
-        case nkdomain_actor:request(ActorSrvId, ActorId, Config, ApiReq3) of
+        #{verb:=Verb} = ApiReq3,
+        case nkservice_actor:request(ActorSrvId, ActorId, Config, Verb, ApiReq3) of
             continue ->
                 ?API_DEBUG("processing default", [], ApiReq3),
                 default_request(ActorSrvId, ActorId, Verb, Config, ApiReq3);
@@ -212,7 +213,7 @@ get(SrvId, ActorId, Config, ApiReq) ->
     } = ActorId,
     Opts = set_activate_opts(Config, ApiReq),
     ?API_DEBUG("processing read ~p (~p)", [ActorId, Opts]),
-    case nkservice_actor_db:read(SrvId, ActorId, Opts) of
+    case nkservice_actor_db:read({SrvId, ActorId}, Opts) of
         {ok, #actor{id=ActorId2}=Actor, _Meta} ->
             #actor_id{domain=Domain, group=Group, resource=Res, name=Name} = ActorId2,
             case nkdomain_api:actor_to_external(SrvId, Actor, Vsn) of
@@ -264,7 +265,8 @@ pre_create(SrvId, ActorId, Config, ApiReq) ->
     end,
     Actor2 = nkservice_actor_util:put_create_fields(Actor1),
     % Make sure it is a valid actor, parse data
-    case nkdomain_actor:parse(SrvId, Actor2, Config, ApiReq) of
+    #{module:=Module} = Config,
+    case nkdomain_actor:parse(SrvId, Actor2, Module, ApiReq) of
         {ok, Actor3} ->
             Actor3;
         {error, ParseError} ->
@@ -278,7 +280,7 @@ create(SrvId, ActorId, Config, Actor, ApiReq) ->
     % Actor will not have uid, so it will be generated
     ?API_DEBUG("Creating actor ~p (~p)", [Actor, Opts]),
     #actor_id{vsn=Vsn} = ActorId,
-    Actor2 = case nkservice_actor_db:create(SrvId, Actor, Opts) of
+    Actor2 = case nkservice_actor_db:create(SrvId, Actor, #{actor_config=>Config}) of
         {ok, ActorCreated, _Meta} ->
             ActorCreated;
         {error, CreateError} ->
@@ -308,7 +310,8 @@ pre_update(SrvId, ActorId, Config, ApiReq) ->
         {error, ApiActorError} ->
             throw({error, ApiActorError})
     end,
-    case nkdomain_actor:parse(SrvId, Actor1, Config, ApiReq) of
+    #{module:=Module} = Config,
+    case nkdomain_actor:parse(SrvId, Actor1, Module, ApiReq) of
         {ok, Actor2} ->
             Actor2;
         {error, ParseError} ->
@@ -345,7 +348,7 @@ delete(SrvId, ActorId, _Config, ApiReq) ->
     #{params:=Params} = ApiReq,
     Opts = #{cascade => maps:get(cascade, Params, false)},
     ?API_DEBUG("processing delete ~p (~p)", [ActorId, Opts]),
-    case nkservice_actor_db:delete(SrvId, ActorId, Opts) of
+    case nkservice_actor_db:delete({SrvId, ActorId}, Opts) of
         {ok, _ActorIds, _Meta} ->
             {status, actor_deleted};
         {error, Error} ->

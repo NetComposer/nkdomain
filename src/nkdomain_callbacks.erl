@@ -25,15 +25,13 @@
 -export([msg/1, status/1]).
 -export([nkdomain_api_request/4, nkdomain_get_paths/2, nkdomain_api_get_groups/1,
          nkdomain_api_get_resources/3]).
--export([actor_is_activated/2, actor_activate/3, actor_create/3, actor_external_event/3]).
--export([actor_srv_init/2, actor_srv_register/2, actor_srv_heartbeat/1, actor_srv_update/2,
+-export([actor_find_registered/2, actor_activate/3, actor_create/3, actor_external_event/3]).
+-export([actor_srv_init/1, actor_srv_register/2, actor_srv_heartbeat/1, actor_srv_update/2,
          actor_srv_enabled/2, actor_srv_event/2, actor_srv_link_event/4,
          actor_srv_sync_op/3, actor_srv_async_op/2,
          actor_srv_handle_call/3, actor_srv_handle_cast/2, actor_srv_handle_info/2,
          actor_srv_stop/2, actor_srv_terminate/2]).
--export([actor_db_find/2, actor_db_create/2, actor_db_read/2,
-         actor_db_update/2, actor_db_delete/3, actor_db_search/3, actor_db_aggregate/3,
-         actor_db_get_query/4, actor_db_get_service/2, actor_db_update_service/3]).
+-export([actor_db_get_query/4]).
 -export([service_master_leader/4]).
 -export([nkservice_rest_http/4]).
 -export([nkservice_openapi_get_spec/1]).
@@ -316,13 +314,14 @@ nkdomain_api_get_resources(SrvId, ApiGroup, ApiVsn) ->
 %% Actor processing
 %% ===================================================================
 
-actor_is_activated(_SrvId, ActorIdOrUID) ->
-    nkdomain_domain:is_actor_cached(ActorIdOrUID).
+%% @see Implements alternate registrar
+actor_find_registered(_SrvId, Id) ->
+    nkdomain_register:find_registered(Id).
 
 
-%% @see nkservice_callbacks:actor_create/3
-actor_create(SrvId, Actor, LoadOpts) ->
-    nkdomain_actor:actor_create(SrvId, Actor, LoadOpts).
+%% @see nkservice_callbacks:actor_create/4
+actor_create(SrvId, Actor, Config) ->
+    nkdomain_actor:actor_create(SrvId, Actor, Config).
 
 
 %% @see nkservice_callbacks:actor_activate/3
@@ -361,63 +360,65 @@ actor_external_event(_SrvId, _Event, _Actor) ->
 
 
 %% @doc
-actor_srv_init(StartOpts, ActorSt) ->
-    nkdomain_actor:actor_srv_init(StartOpts, ActorSt).
+actor_srv_init(ActorSt) ->
+    nkservice_actor:actor_srv_init(ActorSt).
 
 
 %% @doc
 actor_srv_register(SrvId, ActorSt) ->
-    nkdomain_actor:actor_register(SrvId,  ActorSt).
+
+
+    nkservice_actor:actor_register(SrvId,  ActorSt).
 
 
 %% @doc
 actor_srv_heartbeat(ActorSt) ->
-    nkdomain_actor:actor_srv_heartbeat(ActorSt).
+    nkservice_actor:actor_srv_heartbeat(ActorSt).
 
 
 %% @doc
 actor_srv_enabled(Enabled, ActorSt) ->
-    nkdomain_actor:actor_srv_enabled(Enabled, ActorSt).
+    nkservice_actor:actor_srv_enabled(Enabled, ActorSt).
 
 
 %% @doc
 actor_srv_update(Actor, State) ->
-    nkdomain_actor:actor_srv_update(Actor, State).
+    nkservice_actor:actor_srv_update(Actor, State).
 
 
 %% @doc
 actor_srv_sync_op(Op, From, State) ->
-    nkdomain_actor:actor_srv_sync_op(Op, From, State).
+    nkservice_actor:actor_srv_sync_op(Op, From, State).
 
 
 %% @doc
 actor_srv_async_op(Op, State) ->
-    nkdomain_actor:actor_srv_async_op(Op, State).
+    nkservice_actor:actor_srv_async_op(Op, State).
 
 
 %% @doc
 actor_srv_handle_call(Msg, From, ActorSt) ->
-    nkdomain_actor:actor_srv_handle_call(Msg, From, ActorSt).
+    nkservice_actor:actor_srv_handle_call(Msg, From, ActorSt).
 
 
 %% @doc
 actor_srv_handle_cast(Msg, ActorSt) ->
-    nkdomain_actor:actor_srv_handle_cast(Msg, ActorSt).
+    nkservice_actor:actor_srv_handle_cast(Msg, ActorSt).
 
 
 %% @doc
 actor_srv_handle_info(Msg, ActorSt) ->
-    nkdomain_actor:actor_srv_handle_info(Msg, ActorSt).
+    nkservice_actor:actor_srv_handle_info(Msg, ActorSt).
 
 
 %% @doc
 actor_srv_stop(Reason, ActorSt) ->
-    nkdomain_actor:actor_srv_stop(Reason, ActorSt).
+    nkservice_actor:actor_srv_stop(Reason, ActorSt).
 
 
 %% @doc
 actor_srv_terminate(Reason, ActorSt) ->
-    nkdomain_actor:actor_srv_terminate(Reason, ActorSt).
+    nkservice_actor:actor_srv_terminate(Reason, ActorSt).
 
 
 %% @doc Called when an actor generates and event
@@ -435,12 +436,12 @@ actor_srv_event({nkdomain_api_event, Op, EvActor},
         #actor_id{domain=?ROOT_DOMAIN, name=?ROOT_DOMAIN} ->
             ok;
         #actor_id{domain=Domain} ->
-            case nkdomain_domain:is_domain_active(Domain) of
+            case nkdomain_register:is_domain_active(Domain) of
                 {true, Pid} ->
                     % We scale the api event to our father, so that possible watchers
                     % there can read it
                     Ev = {nkdomain_api_event, Op, EvActor},
-                    nkservice_actor_srv:async_op(none, Pid, {send_event, Ev});
+                    nkservice_actor_srv:async_op(Pid, {send_event, Ev});
                 false ->
                     lager:error("NKLOG EVENR SCALATE ERROR: ~s", [Domain])
             end
@@ -452,7 +453,7 @@ actor_srv_event(Event, ActorSt) when Event==created; element(1,Event)==updated; 
     {ok, nkdomain_lib:core_api_event(Event, ActorSt)};
 
 actor_srv_event(Event, ActorSt) ->
-    nkdomain_actor:actor_srv_event(Event, ActorSt).
+    nkservice_actor:actor_srv_event(Event, ActorSt).
 
 
 %% @doc Called when an actor generates and event, for each linked process
@@ -473,58 +474,58 @@ actor_srv_link_event(_Link, _Data, _Event, _ActorSt) ->
     continue.
 
 
-%% ===================================================================
-%% Actor DB
-%% All DB operations are rerouted to ?ROOT_DOMAIN
-%% ===================================================================
-
-%% @private
-actor_db_find(?ROOT_SRV, _Id) ->
-    continue;
-actor_db_find(_SrvId, Id) ->
-    ?CALL_SRV(?ROOT_SRV, actor_db_find, [?ROOT_SRV, Id]).
-
-
-%% @private
-actor_db_read(?ROOT_SRV, _UID) ->
-    continue;
-actor_db_read(_SrvId, UID) ->
-    ?CALL_SRV(?ROOT_SRV, actor_db_read, [?ROOT_SRV, UID]).
-
-
-%% @private
-actor_db_create(?ROOT_SRV, _Actor) ->
-    continue;
-actor_db_create(_SrvId, Actor) ->
-    ?CALL_SRV(?ROOT_SRV, actor_db_create, [?ROOT_SRV, Actor]).
-
-
-%% @private
-actor_db_update(?ROOT_SRV, _Actor) ->
-    continue;
-actor_db_update(_SrvId, Actor) ->
-    ?CALL_SRV(?ROOT_SRV, actor_db_update, [?ROOT_SRV, Actor]).
-
-
-%% @private
-actor_db_delete(?ROOT_SRV, _UID, _Opts) ->
-    continue;
-actor_db_delete(_SrvId, UID, Opts) ->
-    ?CALL_SRV(?ROOT_SRV, actor_db_delete, [?ROOT_SRV, UID, Opts]).
-
-
-%% @private
-actor_db_search(?ROOT_SRV, _SearchType, _Opts) ->
-    continue;
-actor_db_search(_SrvId, SearchType, Opts) ->
-    ?CALL_SRV(?ROOT_SRV, actor_db_search, [?ROOT_SRV,SearchType, Opts]).
-
-
-%% @private
-actor_db_aggregate(?ROOT_SRV, _SearchType, _Opts) ->
-    continue;
-actor_db_aggregate(_SrvId, SearchType, Opts) ->
-    ?CALL_SRV(?ROOT_SRV, actor_db_aggregate, [?ROOT_SRV,SearchType, Opts]).
+%%%% ===================================================================
+%%%% Actor DB
+%%%% All DB operations are rerouted to ?ROOT_DOMAIN
+%%%% ===================================================================
+%%
+%%%% @private
+%%actor_db_find(?ROOT_SRV, _Id) ->
+%%    continue;
+%%actor_db_find(_SrvId, Id) ->
+%%    ?CALL_SRV(?ROOT_SRV, actor_db_find, [?ROOT_SRV, Id]).
+%%
+%%
+%%%% @private
+%%actor_db_read(?ROOT_SRV, _UID) ->
+%%    continue;
+%%actor_db_read(_SrvId, UID) ->
+%%    ?CALL_SRV(?ROOT_SRV, actor_db_read, [?ROOT_SRV, UID]).
+%%
+%%
+%%%% @private
+%%actor_db_create(?ROOT_SRV, _Actor) ->
+%%    continue;
+%%actor_db_create(_SrvId, Actor) ->
+%%    ?CALL_SRV(?ROOT_SRV, actor_db_create, [?ROOT_SRV, Actor]).
+%%
+%%
+%%%% @private
+%%actor_db_update(?ROOT_SRV, _Actor) ->
+%%    continue;
+%%actor_db_update(_SrvId, Actor) ->
+%%    ?CALL_SRV(?ROOT_SRV, actor_db_update, [?ROOT_SRV, Actor]).
+%%
+%%
+%%%% @private
+%%actor_db_delete(?ROOT_SRV, _UID, _Opts) ->
+%%    continue;
+%%actor_db_delete(_SrvId, UID, Opts) ->
+%%    ?CALL_SRV(?ROOT_SRV, actor_db_delete, [?ROOT_SRV, UID, Opts]).
+%%
+%%
+%%%% @private
+%%actor_db_search(?ROOT_SRV, _SearchType, _Opts) ->
+%%    continue;
+%%actor_db_search(_SrvId, SearchType, Opts) ->
+%%    ?CALL_SRV(?ROOT_SRV, actor_db_search, [?ROOT_SRV,SearchType, Opts]).
+%%
+%%
+%%%% @private
+%%actor_db_aggregate(?ROOT_SRV, _SearchType, _Opts) ->
+%%    continue;
+%%actor_db_aggregate(_SrvId, SearchType, Opts) ->
+%%    ?CALL_SRV(?ROOT_SRV, actor_db_aggregate, [?ROOT_SRV,SearchType, Opts]).
 
 
 %% @private
@@ -534,24 +535,24 @@ actor_db_get_query(SrvId, pgsql, SearchType, Opts) ->
             continue;
         Other ->
             Other
-    end;
+    end.
 
-actor_db_get_query(_SrvId, _Backend, _SearchType, _Opts) ->
-    continue.
-
-
-%% @private
-actor_db_get_service(?ROOT_SRV, _ActorSrvId) ->
-    continue;
-actor_db_get_service(_SrvId, ActorSrvId) ->
-    ?CALL_SRV(?ROOT_SRV, actor_db_get_service, [?ROOT_SRV, ActorSrvId]).
-
-
-%% @private
-actor_db_update_service(?ROOT_SRV, _ActorSrvId, _Cluster) ->
-    continue;
-actor_db_update_service(_SrvId, ActorSrvId, Cluster) ->
-    ?CALL_SRV(?ROOT_SRV, actor_db_update_service, [?ROOT_SRV, ActorSrvId, Cluster]).
+%%actor_db_get_query(_SrvId, _Backend, _SearchType, _Opts) ->
+%%    continue.
+%%
+%%
+%%%% @private
+%%actor_db_get_service(?ROOT_SRV, _ActorSrvId) ->
+%%    continue;
+%%actor_db_get_service(_SrvId, ActorSrvId) ->
+%%    ?CALL_SRV(?ROOT_SRV, actor_db_get_service, [?ROOT_SRV, ActorSrvId]).
+%%
+%%
+%%%% @private
+%%actor_db_update_service(?ROOT_SRV, _ActorSrvId, _Cluster) ->
+%%    continue;
+%%actor_db_update_service(_SrvId, ActorSrvId, Cluster) ->
+%%    ?CALL_SRV(?ROOT_SRV, actor_db_update_service, [?ROOT_SRV, ActorSrvId, Cluster]).
 
 
 %% ===================================================================

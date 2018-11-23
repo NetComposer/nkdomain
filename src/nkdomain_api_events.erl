@@ -100,7 +100,7 @@ send_event(SrvId, #actor{metadata=Meta}=EvActor) ->
         fun({Label, UID}) ->
             case Label of
                 <<"event.related:", _/binary>> ->
-                    nkservice_actor_srv:async_op(SrvId, UID, {send_event, ApiEvent});
+                    nkservice_actor_srv:async_op({SrvId, UID}, {send_event, ApiEvent});
                 _ ->
                     ok
             end
@@ -123,9 +123,9 @@ do_send_domain_event(EvActor, ApiEvent) ->
             ok;
         _ ->
             % lager:error("SENDING EVENT UP FROM ~p TO ~p ~p", [IO, Domain, ActorId]),
-            case nkdomain_domain:is_domain_active(Domain) of
+            case nkdomain_register:is_domain_active(Domain) of
                 {true, Pid} ->
-                    nkservice_actor_srv:async_op(none, Pid, {send_event, ApiEvent});
+                    nkservice_actor_srv:async_op(Pid, {send_event, ApiEvent});
                 false ->
                     ?LLOG(warning, "could not send to domain '~s': not active", [Domain])
             end
@@ -185,7 +185,7 @@ make_event(SrvId, Event, #actor{id=ActorId}=InvolvedActor) ->
     #actor_id{domain=Domain, group=Group, resource=Res, name=Name} = ActorId,
     EvDomain = case {Group, Res} of
         {?GROUP_CORE, ?RES_CORE_DOMAINS} ->
-            nkdomain_domain:actor_id_to_managed_domain(ActorId);
+            nkdomain_register:actor_id_to_managed_domain(ActorId);
         _ ->
             Domain
     end,

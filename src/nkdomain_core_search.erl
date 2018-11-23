@@ -151,10 +151,10 @@ search_spec(SrvId, Domain, Body) ->
 %% @private
 base_config() ->
     #{
-        filter_fields => nkdomain_actor:filter_fields(),
-        sort_fields => nkdomain_actor:sort_fields(),
-        field_type => nkdomain_actor:field_type(),
-        field_trans => nkdomain_actor:field_trans()
+        filter_fields => nkservice_actor:filter_fields(),
+        sort_fields => nkservice_actor:sort_fields(),
+        field_type => nkservice_actor:field_type(),
+        field_trans => nkservice_actor:field_trans()
     }.
 
 

@@ -255,7 +255,8 @@ actor_to_external(SrvId, Actor, Vsn) ->
             {error, Error} ->
                 throw({error, Error})
         end,
-        Actor2 = nkdomain_actor:make_external(SrvId, Config, Actor, Vsn),
+        #{module:=Module} = Config,
+        Actor2 = nkdomain_actor:make_external(SrvId, Actor, Module, Vsn),
         #actor{id=#actor_id{vsn=Vsn2}, data=Data, metadata=Meta} = Actor2,
         case Vsn /= undefined andalso Vsn /= Vsn2 of
             true ->

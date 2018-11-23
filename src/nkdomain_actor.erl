@@ -110,143 +110,14 @@
 
 -module(nkdomain_actor).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
--export([config/1, parse/4, request/4, make_external/4]).
--export([actor_srv_init/2, actor_srv_sync_op/3, actor_srv_async_op/2,
-         actor_srv_heartbeat/1, actor_srv_enabled/2, actor_srv_update/2,
-         actor_srv_handle_call/3, actor_srv_handle_cast/2, actor_srv_handle_info/2,
-         actor_srv_event/2, actor_srv_stop/2, actor_srv_terminate/2]).
 -export([actor_create/3, actor_activate/3, actor_register/2]).
--export([filter_fields/0, sort_fields/0, field_type/0, field_trans/0]).
+-export([parse/4, make_external/4]).
 
 -include("nkdomain.hrl").
 -include_lib("nkservice/include/nkservice_actor.hrl").
 
 -define(LLOG(Type, Txt, Args), lager:Type("NkDOMAIN Actor: "++Txt, Args)).
 
-
-
-%% ===================================================================
-%% Types
-%% ===================================================================
-
--type actor_st() :: #actor_st{}.
--type continue() :: continue | {continue, list()}.
-
-
-
-%% ===================================================================
-%% Behaviour callbacks
-%% ===================================================================
-
-
-%% @doc Called to get the actor's config
--callback config() -> nkdomain:actor_config().
-
-
-%% @doc Called to parse an actor of this type
-%% Can return:
-%% - {actor_spec, Syntax}: this Syntax will be applied to spec field
-%%
-%% If not implemented, anything is allowed in spec
--callback parse(nkservice:id(), nkservice_actor:actor(), nkdomain_api:request()) ->
-    {actor_spec, nklib_syntax:syntax()}.     % Return syntax for our spec
-
-
-%% @doc Called to process an incoming API
-%% SrvId will be the service supporting the domain in ApiReq
-%% If not implemented, or 'continue' is returned, standard processing will apply
--callback request(nkservice:id(), nkdomain_api:verb(), #actor_id{},
-                  nkdomain:actor_config(), nkdomain_api:api_req()) ->
-    nkdomain_api:response() | continue.
-
-
-%% @doc Called to change the external representation of an actor,
-%% for example to change date's format. Vsn will be the current ApiVsn asking for it
--callback make_external(nkservice:id(), nkservice:actor(), nkdomain_api:vsn()) ->
-    {ok, nkservice:actor()} | continue.
-
-
-%% @doc Called when a new actor starts
--callback init(actor_st()) ->
-    {ok, actor_st()} | {error, Reason::term()}.
-
-
-%% @doc Called to process sync operations
--callback update(nkservice:actor(), actor_st()) ->
-    {ok, nkservice:actor(), actor_st()} | {error, nkservice:msg(), actor_st()}.
-
-
-%% @doc Called to process sync operations
--callback sync_op(term(), {pid(), reference()}, actor_st()) ->
-    {reply, Reply::term(), actor_st()} | {reply_and_save, Reply::term(), actor_st()} |
-    {noreply, actor_st()} | {noreply_and_save, actor_st()} |
-    {stop, Reason::term(), Reply::term(), actor_st()} |
-    {stop, Reason::term(), actor_st()} |
-    continue().
-
-
-%% @doc Called to process async operations
--callback async_op(term(), actor_st()) ->
-    {noreply, actor_st()} | {noreply_and_save, actor_st()} |
-    {stop, Reason::term(), actor_st()} |
-    continue().
-
-
-%%  @doc Called when an actor is sent inside the actor process
-%%  Can be used to launch API events, calling
--callback event(term(), actor_st()) ->
-    {ok, actor_st()} | continue().
-
-
-%% @doc Called when an event is sent, for each registered process to the session
-%% The events are 'erlang' events (tuples usually)
--callback link_event(nklib:link(), term(), nkservice_actor_srv:event(), actor_st()) ->
-    {ok, actor_st()} | continue().
-
-
-%% @doc Called when an object is enabled/disabled
--callback enabled(boolean(), actor_st()) ->
-    {ok, actor_st()} | continue().
-
-
-%% @doc Called on actor heartbeat (5 secs)
--callback heartbeat(actor_st()) ->
-    {ok, actor_st()} | {error, nkservice_msg:msg(), actor_st()} | continue().
-
-
-%% @doc
--callback handle_call(term(), {pid(), term()}, actor_st()) ->
-    {reply, term(), actor_st()} | {noreply, actor_st()} |
-    {stop, Reason::term(), Reply::term(), actor_st()} |
-    {stop, Reason::term(), actor_st()} | continue().
-
-
-%% @doc
--callback handle_cast(term(), actor_st()) ->
-    {noreply, actor_st()} | {stop, term(), actor_st()} | continue().
-
-
-%% @doc
--callback handle_info(term(), actor_st()) ->
-    {noreply, actor_st()} | {stop, term(), actor_st()} | continue().
-
-
-%% @doc
--callback stop(Reason::term(), actor_st()) ->
-    {ok, actor_st()}.
-
-
-%% @doc
--callback terminate(Reason::term(), actor_st()) ->
-    {ok, actor_st()}.
-
-
-%% @doc
--optional_callbacks([
-    request/5, parse/3, make_external/3,
-    init/1, update/2, sync_op/3, async_op/2, enabled/2, heartbeat/1,
-    event/2, link_event/4, handle_call/3, handle_cast/2, handle_info/2,
-    stop/2, terminate/2]).
 
 
 
@@ -256,13 +127,13 @@
 
 
 %% @doc Called from nkdomain_callbacks:actor_create()
-actor_create(SrvId, Actor, Opts) ->
-    do_actor_activate(SrvId, Actor, true, Opts).
+actor_create(SrvId, Actor, ExtraConfig) ->
+    do_actor_activate(SrvId, Actor, true, ExtraConfig).
 
 
 %% @doc Called from nkdomain_callbacks:actor_activate()
-actor_activate(SrvId, Actor, Opts) ->
-    do_actor_activate(SrvId, Actor, false, Opts).
+actor_activate(SrvId, Actor, ExtraConfig) ->
+    do_actor_activate(SrvId, Actor, false, ExtraConfig).
 
 
 %% @doc Called from nkdomain_callbacks for actor registration
@@ -277,7 +148,7 @@ actor_register(SrvId, ActorSt) ->
                     {error, service_leader_not_available}
             end;
         _ ->
-            case nkdomain_domain:register_actor(SrvId, ActorId) of
+            case nkdomain_register:register_actor(SrvId, ActorId) of
                 {ok, Pid} ->
                     {ok, Pid, ActorSt};
                 {error, Error} ->
@@ -286,33 +157,12 @@ actor_register(SrvId, ActorSt) ->
     end.
 
 
-%% ===================================================================
-%% Actor Proxy
-%% ===================================================================
-
-
-%% @doc Used to call the 'config' callback on an actor's module
-%% You normally will use nkdomain_util:get_config/2, as its has a complete set of fields
-config(Module) ->
-    case erlang:function_exported(Module, config, 0) of
-        true ->
-            Module:config();
-        false ->
-            not_exported
-    end.
-
 
 %% @doc Used to parse an actor, trying the module callback first
 %% Must set also vsn
 %% @see task actor for an example of direct parsing
-parse(SrvId, Actor, #{module:=Module}, ApiReq) ->
-    SynSpec = case erlang:function_exported(Module, parse, 3) of
-        true ->
-            apply(Module, parse, [SrvId, Actor, ApiReq]);
-        false ->
-            {syntax, #{}}
-    end,
-    case SynSpec of
+parse(SrvId, Actor, Module, ApiReq) ->
+    case nkservice_actor:parse(SrvId, Actor, Module, ApiReq) of
         {ok, #actor{}=Actor2} ->
             {ok, Actor2};
         {syntax, Syntax} when is_map(Syntax) ->
@@ -322,189 +172,24 @@ parse(SrvId, Actor, #{module:=Module}, ApiReq) ->
     end.
 
 
-%% @doc Used to call the 'request' callback on an actor's module
-request(SrvId, ActorId, #{module:=Module}=Config, #{verb:=Verb}=ApiReq) ->
-    case erlang:function_exported(Module, request, 5) of
-        true ->
-            Module:request(SrvId, Verb, ActorId, Config, ApiReq);
-        false ->
-            continue
-    end;
-
-request(_SrvId, _ActorId, _Config, _ApiReq) ->
-    continue.
-
-
 %% @doc Used to update the external API representation of an actor
 %% to match a version and also to filter and populate 'data' (specially, data.status)
 %% If Vsn is 'undefined' actor can use it's last version
--spec make_external(nkservice:id(), nkdomain:config(), #actor{}, nkdomain_api:vsn()|undefined) ->
+-spec make_external(nkservice:id(), #actor{}, module(), nkdomain_api:vsn()|undefined) ->
     #actor{}.
 
-make_external(SrvId, #{module:=Module}, Actor, Vsn) ->
-    Actor3 = case erlang:function_exported(Module, make_external, 3) of
-        true ->
-            case Module:make_external(SrvId, Actor, Vsn) of
-                continue ->
-                    Actor;
-                {ok, Actor2} ->
-                    Actor2
-            end;
-        false ->
-            Actor
-    end,
-    #actor{id=#actor_id{pid=Pid}, data=Data} = Actor3,
+make_external(SrvId, Actor, Module, Vsn) ->
+    Actor2 = nkservice_actor:make_external(SrvId, Actor, Module, Vsn),
+    #actor{id=#actor_id{pid=Pid}, data=Data} = Actor2,
     case is_pid(Pid) of
         true ->
             Status1 = maps:get(<<"status">>, Data, #{}),
             Status2 = Status1#{<<"isActivated">> => true},
             Data3 = Data#{<<"status">> => Status2},
-            Actor3#actor{data=Data3};
+            Actor2#actor{data=Data3};
         false ->
-            Actor3
+            Actor2
     end.
-
-
-%% @doc Called from nkdomain_callbacks for actor initialization
-actor_srv_init(_StartOpts, ActorSt) ->
-    call_actor(init, [ActorSt], ActorSt).
-
-
-%% @doc Called from nkdomain_callbacks for actor heartbeat
-actor_srv_heartbeat(ActorSt) ->
-    call_actor(heartbeat, [ActorSt], ActorSt).
-
-
-%% @doc Called from nkdomain_callbacks after enable change
-actor_srv_enabled(Enabled, ActorSt) ->
-    call_actor(enabled, [Enabled, ActorSt], ActorSt).
-
-
-%% @doc Called from nkdomain_callbacks before terminating an update
-actor_srv_update(Actor, ActorSt) ->
-    call_actor(update, [Actor, ActorSt], ActorSt).
-
-
-%% @doc Called from nkdomain_callbacks for sync operations
-actor_srv_sync_op(Op, From, ActorSt) ->
-    call_actor(sync_op, [Op, From, ActorSt], ActorSt).
-
-
-%% @doc Called from nkdomain_callbacks for async operations
-actor_srv_async_op(Op, ActorSt) ->
-    call_actor(async_op, [Op,  ActorSt], ActorSt).
-
-
-%% @doc Called from nkdomain_callbacks when a event is sent
-actor_srv_event(Op, ActorSt) ->
-    call_actor(event, [Op,  ActorSt], ActorSt).
-
-
-%% @doc Called from nkdomain_callbacks for handle_call
-actor_srv_handle_call(Msg, From, ActorSt) ->
-    call_actor(handle_call, [Msg, From, ActorSt], ActorSt).
-
-
-%% @doc Called from nkdomain_callbacks for handle_cast
-actor_srv_handle_cast(Msg, ActorSt) ->
-    call_actor(handle_cast, [Msg, ActorSt], ActorSt).
-
-
-%% @doc Called from nkdomain_callbacks for handle_info
-actor_srv_handle_info(Msg, ActorSt) ->
-    call_actor(handle_info, [Msg, ActorSt], ActorSt).
-
-
-%% @doc Called from nkdomain_callbacks for actor termination
-actor_srv_stop(Reason, ActorSt) ->
-    call_actor(stop, [Reason,  ActorSt], ActorSt).
-
-
-%% @doc Called from nkdomain_callbacks for actor termination
-actor_srv_terminate(Reason, ActorSt) ->
-    call_actor(terminate, [Reason,  ActorSt], ActorSt).
-
-
-%% ===================================================================
-%% Common fields
-%% ===================================================================
-
-
-%% @doc Default filter fields
-%% Must be sorted!
-filter_fields() ->
-    [
-        <<"apiGroup">>,
-        <<"domain">>,
-        <<"groups">>,
-        <<"group+resource">>,           % Maps to special group + resource
-        <<"kind">>,
-        <<"metadata.createdBy">>,
-        <<"metadata.creationTime">>,
-        <<"metadata.domain">>,
-        <<"metadata.expiresTime">>,
-        <<"metadata.generation">>,
-        <<"metadata.isEnabled">>,
-        <<"metadata.isInAlarm">>,
-        <<"metadata.name">>,
-        <<"metadata.resourceVersion">>,
-        <<"metadata.subtype">>,
-        <<"metadata.uid">>,
-        <<"metadata.updateTime">>,
-        <<"metadata.updatedBy">>,
-        <<"name">>,
-        <<"path">>,
-        <<"resource">>,
-        <<"srv">>,
-        <<"uid">>,
-        <<"vsn">>
-    ].
-
-
-%% @doc Default sort fields
-%% Must be sorted!
-sort_fields() ->
-    [
-        <<"apiGroup">>,
-        <<"domain">>,
-        <<"group">>,
-        <<"group+resource">>,
-        <<"kind">>,
-        <<"metadata.createdBy">>,
-        <<"metadata.creationTime">>,
-        <<"metadata.domain">>,
-        <<"metadata.expiresTime">>,
-        <<"metadata.generation">>,
-        <<"metadata.isEnabled">>,
-        <<"metadata.isInAlarm">>,
-        <<"metadata.name">>,
-        <<"metadata.subtype">>,
-        <<"metadata.updateTime">>,
-        <<"metadata.updatedBy">>,
-        <<"name">>,
-        <<"path">>,
-        <<"srv">>
-    ].
-
-
-%% @doc
-field_trans() ->
-    #{
-        <<"apiGroup">> => <<"group">>,
-        <<"kind">> => <<"data.kind">>,
-        <<"metadata.uid">> => <<"uid">>,
-        <<"metadata.name">> => <<"name">>
-    }.
-
-
-%% @doc Field value, applied after trans
-field_type() ->
-    #{
-        <<"metadata.generation">> => integer,
-        <<"metadata.isEnabled">> => boolean,
-        <<"metadata.isInAlarm">> => boolean
-    }.
-
 
 
 
@@ -512,34 +197,22 @@ field_type() ->
 %% Internal
 %% ===================================================================
 
-%% @private
-call_actor(Fun, Args, #actor_st{module=Module}) ->
-    case erlang:function_exported(Module, Fun, length(Args)) of
-        true ->
-            apply(Module, Fun, Args);
-        false ->
-            continue
-    end;
-
-call_actor(_Fun, _Args, _ActorSt) ->
-    continue.
-
 
 %% @private
-do_actor_activate(SrvId, Actor, IsNew, Opts) ->
+do_actor_activate(SrvId, Actor, IsNew, ExtraConfig) ->
     #actor{id=ActorId, metadata=Meta} = Actor,
     #actor_id{domain=Domain, group=Group, resource=Resource, name=Name} = ActorId,
     case {Domain, Group, Resource, Name} of
         {?ROOT_DOMAIN, ?GROUP_CORE, ?RES_CORE_DOMAINS, ?ROOT_DOMAIN} ->
-            do_load_actor(SrvId, Actor, IsNew, Opts);
+            do_load_actor(SrvId, Actor, IsNew, ExtraConfig);
         _ ->
             % Start the domain object
             case Meta of
                 #{<<"links">>:=#{?RES_CORE_DOMAINS:=DomUID}} ->
                     % Activate the domain, if not active
-                    case nkservice_actor_db:activate(SrvId, DomUID, Opts) of
+                    case nkservice_actor:activate({SrvId, DomUID}, #{}) of
                         {ok, #actor_id{}, _} ->
-                            do_load_actor(SrvId, Actor, IsNew, Opts);
+                            do_load_actor(SrvId, Actor, IsNew, ExtraConfig);
                         {error, Error} ->
                             ?LLOG(warning, "Cannot activate service ~s: ~p", [SrvId, Error]),
                             {error, Error}
@@ -551,22 +224,13 @@ do_actor_activate(SrvId, Actor, IsNew, Opts) ->
 
 
 %% @private
-do_load_actor(SrvId, Actor, IsNew, Opts) ->
-    #actor{id=#actor_id{group=Group, resource=Resource}} = Actor,
-    {ok, Config1} = nkdomain_actor_util:get_config(SrvId, Group, Resource),
-    Config2 = case Opts of
-        #{ttl:=TTL} ->
-            Config1#{ttl=>TTL};
-        _ ->
-            Config1
-    end,
-    LoadOpts = #{config => Config2, module => maps:get(module, Config2)},
+do_load_actor(SrvId, Actor, IsNew, ExtraConfig) ->
     Fun = case IsNew of
         true -> create;
         false -> start
     end,
     Node = node(),
-    case rpc:call(Node, nkservice_actor_srv, Fun, [SrvId, Actor, LoadOpts], 15000) of
+    case rpc:call(Node, nkservice_actor_srv, Fun, [SrvId, Actor, ExtraConfig], 15000) of
         {ok, #actor_id{pid=Pid}=ActorId} when is_pid(Pid) ->
             {ok, ActorId};
         {badrpc, Reason} ->

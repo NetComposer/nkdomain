@@ -40,7 +40,7 @@
 -module(nkdomain_file_actor).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--behavior(nkdomain_actor).
+-behavior(nkservice_actor).
 
 -export([op_get_body/2, op_get_download_link/2, op_get_media/2]).
 -export([config/0, parse/3, request/5, sync_op/3]).
@@ -58,18 +58,18 @@
 
 %% @doc
 op_get_body(SrvId, Id) ->
-    nkservice_actor_srv:sync_op(SrvId, Id, nkdomain_get_body, 60000).
+    nkservice_actor_srv:sync_op({SrvId, Id}, nkdomain_get_body, 60000).
 
 
 %% @doc
 op_get_download_link(SrvId, Id) ->
-    nkservice_actor_srv:sync_op(SrvId, Id, nkdomain_get_download_link).
+    nkservice_actor_srv:sync_op({SrvId, Id}, nkdomain_get_download_link).
 
 
 op_get_media(SrvId, Id) ->
-    case nkservice_actor_db:activate(SrvId, Id, #{}) of
+    case nkservice_actor:activate({SrvId, Id}) of
         {ok, #actor_id{group=?GROUP_CORE, resource=?RES_CORE_FILES}=ActorId, _} ->
-            nkservice_actor_srv:sync_op(SrvId, ActorId, nkdomain_get_media);
+            nkservice_actor_srv:sync_op({SrvId, ActorId}, nkdomain_get_media);
         {ok, _} ->
             {error, actor_not_found};
         {error, Error} ->

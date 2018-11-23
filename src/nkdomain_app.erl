@@ -60,7 +60,6 @@ start(Type) ->
 
 
 %% @private OTP standard start callback
-%% Last application must call maybe_start_nkroot
 start(_Type, _Args) ->
     Syntax = #{
         %serviceDbHeartbeat => boolean,
@@ -69,7 +68,7 @@ start(_Type, _Args) ->
     case nklib_config:load_env(?APP, Syntax) of
         {ok, _} ->
             {ok, Pid} = nkdomain_sup:start_link(),
-            ok = nkservice_util:register_package(?PACKAGE_CLASS_DOMAIN, nkdomain),
+            ok = nkservice_util:register_package_class(?PACKAGE_CLASS_DOMAIN, nkdomain, #{unique=>true}),
             {ok, Vsn} = application:get_key(nkdomain, vsn),
             lager:info("NkDOMAIN v~s has started.", [Vsn]),
             {ok, Pid};

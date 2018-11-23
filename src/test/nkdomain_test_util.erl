@@ -399,7 +399,7 @@ send_test_event() ->
 
 
 send_test_event(Path) ->
-    nkservice_actor_srv:async_op(?ROOT_SRV, Path, {send_event, test_api}).
+    nkservice_actor_srv:async_op(Path, {send_event, test_api}).
 
 
 

@@ -53,7 +53,7 @@ check_base_domain(SrvId, Domain, Tries) when Tries > 0->
     },
     try
         % It will read and activate the service also
-        case nkservice_actor_db:read(SrvId, ActorId, #{}) of
+        case nkservice_actor_db:read({SrvId, ActorId}, #{}) of
             {ok, #actor{id=#actor_id{uid=DomUID}}, _Meta} ->
                 {ok, DomUID};
             {error, actor_not_found} ->
@@ -111,7 +111,7 @@ check_admin(SrvId, Domain, DomUID) ->
         resource = ?RES_CORE_USERS,
         name = <<"admin">>
     },
-    case nkservice_actor_db:read(SrvId, ActorId, #{}) of
+    case nkservice_actor_db:read({SrvId, ActorId}, #{}) of
         {ok, _Actor, _Meta} ->
             ok;
         {error, actor_not_found} ->
@@ -167,4 +167,4 @@ create_actor(SrvId, Actor) ->
     #actor{id=#actor_id{uid=UID}, metadata=Meta} = Actor2,
     Meta2 = Meta#{<<"uid">> => UID},
     Actor3 = Actor2#actor{metadata=Meta2},
-    nkservice_actor_db:create(SrvId, Actor3, #{config=>Config}).
+    nkservice_actor_db:create(SrvId, Actor3, #{actor_config=>Config}).

@@ -27,7 +27,7 @@
 -module(nkdomain_contact_actor).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--behaviour(nkdomain_actor).
+-behavior(nkservice_actor).
 
 -export([config/0, parse/3]).
 -export([parse_post_check/1]).

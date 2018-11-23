@@ -45,7 +45,7 @@
 %%   throw http (nkdomain_api:rest_api/4)
 %% - In any case, callback nkdomain_api is called.
 %%   For 'core' group, nkdomain_core_v1:request/2 is called
-%% - After finding resource and module, and parsed parameters, nkdomain_actor:request/3
+%% - After finding resource and module, and parsed parameters, nkservice_actor:request/3
 %%   is called. If not implemented, nkdomain_core:create/5 is called
 %% - An Actor is extracted from the API's body (an nkdomain_api_actor can update it)
 %% - The type-specific parser is checked, calling nkdomain_actor:parse/3
@@ -125,7 +125,7 @@ delete_old_events(SrvId, Domain, Date) ->
 get_actor(Path) ->
     case nkservice_actor_util:is_actor_id(Path) of
         {true, #actor_id{domain=Domain}=ActorId} ->
-            case nkdomain_domain:get_domain_data(Domain) of
+            case nkdomain_register:get_domain_data(Domain) of
                 {ok, DomSrvId, _DomUID} ->
                     nkservice_actor:get_actor(DomSrvId, ActorId);
                 {error, Error} ->

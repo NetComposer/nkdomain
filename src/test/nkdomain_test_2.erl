@@ -116,15 +116,15 @@ token_test() ->
     {created, T3} = api(#{verb=>create, resource=>tokens, body=>B1, params=>#{ttl=>2}}),
     #{<<"metadata">>:=#{<<"name">>:=T3_Name}} = T3, 
     Path = <<"/a-nktest/core/tokens/", T3_Name/binary>>,
-    {true, #actor_id{pid=Pid1}} = nkservice_actor_db:is_activated(?ROOT_SRV, Path),
+    {true, #actor_id{pid=Pid1}} = nkservice_actor_db:is_activated(Path),
 
     % We kill the actor, is its activated again on load
     exit(Pid1, kill),
     timer:sleep(50),
-    false = nkservice_actor_db:is_activated(?ROOT_SRV, Path),
+    false = nkservice_actor_db:is_activated(Path),
     {ok, T3} = api(#{verb=>get, domain=>"a-nktest", resource=>tokens, name=>T3_Name}),
     timer:sleep(50),
-    {true, #actor_id{pid=Pid2}} = nkservice_actor_db:is_activated(?ROOT_SRV, Path),
+    {true, #actor_id{pid=Pid2}} = nkservice_actor_db:is_activated(Path),
     false = Pid1 == Pid2,
 
     % We kill again but when we activate it again is expired
@@ -375,7 +375,7 @@ task_test() ->
     {created, T6} = api(#{verb=>create, resource=>tasks, body=>B1}),
     #{<<"metadata">> := #{<<"name">> := T6_Name}} = T6,
     ActorPath = <<"/a-nktest/core/tasks/", T6_Name/binary>>,
-    ok = nkservice_actor_srv:sync_op(?ROOT_SRV, ActorPath, {update_state, #{status=>success}}),
+    ok = nkservice_actor_srv:sync_op(ActorPath, {update_state, #{status=>success}}),
     timer:sleep(150),
     {error, actor_not_found} = nkservice_actor:get_actor(?ROOT_SRV, ActorPath),
     nkdomain_api_events:wait_for_save(),
@@ -428,7 +428,7 @@ auto_activate_test() ->
             {created, T} = api(#{verb=>create, resource=>tasks, name=>Name, body=>Y1}),
             #{<<"metadata">>:=#{<<"name">>:=Name}} = T,
             P = <<"/a-nktest/core/tasks/", Name/binary>>,
-            {ok, #actor_id{pid=Pid}, _} = nkservice_actor_db:find(?ROOT_SRV, P),
+            {ok, #actor_id{pid=Pid}, _} = nkservice_actor:find(P),
             true = is_pid(Pid),
             Pid
         end,
@@ -452,7 +452,7 @@ auto_activate_test() ->
     [] = nkdomain_lib:launch_auto_activated(?ROOT_SRV),
     Pids2 = lists:map(
         fun(ActorId) ->
-            {true, #actor_id{pid=Pid}} = nkservice_actor_db:is_activated(?ROOT_SRV, ActorId),
+            {true, #actor_id{pid=Pid}} = nkservice_actor_db:is_activated(ActorId),
             Pid
         end,
         ActivatedIds),
@@ -477,17 +477,17 @@ alarm_test() ->
     {ok, #{<<"items">>:=[]}} =
         api(#{verb=>list, resource=>users, params=>#{fieldSelector=>"metadata.isInAlarm:true"}}),
     P = "/root/core/users/admin",
-    {ok, []} = nkservice_actor_srv:sync_op(?ROOT_SRV, P, get_alarms),
-    ok = nkservice_actor_srv:sync_op(?ROOT_SRV, P, {set_alarm, class1, #{
+    {ok, []} = nkservice_actor_srv:sync_op(P, get_alarms),
+    ok = nkservice_actor_srv:sync_op(P, {set_alarm, class1, #{
         <<"code">> => <<"code1">>,
         <<"message">> => <<"message1">>,
         <<"meta">> => #{<<"a">> => 1}
     }}),
-    ok = nkservice_actor_srv:sync_op(?ROOT_SRV, P, {set_alarm, class2, #{
+    ok = nkservice_actor_srv:sync_op(P, {set_alarm, class2, #{
         <<"code">> => <<"code2">>,
         <<"message">> => <<"message2">>
     }}),
-    ok = nkservice_actor_srv:sync_op(?ROOT_SRV, P, {set_alarm, class1, #{
+    ok = nkservice_actor_srv:sync_op(P, {set_alarm, class1, #{
         <<"code">> => <<"code3">>,
         <<"message">> => <<"message1">>,
         <<"meta">> => #{<<"a">> => 2}
@@ -504,15 +504,15 @@ alarm_test() ->
             <<"lastTime">> := <<"20", _/binary>>,
             <<"message">> := <<"message2">>
         }
-    }} = nkservice_actor_srv:sync_op(?ROOT_SRV, P, get_alarms),
+    }} = nkservice_actor_srv:sync_op(P, get_alarms),
 
     % Not yet saved
     {ok, #{<<"items">>:=[]}} = api(#{verb=>list, resource=>users, params=>#{fieldSelector=>"metadata.isInAlarm:true"}}),
-    {ok, Time} = nkservice_actor_srv:sync_op(?ROOT_SRV, P, get_save_time),
+    {ok, Time} = nkservice_actor_srv:sync_op(P, get_save_time),
     true = is_integer(Time),
 
     % Don't wait for automatic save
-    ok = nkservice_actor_srv:async_op(?ROOT_SRV, P, save),
+    ok = nkservice_actor_srv:async_op(P, save),
     timer:sleep(50),
     {ok, #{<<"items">>:=[Admin2]}} =
         api(#{verb=>list, resource=>users, params=>#{fieldSelector=>"metadata.isInAlarm:true"}}),
@@ -536,11 +536,11 @@ alarm_test() ->
     } = Admin2,
 
     % Clear
-    ok = nkservice_actor_srv:async_op(?ROOT_SRV, P, clear_all_alarms),
+    ok = nkservice_actor_srv:async_op(P, clear_all_alarms),
     timer:sleep(50),
-    {ok, Time2} = nkservice_actor_srv:sync_op(?ROOT_SRV, P, get_save_time),
+    {ok, Time2} = nkservice_actor_srv:sync_op(P, get_save_time),
     true = is_integer(Time2),
-    ok = nkservice_actor_srv:async_op(?ROOT_SRV, P, save),
+    ok = nkservice_actor_srv:async_op(P, save),
     timer:sleep(50),
     {ok, #{<<"items">>:=[]}} =
         api(#{verb=>list, resource=>users, params=>#{fieldSelector=>"metadata.isInAlarm:true"}}),
@@ -580,13 +580,13 @@ session_test() ->
 
     timer:sleep(1000),
     P = "/a-nktest/core/sessions/s1",
-    {ok, {expires, Time1}} = nkservice_actor_srv:sync_op(?ROOT_SRV, P, get_unload_policy),
+    {ok, {expires, Time1}} = nkservice_actor_srv:sync_op(P, get_unload_policy),
     true = (Time1 - nklib_date:epoch(msecs)) < 1000,
 
     {ok, #{<<"reason">>:= <<"actor_updated">>}} =
         api(#{verb=>get, domain=>"a-nktest", resource=>"sessions", name=>s1, subresource=>[<<"_refresh">>]}),
 
-    {ok, {expires, Time2}} = nkservice_actor_srv:sync_op(?ROOT_SRV, P, get_unload_policy),
+    {ok, {expires, Time2}} = nkservice_actor_srv:sync_op(P, get_unload_policy),
     true = (Time2 - nklib_date:epoch(msecs)) > 1500,
 
     timer:sleep(2100),

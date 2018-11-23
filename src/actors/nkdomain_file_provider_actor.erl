@@ -27,7 +27,7 @@
 -module(nkdomain_file_provider_actor).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--behavior(nkdomain_actor).
+-behavior(nkservice_actor).
 
 -export([op_get_spec/2, op_get_direct_download_link/3, op_get_upload_link/3,
          op_get_check_meta/3]).
@@ -62,28 +62,28 @@
     {ok, #actor_id{}, map()} | {error, term()}.
 
 op_get_spec(SrvId, Id) ->
-    nkservice_actor_srv:sync_op(SrvId, Id, nkdomain_get_spec).
+    nkservice_actor_srv:sync_op({SrvId, Id}, nkdomain_get_spec).
 
 
 %% @doc
 op_get_direct_download_link(SrvId, Id, ExternalId) ->
-    nkservice_actor_srv:sync_op(SrvId, Id, {nkdomain_get_direct_download_link, ExternalId}).
+    nkservice_actor_srv:sync_op({SrvId, Id}, {nkdomain_get_direct_download_link, ExternalId}).
 
 
 %% @doc
 op_get_upload_link(SrvId, Id, CT) ->
-    nkservice_actor_srv:sync_op(SrvId, Id, {nkdomain_get_upload_link, CT}).
+    nkservice_actor_srv:sync_op({SrvId, Id}, {nkdomain_get_upload_link, CT}).
 
 
 %% @doc
 op_get_check_meta(SrvId, Id, ExternalId) ->
-    nkservice_actor_srv:sync_op(SrvId, Id, {nkdomain_check_meta, ExternalId}).
+    nkservice_actor_srv:sync_op({SrvId, Id}, {nkdomain_check_meta, ExternalId}).
 
 
 %% @private
 link_to_provider(SrvId, ApiId, Actor) ->
     ProviderPath = nkdomain_api_lib:api_path_to_actor_path(ApiId),
-    case nkservice_actor_db:activate(SrvId, ProviderPath, #{}) of
+    case nkservice_actor:activate({SrvId, ProviderPath}) of
         {ok, #actor_id{group=?GROUP_CORE, resource=?RES_CORE_FILE_PROVIDERS}=ProvActorId, _} ->
             {ok, nkdomain_actor_util:add_link(Actor, ProvActorId)};
         _ ->

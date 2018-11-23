@@ -27,9 +27,10 @@
 -module(nkdomain_node_actor).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--behavior(nkdomain_actor).
+-behavior(nkservice_actor).
 
 -export([config/0, parse/3]).
+
 
 
 -include("nkdomain.hrl").

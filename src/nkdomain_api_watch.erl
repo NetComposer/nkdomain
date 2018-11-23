@@ -66,7 +66,7 @@ start(SrvId, ActorId, Config, ApiReq) ->
     Filters1 = maps:with([kind], Params),
     ?API_DEBUG("processing watch ~p (~p)", [ActorId, Filters1]),
     % Get the PID of the actor we want to watch on, and start a link on it to us
-    ActorPid = case nkservice_actor_db:activate(SrvId, ActorId, #{}) of
+    ActorPid = case nkservice_actor:activate({SrvId, ActorId}) of
         {ok, #actor_id{pid=ActorPid0}, _Meta} ->
             ActorPid0;
         {error, ActivateError} ->
@@ -80,7 +80,7 @@ start(SrvId, ActorId, Config, ApiReq) ->
         avoid_unload => true,
         data => #{filters=>Filters1}
     },
-    case nkservice_actor_srv:sync_op(SrvId, ActorId, {link, Link, LinkOpts}) of
+    case nkservice_actor_srv:sync_op({SrvId, ActorId}, {link, Link, LinkOpts}) of
         ok ->
             % We will start receiving events now
             ok;
@@ -101,7 +101,7 @@ watch_db(SrvId, ActorId, Config, LinkRef, ActorMon, #{resourceVersion:=Hash}=Par
     SearchParams1 = maps:with([deep], Params),
     {QDomain, QKind, QName} = case {Group, Resource} of
         {?GROUP_CORE, ?RES_CORE_DOMAINS} ->
-            {nkdomain_domain:actor_id_to_managed_domain(ActorId), all, all};
+            {nkdomain_register:actor_id_to_managed_domain(ActorId), all, all};
         _ ->
             {Domain, Kind, Name}
     end,

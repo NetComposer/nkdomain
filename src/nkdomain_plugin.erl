@@ -307,7 +307,7 @@ make_type_cache([], Cache) ->
 
 make_type_cache([Module|Rest], Cache) ->
     code:ensure_loaded(Module),
-    Config = case nkdomain_actor:config(Module) of
+    Config = case nkservice_actor:config(Module) of
         not_exported ->
             ?LLOG(error, "Invalid actor callback module '~s'", [Module]),
             error({module_unknown, Module});
@@ -352,19 +352,19 @@ make_resources_cache_module(Config, Cache) ->
     Versions = maps:get(versions, Config),
     FilterFields1 = maps:get(filter_fields, Config, []),
     FilterFields2 = [to_bin(Field) || Field <- FilterFields1],
-    FilterFields3 = nkdomain_actor:filter_fields(),
+    FilterFields3 = nkservice_actor:filter_fields(),
     FilterFields4 = lists:usort(FilterFields2++FilterFields3),
     SortFields1 = maps:get(sort_fields, Config, []),
     SortFields2 = [to_bin(Field) || Field <- SortFields1],
-    SortFields3 = nkdomain_actor:sort_fields(),
+    SortFields3 = nkservice_actor:sort_fields(),
     SortFields4 = lists:usort(SortFields2++SortFields3),
     FieldType1 = maps:to_list(maps:get(field_type, Config, #{})),
     FieldType2 = maps:from_list([{to_bin(Field), Value} || {Field, Value} <- FieldType1]),
-    FieldType3 = nkdomain_actor:field_type(),
+    FieldType3 = nkservice_actor:field_type(),
     FieldType4 = maps:merge(FieldType3, FieldType2),
     FieldTrans1 = maps:to_list(maps:get(field_trans, Config, #{})),
     FieldTrans2 = maps:from_list([{to_bin(Field), Value} || {Field, Value} <- FieldTrans1]),
-    FieldTrans3 = nkdomain_actor:field_trans(),
+    FieldTrans3 = nkservice_actor:field_trans(),
     FieldTrans4 = maps:merge(FieldTrans3, FieldTrans2),
     StaticFields1 = maps:get(immutable_fields, Config, []),
     StaticFields2 = [to_bin(Field) || Field <- StaticFields1],

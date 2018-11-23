@@ -36,7 +36,7 @@
 
 -module(nkdomain_domain_actor).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
--behavior(nkdomain_actor).
+-behavior(nkservice_actor).
 
 -export([config/0, parse/3]).
 -export([init/1, heartbeat/1, terminate/2, enabled/2, sync_op/3, async_op/2, handle_info/2, stop/2]).
@@ -68,14 +68,14 @@
 % Local information will have srv_id '<<>>'
 -type counters() :: #{
     nkservice_actor:group() => #{
-        nkservice_actor:resource() => #{nkdomain_actor:id()|<<>> => integer()}}}.
+        nkservice_actor:resource() => #{nkservice_actor:id()|<<>> => integer()}}}.
 
 
 -record(run_state, {
     is_root :: boolean(),
     managed_domain :: binary(),
     register_ets :: ets:id(),
-    actor_uids = #{} :: #{nkdomain_actor:id() => boolean()},
+    actor_uids = #{} :: #{nkservice_actor:id() => boolean()},
     actor_childs = #{} :: #{nkservice:domain() => reference()},
     actor_group_types = #{} :: class_types(),
     counters = #{} :: counters()
@@ -124,7 +124,7 @@ parse(_SrvId, _Actor, _ApiReq) ->
 
 %% @private
 init(#actor_st{actor=#actor{id=ActorId}}=ActorSt) ->
-    ManagedDomain = nkdomain_domain:actor_id_to_managed_domain(ActorId),
+    ManagedDomain = nkdomain_register:actor_id_to_managed_domain(ActorId),
     case global:register_name({nkdomain_domain, ManagedDomain}, self()) of
         yes ->
             ?ACTOR_LOG(notice, "registered global domain ~s", [ManagedDomain], ActorSt),
@@ -394,7 +394,7 @@ do_stop_all_actors(#actor_st{run_state=RunState}=State) ->
     Stopped = ets:foldl(
         fun
             ({{pid, Pid}, {name, _Group, _Res, _Name}, _UID, _Ref}, Acc) ->
-                nkservice_actor_srv:async_op(none, Pid, {raw_stop, father_stopped}),
+                nkservice_actor_srv:async_op(Pid, {raw_stop, father_stopped}),
                 Acc+1;
             (_Term, Acc) ->
                 Acc
@@ -524,7 +524,7 @@ send_counter_to_parent(Group, Res, State) ->
     Value = do_get_type_counter(Group, Res, State),
     ?ACTOR_DEBUG("sent to parent ~p: ~p, ~p, ~p", [FatherPid, Group, Res, Value], State),
     Op = {nkdomain_updated_child_counter, Domain, self(), Group, Res, Value},
-    nkservice_actor_srv:async_op(none, FatherPid, Op),
+    nkservice_actor_srv:async_op(FatherPid, Op),
     State.
 
 

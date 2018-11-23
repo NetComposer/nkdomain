@@ -121,13 +121,13 @@ basic_test() ->
     {409, #{<<"code">>:=409, <<"reason">>:=<<"uniqueness_violation">>}} = http_post("/users", U1),
 
     % The actor is loaded
-    {true, #actor_id{name = <<"ut1">>, pid=Pid1}= ActorId1} = nkdomain_domain:is_actor_cached(UID),
+    {true, #actor_id{name = <<"ut1">>, pid=Pid1}= ActorId1} = nkdomain_register:find_registered(UID),
     true = is_pid(Pid1),
-    {ok, ActorId1, _} = nkservice_actor_db:find(?ROOT_SRV, ActorId1),
-    {ok, ActorId1, _} = nkservice_actor_db:find(?ROOT_SRV, UID),
-    {ok, <<"/root/core/users/ut1">>=Path1} = nkservice_actor:get_path(?ROOT_SRV, UID),
-    {ok, ActorId1, _} = nkservice_actor_db:find(?ROOT_SRV, Path1),
-    {ok, Actor1} = nkservice_actor:get_actor(?ROOT_SRV, Path1),
+    {ok, ActorId1, _} = nkservice_actor:find(ActorId1),
+    {ok, ActorId1, _} = nkservice_actor:find(UID),
+    {ok, <<"/root/core/users/ut1">>=Path1} = nkservice_actor:get_path(UID),
+    {ok, ActorId1, _} = nkservice_actor:find(Path1),
+    {ok, Actor1} = nkservice_actor:get_actor(Path1),
     #actor{
         id = #actor_id{
             uid = UID,
@@ -168,29 +168,29 @@ basic_test() ->
     % Let's work with the actor while unloaded
     ok = nkservice_actor:stop(none, Pid1),
     timer:sleep(100),
-    false = nkdomain_domain:is_actor_cached(UID),
+    false = nkdomain_register:find_registered(UID),
     false = is_process_alive(Pid1),
     ActorId1b = ActorId1#actor_id{pid=undefined},
-    {ok, ActorId1b, _} = nkservice_actor_db:find(?ROOT_SRV, ActorId1),
-    {ok, ActorId1b, _} = nkservice_actor_db:find(?ROOT_SRV, UID),
+    {ok, ActorId1b, _} = nkservice_actor:find(ActorId1),
+    {ok, ActorId1b, _} = nkservice_actor:find(UID),
     %Actor1b = Actor1#actor{id=ActorId1b#actor_id{vsn= <<"v1a1">>}, hash=Vsn1, run_state=undefined},
     Actor1b = Actor1#actor{id=ActorId1b},
-    {ok, Actor1b, _} = nkservice_actor_db:read(?ROOT_SRV, UID, #{activate=>false}), % Hash vsn and hash
-    {ok, Actor1b, _} = nkservice_actor_db:read(?ROOT_SRV, Path1, #{activate=>false}),
+    {ok, Actor1b, _} = nkservice_actor_db:read(UID, #{activate=>false}), % Hash vsn and hash
+    {ok, Actor1b, _} = nkservice_actor_db:read(Path1, #{activate=>false}),
     ApiActor1b = ApiActor1#{<<"status">>:=#{}},
     {ok, ApiActor1b} = api(#{verb=>get, resource=>"_uids", name=>UID, params=>#{activate=>false}}),
     {ok, ApiActor1b} = api(#{verb=>get, resource=>users, name=>ut1, params=>#{activate=>false}}),
     {200, ApiActor1b} = http_get("/users/ut1?activate=false"),
-    false = nkdomain_domain:is_actor_cached(UID),
+    false = nkdomain_register:find_registered(UID),
 
     % Load with TTL
     {200, ApiActor1} = http_get("/users/ut1?activate=true&ttl=500"),
-    {true, #actor_id{pid=Pid2}} = nkdomain_domain:is_actor_cached("/root/core/users/ut1"),
+    {true, #actor_id{pid=Pid2}} = nkdomain_register:find_registered("/root/core/users/ut1"),
     timer:sleep(50),  % Give some time for UID cache to register
-    {true, #actor_id{pid=Pid2}} = nkdomain_domain:is_actor_cached(UID),
+    {true, #actor_id{pid=Pid2}} = nkdomain_register:find_registered(UID),
     true = Pid1 /= Pid2,
     timer:sleep(600),
-    false =  nkdomain_domain:is_actor_cached(UID),
+    false =  nkdomain_register:find_registered(UID),
 
     % Delete the user
     {error, #{<<"code">>:=404, <<"reason">>:=<<"actor_not_found">>}} = api(#{verb=>delete, resource=>users, name=>"utest1"}),
@@ -244,16 +244,16 @@ activation_test() ->
         <<"spec">> := #{<<"password">> := <<>>}
         % <<"status">> := #{}
     } = Add1,
-    false = nkdomain_domain:is_actor_cached(UID1),
+    false = nkdomain_register:find_registered(UID1),
     % Delete not-activated object
     {200, #{<<"code">>:=200, <<"reason">>:=<<"actor_deleted">>}} = http_delete("/users/ut1"),
 
     % Create with TTL
     {201, #{<<"metadata">>:=#{<<"uid">>:=UID2}}} = http_post("/users?ttl=500", U1),
-    {true, _} = nkservice_actor_db:is_activated('nkdomain-root', UID2),
+    {true, _} = nkservice_actor_db:is_activated(UID2),
 
     timer:sleep(600),
-    false = nkservice_actor_db:is_activated('nkdomain-root', UID2),
+    false = nkservice_actor_db:is_activated(UID2),
     {200, #{<<"code">>:=200, <<"reason">>:=<<"actor_deleted">>}} = http_delete("/users/ut1"),
     nkdomain_api_events:wait_for_save(),
     {200, #{<<"details">>:=#{<<"deleted">>:=N}}} = http_delete("/events?fieldSelector=involvedObject.name:ut1"),
@@ -267,7 +267,7 @@ subdomains_test() ->
     nkservice_actor:stop(?ROOT_SRV, "/root/core/users/admin"),
 
     % Get the UUID for the root domain
-    {ok, 'nkdomain-root', RootUID} = nkdomain_domain:get_domain_data('nkdomain-root', "root"),
+    {ok, 'nkdomain-root', RootUID} = nkdomain_register:get_domain_data('nkdomain-root', "root"),
     {ok, #{<<"metadata">>:=#{<<"uid">>:=RootUID}}} = api(#{resource=>"domains", name=>"root"}),
 
     % Create "a-nktest" domain
@@ -317,7 +317,7 @@ subdomains_test() ->
             <<"links">> := #{<<"domains">>:=_B_A_UID}
     }
     } = AddD3,
-    {true, _} = nkdomain_domain:is_domain_active("c.b.a-nktest"),
+    {true, _} = nkdomain_register:is_domain_active("c.b.a-nktest"),
 
     {ok, #{<<"metadata">>:=#{<<"uid">>:=C_B_A_UID}}} = api(#{domain=>"b.a-nktest", resource=>"domains", name=>"c"}),
     {200, #{<<"metadata">>:=#{<<"uid">>:=C_B_A_UID}}} = http_get("/domains/b.a-nktest/domains/c"),
@@ -328,11 +328,11 @@ subdomains_test() ->
     % If we unload the actor, the service will stop
     nkservice_actor:stop(?ROOT_SRV, "/b.a-nktest/core/domains/c"),
     timer:sleep(100),
-    false = nkdomain_domain:is_domain_active("c.b.a-nktest"),
+    false = nkdomain_register:is_domain_active("c.b.a-nktest"),
 
     % When we reload it, it will be started again
     {ok, #{<<"metadata">>:=#{<<"uid">>:=C_B_A_UID}}} = api(#{domain=>"b.a-nktest", resource=>"domains", name=>"c"}),  % GET /.../domains/c
-    {true, _} = nkdomain_domain:is_domain_active("c.b.a-nktest"),
+    {true, _} = nkdomain_register:is_domain_active("c.b.a-nktest"),
 
     % Add an user on "b.a-nktest"
     {created, AddU1} = api(#{verb=>create, domain=>"b.a-nktest", resource=>users, name=>"ut1", body=>U1}),
@@ -352,31 +352,31 @@ subdomains_test() ->
     #{<<"domains">>:=2, <<"users">>:=1} = get_counter("a-nktest"),
     #{<<"domains">>:=1, <<"users">>:=1} = get_counter("b.a-nktest"),
 
-    {true, _} = nkservice_actor_db:is_activated(?ROOT_SRV, A_UID),
-    {true, _} = nkservice_actor_db:is_activated(?ROOT_SRV, B_A_UID),
-    {true, _} = nkservice_actor_db:is_activated(?ROOT_SRV, C_B_A_UID),
-    {true, _} = nkservice_actor_db:is_activated(?ROOT_SRV, U1_UID),
-    {true, _} = nkservice_actor_db:is_activated(?ROOT_SRV, "/root/core/domains/a-nktest"),
-    {true, _} = nkservice_actor_db:is_activated(?ROOT_SRV, "/a-nktest/core/domains/b"),
-    {true, _} = nkservice_actor_db:is_activated(?ROOT_SRV, "/b.a-nktest/core/domains/c"),
-    {true, _} = nkservice_actor_db:is_activated(?ROOT_SRV, "/b.a-nktest/core/users/ut1"),
+    {true, _} = nkservice_actor_db:is_activated(A_UID),
+    {true, _} = nkservice_actor_db:is_activated(B_A_UID),
+    {true, _} = nkservice_actor_db:is_activated(C_B_A_UID),
+    {true, _} = nkservice_actor_db:is_activated(U1_UID),
+    {true, _} = nkservice_actor_db:is_activated("/root/core/domains/a-nktest"),
+    {true, _} = nkservice_actor_db:is_activated("/a-nktest/core/domains/b"),
+    {true, _} = nkservice_actor_db:is_activated("/b.a-nktest/core/domains/c"),
+    {true, _} = nkservice_actor_db:is_activated("/b.a-nktest/core/users/ut1"),
 
     % Delete all
     % We cannot delete b.a-nktest
     {422, #{<<"reason">>:= <<"actor_has_linked_actors">>}} = http_delete("/domains/a-nktest/domains/b"),
     {200, _} = http_delete("/domains/b.a-nktest/domains/c"),
     timer:sleep(50),
-    false = nkservice_actor_db:is_activated(?ROOT_SRV, C_B_A_UID),
+    false = nkservice_actor_db:is_activated(C_B_A_UID),
     {422, #{<<"reason">>:= <<"actor_has_linked_actors">>}} = http_delete("/domains/a-nktest/domains/b"),
     {200, _} = http_delete("/domains/b.a-nktest/users/ut1"),
     timer:sleep(50),
-    false = nkservice_actor_db:is_activated(?ROOT_SRV, U1_UID),
+    false = nkservice_actor_db:is_activated(U1_UID),
     {200, _} = http_delete("/domains/a-nktest/domains/b"),
     timer:sleep(50),
-    false = nkservice_actor_db:is_activated(?ROOT_SRV, B_A_UID),
+    false = nkservice_actor_db:is_activated(B_A_UID),
     {200, _} = http_delete("/domains/root/domains/a-nktest"),
     timer:sleep(50),
-    false = nkservice_actor_db:is_activated(?ROOT_SRV, A_UID),
+    false = nkservice_actor_db:is_activated(A_UID),
     #{<<"domains">>:=0} = get_counter("root"), % "root"
     ok.
 
@@ -390,10 +390,10 @@ loading_test() ->
     {created, _} = api(#{verb=>create, domain=>"a-nktest", resource=>"domains", name=>"b", body=>D2}),
     {created, _} = api(#{verb=>create, domain=>"b.a-nktest", resource=>"domains", name=>"c", body=>D3}),
     {created, _} = api(#{verb=>create, domain=>"b.a-nktest", resource=>users, name=>"ut1", body=>U1}),
-    {true, _} = nkservice_actor_db:is_activated(?ROOT_SRV, "/root/core/domains/a-nktest"),
-    {true, _} = nkservice_actor_db:is_activated(?ROOT_SRV, "/a-nktest/core/domains/b"),
-    {true, _} = nkservice_actor_db:is_activated(?ROOT_SRV, "/b.a-nktest/core/domains/c"),
-    {true, _} = nkservice_actor_db:is_activated(?ROOT_SRV, "/b.a-nktest/core/users/ut1"),
+    {true, _} = nkservice_actor_db:is_activated("/root/core/domains/a-nktest"),
+    {true, _} = nkservice_actor_db:is_activated("/a-nktest/core/domains/b"),
+    {true, _} = nkservice_actor_db:is_activated("/b.a-nktest/core/domains/c"),
+    {true, _} = nkservice_actor_db:is_activated("/b.a-nktest/core/users/ut1"),
     #{<<"domains">>:=3, <<"users">>:=1} = get_counter("root"),
     #{<<"domains">>:=2, <<"users">>:=1} = get_counter("a-nktest"),
     #{<<"domains">>:=1, <<"users">>:=1} = get_counter("b.a-nktest"),
@@ -404,20 +404,20 @@ loading_test() ->
     nkservice_actor:stop(?ROOT_SRV, "/root/core/domains/a-nktest"),
     timer:sleep(100),
     #{<<"domains">>:=0, <<"users">>:=0} = get_counter("root"),
-    false = nkservice_actor_db:is_activated(?ROOT_SRV, "/root/core/domains/a-nktest"),
-    false = nkservice_actor_db:is_activated(?ROOT_SRV, "/a-nktest/core/domains/b"),
-    false = nkservice_actor_db:is_activated(?ROOT_SRV, "/b.a-nktest/core/domains/c"),
-    false = nkservice_actor_db:is_activated(?ROOT_SRV, "/b.a-nktest/core/users/ut1"),
+    false = nkservice_actor_db:is_activated("/root/core/domains/a-nktest"),
+    false = nkservice_actor_db:is_activated("/a-nktest/core/domains/b"),
+    false = nkservice_actor_db:is_activated("/b.a-nktest/core/domains/c"),
+    false = nkservice_actor_db:is_activated("/b.a-nktest/core/users/ut1"),
 
     % If we load "ut1" al domains up to root will be activated
     {200, _} = http_get("/domains/b.a-nktest/users/ut1"),
     #{<<"domains">>:=2, <<"users">>:=1} = get_counter("root"),
     #{<<"domains">>:=1, <<"users">>:=1} = get_counter("a-nktest"),
     #{<<"users">>:=1} = get_counter("b.a-nktest"),
-    {true, _} = nkservice_actor_db:is_activated(?ROOT_SRV, "/root/core/domains/a-nktest"),
-    {true, _} = nkservice_actor_db:is_activated(?ROOT_SRV, "/a-nktest/core/domains/b"),
-    false = nkservice_actor_db:is_activated(?ROOT_SRV, "/b.a-nktest/core/domains/c"),
-    {true, _} = nkservice_actor_db:is_activated(?ROOT_SRV, "/b.a-nktest/core/users/ut1"),
+    {true, _} = nkservice_actor_db:is_activated("/root/core/domains/a-nktest"),
+    {true, _} = nkservice_actor_db:is_activated("/a-nktest/core/domains/b"),
+    false = nkservice_actor_db:is_activated("/b.a-nktest/core/domains/c"),
+    {true, _} = nkservice_actor_db:is_activated("/b.a-nktest/core/users/ut1"),
 
     % Cascade Delete
     {422, #{<<"reason">>:=<<"actor_has_linked_actors">>}} = http_delete("/domains/root/domains/a-nktest"),
@@ -451,10 +451,10 @@ disable_test() ->
     {created, _} = api(#{verb=>create, domain=>"a-nktest", resource=>"domains", name=>"b", body=>D2}),
     {created, _} = api(#{verb=>create, domain=>"b.a-nktest", resource=>"domains", name=>"c", body=>D3}),
     {created, _} = api(#{verb=>create, domain=>"b.a-nktest", resource=>users, name=>"ut1", body=>U1}),
-    {true, _} = nkservice_actor_db:is_activated(?ROOT_SRV, "/root/core/domains/a-nktest"),
-    {true, _} = nkservice_actor_db:is_activated(?ROOT_SRV, "/a-nktest/core/domains/b"),
-    {true, _} = nkservice_actor_db:is_activated(?ROOT_SRV, "/b.a-nktest/core/domains/c"),
-    {true, _} = nkservice_actor_db:is_activated(?ROOT_SRV, "/b.a-nktest/core/users/ut1"),
+    {true, _} = nkservice_actor_db:is_activated("/root/core/domains/a-nktest"),
+    {true, _} = nkservice_actor_db:is_activated("/a-nktest/core/domains/b"),
+    {true, _} = nkservice_actor_db:is_activated("/b.a-nktest/core/domains/c"),
+    {true, _} = nkservice_actor_db:is_activated("/b.a-nktest/core/users/ut1"),
     #{<<"domains">>:=3, <<"users">>:=1} = get_counter("root"),
     #{<<"domains">>:=2, <<"users">>:=1} = get_counter("a-nktest"),
     #{<<"domains">>:=1, <<"users">>:=1} = get_counter("b.a-nktest"),
@@ -490,10 +490,10 @@ disable_test() ->
     false = (Vsn==Vsn2),
     true = (Time2>Time),
     timer:sleep(100),
-    {true, _} = nkservice_actor_db:is_activated(?ROOT_SRV, "/root/core/domains/a-nktest"),
-    false = nkservice_actor_db:is_activated(?ROOT_SRV, "/a-nktest/core/domains/b"),
-    false = nkservice_actor_db:is_activated(?ROOT_SRV, "/b.a-nktest/core/domains/c"),
-    false = nkservice_actor_db:is_activated(?ROOT_SRV, "/b.a-nktest/core/users/ut1"),
+    {true, _} = nkservice_actor_db:is_activated("/root/core/domains/a-nktest"),
+    false = nkservice_actor_db:is_activated("/a-nktest/core/domains/b"),
+    false = nkservice_actor_db:is_activated("/b.a-nktest/core/domains/c"),
+    false = nkservice_actor_db:is_activated("/b.a-nktest/core/users/ut1"),
 
     % Now we are performing some operations over actors in a disabled domain
 
@@ -537,12 +537,12 @@ list_test_1() ->
     B_A_P = "/a-nktest/core/domains/b",
     C_B_A_P = "/b.a-nktest/core/domains/c",
     U1_P = "/b.a-nktest/core/users/ut1",
-    {ok, #actor_id{uid=Root_UID}, _} = nkservice_actor_db:find(?ROOT_SRV, Root_P),
-    {ok, #actor_id{uid=Admin_UID}, _} = nkservice_actor_db:find(?ROOT_SRV, Admin_P),
-    {ok, #actor_id{uid=A_UID}, _} = nkservice_actor_db:find(?ROOT_SRV, A_P),
-    {ok, #actor_id{uid=B_A_UID}, _} = nkservice_actor_db:find(?ROOT_SRV, B_A_P),
-    {ok, #actor_id{uid=C_B_A_UID}, _} = nkservice_actor_db:find(?ROOT_SRV, C_B_A_P),
-    {ok, #actor_id{uid=U1_UID}, _} = nkservice_actor_db:find(?ROOT_SRV, U1_P),
+    {ok, #actor_id{uid=Root_UID}, _} = nkservice_actor:find(Root_P),
+    {ok, #actor_id{uid=Admin_UID}, _} = nkservice_actor:find(Admin_P),
+    {ok, #actor_id{uid=A_UID}, _} = nkservice_actor:find(A_P),
+    {ok, #actor_id{uid=B_A_UID}, _} = nkservice_actor:find(B_A_P),
+    {ok, #actor_id{uid=C_B_A_UID}, _} = nkservice_actor:find(C_B_A_P),
+    {ok, #actor_id{uid=U1_UID}, _} = nkservice_actor:find(U1_P),
 
     {ok, #{A_UID:=<<"domains">>, Admin_UID:=<<"domains">>}=M5, _} = nkservice_actor:search_linked_to(?ROOT_SRV, "root", Root_P, any, #{}),
     {ok, #{A_UID:=<<"domains">>, Admin_UID:=<<"domains">>}=M5, _} = nkservice_actor:search_linked_to(?ROOT_SRV, "root", Root_P, <<"domains">>, #{}),
@@ -1122,7 +1122,7 @@ event_test() ->
     #{d1:=D1, d2:=D2, d3:=D3, u1:=U1} = nkdomain_test_util:test_data(),
     {ok, #{<<"metadata">>:=RootMeta}} = api(#{resource=>"domains", name=>"root"}),
     #{<<"uid">>:=RootUID} = RootMeta,
-    {ok, 'nkdomain-root', RootUID} = nkdomain_domain:get_domain_data("root"),
+    {ok, 'nkdomain-root', RootUID} = nkdomain_register:get_domain_data("root"),
 
     % Watch on root domain
     WatchRoot = http_watch("/domains/root"),
@@ -1175,7 +1175,7 @@ event_test() ->
         api(#{verb=>list, resource=>"events", domain=>"a-nktest", params=>#{fieldSelector=><<"involvedObject.uid:", A_UID/binary>>}}),
 
     % Now 'root' domain generates an event
-    nkservice_actor_srv:async_op(?ROOT_SRV, "/root/core/domains/root", {send_event, test_api}),
+    nkservice_actor_srv:async_op("/root/core/domains/root", {send_event, test_api}),
     {<<"ADDED">>, Ev2} = wait_http_event(WatchRoot, <<"TestAPI">>),
     #{
         <<"reason">> := <<"TestAPI">>,
@@ -1203,7 +1203,7 @@ event_test() ->
     ok = nkdomain_api_events:wait_for_save(),
     {ok, Ev1} = api(#{resource=>events, domain=>"a-nktest", name=>Ev1Name, params=>#{activate=>false}}),
 
-    nkservice_actor_srv:async_op(?ROOT_SRV, "/root/core/domains/root", {send_event, test_api}),
+    nkservice_actor_srv:async_op("/root/core/domains/root", {send_event, test_api}),
     {<<"MODIFIED">>, Ev3} = wait_http_event(WatchRoot, <<"TestAPI">>),
     #{
         <<"reason">> := <<"TestAPI">>,
@@ -1240,7 +1240,7 @@ event_test() ->
 
     % Domain A generates an event
     % The same event is sent to itself and it's domain, "root"
-    nkservice_actor_srv:async_op(?ROOT_SRV, "/root/core/domains/a-nktest", {send_event, test_api}),
+    nkservice_actor_srv:async_op("/root/core/domains/a-nktest", {send_event, test_api}),
 
     {<<"ADDED">>, Ev4} = wait_api_event(WatchA, <<"TestAPI">>),
     % Domain receives a copy of the event
@@ -1276,7 +1276,7 @@ event_test() ->
 
     % Now c.b.a-nktest sends an event
     % It is generated at itself, and copied to its fathers b.a-nktest (no listen), a and root
-    nkservice_actor_srv:async_op(?ROOT_SRV, "/b.a-nktest/core/domains/c", {send_event, test_api}),
+    nkservice_actor_srv:async_op("/b.a-nktest/core/domains/c", {send_event, test_api}),
     {<<"ADDED">>, Ev6b} = wait_api_event(WatchA, <<"TestAPI">>),
     {<<"ADDED">>, Ev6b} = wait_http_event(WatchRoot, <<"TestAPI">>),
 
@@ -1300,7 +1300,7 @@ event_test() ->
     ] = lists:sort(nkdomain_api_core:get_watches()),
 
     % Now U1 sends an event
-    nkservice_actor_srv:async_op(?ROOT_SRV, "/b.a-nktest/core/users/ut1", {send_event, test_api}),
+    nkservice_actor_srv:async_op("/b.a-nktest/core/users/ut1", {send_event, test_api}),
 
     % It is generated at itself, and copied to its fathers b.a-nktest (no listen), a and root
     {<<"ADDED">>, Ev8} = wait_api_event(WatchU1, <<"TestAPI">>),
@@ -1308,7 +1308,7 @@ event_test() ->
     {<<"ADDED">>, Ev8} = wait_api_event(WatchAU, <<"TestAPI">>),
     {<<"ADDED">>, Ev8} = wait_http_event(WatchRoot, <<"TestAPI">>),
     %#{<<"involvedObject">>:=#{<<"isActivated">>:=true}} = Ev8,
-    {true, _} = nkservice_actor_db:is_activated(?ROOT_SRV, "/b.a-nktest/core/users/ut1"),
+    {true, _} = nkservice_actor_db:is_activated("/b.a-nktest/core/users/ut1"),
 
     nkdomain_api_events:wait_for_save(),    % Ensure it is just saved
 
@@ -1323,7 +1323,7 @@ event_test() ->
     % also listening on B. This event will be received immediately in B,
     % and also will appear in DB search, but it is filtered (check in the log 'filtered db event')
     % and only 1 will be received
-    nkservice_actor_srv:async_op(?ROOT_SRV, "/a-nktest/core/domains/b", {send_event, test_api}),
+    nkservice_actor_srv:async_op("/a-nktest/core/domains/b", {send_event, test_api}),
 
     % We get the events already past, after Ev6bRV
     {<<"ADDED">>, Ev7} = wait_api_event(WatchB, <<"ActorCreated">>),
@@ -1381,7 +1381,7 @@ event_test() ->
     {<<"ADDED">>, Ev11} = wait_api_event(WatchAU, <<"ActorCreated">>),
     {<<"ADDED">>, Ev11} = wait_http_event(WatchRoot, <<"ActorCreated">>),
     {<<"ADDED">>, Ev11} = wait_api_event(WatchB, <<"ActorCreated">>),
-    false = nkservice_actor_db:is_activated(?ROOT_SRV, "/b.a-nktest/core/users/ut1"),
+    false = nkservice_actor_db:is_activated("/b.a-nktest/core/users/ut1"),
 
     % Perform a delete over a non-activated object
     % resourceVersion in involvedObject would be <<>> for non-activated objects
@@ -1443,6 +1443,6 @@ event_test() ->
 
 
 get_counter(Domain) ->
-    {ok, Count} = nkdomain_domain:get_group_counters(Domain, ?GROUP_CORE),
+    {ok, Count} = nkdomain_register:get_group_counters(Domain, ?GROUP_CORE),
     Count.
 

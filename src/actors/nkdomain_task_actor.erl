@@ -44,7 +44,7 @@
 -module(nkdomain_task_actor).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--behavior(nkdomain_actor).
+-behavior(nkservice_actor).
 
 -export([config/0, parse/3, request/5, init/1, event/2,
          sync_op/3, async_op/2, stop/2, make_external/3]).
@@ -132,7 +132,7 @@ parse(_SrvId, Actor, ApiReq) ->
 
 %% @doc
 request(SrvId, update, ActorId, _Config, #{subresource:=[<<"_state">>], body:=Body}) ->
-    case nkservice_actor_srv:sync_op(SrvId, ActorId, {update_state, Body}) of
+    case nkservice_actor_srv:sync_op({SrvId, ActorId}, {update_state, Body}) of
         ok ->
             {status, actor_updated};
         {error, Error} ->
@@ -177,7 +177,7 @@ init(#actor_st{unload_policy={expires, _}, actor=Actor}=ActorSt) ->
             },
             % We don't want to call set_run_state/2 yet, because the start
             % event would arrive before the creation event
-            nkservice_actor_srv:async_op(none, self(), {update_state, #{status=>start}}),
+            nkservice_actor_srv:async_op(self(), {update_state, #{status=>start}}),
             {ok, ActorSt2};
         true ->
             RunState3 = RunState2#{

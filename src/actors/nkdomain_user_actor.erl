@@ -23,7 +23,7 @@
 -module(nkdomain_user_actor).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--behavior(nkdomain_actor).
+-behavior(nkservice_actor).
 
 -export([config/0, parse/3, sync_op/3, request/5, make_external/3]).
 
@@ -69,7 +69,7 @@ request(SrvId, get, ActorId, _Config, #{subresource:=[<<"_checkpass">>], params:
     Syntax = #{password => binary},
     case nklib_syntax:parse(Params, Syntax) of
         {ok, #{password:=Pass}, _} ->
-            case nkservice_actor_srv:sync_op(SrvId, ActorId, {check_pass, Pass}) of
+            case nkservice_actor_srv:sync_op({SrvId, ActorId}, {check_pass, Pass}) of
                 {ok, true} ->
                     {status, password_valid};
                 {ok, false} ->

@@ -29,7 +29,7 @@
 -module(nkdomain_token_actor).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--behavior(nkdomain_actor).
+-behavior(nkservice_actor).
 
 -export([config/0, parse/3, sync_op/3, init/1, stop/2, request/5]).
 
@@ -87,7 +87,7 @@ parse(_SrvId, Actor, ApiReq) ->
 
 %% @doc
 request(SrvId, get, ActorId, _Config, #{subresource:=[<<"_execute">>], params:=Params}) ->
-    case nkservice_actor_srv:sync_op(SrvId, ActorId, {token_execute, Params}) of
+    case nkservice_actor_srv:sync_op({SrvId, ActorId}, {token_execute, Params}) of
         {ok, Reply} ->
             {status, Reply};
         {error, Error} ->

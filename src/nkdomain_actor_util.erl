@@ -53,7 +53,7 @@ pre_create(SrvId, Actor) ->
             {error, ConfigError} ->
                 throw({error, ConfigError})
         end,
-        #{camel:=Kind} = Config,
+        #{camel:=Kind, module:=Module} = Config,
         Actor2 = case nkdomain_api_lib:process_links(SrvId, Actor) of
             {ok, ActorWithLinks} ->
                 ActorWithLinks;
@@ -79,13 +79,13 @@ pre_create(SrvId, Actor) ->
             params => #{}
         },
         Actor4 = nkservice_actor_util:put_create_fields(Actor3),
-        Actor5 = case nkdomain_actor:parse(SrvId, Actor4, Config, ApiReq) of
+        Actor5 = case nkdomain_actor:parse(SrvId, Actor4, Module, ApiReq) of
             {ok, ActorParsed} ->
                 ActorParsed;
             {error, ParseError} ->
                 throw({error, ParseError})
         end,
-        {ok, Actor5}
+        {ok, Actor5, Config}
     catch
         throw:Throw ->
             Throw
@@ -95,8 +95,8 @@ pre_create(SrvId, Actor) ->
 %% @doc
 create(SrvId, Actor) ->
     case pre_create(SrvId, Actor) of
-        {ok, Actor2} ->
-            nkservice_actor_db:create(SrvId, Actor2, #{});
+        {ok, Actor2, Config} ->
+            nkservice_actor_db:create(SrvId, Actor2, #{actor_config=>Config});
         {error, Error} ->
             {error, Error}
     end.
@@ -172,9 +172,9 @@ find_and_sync_op(SrvId, Id, Group, Type, Op) ->
 %% @private
 find_and_sync_op(SrvId, Id, FoundGroup, FoundRes, Op, Timeout) ->
     Path = nkdomain_api_lib:api_path_to_actor_path(Id),
-    case nkservice_actor_db:activate(SrvId, Path, #{}) of
+    case nkservice_actor:activate({SrvId, Path}) of
         {ok, #actor_id{group=FoundGroup, resource=FoundRes}=ActorId, _} ->
-            nkservice_actor_srv:sync_op(SrvId, ActorId, Op, Timeout);
+            nkservice_actor_srv:sync_op({SrvId, ActorId}, Op, Timeout);
         {ok, _, _} ->
             {error, actor_not_found};
 
@@ -182,7 +182,7 @@ find_and_sync_op(SrvId, Id, FoundGroup, FoundRes, Op, Timeout) ->
 %%        {ok, #actor_id{group=FoundGroup, resource=FoundRes2}=ActorId, _} when is_list(FoundRes) ->
 %%            case lists:member(FoundRes2, FoundRes) of
 %%                true ->
-%%                    nkservice_actor_srv:sync_op(SrvId, ActorId, Op, Timeout);
+%%                    nkservice_actor_srv:sync_op({SrvId, ActorId}, Op, Timeout);
 %%                false ->
 %%                    {error, actor_not_found}
 %%            end;

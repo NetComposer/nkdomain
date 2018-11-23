@@ -22,7 +22,7 @@
 -module(nkdomain_event_actor).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--behaviour(nkdomain_actor).
+-behavior(nkservice_actor).
 
 -export([config/0]).
 -define(LLOG(Type, Txt, Args), lager:Type("NkDOMAIN Plugin: "++Txt, Args)).

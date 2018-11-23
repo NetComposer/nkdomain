@@ -184,23 +184,23 @@ alarm_test() ->
 
     {ok, #{<<"metadata">>:=#{<<"uid">>:=B_UID}}} = api(#{domain=>"a-nktest", resource=>"domains", name=>"b"}),
 
-    ok = nkservice_actor_srv:sync_op(?ROOT_SRV, B_UID, {set_alarm, class1, #{
+    ok = nkservice_actor_srv:sync_op(B_UID, {set_alarm, class1, #{
         <<"code">> => <<"code1">>,
         <<"message">> => <<"message1">>,
         <<"meta">> => #{<<"a">> => 1}
     }}),
-    ok = nkservice_actor_srv:sync_op(?ROOT_SRV, B_UID, {set_alarm, class2, #{
+    ok = nkservice_actor_srv:sync_op(B_UID, {set_alarm, class2, #{
         <<"code">> => <<"code2">>,
         <<"message">> => <<"message2">>,
         <<"lastTime">> => <<"date1">>
     }}),
-    ok = nkservice_actor_srv:sync_op(?ROOT_SRV, B_UID, {set_alarm, class1, #{
+    ok = nkservice_actor_srv:sync_op(B_UID, {set_alarm, class1, #{
         <<"code">> => <<"code3">>,
         <<"message">> => <<"message1">>,
         <<"meta">> => #{<<"a">> => 2}
     }}),
 
-    ok = nkservice_actor_srv:async_op(?ROOT_SRV, B_UID, save),
+    ok = nkservice_actor_srv:async_op(B_UID, save),
     timer:sleep(50),
 
     {ok, #{<<"allActors">>:=#{<<"actors">>:=[B1]}}} = request(Q1),
@@ -233,8 +233,8 @@ alarm_test() ->
         }
     } = B1,
 
-    ok = nkservice_actor_srv:async_op(?ROOT_SRV, B_UID, clear_all_alarms),
-    ok = nkservice_actor_srv:async_op(?ROOT_SRV, B_UID, save),
+    ok = nkservice_actor_srv:async_op(B_UID, clear_all_alarms),
+    ok = nkservice_actor_srv:async_op(B_UID, save),
     timer:sleep(50),
     {ok, #{<<"allActors">>:=#{<<"actors">>:=[]}}} = request(Q1),
     ok.
@@ -450,7 +450,7 @@ actors_test_2() ->
     {1, [
         {<<"User">>, #{<<"uid">>:=UT1, <<"name">>:=<<"ut1">>, <<"domain">>:=<<"b.a-nktest">>}}
     ]} = all_actors_query(Filters1),
-    {ok, _, _} = nkdomain_domain:get_domain_data('nkdomain-root', "b.a-nktest"),
+    {ok, _, _} = nkdomain_register:get_domain_data('nkdomain-root', "b.a-nktest"),
     ok = nkservice_actor:enable(?ROOT_SRV, UT1, false),
     {0, []} = all_actors_query(Filters1),
     ok = nkservice_actor:enable(?ROOT_SRV, UT1, true),

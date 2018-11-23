@@ -201,13 +201,13 @@ activate_actors(SrvId, [ActorId|Rest], Acc) ->
             % lager:error("NKLOG SKIPPING:~p", [Name]),
             Acc;
         false ->
-            case nkservice_actor_db:is_activated(SrvId, ActorId) of
+            case nkservice_actor_db:is_activated({SrvId, ActorId}) of
                 {true, _} ->
                     ?LLOG(debug, "actor ~s/~s/~s/~s already activated",
                           [SrvId, Group, Res, Name]),
                     Acc;
                 false ->
-                    case nkservice_actor_db:activate(SrvId, ActorId, #{}) of
+                    case nkservice_actor:activate({SrvId, ActorId}) of
                         {ok, _, _} ->
                             ?LLOG(notice, "activated actor ~s/~s/~s/~s",
                                   [SrvId, Group, Res, Name]);

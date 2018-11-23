@@ -19,17 +19,23 @@
 %% -------------------------------------------------------------------
 
 %% @doc NkDomain Actor utilities
-%% @see also nkdomain_actor and nkdomain_domain_actor
+%% @see also nkservice_actor and nkdomain_domain_actor
+%%
+%% NkDOMAIN provides an alternative actor registrar that base NkSERVICE
+%% - 'Domain' actors are registered globally, and their data (SrvId and UUID)
+%%   is cached at all nodes
+%% - Actors register with their domain, and also data is cached at the node asking for it
 
--module(nkdomain_domain).
+
+
+-module(nkdomain_register).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([is_domain_active/1, get_domain_data/1, get_domain_data/2, 
-         register_actor/2, is_actor_cached/1]).
+         register_actor/2, find_registered/1]).
 -export([get_all_counters/1, get_group_counters/2, get_resource_counter/3,
          get_all_groups/1, get_all_resources/2, get_all_actors/1]).
 -export([actor_id_to_managed_domain/1, managed_domain_to_actor_id/1]).
--export([get_all_registered/0]).
 
 
 -include("nkdomain.hrl").
@@ -78,10 +84,8 @@ get_domain_data(Domain) ->
     end.
 
 
-
 %% @doc
-%% Gets SrvId and UID from cache if available, otherwise tries to start
-%% the domain an get the data
+%% Gets SrvId and UID from cache if available, otherwise tries to start it
 %% Caution: since it calls to domain's actor, do not call it from inside it!
 %% Also populates the cache for the domain
 -spec get_domain_data(nkservice:id(), nkservice_actor:domain()) ->
@@ -104,6 +108,17 @@ get_domain_data(SrvId, Domain) ->
     end.
 
 
+%% @private
+do_get_domain_data(Domain, Pid) when is_pid(Pid) ->
+    case nkservice_actor_srv:sync_op(Pid, nkdomain_get_data) of
+        {ok, DomSrvId, UID} ->
+            nklib_proc:reg({nkdomain_cache, domain_data, Domain}, {DomSrvId, UID}, Pid),
+            {ok, DomSrvId, UID};
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
 %% @doc Registers an actor with its domain actor
 -spec register_actor(nkservice:id(), #actor_id{}) ->
     {ok, Enabled::boolean(), pid()} | {error, already_registered|term()}.
@@ -111,7 +126,7 @@ get_domain_data(SrvId, Domain) ->
 register_actor(SrvId, #actor_id{domain=Domain}=ActorId) ->
     case start_domain(SrvId, Domain) of
         {ok, Pid} ->
-            case nkservice_actor_srv:sync_op(none, Pid, {nkdomain_register_actor, ActorId}) of
+            case nkservice_actor_srv:sync_op(Pid, {nkdomain_register_actor, ActorId}) of
                 ok ->
                     {ok, Pid};
                 {error, Error} ->
@@ -122,46 +137,31 @@ register_actor(SrvId, #actor_id{domain=Domain}=ActorId) ->
     end.
 
 
-%% @doc Checks if an actor is activated
-%% - checks if it is in the local cache
-%% - if not, asks to the domain actor responsible for that domain
-%% - if we are asking for a domain, a shortcut is used
-%% - for UIDs, we can only check if it is in local cache
-%% CAUTION: an actor can be activated and we will not find it by UID unless
-%% a previous call with path or #actor_id{} is made
-%% Call to nkservice_actor_db:is_activated/2 to be sure
-
--spec is_actor_cached(nkservice_actor:id()) ->
+%% @doc Implements alternate registrar based on domain
+-spec find_registered(nkservice_actor:id()) ->
     {true, #actor_id{}} | false.
 
-is_actor_cached(#actor_id{}=ActorId) ->
-    case ets_is_actor_cached(ActorId) of
-        {true, ActorId2} ->
+find_registered(#actor_id{}=ActorId) ->
+    #actor_id{domain=Domain} = ActorId,
+    % Root domain will reply for itself
+    case domain_sync_op(Domain, {nkdomain_find_actor, ActorId}) of
+        {ok, ActorId2} ->
             {true, ActorId2};
-        false ->
-            #actor_id{domain=Domain} = ActorId,
-            % Root domain will reply for itself
-            case domain_sync_op(Domain, {nkdomain_find_actor, ActorId}) of
-                {ok, ActorId2} ->
-                    ets_insert_uid_cache(ActorId2),
-                    ets_insert_actor_cache(ActorId2),
-                    {true, ActorId2};
-                {error, {domain_not_active, _}} ->
-                    false;
-                {error, actor_not_registered} ->
-                    false;
-                {error, Error} ->
-                    ?ACTOR_LOG(warning, "error calling nkdomain_find_actor for ~s: ~p", [Error]),
-                    false
-            end
+        {error, {domain_not_active, _}} ->
+            false;
+        {error, actor_not_registered} ->
+            false;
+        {error, Error} ->
+            ?ACTOR_LOG(warning, "error calling nkdomain_find_actor for ~s: ~p", [Error]),
+            false
     end;
 
-is_actor_cached(Id) ->
+find_registered(Id) ->
     case nkservice_actor_util:is_actor_id(Id) of
         {true, #actor_id{}=ActorId} ->
-            is_actor_cached(ActorId);
+            find_registered(ActorId);
         false ->
-            ets_is_uid_cached(to_bin(Id))
+            false
     end.
 
 
@@ -227,28 +227,10 @@ actor_id_to_managed_domain(ActorId) ->
     end.
 
 
-%% @private
-get_all_registered() ->
-    nklib_proc:values(nkdomain_actor_uid).
-
 
 %% ===================================================================
 %% Internal
 %% ===================================================================
-
-%% @private
-do_get_domain_data(Domain, Pid) when is_pid(Pid) ->
-    case nkservice_actor_srv:sync_op(none, Pid, nkdomain_get_data) of
-        {ok, DomSrvId, UID} ->
-            nklib_proc:reg({nkdomain_cache, domain_data, Domain}, {DomSrvId, UID}, Pid),
-            ActorId1 = managed_domain_to_actor_id(Domain),
-            ActorId2 = ActorId1#actor_id{uid = UID, pid = Pid},
-            ets_insert_uid_cache(ActorId2),
-            ets_insert_actor_cache(ActorId2),
-            {ok, DomSrvId, UID};
-        {error, Error} ->
-            {error, Error}
-    end.
 
 
 %% @doc
@@ -259,7 +241,7 @@ start_domain(SrvId, Domain) ->
             {ok, Pid};
         false ->
             ActorId = managed_domain_to_actor_id(ManagedDomain),
-            case nkservice_actor_db:activate(SrvId, ActorId, #{}) of
+            case nkservice_actor:activate({SrvId, ActorId}) of
                 {ok, #actor_id{pid=Pid}, _} ->
                     {ok, Pid};
                 {error, actor_not_found} ->
@@ -281,7 +263,7 @@ domain_sync_op(Domain, Msg) ->
 domain_sync_op(Domain, Op, Timeout) ->
     case is_domain_active(Domain) of
         {true, DomPid} ->
-            case nkservice_actor_srv:sync_op(none, DomPid, Op, Timeout) of
+            case nkservice_actor_srv:sync_op(DomPid, Op, Timeout) of
                 {error, process_not_found} ->
                     {error, {domain_not_active, Domain}};
                 Other ->
@@ -290,41 +272,6 @@ domain_sync_op(Domain, Op, Timeout) ->
         false ->
             {error, {domain_not_active, Domain}}
     end.
-
-
-%% @private
-ets_insert_uid_cache(#actor_id{uid=UID, pid=Pid}=ActorId) when is_binary(UID), UID /= <<>>, is_pid(Pid) ->
-    nklib_proc:put({nkdomain_actor_uid, UID}, ActorId, Pid),
-    nklib_proc:put(nkdomain_actor_uid, UID, Pid).
-
-
-%% @private
-ets_is_uid_cached(UID) ->
-    % Do a direct-uuid search, only in local node's cache
-    case nklib_proc:values({nkdomain_actor_uid, to_bin(UID)}) of
-        [{ActorId, _Pid}|_] ->
-            {true, ActorId};
-        [] ->
-            false
-    end.
-
-
-%% @private
-ets_is_actor_cached(ActorId) ->
-    #actor_id{domain=Domain, group=Group, resource=Res, name=Name} = ActorId,
-    case nklib_proc:values({nkdomain_actor, Domain, Group, Res, Name}) of
-        [{ActorId2, _Pid}|_] ->
-            {true, ActorId2};
-        [] ->
-            false
-    end.
-
-
-%% @private
-ets_insert_actor_cache(ActorId) ->
-    #actor_id{domain=Domain, group=Group, resource=Res, name=Name, pid=Pid} = ActorId,
-    nklib_proc:put({nkdomain_actor, Domain, Group, Res, Name}, ActorId, Pid).
-
 
 
 

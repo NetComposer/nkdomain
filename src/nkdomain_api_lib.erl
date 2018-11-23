@@ -189,7 +189,7 @@ remove_vsn(Group) ->
 %% @private
 process_links(SrvId, #actor{id=ActorId, metadata=Meta}=Actor) ->
     #actor_id{domain=Domain}= ActorId,
-    case nkdomain_domain:get_domain_data(SrvId, Domain) of
+    case nkdomain_register:get_domain_data(SrvId, Domain) of
         {ok, _DomSrvId, DomUID} ->
             Links1 = maps:get(<<"links">>, Meta, #{}),
             Links2 = case Links1 of

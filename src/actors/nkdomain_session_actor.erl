@@ -28,7 +28,7 @@
 -module(nkdomain_session_actor).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--behavior(nkdomain_actor).
+-behavior(nkservice_actor).
 
 -export([config/0, parse/3, sync_op/3, init/1, request/5, stop/2]).
 
@@ -83,7 +83,7 @@ parse(_SrvId, Actor, ApiReq) ->
 
 %% @doc
 request(SrvId, get, ActorId, _Config, #{subresource:=[<<"_refresh">>]}) ->
-    case nkservice_actor_srv:sync_op(SrvId, ActorId, refresh) of
+    case nkservice_actor_srv:sync_op({SrvId, ActorId}, refresh) of
         ok ->
             {status, actor_updated};
         {error, Error} ->
