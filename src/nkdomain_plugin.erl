@@ -66,8 +66,7 @@ plugin_deps() ->
 
 
 %% @doc
-plugin_config(?PACKAGE_CLASS_DOMAIN, #{id:=Id, config:=Config}=Spec, _Service) ->
-    Id = ?DOMAIN_PKG_ID,
+plugin_config(?PACKAGE_CLASS_DOMAIN, #{config:=Config}=Spec, _Service) ->
     Syntax = #{
         actorModules => {list, module},
         graphqlActorModules => {list, module},
@@ -185,7 +184,7 @@ core_graphql_modules() ->
 
 %% @doc
 get_config(SrvId) ->
-    #{packages:=#{?DOMAIN_PKG_ID:=#{config:=Config}}} = ?CALL_SRV(SrvId, service),
+    #{packages:=#{?PACKAGE_CLASS_DOMAIN:=#{config:=Config}}} = ?CALL_SRV(SrvId, service),
     Config.
 
 
@@ -268,7 +267,7 @@ find_resource(SrvId, Group, Id) ->
     module().
 
 get_modules(SrvId) ->
-    Config = nkservice_util:get_config(SrvId, ?DOMAIN_PKG_ID),
+    Config = nkservice_util:get_config(SrvId, ?PACKAGE_CLASS_DOMAIN),
     maps:get(actorModules, Config).
 
 

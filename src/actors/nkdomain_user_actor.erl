@@ -25,7 +25,7 @@
 
 -behavior(nkservice_actor).
 
--export([config/0, parse/3, sync_op/3, request/5, make_external/3]).
+-export([config/0, parse/3, sync_op/3, request/3, make_external/3]).
 
 -define(LLOG(Type, Txt, Args), lager:Type("NkDOMAIN Actor User: "++Txt, Args)).
 
@@ -65,7 +65,7 @@ parse(SrvId, _Actor, _ApiReq) ->
 
 
 %% @doc
-request(SrvId, get, ActorId, _Config, #{subresource:=[<<"_checkpass">>], params:=Params}) ->
+request(SrvId, ActorId, #{verb:=get, subresource:=[<<"_checkpass">>], params:=Params}) ->
     Syntax = #{password => binary},
     case nklib_syntax:parse(Params, Syntax) of
         {ok, #{password:=Pass}, _} ->
@@ -82,7 +82,7 @@ request(SrvId, get, ActorId, _Config, #{subresource:=[<<"_checkpass">>], params:
             {error, {parameter_missing, <<"password">>}}
     end;
 
-request(_SrvId, _Verb, _ActorId, _Config, _Api) ->
+request(_SrvId, _ActorId, _ApiReq) ->
     continue.
 
 

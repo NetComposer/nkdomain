@@ -23,7 +23,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -export([pre_create/2, create/2]).
 -export([event/2, api_event/2]).
--export([get_config/3, parse/2, parse_actor/3, find_resource/3]).
+-export([get_config/2, get_config/3, find_resource/3]).
 -export([find_and_sync_op/5, find_and_sync_op/6]).
 -export([add_link/2, add_link/3, get_link/3, link_key/2, link_key_extra/3]).
 -export([add_labels/4]).
@@ -53,15 +53,13 @@ pre_create(SrvId, Actor) ->
             {error, ConfigError} ->
                 throw({error, ConfigError})
         end,
-        #{camel:=Kind, module:=Module} = Config,
         Actor2 = case nkdomain_api_lib:process_links(SrvId, Actor) of
             {ok, ActorWithLinks} ->
                 ActorWithLinks;
             {error, LinksError} ->
                 throw({error, LinksError})
         end,
-        #actor{data=Data, metadata=Meta} = Actor2,
-        Data2 = Data#{<<"kind">> => Kind},
+        #actor{metadata=Meta} = Actor2,
         MetaSyntax = nkservice_actor_syntax:meta_syntax(),
         Meta2 = case nklib_syntax:parse(Meta, MetaSyntax, #{path=><<"metadata">>}) of
             {ok, ParsedMeta, _} ->
@@ -69,7 +67,7 @@ pre_create(SrvId, Actor) ->
             {error, Error} ->
                 throw({error, Error})
         end,
-        Actor3 = Actor2#actor{data=Data2, metadata=Meta2},
+        Actor3 = Actor2#actor{metadata=Meta2},
         ApiReq = #{
             verb => create,
             group => Group,
@@ -79,8 +77,9 @@ pre_create(SrvId, Actor) ->
             params => #{}
         },
         Actor4 = nkservice_actor_util:put_create_fields(Actor3),
-        Actor5 = case nkdomain_actor:parse(SrvId, Actor4, Module, ApiReq) of
+        Actor5 = case nkdomain_actor:parse(SrvId, Actor4, Config, ApiReq) of
             {ok, ActorParsed} ->
+                % Kind is added now
                 ActorParsed;
             {error, ParseError} ->
                 throw({error, ParseError})
@@ -120,6 +119,11 @@ api_event(ApiEvent, #actor_st{srv=SrvId, actor=Actor}=ActorSt) ->
 
 
 %% @doc Gets the actor config
+get_config(SrvId, #actor_id{group=Group, resource=Resource}) ->
+    get_config(SrvId, Group, Resource).
+
+
+%% @doc Gets the actor config
 get_config(SrvId, Group, Resource) ->
     case catch nkdomain_plugin:get_resource_config(SrvId, Group, Resource) of
         Map when is_map(Map) ->
@@ -128,40 +132,40 @@ get_config(SrvId, Group, Resource) ->
             {error, {resource_invalid, Group, Resource}}
     end.
 
+%%
+%%%% @private
+%%-spec parse_actor(#actor{}, nklib_syntax:syntax(), nkdomain_api:request()) ->
+%%    {ok, #actor{}} | nklib_syntax:error().
+%%
+%%parse_actor(#actor{id=ActorId, data=Data}=Actor, Syntax, #{vsn:=Vsn}) ->
+%%    case parse(Data, Syntax) of
+%%        {ok, Data2} ->
+%%            {ok, Actor#actor{data=Data2, id=ActorId#actor_id{vsn=Vsn}}};
+%%        {error, Error} ->
+%%            {error, Error}
+%%    end.
 
-%% @private
--spec parse_actor(#actor{}, nklib_syntax:syntax(), nkdomain_api:request()) ->
-    {ok, #actor{}} | nklib_syntax:error().
-
-parse_actor(#actor{id=ActorId, data=Data}=Actor, Syntax, #{vsn:=Vsn}) ->
-    case parse(Data, Syntax#{<<"kind">> => binary}) of
-        {ok, Data2} ->
-            {ok, Actor#actor{data=Data2, id=ActorId#actor_id{vsn=Vsn}}};
-        {error, Error} ->
-            {error, Error}
-    end.
-
-
-%% @private
--spec parse(map(), nklib_syntax:syntax()) ->
-    {ok, map()} | nklib_syntax:error().
-
-parse(Data, Syntax) ->
-    % lager:error("NKLOG SYN Data:~p\n Syntax:~p", [Data, Syntax]),
-    case nklib_syntax:parse(Data, Syntax#{<<"kind">>=>binary}) of
-        {ok, Data2, []} ->
-            {ok, Data2};
-        {ok, _, [Field | _]} ->
-            {error, {field_unknown, Field}};
-        {error, {syntax_error, Field}} ->
-            % lager:error("NKLOG Data ~p Syntax ~p", [Data, Syntax]),
-            {error, {field_invalid, Field}};
-        {error, {field_missing, Field}} ->
-            {error, {field_missing, Field}};
-        {error, Error} ->
-            lager:error("Unexpected parse error at ~p: ~p", [?MODULE, Error]),
-            {error, Error}
-    end.
+%%
+%%%% @private
+%%-spec parse(map(), nklib_syntax:syntax()) ->
+%%    {ok, map()} | nklib_syntax:error().
+%%
+%%parse(Data, Syntax) ->
+%%    % lager:error("NKLOG SYN Data:~p\n Syntax:~p", [Data, Syntax]),
+%%    case nklib_syntax:parse(Data, Syntax#{<<"kind">>=>binary}) of
+%%        {ok, Data2, []} ->
+%%            {ok, Data2};
+%%        {ok, _, [Field | _]} ->
+%%            {error, {field_unknown, Field}};
+%%        {error, {syntax_error, Field}} ->
+%%            % lager:error("NKLOG Data ~p Syntax ~p", [Data, Syntax]),
+%%            {error, {field_invalid, Field}};
+%%        {error, {field_missing, Field}} ->
+%%            {error, {field_missing, Field}};
+%%        {error, Error} ->
+%%            lager:error("Unexpected parse error at ~p: ~p", [?MODULE, Error]),
+%%            {error, Error}
+%%    end.
 
 
 %% @private

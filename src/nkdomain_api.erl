@@ -23,7 +23,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([request/2]).
--export([api_object_to_actor/4, actor_to_external/2, actor_to_external/3]).
+-export([api_object_to_actor/3, actor_to_external/2, actor_to_external/3]).
 -export([set_debug/1, status/2]).
 -export_type([verb/0, group/0, vsn/0, api_vsn/0, kind/0, resource/0, subresource/0, params/0]).
 -export_type([request/0, response/0, api_event/0]).
@@ -112,6 +112,7 @@
     reply().
 
 request(SrvId, ApiReq) ->
+    % Gets group and vsn from request or body
     case nkdomain_api_lib:parse_api_request(ApiReq) of
         {ok, #{group:=Group, vsn:=Vsn}=ApiReq2} ->
             set_debug(SrvId),
@@ -120,7 +121,7 @@ request(SrvId, ApiReq) ->
                 trace => []
             },
             ApiReq4 = add_trace(api_start, none, ApiReq3),
-            Reply = nkdomain_lib:nkdomain_api_request(SrvId, Group, Vsn, ApiReq4),
+            Reply = ?CALL_SRV(SrvId, nkdomain_api_request, [SrvId, Group, Vsn, ApiReq4]),
             case reply(SrvId, Reply, ApiReq4) of
                 {raw, {CT, Bin}} ->
                     ?API_DEBUG("reply raw: ~p", [CT], ApiReq4),
@@ -193,12 +194,12 @@ set_debug(SrvId) when is_atom(SrvId) ->
 %% Fixed values: apiVersion, kind, domain, name
 %% If present in fixed, should be the same
 %% Parses metadata
-api_object_to_actor(SrvId, ActorId, Config, Obj) ->
-    % 'data' has everything except core fields (apiVersion and kind) and metadata,
-    % that has its own field
-    #{camel:=Kind} = Config,
-    Data1 = maps:without([<<"apiVersion">>, <<"kind">>, <<"metadata">>], Obj),
-    Data2 = Data1#{<<"kind">> => Kind},
+api_object_to_actor(SrvId, ActorId, Obj) ->
+    % 'data' has everything except fields kind, apiVersion and metadata,
+    % kind is extracted and added after parsing
+    % apiVersion is extracted to #actor_id{}
+    % metadata has its own field
+    Data = maps:without([<<"apiVersion">>, <<"kind">>, <<"metadata">>], Obj),
     Meta = maps:get(<<"metadata">>, Obj, #{}),
     MetaSyntax = nkservice_actor_syntax:meta_syntax(),
     case nklib_syntax:parse(Meta, MetaSyntax, #{path=><<"metadata">>}) of
@@ -209,7 +210,7 @@ api_object_to_actor(SrvId, ActorId, Config, Obj) ->
                 id = ActorId#actor_id{
                     uid = maps:get(<<"uid">>, Meta, undefined)
                 },
-                data = Data2,
+                data = Data,
                 metadata = Meta3,
                 hash = maps:get(<<"resourceVersion">>, Meta, <<>>)
             },
@@ -255,8 +256,7 @@ actor_to_external(SrvId, Actor, Vsn) ->
             {error, Error} ->
                 throw({error, Error})
         end,
-        #{module:=Module} = Config,
-        Actor2 = nkdomain_actor:make_external(SrvId, Actor, Module, Vsn),
+        Actor2 = nkdomain_actor:make_external(SrvId, Actor, Config, Vsn),
         #actor{id=#actor_id{vsn=Vsn2}, data=Data, metadata=Meta} = Actor2,
         case Vsn /= undefined andalso Vsn /= Vsn2 of
             true ->

@@ -26,7 +26,7 @@
 %% ===================================================================
 
 -define(PACKAGE_CLASS_DOMAIN, <<"Domains">>).
--define(DOMAIN_PKG_ID, <<"domains-pkg">>).
+%-define(DOMAIN_PKG_ID, <<"domains-pkg">>).
 -define(DOMAIN_PKG_ID_API, <<"domains-pkg-api">>).
 -define(DOMAIN_PKG_ID_GRAPHIQL, <<"domains-pkg-graphiql">>).
 -define(DOMAIN_PKG_ID_FILE, <<"nkdomain-file">>).

@@ -45,7 +45,7 @@
 %%          - Use camelCase and binaries for fields
 %%          - Date fields in RFC3339 must end in "Time"
 %%      - Export a function sync_op/3 or async_op/2 to support special operations
-%%      - Export a function request/5 to support special API operations
+%%      - Export a function request/3 to support special API operations
 %%      - Export make_external/2 to change default external API representation of actor
 %%        (for example, to show some 'status' info, remove a field, etc.)
 %%      - Export a funciontion update/2 to check and allow updates (see file.provider sample)
@@ -159,14 +159,13 @@ actor_register(SrvId, ActorSt) ->
 
 
 %% @doc Used to parse an actor, trying the module callback first
-%% Must set also vsn
+%% Vsn must be already set in actor_id.
+%% Kind is no expected in 'data' (so that modules don't wait for it) and will be added
 %% @see task actor for an example of direct parsing
-parse(SrvId, Actor, Module, ApiReq) ->
-    case nkservice_actor:parse(SrvId, Actor, Module, ApiReq) of
-        {ok, #actor{}=Actor2} ->
-            {ok, Actor2};
-        {syntax, Syntax} when is_map(Syntax) ->
-            nkdomain_actor_util:parse_actor(Actor, Syntax, ApiReq);
+parse(SrvId, Actor, #{module:=Module, camel:=Kind}, ApiReq) ->
+    case nkservice_actor:parse(Module, SrvId, Actor, ApiReq) of
+        {ok, #actor{data=Data2}=Actor2} ->
+            {ok, Actor2#actor{data=Data2#{<<"kind">> => Kind}}};
         {error, Error} ->
             {error, Error}
     end.
@@ -175,11 +174,11 @@ parse(SrvId, Actor, Module, ApiReq) ->
 %% @doc Used to update the external API representation of an actor
 %% to match a version and also to filter and populate 'data' (specially, data.status)
 %% If Vsn is 'undefined' actor can use it's last version
--spec make_external(nkservice:id(), #actor{}, module(), nkdomain_api:vsn()|undefined) ->
+-spec make_external(nkservice:id(), #actor{}, #{module:=module()}, nkdomain_api:vsn()|undefined) ->
     #actor{}.
 
-make_external(SrvId, Actor, Module, Vsn) ->
-    Actor2 = nkservice_actor:make_external(SrvId, Actor, Module, Vsn),
+make_external(SrvId, Actor, #{module:=Module}, Vsn) ->
+    Actor2 = nkservice_actor:make_external(Module, SrvId, Actor, Vsn),
     #actor{id=#actor_id{pid=Pid}, data=Data} = Actor2,
     case is_pid(Pid) of
         true ->

@@ -30,7 +30,7 @@
 
 -behavior(nkservice_actor).
 
--export([config/0, parse/3, sync_op/3, init/1, request/5, stop/2]).
+-export([config/0, parse/3, sync_op/3, init/1, request/4, stop/2]).
 
 
 -include("nkdomain.hrl").
@@ -60,7 +60,7 @@ config() ->
 
 
 %% @doc
-parse(_SrvId, Actor, ApiReq) ->
+parse(_SrvId, Actor, _ApiReq) ->
     Syntax = #{
         <<"spec">> => #{
             <<"ttlSecs">> => pos_integer,
@@ -69,7 +69,7 @@ parse(_SrvId, Actor, ApiReq) ->
         <<"data">> => map,
         '__mandatory' => [<<"spec">>]
     },
-    case nkdomain_actor_util:parse_actor(Actor, Syntax, ApiReq) of
+    case nkservice_actor_util:parse_actor(Actor, Syntax) of
         {ok, #actor{data=Data2, metadata=Meta2}=Actor2} ->
             #{<<"spec">>:=#{<<"ttlSecs">>:=Secs}} = Data2,
             Now = nklib_date:epoch(msecs),
@@ -82,7 +82,7 @@ parse(_SrvId, Actor, ApiReq) ->
 
 
 %% @doc
-request(SrvId, get, ActorId, _Config, #{subresource:=[<<"_refresh">>]}) ->
+request(SrvId, ActorId, _Config, #{verb:=get, subresource:=[<<"_refresh">>]}) ->
     case nkservice_actor_srv:sync_op({SrvId, ActorId}, refresh) of
         ok ->
             {status, actor_updated};
@@ -90,7 +90,7 @@ request(SrvId, get, ActorId, _Config, #{subresource:=[<<"_refresh">>]}) ->
             {error, Error}
     end;
 
-request(_SrvId, _Verb, _ActorId, _Config, _ApiReq) ->
+request(_SrvId, _ActorId, _Config, _ApiReq) ->
     continue.
 
 

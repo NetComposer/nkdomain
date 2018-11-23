@@ -21,7 +21,7 @@
 %% @doc NkDomain library for nkdomain_callbacks
 -module( nkdomain_lib).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
--export([nkdomain_get_api_groups/1, nkdomain_get_api_resources/3, nkdomain_api_request/4]).
+-export([nkdomain_get_api_groups/1, nkdomain_get_api_resources/3]).
 -export([get_paths/2, get_api_resources/3]).
 -export([core_api_event/2, launch_auto_activated/1, get_auto_activated/1]).
 
@@ -54,9 +54,6 @@ nkdomain_get_api_resources(SrvId, Group, Vsn) ->
     ?CALL_SRV(SrvId, nkdomain_api_get_resources, [SrvId, Group, Vsn]).
 
 
-%% @private
-nkdomain_api_request(SrvId, Group, Vsn, ApiReq) ->
-    ?CALL_SRV(SrvId, nkdomain_api_request, [SrvId, Group, Vsn, ApiReq]).
 
 
 

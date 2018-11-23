@@ -82,7 +82,7 @@ config() ->
 
 %% @doc
 parse(_SrvId, _Actor, _ApiReq) ->
-    Syntax = #{
+    Spec = #{
         <<"name">> => binary,
         <<"surname">> => binary,
         <<"birthTime">> => date_3339,
@@ -148,7 +148,7 @@ parse(_SrvId, _Actor, _ApiReq) ->
         <<"normalizedSurname">> => binary,
         '__post_check' => fun ?MODULE:parse_post_check/1
     },
-    {syntax, #{<<"spec">>=>Syntax}}.
+    {syntax, #{<<"spec">> => Spec}}.
 
 
 

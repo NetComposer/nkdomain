@@ -451,9 +451,9 @@ actors_test_2() ->
         {<<"User">>, #{<<"uid">>:=UT1, <<"name">>:=<<"ut1">>, <<"domain">>:=<<"b.a-nktest">>}}
     ]} = all_actors_query(Filters1),
     {ok, _, _} = nkdomain_register:get_domain_data('nkdomain-root', "b.a-nktest"),
-    ok = nkservice_actor:enable(?ROOT_SRV, UT1, false),
+    ok = nkservice_actor:enable(UT1, false),
     {0, []} = all_actors_query(Filters1),
-    ok = nkservice_actor:enable(?ROOT_SRV, UT1, true),
+    ok = nkservice_actor:enable(UT1, true),
     timer:sleep(100),
     {1, [
         {<<"User">>, #{<<"uid">>:=UT1, <<"name">>:=<<"ut1">>, <<"links">>:=[#{<<"value">>:=B1}]}}

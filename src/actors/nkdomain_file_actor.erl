@@ -43,7 +43,7 @@
 -behavior(nkservice_actor).
 
 -export([op_get_body/2, op_get_download_link/2, op_get_media/2]).
--export([config/0, parse/3, request/5, sync_op/3]).
+-export([config/0, parse/3, request/3, sync_op/3]).
 
 
 -include("nkdomain.hrl").
@@ -123,7 +123,7 @@ config() ->
 
 
 %% @doc
-parse(SrvId, Actor, #{verb:=create}=ApiReq) ->
+parse(SrvId, Actor, #{verb:=create, params:=Params}) ->
     Syntax = #{
         <<"spec">> => #{
             <<"contentType">> => binary,
@@ -135,10 +135,9 @@ parse(SrvId, Actor, #{verb:=create}=ApiReq) ->
         },
         '__mandatory' => [<<"spec">>]
     },
-    case nkdomain_actor_util:parse_actor(Actor, Syntax, ApiReq) of
+    case nkservice_actor_util:parse_actor(Actor, Syntax) of
         {ok, Actor2} ->
             #actor{data=#{<<"spec">>:=Spec2}}=Actor2,
-            #{params:=Params} = ApiReq,
             do_parse(SrvId, Params, Spec2, Actor);
         {error, Error} ->
             {error, Error}
@@ -146,7 +145,7 @@ parse(SrvId, Actor, #{verb:=create}=ApiReq) ->
 
 %% We allow fields in case they didn't change
 %% immutable_fields makes sure no one is changed
-parse(_SrvId, Actor, #{verb:=update}=ApiReq) ->
+parse(_SrvId, Actor, #{verb:=update}) ->
     Syntax = #{
         <<"spec">> => #{
             <<"contentType">> => binary,
@@ -158,13 +157,13 @@ parse(_SrvId, Actor, #{verb:=update}=ApiReq) ->
         },
         '__mandatory' => [<<"spec">>]
     },
-    nkdomain_actor_util:parse_actor(Actor, Syntax, ApiReq).
+    nkservice_actor_util:parse_actor(Actor, Syntax).
 
 
 %% @doc
-request(SrvId, get, ActorId, _Config, #{subresource:=[]}=ApiReq) ->
+request(SrvId, ActorId, #{verb:=get, subresource:=[]}=ApiReq) ->
     #{params:=Params, vsn:=Vsn} = ApiReq,
-    case nkservice_actor:get_actor(SrvId, ActorId) of
+    case nkservice_actor:get_actor({SrvId, ActorId}) of
         {ok, #actor{data=Data}=Actor} ->
             case nklib_syntax:parse(Params, #{getBodyInline=>boolean}) of
                 {ok, #{getBodyInline:=true}, _} ->
@@ -195,7 +194,7 @@ request(SrvId, get, ActorId, _Config, #{subresource:=[]}=ApiReq) ->
             {error, Error}
     end;
 
-request(SrvId, upload, _ActorId, _Config, #{subresource:=[], params:=Params}=ApiReq) ->
+request(SrvId, _ActorId, #{verb:=upload, subresource:=[], params:=Params}=ApiReq) ->
     case Params of
         #{<<"provider">>:=Provider} ->
             case ApiReq of
@@ -223,7 +222,7 @@ request(SrvId, upload, _ActorId, _Config, #{subresource:=[], params:=Params}=Api
             {error, {field_missing, <<"provider">>}}
     end;
 
-request(SrvId, get, ActorId, _Config, #{subresource:=[<<"_download">>]}) ->
+request(SrvId, ActorId, #{verb:=get, subresource:=[<<"_download">>]}) ->
     case op_get_body(SrvId, ActorId) of
         {ok, CT, Body} ->
             {raw, {CT, Body}};
@@ -231,7 +230,7 @@ request(SrvId, get, ActorId, _Config, #{subresource:=[<<"_download">>]}) ->
             {error, Error}
     end;
 
-request(SrvId, get, ActorId, _Config, #{subresource:=[<<"_downloadLink">>]}) ->
+request(SrvId, ActorId, #{verb:=get, subresource:=[<<"_downloadLink">>]}) ->
     case op_get_download_link(SrvId, ActorId) of
         {ok, Url, 0} ->
             {ok, #{url=>Url}};
@@ -241,7 +240,7 @@ request(SrvId, get, ActorId, _Config, #{subresource:=[<<"_downloadLink">>]}) ->
             {error, Error}
     end;
 
-request(_SrvId, _Verb, _ActorId, _Config, _Api) ->
+request(_SrvId, _ActorId, _Api) ->
     continue.
 
 

@@ -29,7 +29,6 @@
 %%   - /domains/core/v1/a.b.c/users/user1 -> /a.b.c.nkdomain-root/nkdomain-core/user/user1
 %%
 %% - The application starts a single service with a single instance of the Domains
-%%   package (?DOMAIN_PKG_ID)
 %%
 %% Actor activation
 %% ----------------
@@ -127,7 +126,7 @@ get_actor(Path) ->
         {true, #actor_id{domain=Domain}=ActorId} ->
             case nkdomain_register:get_domain_data(Domain) of
                 {ok, DomSrvId, _DomUID} ->
-                    nkservice_actor:get_actor(DomSrvId, ActorId);
+                    nkservice_actor:get_actor({DomSrvId, ActorId});
                 {error, Error} ->
                     {error, Error}
             end;

@@ -404,7 +404,7 @@ send_test_event(Path) ->
 
 
 stop() ->
-    nkservice_actor:stop(?ROOT_SRV, "/nkdomain-root/core/user/admin").
+    nkservice_actor:stop("/nkdomain-root/core/user/admin").
 
 w(Vsn) ->
     nkdomain_api_events:wait_for_save(),

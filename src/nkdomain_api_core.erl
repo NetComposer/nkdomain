@@ -115,7 +115,7 @@ request(SrvId, #{verb:=Verb, group:=Group, vsn:=Vsn}=ApiReq) ->
             {error, ConfigError} ->
                 throw({error, ConfigError})
         end,
-        #{verbs:=Verbs, versions:=Versions} = Config,
+        #{verbs:=Verbs, versions:=Versions, module:=Module} = Config,
         ActorId = #actor_id{
             domain = Domain,
             group = Group,
@@ -145,10 +145,10 @@ request(SrvId, #{verb:=Verb, group:=Group, vsn:=Vsn}=ApiReq) ->
         % At this point, the Verb, API Group and version are compatible with the
         % Actor configuration
         #{verb:=Verb} = ApiReq3,
-        case nkservice_actor:request(ActorSrvId, ActorId, Config, Verb, ApiReq3) of
+        case nkservice_actor:request(Module, ActorSrvId, ActorId, ApiReq3) of
             continue ->
                 ?API_DEBUG("processing default", [], ApiReq3),
-                default_request(ActorSrvId, ActorId, Verb, Config, ApiReq3);
+                default_request(Verb, ActorSrvId, ActorId, Config, ApiReq3);
             {continue, #{resource:=Resource2}=ApiReq4} when Resource2 /= Resource ->
                 ?API_DEBUG("updated request", [], ApiReq4),
                 request(ActorSrvId, ApiReq4);
@@ -165,34 +165,34 @@ request(SrvId, #{verb:=Verb, group:=Group, vsn:=Vsn}=ApiReq) ->
 %% @private
 %% A specific actor resource has been identified in Config
 %% Maybe it is a final actor or a resource
-default_request(SrvId, #actor_id{name=Name}=ActorId, get, Config, #{subresource:=[]}=ApiReq)
+default_request(get, SrvId, #actor_id{name=Name}=ActorId, Config, #{subresource:=[]}=ApiReq)
         when is_binary(Name) ->
     get(SrvId, ActorId, Config, ApiReq);
 
-default_request(SrvId, #actor_id{name=undefined}=ActorId, list, Config, #{subresource:=[]}=ApiReq) ->
+default_request(list, SrvId, #actor_id{name=undefined}=ActorId, Config, #{subresource:=[]}=ApiReq) ->
     list(SrvId, ActorId, Config, ApiReq);
 
-default_request(SrvId, ActorId, create, Config, #{subresource:=[]}=ApiReq) ->
+default_request(create, SrvId, ActorId, Config, #{subresource:=[]}=ApiReq) ->
     Actor2 = pre_create(SrvId, ActorId, Config, ApiReq),
     create(SrvId, ActorId, Config, Actor2, ApiReq);
 
-default_request(SrvId, #actor_id{name=Name}=ActorId, update, Config, #{subresource:=[]}=ApiReq)
+default_request(update, SrvId, #actor_id{name=Name}=ActorId, Config, #{subresource:=[]}=ApiReq)
         when is_binary(Name) ->
     Actor2 = pre_update(SrvId, ActorId, Config, ApiReq),
     update(SrvId, ActorId, Config, Actor2, ApiReq);
 
-default_request(SrvId, #actor_id{name=Name}=ActorId, delete, Config, #{subresource:=[]}=ApiReq)
+default_request(delete, SrvId, #actor_id{name=Name}=ActorId, Config, #{subresource:=[]}=ApiReq)
     when is_binary(Name) ->
     delete(SrvId, ActorId, Config, ApiReq);
 
-default_request(SrvId, #actor_id{name=undefined}=ActorId, deletecollection, Config, #{subresource:=[]}=ApiReq) ->
+default_request(deletecollection, SrvId, #actor_id{name=undefined}=ActorId, Config, #{subresource:=[]}=ApiReq) ->
     delete_collection(SrvId, ActorId, Config, ApiReq);
 
-default_request(SrvId, ActorId, watch, Config, #{subresource:=[]}=ApiReq) ->
+default_request(watch, SrvId, ActorId, Config, #{subresource:=[]}=ApiReq) ->
     watch(SrvId, ActorId, Config, ApiReq);
 
-default_request(_SrvId, ActorId, _Verb, _Config, _ApiReq) ->
-    ?API_LLOG(warning, "Invalid resource1 (~p, ~p)", [ActorId, _ApiReq]),
+default_request(_Verb, _SrvId, ActorId, _Config, _ApiReq) ->
+    ?API_LLOG(warning, "Invalid resource.1 (~p)", [{_Verb, _SrvId, ActorId, _Config, _ApiReq}]),
     {error, resource_invalid}.
 
 
@@ -257,7 +257,7 @@ pre_create(SrvId, ActorId, Config, ApiReq) ->
         {error, ObjError} ->
             throw({error, ObjError})
     end,
-    Actor1 = case nkdomain_api:api_object_to_actor(SrvId, ActorId, Config, Obj) of
+    Actor1 = case nkdomain_api:api_object_to_actor(SrvId, ActorId, Obj) of
         {ok, ApiActor} ->
             ApiActor;
         {error, ApiActorError} ->
@@ -265,8 +265,7 @@ pre_create(SrvId, ActorId, Config, ApiReq) ->
     end,
     Actor2 = nkservice_actor_util:put_create_fields(Actor1),
     % Make sure it is a valid actor, parse data
-    #{module:=Module} = Config,
-    case nkdomain_actor:parse(SrvId, Actor2, Module, ApiReq) of
+    case nkdomain_actor:parse(SrvId, Actor2, Config, ApiReq) of
         {ok, Actor3} ->
             Actor3;
         {error, ParseError} ->
@@ -280,7 +279,7 @@ create(SrvId, ActorId, Config, Actor, ApiReq) ->
     % Actor will not have uid, so it will be generated
     ?API_DEBUG("Creating actor ~p (~p)", [Actor, Opts]),
     #actor_id{vsn=Vsn} = ActorId,
-    Actor2 = case nkservice_actor_db:create(SrvId, Actor, #{actor_config=>Config}) of
+    Actor2 = case nkservice_actor_db:create(SrvId, Actor, Opts) of
         {ok, ActorCreated, _Meta} ->
             ActorCreated;
         {error, CreateError} ->
@@ -304,14 +303,13 @@ pre_update(SrvId, ActorId, Config, ApiReq) ->
         {error, ObjError} ->
             throw({error, ObjError})
     end,
-    Actor1 = case nkdomain_api:api_object_to_actor(SrvId, ActorId, Config, Obj) of
+    Actor1 = case nkdomain_api:api_object_to_actor(SrvId, ActorId, Obj) of
         {ok, ApiActor} ->
             ApiActor;
         {error, ApiActorError} ->
             throw({error, ApiActorError})
     end,
-    #{module:=Module} = Config,
-    case nkdomain_actor:parse(SrvId, Actor1, Module, ApiReq) of
+    case nkdomain_actor:parse(SrvId, Actor1, Config, ApiReq) of
         {ok, Actor2} ->
             Actor2;
         {error, ParseError} ->
@@ -335,9 +333,9 @@ update(SrvId, ActorId, Config, Actor, ApiReq) ->
                     {error, Error}
             end;
         {error, actor_not_found} ->
-            default_request(SrvId, ActorId, create, Config, ApiReq);
+            default_request(create, SrvId, ActorId, Config, ApiReq);
         {error, {field_missing, <<"name">>}} ->
-            default_request(SrvId, ActorId, create, Config, ApiReq);
+            default_request(create, SrvId, ActorId, Config, ApiReq);
         {error, UpdateError} ->
             {error, UpdateError}
     end.
@@ -432,7 +430,7 @@ set_activate_opts(_Config, #{params:=Params}) ->
     end,
     Opts2 = case maps:find(ttl, Params) of
         {ok, TTL} ->
-            Opts1#{ttl=>TTL};
+            Opts1#{actor_config=>#{ttl=>TTL}};
         error ->
             Opts1
     end,

@@ -32,7 +32,7 @@
 -export([op_get_spec/2, op_get_direct_download_link/3, op_get_upload_link/3,
          op_get_check_meta/3]).
 -export([link_to_provider/3]).
--export([config/0, parse/3, request/5, make_external/3, init/1, update/2, sync_op/3]).
+-export([config/0, parse/3, request/3, make_external/3, init/1, update/2, sync_op/3]).
 -export_type([run_state/0]).
 
 
@@ -123,7 +123,7 @@ config() ->
 
 
 %% @doc
-parse(_SrvId, Actor, ApiReq) ->
+parse(_SrvId, Actor, _ApiReq) ->
     Syntax = #{
         <<"spec">> => #{
             <<"storageClass">> => {binary, [<<"filesystem">>, <<"s3">>]},
@@ -153,7 +153,7 @@ parse(_SrvId, Actor, ApiReq) ->
         },
         '__mandatory' => [<<"spec">>]
     },
-    case nkdomain_actor_util:parse_actor(Actor, Syntax, ApiReq) of
+    case nkservice_actor_util:parse_actor(Actor, Syntax) of
         {ok, #actor{data=Data2}=Actor2} ->
             case Data2 of
                 #{<<"spec">>:=#{<<"storageClass">>:=<<"filesystem">>}=Spec2} ->
@@ -178,10 +178,10 @@ parse(_SrvId, Actor, ApiReq) ->
 
 %% @doc
 %% Redirect to files, adding parameter
-request(SrvId, Verb, ActorId, _Config, #{subresource:=[<<"files">>|Rest], params:=Params}=ApiReq)
+request(SrvId, ActorId, #{verb:=Verb, subresource:=[<<"files">>|Rest], params:=Params}=ApiReq)
         when Verb==create; Verb==upload ->
     #{params:=Params, vsn:=Vsn}=ApiReq,
-    case nkservice_actor:get_actor(SrvId, ActorId) of
+    case nkservice_actor:get_actor({SrvId, ActorId}) of
         {ok, Actor} ->
             case nkdomain_api:actor_to_external(SrvId, Actor, Vsn) of
                 {ok, #{<<"metadata">>:=#{<<"selfLink">>:=ProviderId}}} ->
@@ -199,7 +199,7 @@ request(SrvId, Verb, ActorId, _Config, #{subresource:=[<<"files">>|Rest], params
             {error, Error}
     end;
 
-request(SrvId, get, ActorId, _Config, #{subresource:=[<<"_uploadLink">>], params:=Params}) ->
+request(SrvId, ActorId, #{verb:=get, subresource:=[<<"_uploadLink">>], params:=Params}) ->
     Syntax = #{contentType => binary},
     case nklib_syntax:parse(Params, Syntax) of
         {ok, #{contentType:=CT}, _} ->
@@ -213,7 +213,7 @@ request(SrvId, get, ActorId, _Config, #{subresource:=[<<"_uploadLink">>], params
             {error, {field_missing, contentType}}
     end;
 
-request(_SrvId, _Verb, _ActorId, _Config, _ApiReq) ->
+request(_SrvId, _ActorId, _ApiReq) ->
     continue.
 
 

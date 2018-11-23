@@ -377,7 +377,7 @@ task_test() ->
     ActorPath = <<"/a-nktest/core/tasks/", T6_Name/binary>>,
     ok = nkservice_actor_srv:sync_op(ActorPath, {update_state, #{status=>success}}),
     timer:sleep(150),
-    {error, actor_not_found} = nkservice_actor:get_actor(?ROOT_SRV, ActorPath),
+    {error, actor_not_found} = nkservice_actor:get_actor(ActorPath),
     nkdomain_api_events:wait_for_save(),
     {ok, #{<<"items">>:=Events3}} = api(#{verb=>list, domain=>"a-nktest", resource=>events, params=>#{
         fieldSelector=><<"involvedObject.kind:Task,involvedObject.subtype:TestType,involvedObject.name:", T6_Name/binary>>}}),

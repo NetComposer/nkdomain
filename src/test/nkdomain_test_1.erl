@@ -69,7 +69,7 @@ basic_test() ->
     api(#{verb=>delete, resource=>users, name=>"ut1"}),
 
     AP1 = "/root/core/users/ut1",
-    {error, actor_not_found} = nkservice_actor:get_actor(?ROOT_SRV, AP1),
+    {error, actor_not_found} = nkservice_actor:get_actor(AP1),
 
     {error, #{<<"code">>:=404, <<"reason">>:=<<"actor_not_found">>}} = api(#{verb=>get, resource=>users, name=>ut1}),
     {error, #{<<"code">>:=405, <<"reason">>:=<<"verb_not_allowed">>}} = api(#{verb=>get1, resource=>users, name=>ut1}),
@@ -121,7 +121,7 @@ basic_test() ->
     {409, #{<<"code">>:=409, <<"reason">>:=<<"uniqueness_violation">>}} = http_post("/users", U1),
 
     % The actor is loaded
-    {true, #actor_id{name = <<"ut1">>, pid=Pid1}= ActorId1} = nkdomain_register:find_registered(UID),
+    {true, #actor_id{name = <<"ut1">>, pid=Pid1}= ActorId1} = nkservice_actor_register:find_registered(UID),
     true = is_pid(Pid1),
     {ok, ActorId1, _} = nkservice_actor:find(ActorId1),
     {ok, ActorId1, _} = nkservice_actor:find(UID),
@@ -166,9 +166,9 @@ basic_test() ->
     {200, ApiActor1} = http_get("/users/ut1"),
 
     % Let's work with the actor while unloaded
-    ok = nkservice_actor:stop(none, Pid1),
+    ok = nkservice_actor:stop(Pid1),
     timer:sleep(100),
-    false = nkdomain_register:find_registered(UID),
+    false = nkservice_actor_register:find_registered(UID),
     false = is_process_alive(Pid1),
     ActorId1b = ActorId1#actor_id{pid=undefined},
     {ok, ActorId1b, _} = nkservice_actor:find(ActorId1),
@@ -181,16 +181,16 @@ basic_test() ->
     {ok, ApiActor1b} = api(#{verb=>get, resource=>"_uids", name=>UID, params=>#{activate=>false}}),
     {ok, ApiActor1b} = api(#{verb=>get, resource=>users, name=>ut1, params=>#{activate=>false}}),
     {200, ApiActor1b} = http_get("/users/ut1?activate=false"),
-    false = nkdomain_register:find_registered(UID),
+    false = nkservice_actor_register:find_registered(UID),
 
     % Load with TTL
     {200, ApiActor1} = http_get("/users/ut1?activate=true&ttl=500"),
-    {true, #actor_id{pid=Pid2}} = nkdomain_register:find_registered("/root/core/users/ut1"),
+    {true, #actor_id{pid=Pid2}} = nkservice_actor_register:find_registered("/root/core/users/ut1"),
     timer:sleep(50),  % Give some time for UID cache to register
-    {true, #actor_id{pid=Pid2}} = nkdomain_register:find_registered(UID),
+    {true, #actor_id{pid=Pid2}} = nkservice_actor_register:find_registered(UID),
     true = Pid1 /= Pid2,
     timer:sleep(600),
-    false =  nkdomain_register:find_registered(UID),
+    false =  nkservice_actor_register:find_registered(UID),
 
     % Delete the user
     {error, #{<<"code">>:=404, <<"reason">>:=<<"actor_not_found">>}} = api(#{verb=>delete, resource=>users, name=>"utest1"}),
@@ -244,7 +244,7 @@ activation_test() ->
         <<"spec">> := #{<<"password">> := <<>>}
         % <<"status">> := #{}
     } = Add1,
-    false = nkdomain_register:find_registered(UID1),
+    false = nkservice_actor_register:find_registered(UID1),
     % Delete not-activated object
     {200, #{<<"code">>:=200, <<"reason">>:=<<"actor_deleted">>}} = http_delete("/users/ut1"),
 
@@ -264,7 +264,7 @@ activation_test() ->
 subdomains_test() ->
     #{d1:=D1, d2:=D2, d3:=D3, u1:=U1} = nkdomain_test_util:test_data(),
     % Unload admin user
-    nkservice_actor:stop(?ROOT_SRV, "/root/core/users/admin"),
+    nkservice_actor:stop("/root/core/users/admin"),
 
     % Get the UUID for the root domain
     {ok, 'nkdomain-root', RootUID} = nkdomain_register:get_domain_data('nkdomain-root', "root"),
@@ -326,7 +326,7 @@ subdomains_test() ->
     #{<<"domains">>:=1} = get_counter("b.a-nktest"),    % c.b.a-nktest
 
     % If we unload the actor, the service will stop
-    nkservice_actor:stop(?ROOT_SRV, "/b.a-nktest/core/domains/c"),
+    nkservice_actor:stop("/b.a-nktest/core/domains/c"),
     timer:sleep(100),
     false = nkdomain_register:is_domain_active("c.b.a-nktest"),
 
@@ -401,7 +401,7 @@ loading_test() ->
     % If we unload "a-nktest"
     % - it will be detected by actor /a-nktest/core/domains/b (leader is down) at it will stop
     % - it will be detected by actor /b.a-nktest/core/domains/c and /users/ut1, they will stop
-    nkservice_actor:stop(?ROOT_SRV, "/root/core/domains/a-nktest"),
+    nkservice_actor:stop("/root/core/domains/a-nktest"),
     timer:sleep(100),
     #{<<"domains">>:=0, <<"users">>:=0} = get_counter("root"),
     false = nkservice_actor_db:is_activated("/root/core/domains/a-nktest"),

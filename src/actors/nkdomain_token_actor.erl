@@ -31,7 +31,7 @@
 
 -behavior(nkservice_actor).
 
--export([config/0, parse/3, sync_op/3, init/1, stop/2, request/5]).
+-export([config/0, parse/3, sync_op/3, init/1, stop/2, request/3]).
 
 -define(LLOG(Type, Txt, Args), lager:Type("NkDOMAIN Actor Token: "++Txt, Args)).
 
@@ -62,16 +62,16 @@ config() ->
 
 
 %% @doc
-parse(_SrvId, Actor, ApiReq) ->
+parse(_SrvId, Actor, #{params:=Params}) ->
     Syntax = #{<<"data">> => map},
-    case nkdomain_actor_util:parse_actor(Actor, Syntax, ApiReq) of
+    case nkservice_actor_util:parse_actor(Actor, Syntax) of
         {ok, #actor{metadata=Meta2}=Actor2} ->
             case maps:is_key(<<"expiresTime">>, Meta2) of
                 true ->
                     {ok, Actor2};
                 false ->
-                    case ApiReq of
-                        #{params:=#{ttl:=TTL}} when is_integer(TTL), TTL>0 ->
+                    case Params of
+                        #{ttl:=TTL} when is_integer(TTL), TTL>0 ->
                             Now = nklib_date:epoch(msecs),
                             {ok, Expires} = nklib_date:to_3339(Now+1000*TTL, msecs),
                             Meta3 = Meta2#{<<"expiresTime">> => Expires},
@@ -86,7 +86,7 @@ parse(_SrvId, Actor, ApiReq) ->
 
 
 %% @doc
-request(SrvId, get, ActorId, _Config, #{subresource:=[<<"_execute">>], params:=Params}) ->
+request(SrvId, ActorId, #{verb:=get, subresource:=[<<"_execute">>], params:=Params}) ->
     case nkservice_actor_srv:sync_op({SrvId, ActorId}, {token_execute, Params}) of
         {ok, Reply} ->
             {status, Reply};
@@ -94,7 +94,7 @@ request(SrvId, get, ActorId, _Config, #{subresource:=[<<"_execute">>], params:=P
             {error, Error}
     end;
 
-request(_SrvId, _ActorId, _Verb, _Config, _ApiReq) ->
+request(_SrvId, _ActorId, _ApiReq) ->
     continue.
 
 

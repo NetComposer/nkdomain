@@ -25,12 +25,9 @@
 -export([msg/1, status/1]).
 -export([nkdomain_api_request/4, nkdomain_get_paths/2, nkdomain_api_get_groups/1,
          nkdomain_api_get_resources/3]).
--export([actor_find_registered/2, actor_activate/3, actor_create/3, actor_external_event/3]).
--export([actor_srv_init/1, actor_srv_register/2, actor_srv_heartbeat/1, actor_srv_update/2,
-         actor_srv_enabled/2, actor_srv_event/2, actor_srv_link_event/4,
-         actor_srv_sync_op/3, actor_srv_async_op/2,
-         actor_srv_handle_call/3, actor_srv_handle_cast/2, actor_srv_handle_info/2,
-         actor_srv_stop/2, actor_srv_terminate/2]).
+-export([actor_find_registered/2, actor_get_config/3, actor_activate/3, actor_create/3,
+         actor_is_managed/2, actor_external_event/3]).
+-export([actor_srv_register/2, actor_srv_event/2, actor_srv_link_event/4]).
 -export([actor_db_get_query/4]).
 -export([service_master_leader/4]).
 -export([nkservice_rest_http/4]).
@@ -91,7 +88,6 @@ msg(file_too_large)                     -> "File is too large";
 msg(group_unknown)                      -> "Invalid Group";
 msg(invalid_content_type)               -> "Invalid Content-Type";
 msg({invalid_name, N})                  -> {"Invalid name '~s'", [N]};
-msg(invalid_object_id)                  -> "Invalid object id";
 msg(invalid_sessionn)                   -> "Invalid session";
 msg(kind_unknown)                       -> "Invalid kind";
 msg({kind_unknown, K})                  -> {"Invalid kind '~s'", [K]};
@@ -314,7 +310,7 @@ nkdomain_api_get_resources(SrvId, ApiGroup, ApiVsn) ->
 %% Actor processing
 %% ===================================================================
 
-%% @see Implements alternate registrar
+%% @see Implements alternate registrar (called only when actor not cached)
 actor_find_registered(_SrvId, Id) ->
     nkdomain_register:find_registered(Id).
 
@@ -327,6 +323,24 @@ actor_create(SrvId, Actor, Config) ->
 %% @see nkservice_callbacks:actor_activate/3
 actor_activate(SrvId, Actor, LoadOpts) ->
     nkdomain_actor:actor_activate(SrvId, Actor, LoadOpts).
+
+
+%% @doc Called when activating an actor to get it's config and module
+actor_get_config(SrvId, ActorId, Config) ->
+    #actor_id{group=Group, resource=Resource} = ActorId,
+    case nkdomain_actor_util:get_config(SrvId, Group, Resource) of
+        {ok, #{module:=Module}=BaseConfig} ->
+            {ok, Module, maps:merge(BaseConfig, Config)};
+        {error, Error} ->
+            {error, Error}
+    end.
+
+%% @doc This plugin manages actors except for "." domains
+actor_is_managed(_SrvId, #actor_id{domain = <<$., _/binary>>}) ->
+    false;
+
+actor_is_managed(_SrvId, _Term) ->
+    true.
 
 
 %% @doc Called for out-of-server events (actor is not active)
@@ -360,65 +374,8 @@ actor_external_event(_SrvId, _Event, _Actor) ->
 
 
 %% @doc
-actor_srv_init(ActorSt) ->
-    nkservice_actor:actor_srv_init(ActorSt).
-
-
-%% @doc
 actor_srv_register(SrvId, ActorSt) ->
-
-
-    nkservice_actor:actor_register(SrvId,  ActorSt).
-
-
-%% @doc
-actor_srv_heartbeat(ActorSt) ->
-    nkservice_actor:actor_srv_heartbeat(ActorSt).
-
-
-%% @doc
-actor_srv_enabled(Enabled, ActorSt) ->
-    nkservice_actor:actor_srv_enabled(Enabled, ActorSt).
-
-
-%% @doc
-actor_srv_update(Actor, State) ->
-    nkservice_actor:actor_srv_update(Actor, State).
-
-
-%% @doc
-actor_srv_sync_op(Op, From, State) ->
-    nkservice_actor:actor_srv_sync_op(Op, From, State).
-
-
-%% @doc
-actor_srv_async_op(Op, State) ->
-    nkservice_actor:actor_srv_async_op(Op, State).
-
-
-%% @doc
-actor_srv_handle_call(Msg, From, ActorSt) ->
-    nkservice_actor:actor_srv_handle_call(Msg, From, ActorSt).
-
-
-%% @doc
-actor_srv_handle_cast(Msg, ActorSt) ->
-    nkservice_actor:actor_srv_handle_cast(Msg, ActorSt).
-
-
-%% @doc
-actor_srv_handle_info(Msg, ActorSt) ->
-    nkservice_actor:actor_srv_handle_info(Msg, ActorSt).
-
-
-%% @doc
-actor_srv_stop(Reason, ActorSt) ->
-    nkservice_actor:actor_srv_stop(Reason, ActorSt).
-
-
-%% @doc
-actor_srv_terminate(Reason, ActorSt) ->
-    nkservice_actor:actor_srv_terminate(Reason, ActorSt).
+    nkdomain_actor:actor_register(SrvId, ActorSt).
 
 
 %% @doc Called when an actor generates and event
@@ -474,58 +431,10 @@ actor_srv_link_event(_Link, _Data, _Event, _ActorSt) ->
     continue.
 
 
-%%%% ===================================================================
-%%%% Actor DB
-%%%% All DB operations are rerouted to ?ROOT_DOMAIN
-%%%% ===================================================================
-%%
-%%%% @private
-%%actor_db_find(?ROOT_SRV, _Id) ->
-%%    continue;
-%%actor_db_find(_SrvId, Id) ->
-%%    ?CALL_SRV(?ROOT_SRV, actor_db_find, [?ROOT_SRV, Id]).
-%%
-%%
-%%%% @private
-%%actor_db_read(?ROOT_SRV, _UID) ->
-%%    continue;
-%%actor_db_read(_SrvId, UID) ->
-%%    ?CALL_SRV(?ROOT_SRV, actor_db_read, [?ROOT_SRV, UID]).
-%%
-%%
-%%%% @private
-%%actor_db_create(?ROOT_SRV, _Actor) ->
-%%    continue;
-%%actor_db_create(_SrvId, Actor) ->
-%%    ?CALL_SRV(?ROOT_SRV, actor_db_create, [?ROOT_SRV, Actor]).
-%%
-%%
-%%%% @private
-%%actor_db_update(?ROOT_SRV, _Actor) ->
-%%    continue;
-%%actor_db_update(_SrvId, Actor) ->
-%%    ?CALL_SRV(?ROOT_SRV, actor_db_update, [?ROOT_SRV, Actor]).
-%%
-%%
-%%%% @private
-%%actor_db_delete(?ROOT_SRV, _UID, _Opts) ->
-%%    continue;
-%%actor_db_delete(_SrvId, UID, Opts) ->
-%%    ?CALL_SRV(?ROOT_SRV, actor_db_delete, [?ROOT_SRV, UID, Opts]).
-%%
-%%
-%%%% @private
-%%actor_db_search(?ROOT_SRV, _SearchType, _Opts) ->
-%%    continue;
-%%actor_db_search(_SrvId, SearchType, Opts) ->
-%%    ?CALL_SRV(?ROOT_SRV, actor_db_search, [?ROOT_SRV,SearchType, Opts]).
-%%
-%%
-%%%% @private
-%%actor_db_aggregate(?ROOT_SRV, _SearchType, _Opts) ->
-%%    continue;
-%%actor_db_aggregate(_SrvId, SearchType, Opts) ->
-%%    ?CALL_SRV(?ROOT_SRV, actor_db_aggregate, [?ROOT_SRV,SearchType, Opts]).
+%% ===================================================================
+%% Actor DB
+%% ===================================================================
+
 
 
 %% @private
@@ -537,22 +446,6 @@ actor_db_get_query(SrvId, pgsql, SearchType, Opts) ->
             Other
     end.
 
-%%actor_db_get_query(_SrvId, _Backend, _SearchType, _Opts) ->
-%%    continue.
-%%
-%%
-%%%% @private
-%%actor_db_get_service(?ROOT_SRV, _ActorSrvId) ->
-%%    continue;
-%%actor_db_get_service(_SrvId, ActorSrvId) ->
-%%    ?CALL_SRV(?ROOT_SRV, actor_db_get_service, [?ROOT_SRV, ActorSrvId]).
-%%
-%%
-%%%% @private
-%%actor_db_update_service(?ROOT_SRV, _ActorSrvId, _Cluster) ->
-%%    continue;
-%%actor_db_update_service(_SrvId, ActorSrvId, Cluster) ->
-%%    ?CALL_SRV(?ROOT_SRV, actor_db_update_service, [?ROOT_SRV, ActorSrvId, Cluster]).
 
 
 %% ===================================================================
@@ -598,7 +491,7 @@ service_master_leader(?ROOT_SRV, _IsLeader, _Pid, User) ->
 
 service_master_leader(SrvId, true, _, User) ->
     #actor_id{}=ActorId = nkdomain_plugin:get_domain_cache(SrvId, actor_id),
-    case nkservice_actor:is_enabled(SrvId, ActorId) of
+    case nkservice_actor:is_enabled({SrvId, ActorId}) of
         {ok, true} ->
             ok;
         {ok, false} ->

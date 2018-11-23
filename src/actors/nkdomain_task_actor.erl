@@ -46,7 +46,7 @@
 
 -behavior(nkservice_actor).
 
--export([config/0, parse/3, request/5, init/1, event/2,
+-export([config/0, parse/3, request/3, init/1, event/2,
          sync_op/3, async_op/2, stop/2, make_external/3]).
 -export_type([event/0, run_state/0]).
 
@@ -104,7 +104,7 @@ config() ->
 
 
 %% @doc
-parse(_SrvId, Actor, ApiReq) ->
+parse(_SrvId, Actor, _ApiReq) ->
     Syntax = #{
         <<"spec">> => #{
             <<"job">> => map,
@@ -118,7 +118,7 @@ parse(_SrvId, Actor, ApiReq) ->
         '__mandatory' => [<<"spec">>]
     },
     % Set expiresTime based on maxSecs
-    case nkdomain_actor_util:parse_actor(Actor, Syntax, ApiReq) of
+    case nkservice_actor_util:parse_actor(Actor, Syntax) of
         {ok, #actor{metadata=Meta}=Actor2} ->
             #actor{data=#{<<"spec">>:=#{<<"maxSecs">>:=MaxSecs}}, metadata=Meta} = Actor2,
             Now = nklib_date:epoch(msecs),
@@ -131,7 +131,7 @@ parse(_SrvId, Actor, ApiReq) ->
 
 
 %% @doc
-request(SrvId, update, ActorId, _Config, #{subresource:=[<<"_state">>], body:=Body}) ->
+request(SrvId, ActorId, #{verb:=update, subresource:=[<<"_state">>], body:=Body}) ->
     case nkservice_actor_srv:sync_op({SrvId, ActorId}, {update_state, Body}) of
         ok ->
             {status, actor_updated};
@@ -139,7 +139,7 @@ request(SrvId, update, ActorId, _Config, #{subresource:=[<<"_state">>], body:=Bo
             {error, Error}
     end;
 
-request(_SrvId, _Verb, _ActorId, _Config, _ApiReq) ->
+request(_SrvId, _ActorId, _ApiReq) ->
     continue.
 
 
@@ -294,7 +294,8 @@ do_update_state(Body, ActorSt) ->
         errorMsg => binary,
         '__mandatory' => [status]
     },
-    case nkdomain_actor_util:parse(Body, Syntax) of
+
+    case nkservice_actor_util:parse(Body, Syntax) of
         {ok, RunState} ->
             {ok, set_run_state(RunState, ActorSt)};
         {error, Error} ->
@@ -318,11 +319,11 @@ set_run_state(NewRunState, #actor_st{run_state=RunState}=ActorSt) ->
     case maps:get(status, RunState3) of
         success ->
             % Allow events
-            nkservice_actor_srv:delayed_async_op(none, self(), delete, 100);
+            nkservice_actor_srv:delayed_async_op(self(), delete, 100);
         error ->
-            nkservice_actor_srv:delayed_async_op(none, self(), {stop, task_status_error}, 100);
+            nkservice_actor_srv:delayed_async_op(self(), {stop, task_status_error}, 100);
         faillure ->
-            nkservice_actor_srv:delayed_async_op(none, self(), delete, 100);
+            nkservice_actor_srv:delayed_async_op(self(), delete, 100);
         _ ->
             ok
     end,
