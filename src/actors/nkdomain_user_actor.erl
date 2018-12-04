@@ -25,7 +25,7 @@
 
 -behavior(nkservice_actor).
 
--export([config/0, parse/3, sync_op/3, request/3, make_external/3]).
+-export([config/0, parse/3, sync_op/3, request/3, make_external/3, store_pass/2]).
 
 -define(LLOG(Type, Txt, Args), lager:Type("NkDOMAIN Actor User: "++Txt, Args)).
 
