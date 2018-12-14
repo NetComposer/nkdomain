@@ -144,43 +144,48 @@ http_post(SelectedDomain, StoreId, Name, Req) ->
                 content_type => CT,
                 store_id => StoreId
             },
-            Domain = case SelectedDomain of
+            {Allowed, Domain} = case SelectedDomain of
                 <<>> ->
-                    UserDomainId;
+                    {ok, UserDomainId};
                 _ ->
                     case nkdomain_api_util:is_subdomain(UserDomainId, SelectedDomain) of
                         {ok, true} ->
-                            SelectedDomain;
+                            {ok, SelectedDomain};
                         _ ->
-                            UserDomainId
+                            {error, object_access_not_allowed}
                     end
             end,
-            case get_store(File1) of
-                {ok, StoreObjId, Store} ->
-                    FileId = make_file_id(),
-                    MaxSize = maps:get(max_file_size, Store, ?MAX_FILE_SIZE),
-                    case nkservice_rest_http:get_body(Req, #{max_size=>MaxSize}) of
-                        {ok, Body, Req2} ->
-                            SrvId = nkservice_rest_http:get_srv_id(Req2),
-                            case upload(StoreObjId, Store, FileId, Body) of
-                                {ok, FileMeta} ->
-                                    File2 = File1#{
-                                        store_id => StoreObjId,
-                                        size => byte_size(Body)
-                                    },
-                                    Obj = #{
-                                        srv_id => SrvId,
-                                        obj_id => FileId,
-                                        type => ?DOMAIN_FILE,
-                                        domain_id => Domain,
-                                        created_by => UserId,
-                                        name => Name,
-                                        ?DOMAIN_FILE => maps:merge(File2, FileMeta)
-                                    },
+            case {Allowed, Domain} of
+                {ok, _} ->
+                    case get_store(File1) of
+                        {ok, StoreObjId, Store} ->
+                            FileId = make_file_id(),
+                            MaxSize = maps:get(max_file_size, Store, ?MAX_FILE_SIZE),
+                            case nkservice_rest_http:get_body(Req, #{max_size=>MaxSize}) of
+                                {ok, Body, Req2} ->
+                                    SrvId = nkservice_rest_http:get_srv_id(Req2),
+                                    case upload(StoreObjId, Store, FileId, Body) of
+                                        {ok, FileMeta} ->
+                                            File2 = File1#{
+                                                store_id => StoreObjId,
+                                                size => byte_size(Body)
+                                            },
+                                            Obj = #{
+                                                srv_id => SrvId,
+                                                obj_id => FileId,
+                                                type => ?DOMAIN_FILE,
+                                                domain_id => Domain,
+                                                created_by => UserId,
+                                                name => Name,
+                                                ?DOMAIN_FILE => maps:merge(File2, FileMeta)
+                                            },
 
-                                    case nkdomain_obj_make:create(Obj) of
-                                        {ok, ExtId, _Unknown} ->
-                                            {ok, ExtId, Obj, Req2};
+                                            case nkdomain_obj_make:create(Obj) of
+                                                {ok, ExtId, _Unknown} ->
+                                                    {ok, ExtId, Obj, Req2};
+                                                {error, Error} ->
+                                                    {error, Error}
+                                            end;
                                         {error, Error} ->
                                             {error, Error}
                                     end;
