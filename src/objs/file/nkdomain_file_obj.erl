@@ -123,7 +123,7 @@ create(StoreObjId, UserId, DomainId, FileObjId, SrvId, ContentType, Size, Links)
 http_post(Req) ->
     Qs = nkservice_rest_http:get_qs(Req),
     Name = nklib_util:get_value(<<"name">>, Qs, <<>>),
-    Domain = nklib_util:get_value(<<"domain">>, Qs, <<"/">>),
+    Domain = nklib_util:get_value(<<"domain">>, Qs, <<>>),
     StoreId = nklib_util:get_value(<<"store_id">>, Qs, <<>>),
     case http_post(Domain, StoreId, Name, Req) of
         {ok, #obj_id_ext{obj_id=ObjId, path=Path}, Obj, Req2} ->
@@ -134,16 +134,27 @@ http_post(Req) ->
 
 
 %% @doc Creates a file over HTTP
-http_post(Domain, StoreId, Name, Req) ->
+http_post(SelectedDomain, StoreId, Name, Req) ->
     Headers = nkservice_rest_http:get_headers(Req),
     Token = nklib_util:get_value(<<"x-netcomposer-auth">>, Headers, <<>>),
     case nkdomain_api_util:check_raw_token(Token) of
-        {ok, UserId, _UserDomainId, _Data, _SessId} ->
+        {ok, UserId, UserDomainId, _Data, _SessId} ->
             CT = nkservice_rest_http:get_ct(Req),
             File1 = #{
                 content_type => CT,
                 store_id => StoreId
             },
+            Domain = case SelectedDomain of
+                <<>> ->
+                    UserDomainId;
+                _ ->
+                    case nkdomain_api_util:is_subdomain(UserDomainId, SelectedDomain) of
+                        {ok, true} ->
+                            SelectedDomain;
+                        _ ->
+                            UserDomainId
+                    end
+            end,
             case get_store(File1) of
                 {ok, StoreObjId, Store} ->
                     FileId = make_file_id(),
