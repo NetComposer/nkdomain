@@ -123,7 +123,7 @@ create(StoreObjId, UserId, DomainId, FileObjId, SrvId, ContentType, Size, Links)
 http_post(Req) ->
     Qs = nkservice_rest_http:get_qs(Req),
     Name = nklib_util:get_value(<<"name">>, Qs, <<>>),
-    Domain = nklib_util:get_value(<<"domain">>, Qs, <<"/">>),
+    Domain = nklib_util:get_value(<<"domain">>, Qs, <<>>),
     StoreId = nklib_util:get_value(<<"store_id">>, Qs, <<>>),
     case http_post(Domain, StoreId, Name, Req) of
         {ok, #obj_id_ext{obj_id=ObjId, path=Path}, Obj, Req2} ->
@@ -134,42 +134,58 @@ http_post(Req) ->
 
 
 %% @doc Creates a file over HTTP
-http_post(Domain, StoreId, Name, Req) ->
+http_post(SelectedDomain, StoreId, Name, Req) ->
     Headers = nkservice_rest_http:get_headers(Req),
     Token = nklib_util:get_value(<<"x-netcomposer-auth">>, Headers, <<>>),
     case nkdomain_api_util:check_raw_token(Token) of
-        {ok, UserId, _UserDomainId, _Data, _SessId} ->
+        {ok, UserId, UserDomainId, _Data, _SessId} ->
             CT = nkservice_rest_http:get_ct(Req),
             File1 = #{
                 content_type => CT,
                 store_id => StoreId
             },
-            case get_store(File1) of
-                {ok, StoreObjId, Store} ->
-                    FileId = make_file_id(),
-                    MaxSize = maps:get(max_file_size, Store, ?MAX_FILE_SIZE),
-                    case nkservice_rest_http:get_body(Req, #{max_size=>MaxSize}) of
-                        {ok, Body, Req2} ->
-                            SrvId = nkservice_rest_http:get_srv_id(Req2),
-                            case upload(StoreObjId, Store, FileId, Body) of
-                                {ok, FileMeta} ->
-                                    File2 = File1#{
-                                        store_id => StoreObjId,
-                                        size => byte_size(Body)
-                                    },
-                                    Obj = #{
-                                        srv_id => SrvId,
-                                        obj_id => FileId,
-                                        type => ?DOMAIN_FILE,
-                                        domain_id => Domain,
-                                        created_by => UserId,
-                                        name => Name,
-                                        ?DOMAIN_FILE => maps:merge(File2, FileMeta)
-                                    },
+            {Allowed, Domain} = case SelectedDomain of
+                <<>> ->
+                    {ok, UserDomainId};
+                _ ->
+                    case nkdomain_api_util:is_subdomain(UserDomainId, SelectedDomain) of
+                        {ok, true} ->
+                            {ok, SelectedDomain};
+                        _ ->
+                            {error, object_access_not_allowed}
+                    end
+            end,
+            case {Allowed, Domain} of
+                {ok, _} ->
+                    case get_store(File1) of
+                        {ok, StoreObjId, Store} ->
+                            FileId = make_file_id(),
+                            MaxSize = maps:get(max_file_size, Store, ?MAX_FILE_SIZE),
+                            case nkservice_rest_http:get_body(Req, #{max_size=>MaxSize}) of
+                                {ok, Body, Req2} ->
+                                    SrvId = nkservice_rest_http:get_srv_id(Req2),
+                                    case upload(StoreObjId, Store, FileId, Body) of
+                                        {ok, FileMeta} ->
+                                            File2 = File1#{
+                                                store_id => StoreObjId,
+                                                size => byte_size(Body)
+                                            },
+                                            Obj = #{
+                                                srv_id => SrvId,
+                                                obj_id => FileId,
+                                                type => ?DOMAIN_FILE,
+                                                domain_id => Domain,
+                                                created_by => UserId,
+                                                name => Name,
+                                                ?DOMAIN_FILE => maps:merge(File2, FileMeta)
+                                            },
 
-                                    case nkdomain_obj_make:create(Obj) of
-                                        {ok, ExtId, _Unknown} ->
-                                            {ok, ExtId, Obj, Req2};
+                                            case nkdomain_obj_make:create(Obj) of
+                                                {ok, ExtId, _Unknown} ->
+                                                    {ok, ExtId, Obj, Req2};
+                                                {error, Error} ->
+                                                    {error, Error}
+                                            end;
                                         {error, Error} ->
                                             {error, Error}
                                     end;

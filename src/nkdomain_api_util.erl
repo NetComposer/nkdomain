@@ -24,6 +24,7 @@
 -export([session_login/1, token_login/2, check_token/2, check_raw_token/1]).
 -export([search/1, get_id/3, get_id/4, add_id/3, add_meta/3, get_meta/2, remove_meta/2]).
 -export([head_type_field/2, head_type_filters/2]).
+-export([is_subdomain/2, is_subdomain/3]).
 -export_type([login_data/0, session_meta/0]).
 
 -include("nkdomain.hrl").
@@ -270,6 +271,40 @@ head_type_filters(Type, List) when is_list(List) ->
     Fields = [{head_type_field(Type, Key), Val} || {Key, Val} <- List],
     maps:from_list(Fields).
 
+
+%% @doc Checks if a domain is a subdomain of another domain
+is_subdomain(BaseDomain, Domain) ->
+    is_subdomain(BaseDomain, Domain, #{}).
+
+is_subdomain(BaseDomain, Domain, Opts) ->
+    DomainExists = maps:get(<<"domain_exists">>, Opts, true),
+    case nkdomain:find(BaseDomain) of
+        {ok, ?DOMAIN_DOMAIN, _BaseId, BasePath, _} ->
+            case DomainExists of
+                true ->
+                    case nkdomain:find(Domain) of
+                        {ok, ?DOMAIN_DOMAIN, _DomainId, DomainPath, _} ->
+                            case binary:longest_common_prefix([BasePath, DomainPath]) =:= size(BasePath) of
+                                true ->
+                                    {ok, true};
+                                _ ->
+                                    {ok, false}
+                            end;
+                        _ ->
+                            {error, object_not_found}
+                    end;
+                _ ->
+                    case binary:longest_common_prefix([BasePath, to_bin(Domain)]) =:= size(BasePath) of
+                        true ->
+                            {ok, true};
+                        _ ->
+                            {ok, false}
+                    end
+            end;            
+        _ ->
+            {error, object_not_found}
+    end.
+        
 
 %% @private
 to_bin(Term) when is_binary(Term) -> Term;
