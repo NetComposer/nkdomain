@@ -30,7 +30,7 @@
 
 -behavior(nkservice_actor).
 
--export([config/0, parse/3, sync_op/3, init/1, request/4, stop/2]).
+-export([config/0, parse/3, sync_op/3, init/2, request/3, stop/2]).
 
 
 -include("nkdomain.hrl").
@@ -82,7 +82,7 @@ parse(_SrvId, Actor, _ApiReq) ->
 
 
 %% @doc
-request(SrvId, ActorId, _Config, #{verb:=get, subresource:=[<<"_refresh">>]}) ->
+request(SrvId, ActorId, #{verb:=get, subresource:=[<<"_rpc">>, <<"refresh">>]}) ->
     case nkservice_actor_srv:sync_op({SrvId, ActorId}, refresh) of
         ok ->
             {status, actor_updated};
@@ -90,12 +90,12 @@ request(SrvId, ActorId, _Config, #{verb:=get, subresource:=[<<"_refresh">>]}) ->
             {error, Error}
     end;
 
-request(_SrvId, _ActorId, _Config, _ApiReq) ->
+request(_SrvId, _ActorId, _ApiReq) ->
     continue.
 
 
 %% @doc
-init(#actor_st{unload_policy = {expires, _}}=ActorSt) ->
+init(_Op, #actor_st{unload_policy = {expires, _}}=ActorSt) ->
     % The parser shouldn't allow to get to this point
     {ok, ActorSt}.
 

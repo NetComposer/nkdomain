@@ -199,7 +199,7 @@ request(SrvId, ActorId, #{verb:=Verb, subresource:=[<<"files">>|Rest], params:=P
             {error, Error}
     end;
 
-request(SrvId, ActorId, #{verb:=get, subresource:=[<<"_uploadLink">>], params:=Params}) ->
+request(SrvId, ActorId, #{verb:=get, subresource:=[<<"_rpc">>, <<"uploadLink">>], params:=Params}) ->
     Syntax = #{contentType => binary},
     case nklib_syntax:parse(Params, Syntax) of
         {ok, #{contentType:=CT}, _} ->

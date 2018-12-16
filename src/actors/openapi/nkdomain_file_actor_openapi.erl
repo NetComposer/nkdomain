@@ -57,7 +57,7 @@ paths(SrvId) ->
                         nkdomain_openapi_util:binary_response()
                 }
             },
-            '_downloadLink' => #{
+            '_rpc/downloadLink' => #{
                 get => #{
                     description => <<"
                         Generates a temporary link for direct download of the file

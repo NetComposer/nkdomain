@@ -37,7 +37,7 @@
 paths(SrvId) ->
     Spec = #{
         subpaths => #{
-            '_checkpass' => #{
+            '_rpc/checkpass' => #{
                 get => #{
                     parameters => #{
                         password => <<"core.v1a1.UserParamPassword">>

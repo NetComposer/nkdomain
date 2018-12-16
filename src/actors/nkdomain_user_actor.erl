@@ -66,7 +66,7 @@ parse(SrvId, _Actor, _ApiReq) ->
 
 
 %% @doc
-request(SrvId, ActorId, #{verb:=get, subresource:=[<<"_checkpass">>], params:=Params}) ->
+request(SrvId, ActorId, #{verb:=get, subresource:=[<<"_rpc">>, <<"checkpass">>], params:=Params}) ->
     Syntax = #{password => binary},
     case nklib_syntax:parse(Params, Syntax) of
         {ok, #{password:=Pass}, _} ->

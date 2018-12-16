@@ -37,7 +37,7 @@
 paths(SrvId) ->
     Spec = #{
         subpaths => #{
-            '_refresh' => #{
+            '_rpc/refresh' => #{
                 get => #{
                     description => <<"
                         Refresh an user password for the initial number of seconds.

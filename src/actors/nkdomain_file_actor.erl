@@ -230,7 +230,7 @@ request(SrvId, ActorId, #{verb:=get, subresource:=[<<"_download">>]}) ->
             {error, Error}
     end;
 
-request(SrvId, ActorId, #{verb:=get, subresource:=[<<"_downloadLink">>]}) ->
+request(SrvId, ActorId, #{verb:=get, subresource:=[<<"_rpc">>, <<"downloadLink">>]}) ->
     case op_get_download_link(SrvId, ActorId) of
         {ok, Url, 0} ->
             {ok, #{url=>Url}};

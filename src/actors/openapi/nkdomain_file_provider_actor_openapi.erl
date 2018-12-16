@@ -43,7 +43,7 @@ paths(SrvId) ->
             }
         },
         subpaths => #{
-            '_uploadLink' => #{
+            '_rpc/uploadLink' => #{
                 get => #{
                     description => <<"
                         Generates a temporary upload link, directly to an S3 provider.
