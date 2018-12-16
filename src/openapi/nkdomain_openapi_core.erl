@@ -471,11 +471,6 @@ schemas(_SrvId) -> #{
                     type => string
                 }
             },
-            eventsCallbackUrl => #{
-                description => <<"Callback to be called on actor events.">>,
-                type => string,
-                format => uri
-            },
             creationTime => #{
                 description => <<"A timestamp representing the server time when this object was created.">>,
                 type => string,
@@ -788,6 +783,36 @@ schemas(_SrvId) -> #{
             }
         },
         required => [field]
+    },
+
+    'common.v1.Callback' => #{
+        description => <<"A callback specification">>,
+        properties => #{
+            url => #{
+                description => <<"URL to call">>,
+                type => string,
+                format => uri
+            },
+            method => #{
+                description => <<"Method to use">>,
+                type => string,
+                enum => [get, post, put, delete, head],
+                default => post
+            },
+            redirects => #{
+                description => <<"Number of redirects to allow">>,
+                type => integer,
+                minimum => 0,
+                maximum => 10,
+                default => 0
+            },
+            insecure => #{
+                description => <<"For HTTPS, do not check certificate">>,
+                type => boolean,
+                default => false
+            }
+        },
+        required => [url]
     }
 
 }.
