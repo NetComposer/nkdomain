@@ -31,7 +31,7 @@
 
 -behavior(nkservice_actor).
 
--export([config/0, parse/3, sync_op/3, init/1, stop/2, request/3]).
+-export([config/0, parse/3, sync_op/3, init/2, stop/2, request/3]).
 
 -define(LLOG(Type, Txt, Args), lager:Type("NkDOMAIN Actor Token: "++Txt, Args)).
 
@@ -100,11 +100,11 @@ request(_SrvId, _ActorId, _ApiReq) ->
 
 
 %% @doc
-init(#actor_st{unload_policy = {expires, _}}=ActorSt) ->
+init(_Op, #actor_st{unload_policy = {expires, _}}=ActorSt) ->
     % The parser shouldn't allow to get to this point
     {ok, ActorSt};
 
-init(_ActorSt) ->
+init(_Op, _ActorSt) ->
     {error, expires_missing}.
 
 

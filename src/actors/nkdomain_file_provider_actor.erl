@@ -232,7 +232,7 @@ make_external(_SrvId, #actor{data=Data}=Actor, _Vsn) ->
 
 
 %% @doc
-init(#actor_st{actor=Actor}=ActorSt) ->
+init(_Op, #actor_st{actor=Actor}=ActorSt) ->
     set_spec_cache(Actor, ActorSt).
 
 

@@ -26,6 +26,7 @@
 -export([get_group_vsn/1, api_path_to_actor_path/1]).
 -export([remove_vsn/1, process_links/2]).
 -export([api_group_list/1, api_groups/1, api_resources_list/2, make_actors_list/5]).
+-export([parse_subresource/1]).
 
 -include("nkdomain.hrl").
 -include("nkdomain_api.hrl").
@@ -149,7 +150,7 @@ api_path_to_actor_path(Id) ->
         [<<>>, <<"apis">>, Group, _Vsn, Resource, Name] ->
             api_to_actor_path(?ROOT_DOMAIN, Group, Resource, Name);
         _ ->
-            % Must be a UID
+            % Must be a UID or actor path
             Id
     end.
 
@@ -192,11 +193,12 @@ process_links(SrvId, #actor{id=ActorId, metadata=Meta}=Actor) ->
     case nkdomain_register:get_domain_data(SrvId, Domain) of
         {ok, _DomSrvId, DomUID} ->
             Links1 = maps:get(<<"links">>, Meta, #{}),
+            DomainLink = nkdomain_actor_util:link_key2(?GROUP_CORE, ?LINK_CORE_DOMAIN),
             Links2 = case Links1 of
-                #{?RES_CORE_DOMAINS:=DomUID} ->
+                #{DomainLink:=DomUID} ->
                     Links1;
                 _ ->
-                    Links1#{?RES_CORE_DOMAINS => DomUID}
+                    Links1#{DomainLink => DomUID}
             end,
             Links3 = expand_links(SrvId, maps:to_list(Links2), #{}),
             Meta2 = Meta#{<<"links">> => Links3},
@@ -258,7 +260,7 @@ api_syntax() ->
         domain => binary,
         resource => binary,
         name => binary,
-        subresource => {list, binary},
+        subresource => fun parse_subresource/1,
         params => map,
         body => [map, binary],
         auth => map,
@@ -273,6 +275,21 @@ api_syntax() ->
             meta => #{}
         }
     }.
+
+
+%% @private
+parse_subresource([]) ->
+    {ok, []};
+
+parse_subresource([Term|_]=List) when is_binary(Term) ->
+    {ok, List};
+
+parse_subresource(Term) when is_binary(Term) ->
+    {ok, binary:split(Term, <<"/">>, [global])};
+
+parse_subresource(Term) ->
+    parse_subresource(to_bin(Term)).
+
 
 
 %% @private

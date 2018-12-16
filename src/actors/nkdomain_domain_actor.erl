@@ -39,7 +39,7 @@
 -behavior(nkservice_actor).
 
 -export([config/0, parse/3]).
--export([init/1, heartbeat/1, terminate/2, enabled/2, sync_op/3, async_op/2, handle_info/2, stop/2]).
+-export([init/2, heartbeat/1, terminate/2, enabled/2, sync_op/3, async_op/2, handle_info/2, stop/2]).
 
 -include("nkdomain.hrl").
 -include_lib("nkservice/include/nkservice.hrl").
@@ -84,6 +84,14 @@
 
 
 %% ===================================================================
+%% Internal
+%% ===================================================================
+
+
+
+
+
+%% ===================================================================
 %% Behavior callbacks
 %% ===================================================================
 
@@ -123,7 +131,7 @@ parse(_SrvId, _Actor, _ApiReq) ->
 %% ===================================================================
 
 %% @private
-init(#actor_st{actor=#actor{id=ActorId}}=ActorSt) ->
+init(_Op, #actor_st{actor=#actor{id=ActorId}}=ActorSt) ->
     ManagedDomain = nkdomain_register:actor_id_to_managed_domain(ActorId),
     case global:register_name({nkdomain_domain, ManagedDomain}, self()) of
         yes ->

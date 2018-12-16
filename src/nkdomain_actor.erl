@@ -49,7 +49,7 @@
 %%      - Export make_external/2 to change default external API representation of actor
 %%        (for example, to show some 'status' info, remove a field, etc.)
 %%      - Export a funciontion update/2 to check and allow updates (see file.provider sample)
-%% - Document initialization operations over init/1 (if used)
+%% - Document initialization operations over init/2 (if used)
 %% - Write a test to check specific operations
 %%
 %%
@@ -206,8 +206,9 @@ do_actor_activate(SrvId, Actor, IsNew, ExtraConfig) ->
             do_load_actor(SrvId, Actor, IsNew, ExtraConfig);
         _ ->
             % Start the domain object
+            DomainLink = nkdomain_actor_util:link_key2(?GROUP_CORE, ?LINK_CORE_DOMAIN),
             case Meta of
-                #{<<"links">>:=#{?RES_CORE_DOMAINS:=DomUID}} ->
+                #{<<"links">>:=#{DomainLink:=DomUID}} ->
                     % Activate the domain, if not active
                     case nkservice_actor:activate({SrvId, DomUID}, #{}) of
                         {ok, #actor_id{}, _} ->

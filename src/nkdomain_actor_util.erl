@@ -25,9 +25,10 @@
 -export([event/2, api_event/2]).
 -export([get_config/2, get_config/3, find_resource/3]).
 -export([find_and_sync_op/5, find_and_sync_op/6]).
--export([add_link/2, add_link/3, get_link/3, link_key/2, link_key_extra/3]).
+-export([add_link/3, get_link/2, link_key2/2, link_key_extra2/3]).
 -export([add_labels/4]).
 -export([get_public_self/3]).
+-export([callback_syntax/0, http_callback/4]).
 
 -include("nkdomain.hrl").
 -include_lib("nkservice/include/nkservice_actor.hrl").
@@ -204,17 +205,21 @@ find_resource(SrvId, Group, Id) ->
     nkdomain_plugin:find_resource(SrvId, Group, Id).
 
 
+%%%% @doc
+%%get_link(Group, Resource, #actor{}=Actor) ->
+%%    get_link(link_key(Group, Resource), Actor).
+
+
 %% @doc
-get_link(Group, Resource, #actor{metadata = Meta}) ->
+get_link(LinkKey, #actor{metadata = Meta}) ->
     Links = maps:get(<<"links">>, Meta, #{}),
-    LinkKey = link_key(Group, Resource),
     maps:find(LinkKey, Links).
 
 
-%% @doc
-add_link(Actor, #actor_id{group=Group, resource=Resource}=ActorId) ->
-    LinkKey = link_key(Group, Resource),
-    add_link(Actor, LinkKey, ActorId).
+%%%% @doc
+%%add_link(Actor, #actor_id{group=Group, resource=Resource}=ActorId) ->
+%%    LinkKey = link_key(Group, Resource),
+%%    add_link(Actor, LinkKey, ActorId).
 
 
 %% @private
@@ -227,20 +232,28 @@ add_link(#actor{metadata=Meta}=Actor, LinkKey, UID) when is_binary(UID), UID /= 
     Actor#actor{metadata=Meta#{<<"links">>=>Links2}}.
 
 
+%%%% @doc
+%%link_key(?GROUP_CORE, Resource) ->
+%%    Resource;
+%%
+%%link_key(Group, Resource) ->
+%%    <<Group/binary, $., Resource/binary>>.
+
+
 %% @doc
-link_key(?GROUP_CORE, Resource) ->
-    Resource;
+link_key2(Group, Resource) ->
+    <<"io.netc.", Group/binary, $., Resource/binary>>.
 
-link_key(Group, Resource) ->
-    <<Group/binary, $., Resource/binary>>.
+
+
+%%%% @doc
+%%link_key_extra(Group, Resource, Pos) ->
+%%    link_key(Group, <<Resource/binary, $., (nklib_util:to_binary(Pos))/binary>>).
 
 
 %% @doc
-link_key_extra(?GROUP_CORE, Resource, Pos) ->
-    <<Resource/binary, $., (nklib_util:to_binary(Pos))/binary>>;
-
-link_key_extra(Group, Resource, Pos) ->
-    <<Group/binary, $., Resource/binary, $., (nklib_util:to_binary(Pos))/binary>>.
+link_key_extra2(Group, Resource, Pos) ->
+    link_key2(Group, <<Resource/binary, $., (nklib_util:to_binary(Pos))/binary>>).
 
 
 %% @doc
@@ -266,6 +279,65 @@ get_public_self(SrvId, #actor_id{domain=Domain}=ActorId, Vsn) ->
         $/, Res/binary, $/, Name/binary
     >>.
 
+
+%% @doc
+callback_syntax() ->
+    #{
+        <<"url">> => binary,
+        <<"method">> => lower,
+        <<"insecure">> => boolean,
+        <<"redirects">> => {integer, 0, 10},
+        '__mandatory' => [<<"url">>],
+        '__defaults' => #{
+            <<"method">> => <<"post">>,
+            <<"insecure">> => false,
+            <<"redirects">> => 0
+        }
+    }.
+
+
+
+%% @doc
+-spec http_callback(#actor_id{}, map(), [{binary(), binary()}], map()|binary()) ->
+    {ok, integer(), [{binary(), binary()}]} | {error, term()}.
+
+http_callback(ActorId, Callback, Hds, Body) ->
+    case nklib_syntax:parse(Callback, callback_syntax()) of
+        {ok, Parsed, _} ->
+            #{
+                <<"url">> := Url,
+                <<"method">> := Method,
+                <<"insecure">> := Insecure,
+                <<"redirects">> := Redirects
+            } = Parsed,
+            #actor_id{domain = Domain} = ActorId,
+            {Hds2, Body2} = case is_map(Body) of
+                true ->
+                    {
+                        [{<<"content-type">>, <<"application/json">>}|Hds],
+                        nklib_json:encode(Body)
+                    };
+                false ->
+                    {Hds, Body}
+            end,
+            Opts1 = [{pool, Domain}, {insecure, Insecure}],
+            Opts2 = case Redirects of
+                0 ->
+                    Opts1;
+                _ ->
+                    [{follow_redirect, true}, {max_redirect, Redirects}|Opts1]
+            end,
+            case hackney:request(Method, Url, Hds2, Body2, Opts2) of
+                {ok, StatusCode, RespHeaders, ClientRef} ->
+                    hackney:skip_body(ClientRef),
+                    {ok, StatusCode, RespHeaders};
+                {error, Error} ->
+                    {error, Error}
+            end;
+        {error, Error} ->
+            {error, Error}
+    end.
+            
 
 %% @private
 to_bin(T) when is_binary(T)-> T;

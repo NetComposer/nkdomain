@@ -46,7 +46,7 @@
 
 -behavior(nkservice_actor).
 
--export([config/0, parse/3, request/3, init/1, event/2,
+-export([config/0, parse/3, request/3, init/2, event/2,
          sync_op/3, async_op/2, stop/2, make_external/3]).
 -export_type([event/0, run_state/0]).
 
@@ -149,7 +149,7 @@ request(_SrvId, _ActorId, _ApiReq) ->
 %%   and delete the actor if exceeded
 %% - program 'updated_state' event with progress=start (see event/2)
 %% - save updated status
-init(#actor_st{unload_policy={expires, _}, actor=Actor}=ActorSt) ->
+init(_Op, #actor_st{unload_policy={expires, _}, actor=Actor}=ActorSt) ->
     #actor{data=Data, metadata=Metadata} = Actor,
     ActorStatus1 = maps:get(<<"status">>, Data, #{}),
     Tries = maps:get(<<"tries">>, ActorStatus1, 0),
@@ -191,7 +191,7 @@ init(#actor_st{unload_policy={expires, _}, actor=Actor}=ActorSt) ->
             {delete, task_max_tries_reached}
     end;
 
-init(_ActorSt) ->
+init(_Op, _ActorSt) ->
     {error, expires_missing}.
 
 
