@@ -32,7 +32,7 @@
 -export([op_get_spec/2, op_get_direct_download_link/3, op_get_upload_link/3,
          op_get_check_meta/3]).
 -export([link_to_provider/3]).
--export([config/0, parse/3, request/3, make_external/3, init/1, update/2, sync_op/3]).
+-export([config/0, parse/3, request/3, make_external/3, init/2, update/2, sync_op/3]).
 -export_type([run_state/0]).
 
 
@@ -85,7 +85,8 @@ link_to_provider(SrvId, ApiId, Actor) ->
     ProviderPath = nkdomain_api_lib:api_path_to_actor_path(ApiId),
     case nkservice_actor:activate({SrvId, ProviderPath}) of
         {ok, #actor_id{group=?GROUP_CORE, resource=?RES_CORE_FILE_PROVIDERS}=ProvActorId, _} ->
-            {ok, nkdomain_actor_util:add_link(Actor, ProvActorId)};
+            LinkKey = nkdomain_actor_util:link_key2(?GROUP_CORE, ?LINK_CORE_FILE_PROVIDER),
+            {ok, nkdomain_actor_util:add_link(Actor, LinkKey, ProvActorId)};
         _ ->
             {error, {provider_invalid, ApiId}}
     end.

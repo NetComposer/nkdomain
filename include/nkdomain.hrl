@@ -53,6 +53,13 @@
 -define(KIND_CORE_DOMAIN, <<"Domain">>).
 -define(KIND_CORE_EVENT, <<"Event">>).
 
+-define(LINK_CORE_DOMAIN, <<"domain">>).
+-define(LINK_CORE_FILE_PROVIDER, <<"file-provider">>).
+-define(LINK_CORE_CONTACT_USER, <<"contact-user">>).
+
+
+
+
 
 -endif.
 

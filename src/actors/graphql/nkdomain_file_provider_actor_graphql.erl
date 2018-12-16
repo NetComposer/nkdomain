@@ -151,6 +151,7 @@ execute(_SrvId, Field, {nkdomain, {field, <<"FileProvider">>, <<"s3Config">>, Ma
 
 execute(SrvId, <<"filesConnection">>, {nkdomain, {actor, _Type, Actor}}, _Meta, Params) ->
     #{<<"metadata">>:=#{<<"uid">>:=UID}} = Actor,
+    LinkKey = nkdomain_actor_util:link_key2(?GROUP_CORE, ?LINK_CORE_FILE_PROVIDER),
     Opts = #{
         apiGroup => ?GROUP_CORE,
         kind => <<"File">>,
@@ -158,7 +159,7 @@ execute(SrvId, <<"filesConnection">>, {nkdomain, {actor, _Type, Actor}}, _Meta, 
             deep => true,
             filter => #{
                 'and' => [
-                    #{field=><<"metadata.links.", ?RES_CORE_FILE_PROVIDERS/binary>>, op=>eq, value=>UID}
+                    #{field=><<"metadata.links.", LinkKey/binary>>, op=>eq, value=>UID}
                 ]
             }
         }

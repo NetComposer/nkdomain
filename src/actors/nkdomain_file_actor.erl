@@ -248,7 +248,8 @@ request(_SrvId, _ActorId, _Api) ->
 sync_op(nkdomain_get_body, _From, ActorSt) ->
     #actor_st{srv=SrvId, actor=#actor{data=Data, metadata=Meta}} = ActorSt,
     Links = maps:get(<<"links">>, Meta),
-    ProviderUID = maps:get(?RES_CORE_FILE_PROVIDERS, Links),
+    LinkKey = nkdomain_actor_util:link_key2(?GROUP_CORE, ?LINK_CORE_FILE_PROVIDER),
+    ProviderUID = maps:get(LinkKey, Links),
     #{<<"spec">>:=#{<<"contentType">>:=CT, <<"externalId">>:=Id}=Spec} = Data,
     FileMeta1 = #{
         name => Id,
@@ -285,7 +286,8 @@ sync_op(nkdomain_get_body, _From, ActorSt) ->
 sync_op(nkdomain_get_download_link, _From, ActorSt) ->
     #actor_st{srv=SrvId, actor=#actor{id=ActorId, data=Data}=Actor} = ActorSt,
     #{<<"spec">>:=#{<<"externalId">>:=Id}} = Data,
-    {ok, ProvUID} = nkdomain_actor_util:get_link(?GROUP_CORE, ?RES_CORE_FILE_PROVIDERS, Actor),
+    LinkKey = nkdomain_actor_util:link_key2(?GROUP_CORE, ?LINK_CORE_FILE_PROVIDER),
+    {ok, ProvUID} = nkdomain_actor_util:get_link(LinkKey, Actor),
     Reply = case nkdomain_file_provider_actor:op_get_direct_download_link(SrvId, ProvUID, Id) of
         {ok, Link, TTL} ->
             {ok, Link, TTL};
@@ -332,8 +334,8 @@ do_parse(SrvId, _Params, #{<<"provider">>:=ProviderId}=Spec, Actor) ->
         {ok, ProvActorId, ProvSpec} ->
             case ProvActorId of
                 #actor_id{group=?GROUP_CORE, resource=?RES_CORE_FILE_PROVIDERS} ->
-                    Actor2 = nkdomain_actor_util:add_link(Actor, ProvActorId),
-
+                    LinkKey = nkdomain_actor_util:link_key2(?GROUP_CORE, ?LINK_CORE_FILE_PROVIDER),
+                    Actor2 = nkdomain_actor_util:add_link(Actor, LinkKey, ProvActorId),
                     do_parse_upload(SrvId, Spec, ProvActorId, ProvSpec, Actor2);
                 _ ->
                     {error, {provider_unknown, ProviderId}}

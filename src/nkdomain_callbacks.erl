@@ -151,6 +151,7 @@ msg(upload_server_error)                -> "Upload server error";
 msg(url_unknown)      		            -> "Unknown url";
 msg(user_is_disabled) 		            -> "User is disabled";
 msg(user_unknown)                       -> "Unknown user";
+msg({user_unknown, UserId})             -> {"Unknown user '~s", [UserId]};
 msg(verb_not_allowed)                   -> "Verb is not allowed";
 msg(watch_stop)                         -> "Watch stopped";
 msg(_)   		                        -> continue.
@@ -194,6 +195,8 @@ status(domain_invalid) -> {404, #{}};
 status(resource_invalid) -> {404, #{}};
 status({resource_invalid, Res}) -> {404, #{<<"resource">>=>Res}};
 status({resource_invalid, Group, Path}) -> {404, #{<<"group">>=>Group, <<"resource">>=>Path}};
+status(user_unknown) -> {404, #{}};
+status({user_unknown, UserId}) -> {404, #{<<"user">> => UserId}};
 status(actor_not_found) -> {404, #{}};
 status({actor_not_found, A}) -> {404, #{<<"actor">> => A}};
 status(not_found) -> {404, #{}};
