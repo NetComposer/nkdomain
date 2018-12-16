@@ -24,7 +24,7 @@
 -module(nkdomain_openapi_util).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -export([filter_parameters/4, sort_parameter/1, filter_parameter/1]).
--export([ok_response/1, created_response/1, updated_response/1,
+-export([ok_response/1, ok_array_response/1, created_response/1, updated_response/1,
          list_response/0, binary_response/0]).
 -export([make_ref/3, make_ref/4]).
 -export([ref_schema/1, ref_parameter/1, ref_response/1, unident_descriptions/1]).
@@ -140,6 +140,24 @@ ok_response(Schema) ->
             content => #{
                 'application/json' => #{
                     schema => ref_schema(Schema)
+                }
+            }
+        }
+    }.
+
+
+%% @private
+ok_array_response(Schema) ->
+    Base = error_responses(),
+    Base#{
+        '200' => #{
+            description => <<"OK">>,
+            content => #{
+                'application/json' => #{
+                    schema => #{
+                        type => array,
+                        items => ref_schema(Schema)
+                    }
                 }
             }
         }

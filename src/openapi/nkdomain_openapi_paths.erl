@@ -42,6 +42,7 @@ paths(SrvId, Group, Vsn, Resource, Opts) ->
     Map1 = make_actor_paths(Opts2),
     Map2 = case Opts of
         #{subpaths:=SubPathsSpec} ->
+            % Subpaths include the actor name
             maps:fold(
                 fun(SubPath, Spec, Acc) ->
                     make_actor_subpath(to_bin(SubPath), Spec, Opts2, Acc)
@@ -53,6 +54,8 @@ paths(SrvId, Group, Vsn, Resource, Opts) ->
     end,
     Map3 = case Opts of
         #{subresources:=SubResSpec} ->
+            % Subresources doesn't include the actor name
+            % They refer to a resource group, not an specific one
             maps:fold(
                 fun(SubPath, Spec, Acc) ->
                     make_actor_subresource(to_bin(SubPath), Spec, Opts2, Acc)
@@ -150,8 +153,6 @@ make_actor_paths(Spec) ->
 actor_path(Verb, Spec, Opts) ->
     #{group:=Group, vsn:=Vsn, camel:=Kind} = Opts,
     DefDesc = actor_default_description(Verb, Kind),
-    CBs1 = maps:get(callbacks, Spec, #{}),
-    CBs2 = maps:merge(actor_default_callbacks(Verb), CBs1),
     Map1 = #{
         description => maps:get(description, Spec, DefDesc),
         tags => actor_path_tags(Group, Vsn),
@@ -164,11 +165,11 @@ actor_path(Verb, Spec, Opts) ->
         RequestBody ->
             Map1#{requestBody => RequestBody}
     end,
-    Map3 = case maps:size(CBs2) of
-        0 ->
+    Map3 = case maps:get(callbacks, Spec, none) of
+        none ->
             Map2;
-        _ ->
-            Map2#{callbacks => CBs2}
+        CBs ->
+            Map2#{callbacks => CBs}
     end,
     Map3.
 
@@ -313,15 +314,15 @@ actor_default_responses(delete, _Group, _Vsn, _Kind) ->
     ok_response("common.v1.Status").
 
 
-%% @private
-actor_default_callbacks(create) ->
-    #{onEvent => cb_on_event()};
-
-actor_default_callbacks(update) ->
-    #{onEvent => cb_on_event()};
-
-actor_default_callbacks(_Verb) ->
-    #{}.
+%%%% @private
+%%actor_default_callbacks(create) ->
+%%    #{onEvent => cb_on_event()};
+%%
+%%actor_default_callbacks(update) ->
+%%    #{onEvent => cb_on_event()};
+%%
+%%actor_default_callbacks(_Verb) ->
+%%    #{}.
 
 
 %% @private
@@ -332,27 +333,27 @@ actor_path_tags(Group, Vsn) ->
     ].
 
 
-%% @private
-cb_on_event() ->
-    #{
-        '{$request.body#/metadata.eventsCallbackUrl}' => #{
-            post => #{
-                requestBody => #{
-                    description => <<"Fired Event.">>,
-                    content => #{
-                        'application/json' => #{
-                            schema => ref_schema("core.v1a1.Event")
-                        }
-                    }
-                },
-                responses => #{
-                    '200' => #{
-                        description => <<"OK">>
-                    }
-                }
-            }
-        }
-    }.
+%%%% @private
+%%cb_on_event() ->
+%%    #{
+%%        '{$request.body.metadata.eventsCallbackUrl}' => #{
+%%            post => #{
+%%                requestBody => #{
+%%                    description => <<"Fired Event.">>,
+%%                    content => #{
+%%                        'application/json' => #{
+%%                            schema => ref_schema("core.v1a1.Event")
+%%                        }
+%%                    }
+%%                },
+%%                responses => #{
+%%                    '200' => #{
+%%                        description => <<"OK">>
+%%                    }
+%%                }
+%%            }
+%%        }
+%%    }.
 
 
 %% ===================================================================
@@ -372,19 +373,25 @@ make_actor_subpath(SubPath, Spec, Opts, Map) ->
         error ->
             Actor1
     end,
-    Actor3 = case maps:find(update, Spec) of
-        {ok, Update} ->
-            Actor2#{put => actor_subpath(update, Update, Opts)};
+    Actor3 = case maps:find(create, Spec) of
+        {ok, Create} ->
+            Actor2#{post => actor_subpath(create, Create, Opts)};
         error ->
             Actor2
     end,
-    Actor4 = case maps:find(delete, Spec) of
-        {ok, Delete} ->
-            Actor3#{delete => actor_subpath(delete, Delete, Opts)};
+    Actor4 = case maps:find(update, Spec) of
+        {ok, Update} ->
+            Actor3#{put => actor_subpath(update, Update, Opts)};
         error ->
             Actor3
     end,
-    DomainActor4 = Actor4#{
+    Actor5 = case maps:find(delete, Spec) of
+        {ok, Delete} ->
+            Actor4#{delete => actor_subpath(delete, Delete, Opts)};
+        error ->
+            Actor4
+    end,
+    DomainActor5 = Actor5#{
         parameters => [
             ref_parameter("common.v1.ParamActorName"),
             ref_parameter("common.v1.ParamDomainName")
@@ -393,7 +400,7 @@ make_actor_subpath(SubPath, Spec, Opts, Map) ->
     #{group:=Group, vsn:=Vsn, resource:=Resource} = Opts,
     Map#{
         path_a_s(Group, Vsn, Resource, SubPath) => Actor4,
-        path_d_a_s(Group, Vsn, Resource, SubPath) => DomainActor4
+        path_d_a_s(Group, Vsn, Resource, SubPath) => DomainActor5
     }.
 
 
@@ -446,9 +453,15 @@ actor_subpath(Verb, Spec, Opts) ->
         parameters => actor_path_params(maps:get(parameters, Spec, #{})),
         responses => Responses
     },
-    Map2 = case maps:find(request_schema, Spec) of
+    Map2 = case Spec of
+        #{callbacks:=CBs} ->
+            Map1#{callbacks => CBs};
+        _ ->
+            Map1
+    end,
+    Map3 = case maps:find(request_schema, Spec) of
         {ok, Schema} ->
-            Map1#{
+            Map2#{
                 requestBody => #{
                     required => true,
                     content => #{
@@ -464,12 +477,12 @@ actor_subpath(Verb, Spec, Opts) ->
         error ->
             case maps:find(request, Spec) of
                 {ok, ReqBody} ->
-                    Map1#{requestBody => ReqBody};
+                    Map2#{requestBody => ReqBody};
                 error ->
-                    Map1
+                    Map2
             end
     end,
-    Map2.
+    Map3.
 
 
 
@@ -498,24 +511,26 @@ path_d_a(Group, Vsn, Resource) ->
     <<"/apis/", Group/binary, "/", Vsn/binary, "/domains/{domainName}/", Resource/binary, "/{actorName}">>.
 
 
-%% @private
-path_s(Group, Vsn, Resource, Subresource) ->
-    <<(path(Group, Vsn, Resource))/binary, "/", Subresource/binary>>.
-
-
-%% @private
+%% @private Subpath: with actor name
 path_a_s(Group, Vsn, Resource, Subresource) ->
     <<(path_a(Group, Vsn, Resource))/binary, "/", Subresource/binary>>.
 
 
-%% @private
+%% @private Subpath: with actor name (and domain)
+path_d_a_s(Group, Vsn, Resource, Subresource) ->
+    <<(path_d_a(Group, Vsn, Resource))/binary, "/", Subresource/binary>>.
+
+
+%% @private Subresource: without actor name
+path_s(Group, Vsn, Resource, Subresource) ->
+    <<(path(Group, Vsn, Resource))/binary, "/", Subresource/binary>>.
+
+
+%% @private Subresource: without actor name (with domain)
 path_d_s(Group, Vsn, Resource, Subresource) ->
     <<(path_d(Group, Vsn, Resource))/binary, "/", Subresource/binary>>.
 
 
-%% @private
-path_d_a_s(Group, Vsn, Resource, Subresource) ->
-    <<(path_d_a(Group, Vsn, Resource))/binary, "/", Subresource/binary>>.
 
 
 %% @private
