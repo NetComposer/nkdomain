@@ -108,6 +108,7 @@ schema(types) ->
         },
         'ContactSpec' => #{
             fields => #{
+                user => string,
                 name => string,
                 surname => string,
                 normalizedName => string,
@@ -227,6 +228,7 @@ execute(_SrvId, Field, {nkdomain, {field, <<"Contact">>, Type, Data}}, _Meta, Pa
 
 execute(SrvId, <<"contactsConnection">>, {nkdomain, {actor, _Type, Actor}}, _Meta, Params) ->
     #{<<"metadata">>:=#{<<"uid">>:=UID}} = Actor,
+    LinkKey = nkdomain_actor_util:link_key2(?GROUP_CORE, ?LINK_CORE_CONTACT_USER),
     Opts = #{
         apiGroup => ?GROUP_CORE,
         kind => <<"Contact">>,
@@ -234,7 +236,7 @@ execute(SrvId, <<"contactsConnection">>, {nkdomain, {actor, _Type, Actor}}, _Met
             deep => true,
             filter => #{
                 'and' => [
-                    #{field=><<"metadata.links.", ?RES_CORE_USERS/binary>>, op=>eq, value=>UID}
+                    #{field=><<"metadata.links.", LinkKey/binary>>, op=>eq, value=>UID}
                 ]
             }
         }
@@ -243,8 +245,9 @@ execute(SrvId, <<"contactsConnection">>, {nkdomain, {actor, _Type, Actor}}, _Met
 
 execute(SrvId, <<"userConnection">>, {nkdomain, {actor, _Type, Actor}}, _Meta, _Params) ->
     #{<<"metadata">>:=Meta} = Actor,
+    LinkKey = nkdomain_actor_util:link_key2(?GROUP_CORE, ?LINK_CORE_CONTACT_USER),
     case maps:get(<<"links">>, Meta, #{}) of
-        #{?RES_CORE_USERS:=UserUID} ->
+        #{LinkKey:=UserUID} ->
             nkdomain_graphql_search:get_uid(SrvId, UserUID);
         _ ->
             {ok, null}

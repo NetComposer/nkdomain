@@ -34,8 +34,7 @@
 -define(LLOG(Type, Txt, Args), lager:Type("NkDOMAIN Plugin: "++Txt, Args)).
 
 -include("nkdomain.hrl").
-%%-include_lib("nkservice/include/nkservice_actor.hrl").
-%%-include_lib("nkpacket/include/nkpacket.hrl").
+-include_lib("nkservice/include/nkservice_actor.hrl").
 
 
 
@@ -81,7 +80,7 @@ config() ->
 
 
 %% @doc
-parse(_SrvId, _Actor, _ApiReq) ->
+parse(SrvId, Actor, _ApiReq) ->
     Spec = #{
         <<"name">> => binary,
         <<"surname">> => binary,
@@ -146,9 +145,16 @@ parse(_SrvId, _Actor, _ApiReq) ->
         % It is always calculated
         <<"normalizedName">> => binary,
         <<"normalizedSurname">> => binary,
+        <<"user">> => binary,
         '__post_check' => fun ?MODULE:parse_post_check/1
     },
-    {syntax, #{<<"spec">> => Spec}}.
+    case nkservice_actor_util:parse_actor(Actor, #{<<"spec">>=>Spec}) of
+        {ok, Actor2} ->
+            add_user_link(SrvId, Actor2);
+        {error, Error} ->
+            {error, Error}
+    end.
+
 
 
 
@@ -157,6 +163,23 @@ parse(_SrvId, _Actor, _ApiReq) ->
 %% ===================================================================
 
 
+%% @private
+add_user_link(SrvId, #actor{data=#{<<"spec">>:=#{<<"user">>:=UserId}}}=Actor) ->
+    UserPath = nkdomain_api_lib:api_path_to_actor_path(UserId),
+    case nkservice_actor:find({SrvId, UserPath}) of
+        {ok, #actor_id{group=?GROUP_CORE, resource=?RES_CORE_USERS}=UserActorId, _} ->
+            LinkKey = nkdomain_actor_util:link_key2(?GROUP_CORE, ?LINK_CORE_CONTACT_USER),
+            Actor2 = nkdomain_actor_util:add_link(Actor, LinkKey, UserActorId),
+            {ok, Actor2};
+        _ ->
+            {error, {user_unknown, UserId}}
+    end;
+
+add_user_link(_SrvId, Actor) ->
+    {ok, Actor}.
+
+
+%% @private
 parse_post_check(List) ->
     Map1 = maps:from_list(List),
     Name = maps:get(<<"name">>, Map1, <<>>),

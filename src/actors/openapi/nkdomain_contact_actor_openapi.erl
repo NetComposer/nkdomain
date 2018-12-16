@@ -57,6 +57,13 @@ schemas(SrvId) ->
             'core.v1a1.ContactSpec' => #{
                 description => <<"Specification for this actor">>,
                 properties => #{
+                    user => #{
+                        description => <<"
+                            If defined, must point to an User actor, a link of
+                            type 'io.netc.core.contact-user' will be added
+                        ">>,
+                        type => string
+                    },
                     name => #{
                         description => <<"Name of the person">>,
                         type => string
