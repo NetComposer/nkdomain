@@ -102,18 +102,18 @@ basic_test() ->
             <<"resourceVersion">> := Vsn1,
             <<"uid">> := UID,
             <<"updateTime">> := Time1,
-            <<"links">> := #{<<"domains">>:=RootUID}
+            <<"links">> := #{<<"io.netc.core.domain">>:=RootUID}
         },
         <<"spec">> := #{<<"password">> := <<>>},    % Pass is empty always
         <<"status">> := #{}
     } = Add1,
 
     % Check pass
-    {error, #{<<"code">>:=400, <<"reason">>:=<<"parameter_missing">>}} = api(#{verb=>get, resource=>users, name=>ut1, subresource=>"_checkpass"}),
-    {ok, #{<<"code">>:=200, <<"reason">>:=<<"password_valid">>}} = api(#{verb=>get, resource=>users, name=>ut1, subresource=>"_checkpass", params=>#{password=>"pass1"}}),
-    {ok, #{<<"code">>:=200, <<"reason">>:=<<"password_invalid">>}} = api(#{verb=>get, resource=>users, name=>ut1, subresource=>"_checkpass", params=>#{password=>"pass2"}}),
-    {200, #{<<"code">>:=200, <<"reason">>:=<<"password_valid">>}} = http_get("/users/ut1/_checkpass?password=pass1"),
-    {200, #{<<"code">>:=200, <<"reason">>:=<<"password_invalid">>}} = http_get("/users/ut1/_checkpass?password=pass2"),
+    {error, #{<<"code">>:=400, <<"reason">>:=<<"parameter_missing">>}} = api(#{verb=>get, resource=>users, name=>ut1, subresource=>"_rpc/checkpass"}),
+    {ok, #{<<"code">>:=200, <<"reason">>:=<<"password_valid">>}} = api(#{verb=>get, resource=>users, name=>ut1, subresource=>"_rpc/checkpass", params=>#{password=>"pass1"}}),
+    {ok, #{<<"code">>:=200, <<"reason">>:=<<"password_invalid">>}} = api(#{verb=>get, resource=>users, name=>ut1, subresource=>"_rpc/checkpass", params=>#{password=>"pass2"}}),
+    {200, #{<<"code">>:=200, <<"reason">>:=<<"password_valid">>}} = http_get("/users/ut1/_rpc/checkpass?password=pass1"),
+    {200, #{<<"code">>:=200, <<"reason">>:=<<"password_invalid">>}} = http_get("/users/ut1/_rpc/checkpass?password=pass2"),
 
 
     % We cannot create it again
@@ -142,7 +142,7 @@ basic_test() ->
             <<"creationTime">> := Time1,
             <<"generation">> := 0,
             <<"updateTime">> := Time1,
-            <<"links">> := #{<<"domains">>:=RootUID}
+            <<"links">> := #{<<"io.netc.core.domain">>:=RootUID}
         },
         hash = Vsn1
     } = Actor1,
@@ -279,7 +279,7 @@ subdomains_test() ->
             <<"domain">> := <<"root">>,
             <<"name">> := <<"a-nktest">>,
             <<"uid">> := A_UID,
-            <<"links">> := #{<<"domains">>:=RootUID}
+            <<"links">> := #{<<"io.netc.core.domain">>:=RootUID}
         }
     } = AddD1,
 
@@ -296,7 +296,7 @@ subdomains_test() ->
             <<"domain">> := <<"a-nktest">>,
             <<"name">> := <<"b">>,
             <<"uid">> := B_A_UID,
-            <<"links">> := #{<<"domains">>:=A_UID}
+            <<"links">> := #{<<"io.netc.core.domain">>:=A_UID}
         }
     } = AddD2,
 
@@ -314,7 +314,7 @@ subdomains_test() ->
             <<"domain">> := <<"b.a-nktest">>,
             <<"name">> := <<"c">>,
             <<"uid">> := C_B_A_UID,
-            <<"links">> := #{<<"domains">>:=_B_A_UID}
+            <<"links">> := #{<<"io.netc.core.domain">>:=_B_A_UID}
     }
     } = AddD3,
     {true, _} = nkdomain_register:is_domain_active("c.b.a-nktest"),
@@ -343,7 +343,7 @@ subdomains_test() ->
             <<"uid">> := U1_UID,
             <<"domain">> := <<"b.a-nktest">>,
             <<"name">> := <<"ut1">>,
-            <<"links">> := #{<<"domains">>:=B_A_UID}
+            <<"links">> := #{<<"io.netc.core.domain">>:=B_A_UID}
         }
     } = AddU1,
 
@@ -444,7 +444,7 @@ disable_test() ->
             <<"resourceVersion">> := Vsn,
             <<"uid">> := A_UID,
             <<"updateTime">> := Time,
-            <<"links">> := #{<<"domains">>:=RootUID}
+            <<"links">> := #{<<"io.netc.core.domain">>:=RootUID}
         }
     } = A1,
 
@@ -484,7 +484,7 @@ disable_test() ->
             <<"resourceVersion">> := Vsn2,
             <<"uid">> := A_UID,
             <<"updateTime">> := Time2,
-            <<"links">> := #{<<"domains">>:=RootUID}
+            <<"links">> := #{<<"io.netc.core.domain">>:=RootUID}
         }
     } = A2,
     false = (Vsn==Vsn2),
@@ -526,7 +526,6 @@ list_test_1() ->
     {ok, #{<<"domains">>:=2, <<"users">>:=1}, _} = nkservice_actor:search_resources(?ROOT_SRV, "a-nktest", "core", #{deep=>true}), % b, c
     {ok, #{<<"domains">>:=1, <<"users">>:=1}, _} = nkservice_actor:search_resources(?ROOT_SRV, "b.a-nktest", "core", #{}), % c
     {ok, #{<<"domains">>:=1, <<"users">>:=1}, _} = nkservice_actor:search_resources(?ROOT_SRV, "b.a-nktest", "core", #{deep=>true}), % c
-    Empty = #{},
     {ok, #{<<"events">>:=1}=E1, _} = nkservice_actor:search_resources(?ROOT_SRV, "c.b.a-nktest", "core", #{deep=>true}),
     false = maps:is_key(<<"domains">>, E1),
     false = maps:is_key(<<"users">>, E1),
@@ -544,23 +543,23 @@ list_test_1() ->
     {ok, #actor_id{uid=C_B_A_UID}, _} = nkservice_actor:find(C_B_A_P),
     {ok, #actor_id{uid=U1_UID}, _} = nkservice_actor:find(U1_P),
 
-    {ok, #{A_UID:=<<"domains">>, Admin_UID:=<<"domains">>}=M5, _} = nkservice_actor:search_linked_to(?ROOT_SRV, "root", Root_P, any, #{}),
-    {ok, #{A_UID:=<<"domains">>, Admin_UID:=<<"domains">>}=M5, _} = nkservice_actor:search_linked_to(?ROOT_SRV, "root", Root_P, <<"domains">>, #{}),
-    {ok, Empty, _} = nkservice_actor:search_linked_to(?ROOT_SRV, "root", Root_P, <<"domain2">>, #{}),
+    {ok, [{A_UID, <<"io.netc.core.domain">>}, {Admin_UID, <<"io.netc.core.domain">>}]= L5, _} = nkservice_actor:search_linked_to(?ROOT_SRV, "root", Root_P, any, #{}),
+    {ok, L5, _} = nkservice_actor:search_linked_to(?ROOT_SRV, "root", Root_P, <<"io.netc.core.domain">>, #{}),
+    {ok, [], _} = nkservice_actor:search_linked_to(?ROOT_SRV, "root", Root_P, <<"domain2">>, #{}),
 
-    {ok, M5, _} = nkservice_actor:search_linked_to(?ROOT_SRV, "root", Root_P, any, #{deep=>true}),
-    {ok, Empty, _} = nkservice_actor:search_linked_to(?ROOT_SRV, "root", A_P, any, #{}),
-    {ok, #{B_A_UID:=<<"domains">>}=M6, _} = nkservice_actor:search_linked_to(?ROOT_SRV, "root", A_P, any, #{deep=>true}),
-    {ok, M6, _} = nkservice_actor:search_linked_to(?ROOT_SRV, "a-nktest", A_P, any, #{}),
+    {ok, L5, _} = nkservice_actor:search_linked_to(?ROOT_SRV, "root", Root_P, any, #{deep=>true}),
+    {ok, [], _} = nkservice_actor:search_linked_to(?ROOT_SRV, "root", A_P, any, #{}),
+    {ok, [{B_A_UID, <<"io.netc.core.domain">>}]=L6, _} = nkservice_actor:search_linked_to(?ROOT_SRV, "root", A_P, any, #{deep=>true}),
+    {ok, L6, _} = nkservice_actor:search_linked_to(?ROOT_SRV, "a-nktest", A_P, any, #{}),
 
-    {ok, #{C_B_A_UID:=<<"domains">>, U1_UID:=<<"domains">>}=M7, _} = nkservice_actor:search_linked_to(?ROOT_SRV, "root", B_A_P, any, #{deep=>true}),
-    {ok, Empty, _} = nkservice_actor:search_linked_to(?ROOT_SRV, "root", B_A_P, any, #{}),
-    {ok, M7, _} = nkservice_actor:search_linked_to(?ROOT_SRV, "a-nktest", B_A_P, any, #{deep=>true}),
-    {ok, Empty, _} = nkservice_actor:search_linked_to(?ROOT_SRV, "a-nktest", B_A_P, any, #{}),
-    {ok, M7, _} = nkservice_actor:search_linked_to(?ROOT_SRV, "b.a-nktest", B_A_P, any, #{}),
-    {ok, Empty, _} = nkservice_actor:search_linked_to(?ROOT_SRV, "c.b.a-nktest", B_A_P, any, #{deep=>true}),
+    {ok, [{C_B_A_UID, <<"io.netc.core.domain">>}, {U1_UID, <<"io.netc.core.domain">>}]=L7, _} = nkservice_actor:search_linked_to(?ROOT_SRV, "root", B_A_P, any, #{deep=>true}),
+    {ok, [], _} = nkservice_actor:search_linked_to(?ROOT_SRV, "root", B_A_P, any, #{}),
+    {ok, L7, _} = nkservice_actor:search_linked_to(?ROOT_SRV, "a-nktest", B_A_P, any, #{deep=>true}),
+    {ok, [], _} = nkservice_actor:search_linked_to(?ROOT_SRV, "a-nktest", B_A_P, any, #{}),
+    {ok, L7, _} = nkservice_actor:search_linked_to(?ROOT_SRV, "b.a-nktest", B_A_P, any, #{}),
+    {ok, [], _} = nkservice_actor:search_linked_to(?ROOT_SRV, "c.b.a-nktest", B_A_P, any, #{deep=>true}),
 
-    {ok, Empty, _} = nkservice_actor:search_linked_to(?ROOT_SRV, "root", C_B_A_P, any, #{deep=>true}),
+    {ok, [], _} = nkservice_actor:search_linked_to(?ROOT_SRV, "root", C_B_A_P, any, #{deep=>true}),
 
 
     {ok, L1, _} = nkservice_actor:search_fts(?ROOT_SRV, "root", any, <<"domain">>, #{deep=>true}),
@@ -664,11 +663,11 @@ list_test_2() ->
     {1, 1, [User1]} = http_list("/domains/a-nktest/users?labelSelector=is_b_domain&deep=true"),
 
     % links
-    {1, 1, [DomainA]} = http_list("/domains?linkedTo=domains"),
-    {3, 3, [DomainC, DomainB, DomainA]} = http_list("/domains?linkedTo=domains&deep=true"),
+    {1, 1, [DomainA]} = http_list("/domains?linkedTo=io.netc.core.domain"),
+    {3, 3, [DomainC, DomainB, DomainA]} = http_list("/domains?linkedTo=io.netc.core.domain&deep=true"),
     #{<<"metadata">>:=#{<<"uid">>:=B_UID}} = DomainB,
-    {1, 1, [DomainC]} = http_list(["/domains?linkedTo=domains:", B_UID, "&deep=true"]),
-    {1, 1, [User1]} = http_list(["/users?linkedTo=domains:", B_UID, "&deep=true"]),
+    {1, 1, [DomainC]} = http_list(["/domains?linkedTo=io.netc.core.domain:", B_UID, "&deep=true"]),
+    {1, 1, [User1]} = http_list(["/users?linkedTo=io.netc.core.domain:", B_UID, "&deep=true"]),
 
     % FTS
     {1, 1, [DomainA]} = http_list("/domains?fts=domain"),
@@ -876,7 +875,7 @@ search_test() ->
     OptsI1 = #{
         filter => #{'and' => [
             #{field=>'kind', value=>'Domain'},
-            #{field=>'metadata.links.domains', op=>exists, value=>true}
+            #{field=>'metadata.links.io.netc.core.domain', op=>exists, value=>true}
         ]}
     },
     {1, 1, [#{<<"metadata">>:=#{<<"name">>:=<<"a-nktest">>, <<"uid">>:=UID_A}}=A]} = http_search("root", OptsI1),
@@ -884,7 +883,7 @@ search_test() ->
         deep => true,
         filter => #{'and' => [
             #{field=>'kind', value=>'Domain'},
-            #{field=>'metadata.links.domains', value=>UID_A}
+            #{field=>'metadata.links.io.netc.core.domain', value=>UID_A}
         ]}
     },
     {1, 1, [B]} = http_search("a-nktest", OptsI2),
@@ -974,11 +973,10 @@ contact_test() ->
                     data1: val1
                   meta:
                     meta1: val1
+            user: /apis/core/v1a1/domains/b.a-nktest/users/ut1
         metadata:
             name: ct1
             domain: c.b.a-nktest
-            links:
-                users: /apis/core/v1a1/domains/b.a-nktest/users/ut1
             fts:
                 fullName: 'My Náme My Surname'
     "/utf8>>,
@@ -991,6 +989,7 @@ contact_test() ->
         <<"apiVersion">> := <<"core/v1a1">>,
         <<"kind">> := <<"Contact">>,
         <<"spec">> := #{
+            <<"user">> := <<"/apis/core/v1a1/domains/b.a-nktest/users/ut1">>,
             <<"name">> := <<"My Náme"/utf8>>,
             <<"surname">> := <<"My Surname">>,
             <<"normalizedName">> := <<"my name">>,
@@ -1060,8 +1059,8 @@ contact_test() ->
             <<"resourceVersion">> := Rs1,
             <<"selfLink">> := <<"/apis/core/v1a1/domains/c.b.a-nktest/contacts/ct1">>,
             <<"links">> := #{
-                <<"domains">> := C_B_A_UID,
-                <<"users">> := UT1_UID
+                <<"io.netc.core.domain">> := C_B_A_UID,
+                <<"io.netc.core.contact-user">> := UT1_UID
             },
             <<"fts">> := #{
                 <<"fullName">> := <<"My Náme My Surname"/utf8>>
@@ -1093,7 +1092,7 @@ contact_test() ->
     {error, #{<<"message">>:= <<"Field 'metadata.domain' is invalid">>}} = api(#{verb=>update, domain=>"a-nktest", body=>Body3}),
     {ok, _} = api(#{verb=>update, domain=>"c.b.a-nktest", resource=>"contacts", name=>"ct1", body=>Body3}),
 
-    {1, 1, [#{<<"metadata">>:=#{<<"uid">>:=C1_UID}}=CT3]} = http_list("/domains/c.b.a-nktest/contacts?linkedTo=users:"++binary_to_list(UT1_UID)),
+    {1, 1, [#{<<"metadata">>:=#{<<"uid">>:=C1_UID}}=CT3]} = http_list("/domains/c.b.a-nktest/contacts?linkedTo=io.netc.core.contact-user:"++binary_to_list(UT1_UID)),
     {0, 0, []} = http_list("/domains/c.b.a-nktest/contacts?linkedTo=user:1"),
     {1, 1, [CT3]} = http_list("/domains/c.b.a-nktest/contacts?fieldSelector=spec.gender:M&sort=spec.timezone"),
     {0, 0, []} = http_list("/domains/c.b.a-nktest/contacts?fieldSelector=spec.gender:F"),

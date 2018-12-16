@@ -583,15 +583,16 @@ session_test() ->
     {ok, {expires, Time1}} = nkservice_actor_srv:sync_op(P, get_unload_policy),
     true = (Time1 - nklib_date:epoch(msecs)) < 1000,
 
+    lager:error("NKLOG LAUNCH"),
     {ok, #{<<"reason">>:= <<"actor_updated">>}} =
-        api(#{verb=>get, domain=>"a-nktest", resource=>"sessions", name=>s1, subresource=>[<<"_refresh">>]}),
+        api(#{verb=>get, domain=>"a-nktest", resource=>"sessions", name=>s1, subresource=><<"_rpc/refresh">>}),
 
     {ok, {expires, Time2}} = nkservice_actor_srv:sync_op(P, get_unload_policy),
     true = (Time2 - nklib_date:epoch(msecs)) > 1500,
 
     timer:sleep(2100),
     {error, #{<<"reason">> := <<"actor_not_found">>}} =
-        api(#{verb=>get, domain=>"a-nktest", resource=>"sessions", name=>s1, subresource=>[<<"_refresh">>]}),
+        api(#{verb=>get, domain=>"a-nktest", resource=>"sessions", name=>s1, subresource=><<"_rpc/refresh">>}),
     ok.
 
 
@@ -732,8 +733,8 @@ file_test() ->
             <<"uid">> := F1_UID,
             <<"name">> := <<"f1">>,
             <<"links">> := #{
-                <<"domains">> := <<"domains-", _/binary>>,
-                <<"fileproviders">> := FS1_UID
+                <<"io.netc.core.domain">> := <<"domains-", _/binary>>,
+                <<"io.netc.core.file-provider">> := FS1_UID
             }
         } = Meta1,
         <<"status">> := #{<<"isActivated">> := true}
@@ -783,7 +784,7 @@ file_test() ->
     #{<<"metadata">> := #{<<"annotations">> := #{<<"ann1">>:=<<"v1">>}}} = F3,
 
     % Filesystem uses standard downloads
-    {200, #{<<"url">> := Url}} = http_get("/domains/a-nktest/files/f1/_downloadLink"),
+    {200, #{<<"url">> := Url}} = http_get("/domains/a-nktest/files/f1/_rpc/downloadLink"),
     <<"_download">> = lists:last(binary:split(Url, <<"/">>, [global])),
 
     % Send direct to _upload
@@ -798,8 +799,8 @@ file_test() ->
             <<"domain">> := <<"a-nktest">>,
             <<"name">> := _,
             <<"links">> := #{
-                <<"domains">> := <<"domains-", _/binary>>,
-                <<"fileproviders">> := <<"fileproviders-", _/binary>>
+                <<"io.netc.core.domain">> := <<"domains-", _/binary>>,
+                <<"io.netc.core.file-provider">> := <<"fileproviders-", _/binary>>
             }
         },
         <<"spec">> := #{

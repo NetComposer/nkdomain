@@ -122,7 +122,7 @@ token_test() ->
                 #{<<"key">> := <<"ann1">>, <<"value">> := <<"value1">>}
             ],
             <<"links">> := [
-                #{<<"key">> := <<"domains">>, <<"value">> := <<"domains-", _/binary>>},
+                #{<<"key">> := <<"io.netc.core.domain">>, <<"value">> := <<"domains-", _/binary>>},
                 #{<<"key">> := <<"users">>, <<"value">> := <<"users-", _/binary>>}
             ]
         }

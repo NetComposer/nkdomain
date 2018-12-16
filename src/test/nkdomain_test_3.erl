@@ -75,7 +75,7 @@ file_test_s3() ->
 
     % Cannot get and uploadLink if we have encryption or hash
     {created, _FP2} = api(#{verb=>create, body=>yaml(SFP)}),
-    {500, #{ <<"reason">> :=  <<"storage_class_incompatible">>}} = http_get("/domains/a-nktest/fileproviders/fs3/_uploadLink?contentType=ct1"),
+    {500, #{ <<"reason">> :=  <<"storage_class_incompatible">>}} = http_get("/domains/a-nktest/fileproviders/fs3/_rpc/uploadLink?contentType=ct1"),
 
     % Re-create the fileprovider without encryption
     {200, _} = http_delete("/domains/a-nktest/fileproviders/fs3"),
@@ -84,13 +84,13 @@ file_test_s3() ->
     % Get an upload link (Url1, Id1) for a file with content-type ct1
 
     {200, L}  =
-        http_get("/domains/a-nktest/fileproviders/fs3/_uploadLink?contentType=ct1"),
+        http_get("/domains/a-nktest/fileproviders/fs3/_rpc/uploadLink?contentType=ct1"),
     lager:error("NKLOG URL1 ~p", [L]),
 
 
 
     {200, #{<<"method">>:=<<"PUT">>, <<"url">>:=Url1, <<"id">>:=Id1, <<"ttlSecs">>:=1}} =
-        http_get("/domains/a-nktest/fileproviders/fs3/_uploadLink?contentType=ct1"),
+        http_get("/domains/a-nktest/fileproviders/fs3/_rpc/uploadLink?contentType=ct1"),
     {_, 13} = binary:match(Url1, <<"/bucket1/a/b/">>),
 
     % Upload a file too large
@@ -131,7 +131,7 @@ file_test_s3() ->
     "ct1" = nklib_util:get_value("content-type", Hds1),
 
     % Get a download link
-    {200, #{<<"url">>:=Url2, <<"ttlSecs">>:=1}} = http_get("/domains/a-nktest/files/file3/_downloadLink"),
+    {200, #{<<"url">>:=Url2, <<"ttlSecs">>:=1}} = http_get("/domains/a-nktest/files/file3/_rpc/downloadLink"),
     {ok, {{_, 200, _}, Hds2, "123"}} = httpc:request(binary_to_list(Url2)),
     "ct1" = nklib_util:get_value("content-type", Hds2),
 

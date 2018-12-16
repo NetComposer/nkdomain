@@ -127,7 +127,7 @@ core_test() ->
             ],
             <<"annotations">> := [],
             <<"links">> := [
-                #{<<"key">> := <<"domains">>,<<"value">> := B_UID}
+                #{<<"key">> := <<"io.netc.core.domain">>,<<"value">> := B_UID}
             ],
             <<"fts">> := [
                 #{
@@ -444,7 +444,7 @@ actors_test_2() ->
         {metadata: {isEnabled: {eq: true}}}
         {metadata: {uid: {exists: true}}}
         {metadata: {labels: {key: \"is_a-nktest_domain\"}}}
-        {metadata: {links: {key: \"domains\"}}}
+        {metadata: {links: {key: \"io.netc.core.domain\"}}}
         {metadata: {fts: {word: \"náme\"}}}
     "/utf8>>,
     {1, [
@@ -516,14 +516,14 @@ actors_test_2() ->
     {0, []} = all_actors_query(Filters11),
 
     % Links
-    Filters20 = <<"{metadata: {links: {key: \"domains\", eq: \"", B1/binary, "\"}}}">>,
+    Filters20 = <<"{metadata: {links: {key: \"io.netc.core.domain\", eq: \"", B1/binary, "\"}}}">>,
     {2, [
         {<<"Domain">>, #{<<"name">>:=<<"c">>, <<"creationTime">>:=CT20a}},
         {<<"User">>, #{<<"uid">>:=UT1, <<"creationTime">>:=CT20b}}
     ]} = all_actors_query(Filters20),
     true = CT20b > CT20a,
 
-    Filters21 = <<"{metadata: {links: {key: \"domains\"}}}">>,
+    Filters21 = <<"{metadata: {links: {key: \"io.netc.core.domain\"}}}">>,
     {N21, _} = all_actors_query(Filters21),
     true = N21 > 2,
 
@@ -824,6 +824,7 @@ contact_test() ->
         apiVersion: core/v1a1
         kind: Contact
         spec:
+            user: /apis/core/v1a1/domains/b.a-nktest/users/ut1
             name: 'My Náme'
             surname: 'My Surname'
             birthTime: 2018-01-01
@@ -867,8 +868,6 @@ contact_test() ->
             subtype: mytest
             name: ct1
             domain: c.b.a-nktest
-            links:
-                users: /apis/core/v1a1/domains/b.a-nktest/users/ut1
             fts:
                 fullName: 'My Náme My Surname'
     "/utf8>>,
