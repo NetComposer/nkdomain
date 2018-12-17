@@ -459,12 +459,12 @@ actor_db_get_query(SrvId, pgsql, SearchType, Opts) ->
 
 
 % /openapi
-nkservice_rest_http(?DOMAIN_PKG_ID_API, <<"GET">>, [<<"openapi">>|Rest], Req) ->
-    % lager:error("NKLOG OA ~p", [Rest]),
-    nkservice_openapi:rest_http(Rest, Req);
-
-nkservice_rest_http(?DOMAIN_PKG_ID_API, <<"GET">>, [<<"openapi.json">>], Req) ->
-    nkservice_openapi:rest_http([<<"openapi.json">>], Req);
+%%nkservice_rest_http(?DOMAIN_PKG_ID_API, <<"GET">>, [<<"openapi">>|Rest], Req) ->
+%%    % lager:error("NKLOG OA ~p", [Rest]),
+%%    nkservice_openapi:rest_http(Rest, Req);
+%%
+%%nkservice_rest_http(?DOMAIN_PKG_ID_API, <<"GET">>, [<<"openapi.json">>], Req) ->
+%%    nkservice_openapi:rest_http([<<"openapi.json">>], Req);
 
 nkservice_rest_http(?DOMAIN_PKG_ID_API, Verb, Path, #{srv:=SrvId}=Req) ->
     Path2 = case lists:reverse(Path) of
