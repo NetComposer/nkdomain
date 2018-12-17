@@ -111,7 +111,7 @@ get_res_domain_name(SrvId, #{group:=Group}=ApiReq) ->
 
 
 %% @doc Checks that fields in req are not different in body:
-%%      (group, vn, domain, resource, name) and expand links
+%%      (group, vsn, domain, resource, name) and expand links
 -spec check_request_obj(nkservice:id(), #actor_id{}, map()) ->
     {ok, Obj::map()} | {error, nkservice:msg()}.
 
@@ -158,8 +158,8 @@ check_request_obj(SrvId, ActorId, ApiReq) ->
         case Obj of
             #{<<"metadata">>:=#{<<"name">>:=BodyName}} ->
                 % If name is in body, it has been already read, so there is a name
-                case maps:get(name, ApiReq) of
-                    BodyName ->
+                case maps:find(name, ApiReq) of
+                    {ok, BodyName} ->
                         ok;
                     _ ->
                         throw({field_invalid, <<"metadata.name">>})
