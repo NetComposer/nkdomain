@@ -411,12 +411,12 @@ make_type_caches_group(Group, Config, Cache) ->
 
 %% @private
 get_listen(#{apiUrl:=Url}=Entry) ->
-    ResolveOpts = #{
+    ResolveOpts1 = #{
         resolve_type => listen,
-        protocol => nkservice_rest_protocol,
-        external_host => nkservice_app:get_external_host()
+        protocol => nkservice_rest_protocol
     },
-    case nkpacket_resolve:resolve(Url, ResolveOpts) of
+    ResolveOpts2 = nkservice_util:add_external_host(ResolveOpts1),
+    case nkpacket_resolve:resolve(Url, ResolveOpts2) of
         {ok, Conns} ->
             ExtUrls = [maps:get(external_url, Opts) || #nkconn{opts=Opts} <- Conns],
             Opts1 = maps:get(apiUrlOpts, Entry, #{}),
