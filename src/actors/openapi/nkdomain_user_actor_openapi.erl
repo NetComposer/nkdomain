@@ -82,7 +82,7 @@ parameters(_SrvId) ->
         #{
             'core.v1a1.UserParamPassword' => #{
                 name => <<"password">>,
-                description => <<"Password user in base64 form">>,
+                description => <<"User password">>,
                 in => query,
                 schema => #{
                     type => string
