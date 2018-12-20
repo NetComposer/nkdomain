@@ -122,7 +122,7 @@ filter_parameter(Fields) ->
             * exits
             * prefix
 
-            **Example**: `filterSelector=metadata.generarion:gte:1,metadata.subtype`
+            **Example**: `filterSelector=metadata.generation:gte:1,metadata.subtype`
             ">>,
         in => query,
         schema => #{

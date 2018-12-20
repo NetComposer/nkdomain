@@ -874,7 +874,7 @@ parameters(_SrvId) -> #{
         description => <<"
             Filter to actors linked to another actor, with an specific _link type_.
 
-            **Example**: `linkedTo=domain,user:user-l4lc993kcdl3lc`
+            **Example**: `linkedTo=io.netc.core.domain,user:user-l4lc993kcdl3lc`
             ">>,
         in => query,
         schema => #{
