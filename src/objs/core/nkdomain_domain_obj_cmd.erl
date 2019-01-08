@@ -127,8 +127,10 @@ cmd(<<"unload_childs">>, #nkreq{data=Data}=Req) ->
         {ok, Id} ->
             case nkdomain_db:load(Id) of
                 #obj_id_ext{path=DomainPath, type=?DOMAIN_DOMAIN} ->
-                    nkdomain_domain:unload_childs(Id),
-                    case nkdomain_api_util:wait_for_condition(nkdomain_api_util:is_not_loaded_condition_fun(DomainPath)) of
+                    ActionFun = fun() ->
+                        nkdomain_domain:unload_childs(Id)
+                    end,
+                    case nkdomain_api_util:wait_for_condition(ActionFun, nkdomain_api_util:is_not_loaded_condition_fun(DomainPath)) of
                         {ok, true} ->
                             lager:info("Childs unloaded for domain ~s", [DomainPath]),
                             ok;
