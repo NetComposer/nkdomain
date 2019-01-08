@@ -25,7 +25,7 @@
 -export([search/1, get_id/3, get_id/4, add_id/3, add_meta/3, get_meta/2, remove_meta/2]).
 -export([head_type_field/2, head_type_filters/2]).
 -export([is_subdomain/2, is_subdomain/3]).
--export([wait_for_condition/1, wait_for_condition/3]).
+-export([wait_for_condition/1, wait_for_condition/2, wait_for_condition/3]).
 -export([is_not_loaded_condition_fun/1, has_childs_type_condition_fun/2]).
 -export_type([login_data/0, session_meta/0]).
 
@@ -314,15 +314,19 @@ is_subdomain(BaseDomain, Domain, Opts) ->
 
 %% @doc
 wait_for_condition(ConditionFun) ->
-    wait_for_condition(?MAX_RETRIES, ?WAIT_TIME, ConditionFun).
+    wait_for_condition(0, ?MAX_RETRIES, ?WAIT_TIME, fun() -> ok end, ConditionFun).
+
+%% @doc
+wait_for_condition(ActionFun, ConditionFun) ->
+    wait_for_condition(0, ?MAX_RETRIES, ?WAIT_TIME, ActionFun, ConditionFun).
 
 %% @doc
 wait_for_condition(MaxRetries, WaitTime, ConditionFun) ->
-    wait_for_condition(0, MaxRetries, WaitTime, ConditionFun).
+    wait_for_condition(0, MaxRetries, WaitTime, fun() -> ok end, ConditionFun).
 
 
 %% @private
-wait_for_condition(N, MaxRetries, WaitTime, ConditionFun) when N =< MaxRetries ->
+wait_for_condition(N, MaxRetries, WaitTime, ActionFun, ConditionFun) when N =< MaxRetries ->
     case ConditionFun() of
         true ->
             %% Condition satisfied
@@ -331,16 +335,17 @@ wait_for_condition(N, MaxRetries, WaitTime, ConditionFun) when N =< MaxRetries -
             %% Condition not satisfied or unexpected response
             case N < MaxRetries of
                 true ->
+                    ActionFun(),
                     ?LLOG(info, "Waiting for ~p msecs", [WaitTime]),
                     timer:sleep(WaitTime),
-                    wait_for_condition(N+1, MaxRetries, WaitTime, ConditionFun);
+                    wait_for_condition(N+1, MaxRetries, WaitTime, ActionFun, ConditionFun);
                 false ->
                     ?LLOG(error, "Maximum number of tries reached (~p)", [MaxRetries]),
                     {ok, false}
             end
     end;
 
-wait_for_condition(_, _MaxRetries, _, _) ->
+wait_for_condition(_, _MaxRetries, _, _, _) ->
     ?LLOG(error, "Maximum number of tries reached (~p)", [_MaxRetries]),
     {ok, false}.
    
@@ -363,6 +368,7 @@ is_loaded(_, _, []) ->
 is_loaded(DomainPath, DomainSize, [{_Type, _ObjId, Path, _Pid}|LoadedObjs]) ->
     case Path of
         <<DomainPath:DomainSize/binary, $/, _/binary>> ->
+            ?LLOG(warning, "Found object ~s loaded", [_ObjId]),
             true;
         _ ->
             is_loaded(DomainPath, DomainSize, LoadedObjs)
