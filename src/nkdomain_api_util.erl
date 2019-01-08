@@ -25,11 +25,17 @@
 -export([search/1, get_id/3, get_id/4, add_id/3, add_meta/3, get_meta/2, remove_meta/2]).
 -export([head_type_field/2, head_type_filters/2]).
 -export([is_subdomain/2, is_subdomain/3]).
+-export([wait_for_condition/1, wait_for_condition/3]).
+-export([is_not_loaded_condition_fun/1, has_childs_type_condition_fun/2]).
 -export_type([login_data/0, session_meta/0]).
 
 -include("nkdomain.hrl").
 -include_lib("nkservice/include/nkservice.hrl").
 
+-define(MAX_RETRIES, 5).
+-define(WAIT_TIME, 1000).
+-define(LLOG(Type, Txt, Args),
+    lager:Type("NkDOMAIN api util: "++Txt, Args)).
 
 %% ===================================================================
 %% Types
@@ -304,7 +310,75 @@ is_subdomain(BaseDomain, Domain, Opts) ->
         _ ->
             {error, object_not_found}
     end.
-        
+
+
+%% @doc
+wait_for_condition(ConditionFun) ->
+    wait_for_condition(?MAX_RETRIES, ?WAIT_TIME, ConditionFun).
+
+%% @doc
+wait_for_condition(MaxRetries, WaitTime, ConditionFun) ->
+    wait_for_condition(0, MaxRetries, WaitTime, ConditionFun).
+
+
+%% @private
+wait_for_condition(N, MaxRetries, WaitTime, ConditionFun) when N =< MaxRetries ->
+    case ConditionFun() of
+        true ->
+            %% Condition satisfied
+            {ok, true};
+        _Other ->
+            %% Condition not satisfied or unexpected response
+            case N < MaxRetries of
+                true ->
+                    ?LLOG(info, "Waiting for ~p msecs", [WaitTime]),
+                    timer:sleep(WaitTime),
+                    wait_for_condition(N+1, MaxRetries, WaitTime, ConditionFun);
+                false ->
+                    ?LLOG(error, "Maximum number of tries reached (~p)", [MaxRetries]),
+                    {ok, false}
+            end
+    end;
+
+wait_for_condition(_, _MaxRetries, _, _) ->
+    ?LLOG(error, "Maximum number of tries reached (~p)", [_MaxRetries]),
+    {ok, false}.
+   
+
+%% @doc
+is_not_loaded_condition_fun(DomainPath) ->
+    fun() ->
+        LoadedObjs = nkdomain_obj:get_all(),
+        not is_loaded(DomainPath, LoadedObjs)
+    end.
+
+
+%% @private
+is_loaded(DomainPath, LoadedObjs) ->
+    is_loaded(DomainPath, size(DomainPath), LoadedObjs).
+
+is_loaded(_, _, []) ->
+    false;
+
+is_loaded(DomainPath, DomainSize, [{_Type, _ObjId, Path, _Pid}|LoadedObjs]) ->
+    case Path of
+        <<DomainPath:DomainSize/binary, $/, _/binary>> ->
+            true;
+        _ ->
+            is_loaded(DomainPath, DomainSize, LoadedObjs)
+    end.
+
+%% @doc
+has_childs_type_condition_fun(Domain, Type) ->
+    fun() ->
+        case nkdomain:get_childs_type(Domain, Type) of
+            {ok, Total, _Data} ->
+                Total =:= 0;
+            _ ->
+                false
+        end
+    end.
+
 
 %% @private
 to_bin(Term) when is_binary(Term) -> Term;
