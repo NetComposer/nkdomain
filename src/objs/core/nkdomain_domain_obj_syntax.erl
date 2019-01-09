@@ -73,14 +73,25 @@ syntax(<<"find_all">>, Syntax) ->
 
 syntax(<<"unload_childs">>, Syntax) ->
     Syntax#{
-        id => binary
+        id => binary,
+        wait_time => {integer, 100, 60000},
+        max_retries => {integer, 1, none},
+        '__defaults' => #{
+            wait_time => 1000,
+            max_retries => 5
+        }
     };
-
 
 syntax(<<"delete_childs_of_type">>, Syntax) ->
     Syntax#{
         id => binary,
-	type => binary
+	    type => binary,
+        wait_time => {integer, 100, 60000},
+        max_retries => {integer, 1, none},
+        '__defaults' => #{
+            wait_time => 1000,
+            max_retries => 5
+        }
     };
 
 syntax(<<"create_child">>, Syntax) ->

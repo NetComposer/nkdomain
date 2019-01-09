@@ -25,7 +25,7 @@
 -export([search/1, get_id/3, get_id/4, add_id/3, add_meta/3, get_meta/2, remove_meta/2]).
 -export([head_type_field/2, head_type_filters/2]).
 -export([is_subdomain/2, is_subdomain/3]).
--export([wait_for_condition/1, wait_for_condition/2, wait_for_condition/3]).
+-export([wait_for_condition/1, wait_for_condition/2, wait_for_condition/3, wait_for_condition/4]).
 -export([is_not_loaded_condition_fun/1, has_childs_type_condition_fun/2]).
 -export_type([login_data/0, session_meta/0]).
 
@@ -324,6 +324,9 @@ wait_for_condition(ActionFun, ConditionFun) ->
 wait_for_condition(MaxRetries, WaitTime, ConditionFun) ->
     wait_for_condition(0, MaxRetries, WaitTime, fun() -> ok end, ConditionFun).
 
+%% @doc
+wait_for_condition(MaxRetries, WaitTime, ActionFun, ConditionFun) ->
+    wait_for_condition(0, MaxRetries, WaitTime, ActionFun, ConditionFun).
 
 %% @private
 wait_for_condition(N, MaxRetries, WaitTime, ActionFun, ConditionFun) when N =< MaxRetries ->
