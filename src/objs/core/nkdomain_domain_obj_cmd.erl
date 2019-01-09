@@ -122,7 +122,7 @@ cmd(<<"find_all">>, #nkreq{data=Data}=Req) ->
 %%            Error
 %%    end;
 
-cmd(<<"unload_childs">>, #nkreq{data=Data}=Req) ->
+cmd(<<"unload_childs">>, #nkreq{data=#{wait_time := WaitTime, max_retries := MaxRetries}=Data}=Req) ->
     case get_domain(Data, Req) of
         {ok, Id} ->
             case nkdomain_db:load(Id) of
@@ -130,7 +130,7 @@ cmd(<<"unload_childs">>, #nkreq{data=Data}=Req) ->
                     ActionFun = fun() ->
                         nkdomain_domain:unload_childs(Id)
                     end,
-                    case nkdomain_api_util:wait_for_condition(ActionFun, nkdomain_api_util:is_not_loaded_condition_fun(DomainPath)) of
+                    case nkdomain_api_util:wait_for_condition(MaxRetries, WaitTime, ActionFun, nkdomain_api_util:is_not_loaded_condition_fun(DomainPath)) of
                         {ok, true} ->
                             lager:info("Childs unloaded for domain ~s", [DomainPath]),
                             ok;
@@ -146,11 +146,11 @@ cmd(<<"unload_childs">>, #nkreq{data=Data}=Req) ->
             Error
     end;
 
-cmd(<<"delete_childs_of_type">>, #nkreq{data=#{ type := Type }=Data}=Req) ->
+cmd(<<"delete_childs_of_type">>, #nkreq{data=#{type := Type, wait_time := WaitTime, max_retries := MaxRetries}=Data}=Req) ->
     case get_domain(Data, Req) of
         {ok, Id} ->
             nkdomain:remove_path_type(Id, Type),
-            case nkdomain_api_util:wait_for_condition(nkdomain_api_util:has_childs_type_condition_fun(Id, Type)) of
+            case nkdomain_api_util:wait_for_condition(MaxRetries, WaitTime, nkdomain_api_util:has_childs_type_condition_fun(Id, Type)) of
                 {ok, true} ->
                     lager:info("Childs of type ~s deleted from domain ~s", [Type, Id]),
                     {ok, #{}};
