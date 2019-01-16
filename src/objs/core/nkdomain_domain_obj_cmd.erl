@@ -149,19 +149,22 @@ cmd(<<"unload_childs">>, #nkreq{data=#{wait_time := WaitTime, max_retries := Max
 cmd(<<"delete_childs_of_type">>, #nkreq{data=#{type := Type, wait_time := WaitTime, max_retries := MaxRetries}=Data}=Req) ->
     case get_domain(Data, Req) of
         {ok, Id} ->
-            nkdomain:remove_path_type(Id, Type),
-            case nkdomain_api_util:wait_for_condition(MaxRetries, WaitTime, nkdomain_api_util:has_childs_type_condition_fun(Id, Type)) of
-                {ok, true} ->
-                    lager:info("Childs of type ~s deleted from domain ~s", [Type, Id]),
-                    {ok, #{}};
-                {ok, false} ->
-                    {error, object_has_childs};
-                {error, Error} ->
-                    {error, Error}
-            end;
+            delete_childs_of_type(Id, MaxRetries, WaitTime, Type);
         Error ->
             Error
    end;
+
+cmd(<<"delete_types">>, #nkreq{data=#{types := Types, 
+                                      wait_time := WaitTime, 
+                                      max_retries := MaxRetries}=Data}=Req) ->
+    case get_domain(Data, Req) of
+        {ok, Id} ->
+            delete_types(Id, MaxRetries, WaitTime, Types);
+        Error ->
+            Error
+   end;
+
+
 
 cmd(<<"create_child">>, #nkreq{data=#{ path := Path, data := ChildData }=Data}=Req) ->
    Obj = ChildData#{ path => Path },
@@ -197,3 +200,26 @@ cmd(Cmd, Req) ->
 
 get_domain(Data, Req) ->
     nkdomain_api_util:get_id(?DOMAIN_DOMAIN, Data, Req).
+
+
+delete_types(Id, _, _, []) -> {ok, #{}};
+delete_types(Id, MaxRetries, WaitTime, [T|Rem]) ->
+    case delete_childs_of_type(Id, MaxRetries, WaitTime, T) of 
+        {ok, _} ->
+            delete_types(Id, MaxRetries, WaitTime, Rem);
+        Other ->
+            Other
+    end.
+
+delete_childs_of_type(Id, MaxRetries, WaitTime, Type) ->
+    nkdomain:remove_path_type(Id, Type),
+    case nkdomain_api_util:wait_for_condition(MaxRetries, WaitTime, 
+                                              nkdomain_api_util:has_childs_type_condition_fun(Id, Type)) of
+        {ok, true} ->
+            lager:info("Childs of type ~s deleted from domain ~s", [Type, Id]),
+            {ok, #{}};
+        {ok, false} ->
+            {error, object_has_childs};
+        {error, Error} ->
+            {error, Error}
+    end.
