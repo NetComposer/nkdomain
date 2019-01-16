@@ -87,7 +87,10 @@ paths(SrvId) ->
                         required => true,
                         content => #{
                             '*/*' => #{
-                                type => string
+                                schema => #{
+                                    type => string,
+                                    format => binary
+                                }
                             }
                         }
                     },
