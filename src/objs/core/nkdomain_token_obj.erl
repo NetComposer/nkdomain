@@ -46,6 +46,7 @@
     #{
         parent_id => nkdomain:id(),     % Mandatory
         created_by => nkdomain:id(),    % Mandatory
+        name => binary(),
         subtype => nkdomain:subtype(),
         module => module(),
         function => atom(),
@@ -66,7 +67,7 @@
     {ok, TokenId::nkdomain:obj_id(), pid(), integer()} | {error, term()}.
 
 create(DomainId, Opts, Data) ->
-    Base = maps:with([parent_id, created_by, subtype, srv_id], Opts),
+    Base = maps:with([parent_id, name, created_by, subtype, srv_id], Opts),
     TokenData = maps:with([module, function], Opts),
     case check_ttl(Opts) of
         {ok, TTL} ->
@@ -262,10 +263,10 @@ object_sync_op({?MODULE, execute, Opts}, _From, #obj_state{obj=Obj}=State) ->
                 {reply, Reply, State3}
             catch
                 _:_ ->
-                    {reply, {error, invalid_token}, State}
+                    {reply, {error, token_invalid}, State}
             end;
         _ ->
-            {reply, {error, invalid_token}, State}
+            {reply, {error, token_invalid}, State}
     end;
 
 object_sync_op({?MODULE, consume, Reason}, From, State) ->
