@@ -129,10 +129,9 @@ execute(SrvId, Field, {nkdomain, {spec, _Type, Spec, Actor}}, _Meta, _Params) ->
     end;
 
 execute(SrvId, <<"fileProviderConnection">>, {nkdomain, {actor, _Type, Actor}}, _Meta, _Params) ->
-    #{<<"metadata">>:=Meta} = Actor,
-    LinkKey = nkdomain_actor_util:link_key2(?GROUP_CORE, ?LINK_CORE_FILE_PROVIDER),
-    case maps:get(<<"links">>, Meta, #{}) of
-        #{LinkKey:=FileProviderUID} ->
+    LinkType = nkdomain_actor_util:link_type(?GROUP_CORE, ?LINK_CORE_FILE_PROVIDER),
+    case nkservice_actor_util:get_linked_uids(LinkType, Actor) of
+        [FileProviderUID] ->
             nkdomain_graphql_search:get_uid(SrvId, FileProviderUID);
         _ ->
             {ok, null}

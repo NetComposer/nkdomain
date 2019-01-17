@@ -414,6 +414,20 @@ w(Vsn) ->
     send_test_event().
 
 
+
+get_linked_uids(Type, #{<<"metadata">>:=#{<<"links">>:=Links}}) ->
+    maps:fold(
+        fun(UID, FunType, Acc) ->
+            case Type==FunType of
+                true -> [UID|Acc];
+                false -> Acc
+            end
+        end,
+        [],
+        Links).
+
+
+
 %%% Delete "TestAPI" events at root
 %%delete_root_test_api() ->
 %%    Opts = #{

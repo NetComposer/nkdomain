@@ -168,8 +168,8 @@ add_user_link(SrvId, #actor{data=#{<<"spec">>:=#{<<"user">>:=UserId}}}=Actor) ->
     UserPath = nkdomain_api_lib:api_path_to_actor_path(UserId),
     case nkservice_actor:find({SrvId, UserPath}) of
         {ok, #actor_id{group=?GROUP_CORE, resource=?RES_CORE_USERS}=UserActorId, _} ->
-            LinkKey = nkdomain_actor_util:link_key2(?GROUP_CORE, ?LINK_CORE_CONTACT_USER),
-            Actor2 = nkdomain_actor_util:add_link(Actor, LinkKey, UserActorId),
+            LinkType = nkdomain_actor_util:link_type(?GROUP_CORE, ?LINK_CORE_CONTACT_USER),
+            Actor2 = nkdomain_actor_util:add_link(UserActorId, LinkType, Actor),
             {ok, Actor2};
         _ ->
             {error, {user_unknown, UserId}}

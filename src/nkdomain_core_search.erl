@@ -272,10 +272,10 @@ parse_links([], Spec) ->
 
 parse_links([Field|Rest], Spec) ->
     {Field2, Op, Value2} = case binary:split(Field, <<":">>) of
-        [Type, UID] ->
-            {<<"metadata.links.", Type/binary>>, eq, UID};
-        [Type] ->
-            {<<"metadata.links.", Type/binary>>, exists, true}
+        [UID, Type] ->
+            {<<"metadata.links.", UID/binary>>, eq, Type};
+        [UID] ->
+            {<<"metadata.links.", UID/binary>>, exists, true}
     end,
     Spec2 = add_and_filter(#{field=>Field2, op=>Op, value=>Value2}, Spec),
     parse_links(Rest, Spec2).

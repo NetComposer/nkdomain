@@ -85,8 +85,8 @@ link_to_provider(SrvId, ApiId, Actor) ->
     ProviderPath = nkdomain_api_lib:api_path_to_actor_path(ApiId),
     case nkservice_actor:activate({SrvId, ProviderPath}) of
         {ok, #actor_id{group=?GROUP_CORE, resource=?RES_CORE_FILE_PROVIDERS}=ProvActorId, _} ->
-            LinkKey = nkdomain_actor_util:link_key2(?GROUP_CORE, ?LINK_CORE_FILE_PROVIDER),
-            {ok, nkdomain_actor_util:add_link(Actor, LinkKey, ProvActorId)};
+            LinkType = nkdomain_actor_util:link_type(?GROUP_CORE, ?LINK_CORE_FILE_PROVIDER),
+            {ok, nkdomain_actor_util:add_link(ProvActorId, LinkType, Actor)};
         _ ->
             {error, {provider_invalid, ApiId}}
     end.

@@ -132,7 +132,7 @@ create_admin(SrvId, ActorId, DomUID) ->
     Config = nkdomain_plugin:get_config(SrvId),
     Pass1 = maps:get(adminPass, Config, <<>>),
     Pass2 = nkdomain_user_actor:store_pass(SrvId, Pass1),
-    DomainLink = nkdomain_actor_util:link_key2(?GROUP_CORE, ?LINK_CORE_DOMAIN),
+    DomainLink = nkdomain_actor_util:link_type(?GROUP_CORE, ?LINK_CORE_DOMAIN),
     Actor = #actor{
         id = ActorId,
         data = #{
@@ -144,7 +144,7 @@ create_admin(SrvId, ActorId, DomUID) ->
         metadata = #{
             <<"name">> => <<"admin">>,
             <<"domain">> => Domain,
-            <<"links">> => #{DomainLink => DomUID}
+            <<"links">> => #{DomUID => DomainLink}
         }
     },
     case create_actor(SrvId, Actor) of

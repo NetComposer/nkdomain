@@ -199,16 +199,16 @@ make_external(SrvId, Actor, #{module:=Module}, Vsn) ->
 
 %% @private
 do_actor_activate(SrvId, Actor, IsNew, ExtraConfig) ->
-    #actor{id=ActorId, metadata=Meta} = Actor,
+    #actor{id=ActorId} = Actor,
     #actor_id{domain=Domain, group=Group, resource=Resource, name=Name} = ActorId,
     case {Domain, Group, Resource, Name} of
         {?ROOT_DOMAIN, ?GROUP_CORE, ?RES_CORE_DOMAINS, ?ROOT_DOMAIN} ->
             do_load_actor(SrvId, Actor, IsNew, ExtraConfig);
         _ ->
             % Start the domain object
-            DomainLink = nkdomain_actor_util:link_key2(?GROUP_CORE, ?LINK_CORE_DOMAIN),
-            case Meta of
-                #{<<"links">>:=#{DomainLink:=DomUID}} ->
+            Type = nkdomain_actor_util:link_type(?GROUP_CORE, ?LINK_CORE_DOMAIN),
+            case nkservice_actor_util:get_linked_uids(Type, Actor) of
+                [DomUID] ->
                     % Activate the domain, if not active
                     case nkservice_actor:activate({SrvId, DomUID}, #{}) of
                         {ok, #actor_id{}, _} ->

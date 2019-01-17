@@ -193,12 +193,12 @@ process_links(SrvId, #actor{id=ActorId, metadata=Meta}=Actor) ->
     case nkdomain_register:get_domain_data(SrvId, Domain) of
         {ok, _DomSrvId, DomUID} ->
             Links1 = maps:get(<<"links">>, Meta, #{}),
-            DomainLink = nkdomain_actor_util:link_key2(?GROUP_CORE, ?LINK_CORE_DOMAIN),
-            Links2 = case Links1 of
-                #{DomainLink:=DomUID} ->
+            DomainLinkType = nkdomain_actor_util:link_type(?GROUP_CORE, ?LINK_CORE_DOMAIN),
+            Links2 = case nkservice_actor_util:get_linked_uids(DomainLinkType, Actor) of
+                [DomUID] ->
                     Links1;
                 _ ->
-                    Links1#{DomainLink => DomUID}
+                    Links1#{DomUID => DomainLinkType}
             end,
             Links3 = expand_links(SrvId, maps:to_list(Links2), #{}),
             Meta2 = Meta#{<<"links">> => Links3},
@@ -212,9 +212,9 @@ process_links(SrvId, #actor{id=ActorId, metadata=Meta}=Actor) ->
 expand_links(_SrvId, [], Acc) ->
     Acc;
 
-expand_links(SrvId, [{Type, Id}|Rest], Acc) ->
+expand_links(SrvId, [{Id, Type}|Rest], Acc) ->
     Path = nkdomain_api_lib:api_path_to_actor_path(Id),
-    expand_links(SrvId, Rest, Acc#{Type => Path}).
+    expand_links(SrvId, Rest, Acc#{Path => Type}).
 
 
 %% @doc Parses an API and makes sure group and vsn are available,

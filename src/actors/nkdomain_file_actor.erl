@@ -246,10 +246,9 @@ request(_SrvId, _ActorId, _Api) ->
 
 %% @doc
 sync_op(nkdomain_get_body, _From, ActorSt) ->
-    #actor_st{srv=SrvId, actor=#actor{data=Data, metadata=Meta}} = ActorSt,
-    Links = maps:get(<<"links">>, Meta),
-    LinkKey = nkdomain_actor_util:link_key2(?GROUP_CORE, ?LINK_CORE_FILE_PROVIDER),
-    ProviderUID = maps:get(LinkKey, Links),
+    #actor_st{srv=SrvId, actor=#actor{data=Data}=Actor} = ActorSt,
+    LinkType = nkdomain_actor_util:link_type(?GROUP_CORE, ?LINK_CORE_FILE_PROVIDER),
+    [ProviderUID] = nkservice_actor_util:get_linked_uids(LinkType, Actor),
     #{<<"spec">>:=#{<<"contentType">>:=CT, <<"externalId">>:=Id}=Spec} = Data,
     FileMeta1 = #{
         name => Id,
@@ -286,8 +285,8 @@ sync_op(nkdomain_get_body, _From, ActorSt) ->
 sync_op(nkdomain_get_download_link, _From, ActorSt) ->
     #actor_st{srv=SrvId, actor=#actor{id=ActorId, data=Data}=Actor} = ActorSt,
     #{<<"spec">>:=#{<<"externalId">>:=Id}} = Data,
-    LinkKey = nkdomain_actor_util:link_key2(?GROUP_CORE, ?LINK_CORE_FILE_PROVIDER),
-    {ok, ProvUID} = nkdomain_actor_util:get_link(LinkKey, Actor),
+    LinkType = nkdomain_actor_util:link_type(?GROUP_CORE, ?LINK_CORE_FILE_PROVIDER),
+    [ProvUID] = nkservice_actor_util:get_linked_uids(LinkType, Actor),
     Reply = case nkdomain_file_provider_actor:op_get_direct_download_link(SrvId, ProvUID, Id) of
         {ok, Link, TTL} ->
             {ok, Link, TTL};
@@ -334,8 +333,8 @@ do_parse(SrvId, _Params, #{<<"provider">>:=ProviderId}=Spec, Actor) ->
         {ok, ProvActorId, ProvSpec} ->
             case ProvActorId of
                 #actor_id{group=?GROUP_CORE, resource=?RES_CORE_FILE_PROVIDERS} ->
-                    LinkKey = nkdomain_actor_util:link_key2(?GROUP_CORE, ?LINK_CORE_FILE_PROVIDER),
-                    Actor2 = nkdomain_actor_util:add_link(Actor, LinkKey, ProvActorId),
+                    LinkType = nkdomain_actor_util:link_type(?GROUP_CORE, ?LINK_CORE_FILE_PROVIDER),
+                    Actor2 = nkdomain_actor_util:add_link(ProvActorId, LinkType, Actor),
                     do_parse_upload(SrvId, Spec, ProvActorId, ProvSpec, Actor2);
                 _ ->
                     {error, {provider_unknown, ProviderId}}

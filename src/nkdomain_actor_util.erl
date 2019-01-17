@@ -25,7 +25,7 @@
 -export([event/2, api_event/2]).
 -export([get_config/2, get_config/3, find_resource/3]).
 -export([find_and_sync_op/5, find_and_sync_op/6]).
--export([add_link/3, get_link/2, link_key2/2, link_key_extra2/3]).
+-export([add_link/3, link_type/2, link_type_extra/3]).
 -export([add_labels/4]).
 -export([get_public_self/3]).
 -export([callback_syntax/0, http_callback/4]).
@@ -205,55 +205,24 @@ find_resource(SrvId, Group, Id) ->
     nkdomain_plugin:find_resource(SrvId, Group, Id).
 
 
-%%%% @doc
-%%get_link(Group, Resource, #actor{}=Actor) ->
-%%    get_link(link_key(Group, Resource), Actor).
-
-
-%% @doc
-get_link(LinkKey, #actor{metadata = Meta}) ->
-    Links = maps:get(<<"links">>, Meta, #{}),
-    maps:find(LinkKey, Links).
-
-
-%%%% @doc
-%%add_link(Actor, #actor_id{group=Group, resource=Resource}=ActorId) ->
-%%    LinkKey = link_key(Group, Resource),
-%%    add_link(Actor, LinkKey, ActorId).
-
-
 %% @private
-add_link(Actor, LinkKey, #actor_id{uid=UID}) ->
-    add_link(Actor, LinkKey, UID);
+add_link(#actor_id{uid=UID}, LinkType, Actor) ->
+    add_link(UID, LinkType, Actor);
 
-add_link(#actor{metadata=Meta}=Actor, LinkKey, UID) when is_binary(UID), UID /= <<>> ->
+add_link(UID, LinkType, #actor{metadata=Meta}=Actor) when is_binary(UID), UID /= <<>> ->
     Links1 = maps:get(<<"links">>, Meta, #{}),
-    Links2 = Links1#{LinkKey => UID},
+    Links2 = Links1#{UID => LinkType},
     Actor#actor{metadata=Meta#{<<"links">>=>Links2}}.
 
 
-%%%% @doc
-%%link_key(?GROUP_CORE, Resource) ->
-%%    Resource;
-%%
-%%link_key(Group, Resource) ->
-%%    <<Group/binary, $., Resource/binary>>.
-
-
 %% @doc
-link_key2(Group, Resource) ->
+link_type(Group, Resource) ->
     <<"io.netc.", Group/binary, $., Resource/binary>>.
 
 
-
-%%%% @doc
-%%link_key_extra(Group, Resource, Pos) ->
-%%    link_key(Group, <<Resource/binary, $., (nklib_util:to_binary(Pos))/binary>>).
-
-
 %% @doc
-link_key_extra2(Group, Resource, Pos) ->
-    link_key2(Group, <<Resource/binary, $., (nklib_util:to_binary(Pos))/binary>>).
+link_type_extra(Group, Resource, Pos) ->
+    link_type(Group, <<Resource/binary, $., (nklib_util:to_binary(Pos))/binary>>).
 
 
 %% @doc

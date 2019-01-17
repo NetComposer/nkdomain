@@ -64,7 +64,7 @@ token_test() ->
             annotations:
                 ann1: value1
             links:
-                users: /apis/core/v1a1/domains/b.a-nktest/users/ut1
+                /apis/core/v1a1/domains/b.a-nktest/users/ut1: user
     ">>,
     Body2 = yaml(Body1),
     {created, _} = api(#{verb=>create, body=>Body2}),
@@ -109,6 +109,7 @@ token_test() ->
         }
     ">>,
     {ok, #{<<"allTokens">>:=#{<<"actors">>:=[Token], <<"totalCount">>:=1}}} = request(Q1),
+    {ok, #{<<"metadata">>:=#{<<"uid">>:=UT1_UID}}} = api(#{domain=>"b.a-nktest", resource=>"users", name=>"ut1"}),
     #{
         <<"id">> := <<"tokens-", _/binary>>,
         <<"kind">> := <<"Token">>,
@@ -122,8 +123,8 @@ token_test() ->
                 #{<<"key">> := <<"ann1">>, <<"value">> := <<"value1">>}
             ],
             <<"links">> := [
-                #{<<"key">> := <<"io.netc.core.domain">>, <<"value">> := <<"domains-", _/binary>>},
-                #{<<"key">> := <<"users">>, <<"value">> := <<"users-", _/binary>>}
+                #{<<"key">> := <<"domains-", _/binary>>, <<"value">>:=<<"io.netc.core.domain">>},
+                #{<<"key">> := UT1_UID, <<"value">> := <<"user">>}
             ]
         }
     } = Token,

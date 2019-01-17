@@ -733,8 +733,7 @@ file_test() ->
             <<"uid">> := F1_UID,
             <<"name">> := <<"f1">>,
             <<"links">> := #{
-                <<"io.netc.core.domain">> := <<"domains-", _/binary>>,
-                <<"io.netc.core.file-provider">> := FS1_UID
+                FS1_UID := <<"io.netc.core.file-provider">>
             }
         } = Meta1,
         <<"status">> := #{<<"isActivated">> := true}
@@ -799,8 +798,7 @@ file_test() ->
             <<"domain">> := <<"a-nktest">>,
             <<"name">> := _,
             <<"links">> := #{
-                <<"io.netc.core.domain">> := <<"domains-", _/binary>>,
-                <<"io.netc.core.file-provider">> := <<"fileproviders-", _/binary>>
+                FS1_UID := <<"io.netc.core.file-provider">>
             }
         },
         <<"spec">> := #{

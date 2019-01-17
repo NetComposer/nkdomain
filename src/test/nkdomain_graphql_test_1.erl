@@ -21,7 +21,7 @@
 %% @doc GraphQL testing
 -module(nkdomain_graphql_test_1).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
--import(nkdomain_test_util, [api/1, yaml/1]).
+-import(nkdomain_test_util, [api/1, yaml/1, get_linked_uids/2]).
 
 -compile(export_all).
 -compile(nowarn_export_all).
@@ -127,7 +127,7 @@ core_test() ->
             ],
             <<"annotations">> := [],
             <<"links">> := [
-                #{<<"key">> := <<"io.netc.core.domain">>,<<"value">> := B_UID}
+                #{<<"key">> := B_UID, <<"value">>:=<<"io.netc.core.domain">>}
             ],
             <<"fts">> := [
                 #{
@@ -438,13 +438,14 @@ actors_test_1() ->
 
 
 actors_test_2() ->
-    Filters1 = <<",
-        {metadata: {creationTime: {prefix: \"2018\"}}}
+    {ok, #{<<"metadata">>:=#{<<"uid">>:=UT1_UID}}} = api(#{domain=>"a-nktest", resource=>"domains", name=>"b"}),
+    Filters1 = <<"
+        {metadata: {creationTime: {prefix: \"20\"}}}
         {metadata: {generation: {gte: 0}}}
-        {metadata: {isEnabled: {eq: true}}}
         {metadata: {uid: {exists: true}}}
+        {metadata: {isEnabled: {eq: true}}}
         {metadata: {labels: {key: \"is_a-nktest_domain\"}}}
-        {metadata: {links: {key: \"io.netc.core.domain\"}}}
+        {metadata: {links: {key: \"", UT1_UID/binary, "\"}}}
         {metadata: {fts: {word: \"náme\"}}}
     "/utf8>>,
     {1, [
@@ -456,7 +457,7 @@ actors_test_2() ->
     ok = nkservice_actor:enable(UT1, true),
     timer:sleep(100),
     {1, [
-        {<<"User">>, #{<<"uid">>:=UT1, <<"name">>:=<<"ut1">>, <<"links">>:=[#{<<"value">>:=B1}]}}
+        {<<"User">>, #{<<"uid">>:=UT1, <<"name">>:=<<"ut1">>, <<"links">>:=[#{<<"key">>:=B1}]}}
     ]} = all_actors_query(Filters1),
 
     Filters2 = <<"{metadata: {creationTime: {prefix: \"1980\"}}}">>,
@@ -516,18 +517,20 @@ actors_test_2() ->
     {0, []} = all_actors_query(Filters11),
 
     % Links
-    Filters20 = <<"{metadata: {links: {key: \"io.netc.core.domain\", eq: \"", B1/binary, "\"}}}">>,
+    Filters20 = <<"{metadata: {links: {key: \"", B1/binary, "\", eq: \"io.netc.core.domain\"}}}">>,
     {2, [
         {<<"Domain">>, #{<<"name">>:=<<"c">>, <<"creationTime">>:=CT20a}},
         {<<"User">>, #{<<"uid">>:=UT1, <<"creationTime">>:=CT20b}}
     ]} = all_actors_query(Filters20),
     true = CT20b > CT20a,
 
-    Filters21 = <<"{metadata: {links: {key: \"io.netc.core.domain\"}}}">>,
-    {N21, _} = all_actors_query(Filters21),
-    true = N21 > 2,
+    Filters21 = <<"{metadata: {links: {key: \"", B1/binary, "\"}}}">>,
+    {2, [
+        {<<"Domain">>, #{<<"name">>:=<<"c">>, <<"creationTime">>:=CT20a}},
+        {<<"User">>, #{<<"uid">>:=UT1, <<"creationTime">>:=CT20b}}
+    ]} = all_actors_query(Filters21),
 
-    Filters22 = <<"{metadata: {links: {key: \"domain2\"}}}">>,
+    Filters22 = <<"{metadata: {links: {key: \"", B1/binary, "\", eq: \"other\"}}}">>,
     {0, []} = all_actors_query(Filters22),
 
     % FTS
@@ -552,7 +555,6 @@ actors_test_2() ->
 
 
 users_test() ->
-%%    create_test_data(),
     Upd1 = #{<<"metadata">> => #{<<"isEnabled">>=>false}},
     {ok, _} = api(#{verb=>update, domain=>"b.a-nktest", resource=>users, name=>"ut1", body=>Upd1}),
     Upd2 = #{<<"metadata">> => #{<<"isEnabled">>=>true}},
