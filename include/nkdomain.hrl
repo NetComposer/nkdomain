@@ -39,6 +39,7 @@
 -define(GROUP_SEARCH, <<"search">>).
 
 -define(RES_CORE_DOMAINS, <<"domains">>).
+-define(RES_CORE_ACCESS_IDS, <<"accessids">>).
 -define(RES_CORE_EVENTS, <<"events">>).
 -define(RES_CORE_USERS, <<"users">>).
 -define(RES_CORE_CONTACTS, <<"contacts">>).

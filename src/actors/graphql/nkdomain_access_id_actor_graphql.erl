@@ -18,8 +18,8 @@
 %%
 %% -------------------------------------------------------------------
 
-%% @doc NkDomain Token Actor GraphQL
--module(nkdomain_id_actor_graphql).
+%% @doc NkDomain Config Actor GraphQL
+-module(nkdomain_access_id_actor_graphql).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -export([config/0, schema/1, connections/1, query/5]).
 
@@ -38,16 +38,16 @@
 
 config() ->
     #{
-        type => <<"Token">>,
+        type => <<"Id">>,
         actor_group => ?GROUP_CORE,
-        actor_resource => ?RES_CORE_TOKENS
+        actor_resource => ?RES_CORE_ACCESS_IDS
     }.
 
 
 %%  @doc Generates new schema entries
 schema(types) ->
     #{
-        'Token' => #{
+        'AccessId' => #{
             class => actor,
             fields => nkdomain_graphql_schema:actor_type_fields(#{
                 data => {list, 'Map'},
@@ -55,16 +55,17 @@ schema(types) ->
             }),
             filter_fields => nkdomain_graphql_schema:actor_filter_fields(#{}),
             sort_fields => nkdomain_graphql_schema:actor_sort_fields(#{}),
-            comment => "A Token"
+            comment => "An Id"
         }
     };
 
 schema(inputs) ->
-    #{};
+    #{
+    };
 
 schema(queries) ->
     #{
-        allTokens => nkdomain_graphql_schema:actor_query(<<"Token">>, #{})
+        allAccessIds => nkdomain_graphql_schema:actor_query(<<"AccessId">>, #{})
     };
 
 schema(_) ->
@@ -76,8 +77,8 @@ connections(_) ->
 
 
 %% @doc
-query(SrvId, <<"allTokens">>, Params, _Meta, _Ctx) ->
-    Opts = #{apiGroup => ?GROUP_CORE, kind => <<"Token">>},
+query(SrvId, <<"allAccessIds">>, Params, _Meta, _Ctx) ->
+    Opts = #{apiGroup => ?GROUP_CORE, kind => <<"AccessId">>},
     nkdomain_graphql_search:search(SrvId, Params, Opts).
 
 

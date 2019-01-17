@@ -37,6 +37,7 @@
 
 all_tests() ->
     nkdomain_test_util:create_test_data(),
+    access_id_test(),
     token_test(),
     config_test(),
     task_test(),
@@ -44,6 +45,66 @@ all_tests() ->
     file_provider_test(),
     file_test(),
     nkdomain_test_util:delete_test_data(),
+    ok.
+
+
+%% @doc
+access_id_test() ->
+    api(#{verb=>deletecollection, domain=>"c.b.a-nktest", resource=>accessids, params=>#{
+        fieldSelector => "metadata.subtype:MyType"}}),
+
+    Body1 = <<"
+        apiVersion: core/v1a1
+        kind: AccessId
+        data:
+            key1: val1
+        metadata:
+            subtype: MyType
+            domain: c.b.a-nktest
+    ">>,
+    Body2 = yaml(Body1),
+    {created, _} = api(#{verb=>create, body=>Body2}),
+
+    Q1 = <<"
+        query {
+            allAccessIds(
+                domain: \"c.b.a-nktest\"
+                sort: [
+                    {metadata: {subtype: {}}},
+                    {metadata: {updateTime: {}}}
+                ],
+                filter: {
+                    and: [
+                        {metadata: {subtype: {eq: \"MyType\"}}}
+                    ]
+                }
+            ) {
+                totalCount
+                actors {
+                    id
+                    kind
+                    data {
+                        key
+                        value
+                    }
+                    metadata {
+                        subtype
+                    }
+                }
+            }
+        }
+    ">>,
+    {ok, #{<<"allAccessIds">>:=#{<<"actors">>:=[CM], <<"totalCount">>:=1}}} = request(Q1),
+    #{
+        <<"id">> := <<"accessids-", _/binary>>,
+        <<"kind">> := <<"AccessId">>,
+        <<"data">> := [
+            #{<<"key">> := <<"key1">>, <<"value">> := <<"val1">>}
+        ],
+        <<"metadata">> := #{
+            <<"subtype">> := <<"MyType">>
+        }
+    } = CM,
     ok.
 
 

@@ -18,8 +18,8 @@
 %%
 %% -------------------------------------------------------------------
 
-%% @doc NkDomain Token OpenAPI
--module(nkdomain_id_actor_openapi).
+%% @doc NkDomain Access Id OpenAPI
+-module(nkdomain_access_id_actor_openapi).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -behavior(nkdomain_openapi).
@@ -38,27 +38,18 @@ paths(SrvId) ->
     Spec = #{
         create => #{
             description => <<"
-                Creates a Token Actor.
-                You will typically use the field `metadata.subtype` to represent the type of token.
+                Creates an Access Id Actor.
                 Netcomposer verb is 'create'.
-            ">>,
-            parameters => #{
-                ttl => <<"core.v1a1.TokenParamTTL">>
-            }
-        },
-        get => #{
-            parameters => #{
-                consume => <<"core.v1a1.TokenParamConsume">>
-            }
+            ">>
         }
     },
-    nkdomain_openapi_paths:paths(SrvId, "core", "v1a1", ?RES_CORE_TOKENS, Spec).
+    nkdomain_openapi_paths:paths(SrvId, "core", "v1a1", ?RES_CORE_ACCESS_IDS, Spec).
 
 
 
 schemas(SrvId) ->
     Spec = #{
-        description => <<"An Actor to represent a specific time living token.">>,
+        description => <<"An Actor to represent a unique Access Id.">>,
         fields => #{
             data => nkdomain_openapi_schemas:actor_schema_data()
         }
@@ -69,24 +60,4 @@ schemas(SrvId) ->
 
 parameters(_SrvId) ->
     #{
-        'core.v1a1.TokenParamConsume' => #{
-            name => consume,
-            description => <<"Consume (deletes) the token atomically on get">>,
-            in => query,
-            schema => #{
-                type => boolean,
-                default => false
-            }
-        },
-
-        'core.v1a1.TokenParamTTL' => #{
-            name => ttl,
-            description => <<"Time to live for the token (in secs)">>,
-            in => query,
-            schema => #{
-                type => integer,
-                minimum => 1
-            },
-            required => true
-        }
     }.

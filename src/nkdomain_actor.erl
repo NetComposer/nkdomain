@@ -37,7 +37,7 @@
 %%   (if core, to nkdomain_plugin:core_actor_modules/0)
 %% - Export a function config/0 in the callback module
 %%      - See nkdomain:actor_config()
-%%      - Set at least group, versios, type, verbs
+%%      - Set at least group, versions, type, verbs
 %%      - Set camel, singular or they will be generated automatically
 %% - Optionally:
 %%      - export a function parse/1 with the syntaxis for the type
@@ -48,7 +48,7 @@
 %%      - Export a function request/3 to support special API operations
 %%      - Export make_external/2 to change default external API representation of actor
 %%        (for example, to show some 'status' info, remove a field, etc.)
-%%      - Export a funciontion update/2 to check and allow updates (see file.provider sample)
+%%      - Export a function update/2 to check and allow updates (see file.provider sample)
 %% - Document initialization operations over init/2 (if used)
 %% - Write a test to check specific operations
 %%

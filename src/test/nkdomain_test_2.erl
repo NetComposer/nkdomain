@@ -42,6 +42,7 @@
 all_tests() ->
     ok = alarm_test(),
     nkdomain_test_util:create_test_data(),
+    ok = access_id_test(),
     ok = token_test(),
     ok = config_test(),
     ok = task_test(),
@@ -52,6 +53,43 @@ all_tests() ->
     nkdomain_test_util:delete_test_data(),
     ok.
 
+
+
+access_id_test() ->
+    api(#{verb=>delete, domain=>"a-nktest", resource=>accessids, name=>id1}),
+
+    B1 = yaml(<<"
+        data:
+            key2: val2
+        metadata:
+            subtype: TestType
+            domain: a-nktest
+            annotations:
+                ann1: value1
+    ">>),
+    {created, ID1} = api(#{verb=>create, resource=>accessids, name=>id1, body=>B1, params=>#{ttl=>2}}),
+    #{
+        <<"apiVersion">> := <<"core/v1a1">>,
+        <<"kind">> := <<"AccessId">>,
+        <<"data">> := #{
+            <<"key2">> := <<"val2">>
+        },
+        <<"metadata">> := #{
+            <<"subtype">> := <<"TestType">>,
+            <<"domain">> := <<"a-nktest">>,
+            <<"uid">> := _ID1_UID,
+            <<"name">> := <<"id1">>,
+            <<"annotations">> := #{
+                <<"ann1">> := <<"value1">>
+            }
+        },
+        <<"status">> := #{<<"isActivated">>:=true}
+    } = ID1,
+    {ok, ID1} = api(#{verb=>get, domain=>"a-nktest", resource=>accessids, name=>id1, params=>#{activate=>false}}),
+    timer:sleep(2100),
+    ID2 = ID1#{<<"status">>:=#{}},
+    {ok, ID2} = api(#{verb=>get, domain=>"a-nktest", resource=>accessids, name=>id1, params=>#{activate=>false}}),
+    ok.
 
 
 token_test() ->
