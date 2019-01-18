@@ -153,11 +153,11 @@ cmd(<<"clear">>, #nkreq{data=#{wait_time := WaitTime,
                                max_retries := MaxRetries}=Data}=Req) ->
     case get_domain(Data, Req) of
         {ok, Id} ->
-            case nkdomain:get_types(Id) of 
-                {ok, _, Types, _} ->
-                    case delete_types(Id, MaxRetries, WaitTime, [ T || {T, _} <- Types]) of 
-                        {ok, _} ->
-                            unload_childs(Id, MaxRetries, WaitTime);
+            case unload_childs(Id, MaxRetries, WaitTime) of 
+                ok ->
+                    case nkdomain:get_types(Id) of 
+                        {ok, _, Types, _} ->
+                            delete_types(Id, MaxRetries, WaitTime, [ T || {T, _} <- Types]);
                         Other ->
                             Other
                     end;
