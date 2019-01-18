@@ -125,23 +125,7 @@ cmd(<<"find_all">>, #nkreq{data=Data}=Req) ->
 cmd(<<"unload_childs">>, #nkreq{data=#{wait_time := WaitTime, max_retries := MaxRetries}=Data}=Req) ->
     case get_domain(Data, Req) of
         {ok, Id} ->
-            case nkdomain_db:load(Id) of
-                #obj_id_ext{path=DomainPath, type=?DOMAIN_DOMAIN} ->
-                    ActionFun = fun() ->
-                        nkdomain_domain:unload_childs(Id)
-                    end,
-                    case nkdomain_api_util:wait_for_condition(MaxRetries, WaitTime, ActionFun, nkdomain_api_util:is_not_loaded_condition_fun(DomainPath)) of
-                        {ok, true} ->
-                            lager:info("Childs unloaded for domain ~s", [DomainPath]),
-                            ok;
-                        {ok, false} ->
-                            {error, object_has_childs};
-                        {error, Error} ->
-                            {error, Error}
-                    end;
-                #obj_id_ext{} ->
-                    {error, {domain_unknown, Id}}
-            end;
+            unload_childs(Id, MaxRetries, WaitTime);
         Error ->
             Error
     end;
@@ -165,6 +149,24 @@ cmd(<<"delete_types">>, #nkreq{data=#{types := Types,
    end;
 
 
+cmd(<<"clear">>, #nkreq{data=#{wait_time := WaitTime, 
+                               max_retries := MaxRetries}=Data}=Req) ->
+    case get_domain(Data, Req) of
+        {ok, Id} ->
+            case unload_childs(Id, MaxRetries, WaitTime) of 
+                ok ->
+                    case nkdomain:get_types(Id) of 
+                        {ok, _, Types, _} ->
+                            delete_types(Id, MaxRetries, WaitTime, [ T || {T, _} <- Types]);
+                        Other ->
+                            Other
+                    end;
+                Other ->
+                    Other
+            end;
+        Other ->
+            Other
+   end;
 
 cmd(<<"create_child">>, #nkreq{data=#{ path := Path, data := ChildData }=Data}=Req) ->
    Obj = ChildData#{ path => Path },
@@ -222,4 +224,23 @@ delete_childs_of_type(Id, MaxRetries, WaitTime, Type) ->
             {error, object_has_childs};
         {error, Error} ->
             {error, Error}
+    end.
+
+unload_childs(Id, MaxRetries, WaitTime) ->
+    case nkdomain_db:load(Id) of
+        #obj_id_ext{path=DomainPath, type=?DOMAIN_DOMAIN} ->
+            ActionFun = fun() ->
+                                nkdomain_domain:unload_childs(Id)
+                        end,
+            case nkdomain_api_util:wait_for_condition(MaxRetries, WaitTime, ActionFun, nkdomain_api_util:is_not_loaded_condition_fun(DomainPath)) of
+                {ok, true} ->
+                    lager:info("Childs unloaded for domain ~s", [DomainPath]),
+                    ok;
+                {ok, false} ->
+                    {error, object_has_childs};
+                {error, Error} ->
+                    {error, Error}
+            end;
+        #obj_id_ext{} ->
+            {error, {domain_unknown, Id}}
     end.
