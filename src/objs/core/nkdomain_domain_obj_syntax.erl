@@ -94,6 +94,17 @@ syntax(<<"delete_types">>, Syntax) ->
         }
     };
 
+syntax(<<"clear">>, Syntax) ->
+    Syntax#{
+        id => binary,
+        wait_time => {integer, 100, 60000},
+        max_retries => {integer, 1, none},
+        '__defaults' => #{
+            wait_time => 1000,
+            max_retries => 5
+        }
+    };
+
 syntax(<<"delete_childs_of_type">>, Syntax) ->
     Syntax#{
         id => binary,
