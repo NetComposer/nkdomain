@@ -253,7 +253,9 @@ unparse(#{type:=Type}=Obj) ->
     end,
     BaseMap3 = case BaseMap2 of
         #{name:=Name} ->
-            BaseMap2#{name_norm=>normalize_multi(Name)};
+            %BaseMap2#{name_norm=>normalize_multi(Name)};
+            % Ignore unrecognized characters
+            BaseMap2#{name_norm=>normalize_multi(Name, #{unrecognized=>skip})};
         _ ->
             BaseMap2
     end,
