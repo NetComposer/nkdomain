@@ -1,6 +1,6 @@
 %% -------------------------------------------------------------------
 %%
-%% Copyright (c) 2018 Carlos Gonzalez Florido.  All Rights Reserved.
+%% Copyright (c) 2019 Carlos Gonzalez Florido.  All Rights Reserved.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -74,6 +74,15 @@ plugin_config(?PACKAGE_CLASS_DOMAIN, #{config:=Config}=Spec, _Service) ->
         apiUrlOpts => nkpacket_syntax:safe_syntax(),
         apiDebug => {list, {atom, [erlang, ws, http, nkpacket]}},
         debug_groups => {list, binary},
+        rpcUrl => binary,
+        rpcUrlOpts => #{
+            opts => nkpacket_syntax:safe_syntax(),
+            debug => {list, {atom, [nkpacket, protocol, msgs]}},
+            ping_interval => {integer, 5, none},
+            cmd_timeout => {integer, 5, none},
+            ext_cmd_timeout => {integer, 5, none},
+            max_body => {integer, 1024, none}
+        },
         pbkdfIters => {integer, 1, 100},
         adminPass => binary,
         '__mandatory' => [],

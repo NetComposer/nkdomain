@@ -10,7 +10,8 @@
         yamerl,
         nkservice,
         nkelastic,
-        nkfile
+        nkfile,
+        nkserver_rpc9
     ]},
     {env, [
     ]}
