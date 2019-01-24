@@ -38,8 +38,11 @@ cmd(<<"load_objs">>, #nkreq{data=#{ objs := Objs}} = Req) ->
     case nkdomain_node:make_objs(Objs) of 
         ok -> 
             {ok, #{}};
+        error ->
+            {error, unknown_error};
         {error, Error} -> 
             {error, Error}
+
     end;
 
 cmd(Cmd, Req) ->
