@@ -24,7 +24,7 @@
 
 -export([request/2]).
 -export([api_object_to_actor/3, actor_to_external/2, actor_to_external/3]).
--export([set_debug/1, status/2]).
+-export([set_debug/1, status/2, status/3]).
 -export_type([verb/0, group/0, vsn/0, api_vsn/0, kind/0, resource/0, subresource/0, params/0]).
 -export_type([request/0, response/0, api_event/0]).
 
@@ -73,7 +73,7 @@
         body => term(),
         auth => map(),
         callback => module(),           % Implementing nkdomain_api behaviour
-        url => binary(),                % External url to use in callbacks
+        external_url => binary(),       % External url to use in callbacks
         srv => nkservice:id(),          % Service that received the request
         start_time => nklib_date:epoch(usecs),
         trace => [{Time::integer(), Op::term(), Meta::map()}],
@@ -83,7 +83,8 @@
 -type response() ::
     ok | {ok, map()} | {ok, map(), request()} |
     {created, map()} |
-    {status, nkservice:msg()} | {status, nkservice:msg(), request()} |  %% See status/2
+    {status, nkservice:msg()} | {status, nkservice:msg(), status_meta()} |  %% See status/2
+    {status, nkservice:msg(), status_meta(), request()} |
     {error, nkservice:msg()} | {error, nkservice:msg(), request()}.
 
 
@@ -99,6 +100,9 @@
         body => map(),
         related => #{Type::binary() => nkservice_actor:uid()}
     }.
+
+-type status_meta() :: map().
+
 
 %% ===================================================================
 %% API Invocation
@@ -121,7 +125,12 @@ request(SrvId, ApiReq) ->
                 trace => []
             },
             ApiReq4 = add_trace(api_start, none, ApiReq3),
-            Reply = ?CALL_SRV(SrvId, nkdomain_api_request, [SrvId, Group, Vsn, ApiReq4]),
+            Reply = case nkdomain_api_lib:authorize_api_request(SrvId, ApiReq4) of
+                true ->
+                    ?CALL_SRV(SrvId, nkdomain_api_request, [SrvId, Group, Vsn, ApiReq4]);
+                false ->
+                    {error, unauthorized}
+            end,
             case reply(SrvId, Reply, ApiReq4) of
                 {raw, {CT, Bin}} ->
                     ?API_DEBUG("reply raw: ~p", [CT], ApiReq4),
@@ -147,14 +156,16 @@ reply(SrvId, Term, ApiReq) ->
         {error, Msg, ApiReq2} ->
             {error, status(SrvId, Msg), ApiReq2};
         {status, Msg} ->
-            {ok, status(SrvId, Msg), ApiReq};
-        {status, Msg, Api2} ->
-            {ok, status(SrvId, Msg), Api2};
+            {ok, status(SrvId, Msg, #{}), ApiReq};
+        {status, Msg, Meta} ->
+            {ok, status(SrvId, Msg, Meta), ApiReq};
+        {status, Msg, Meta, ApiReq2} ->
+            {ok, status(SrvId, Msg, Meta), ApiReq2};
         {raw, {CT, Body}} ->
             {raw, {CT, Body}};
         Other ->
             ?API_LLOG(error, "Invalid API response: ~p", [Other]),
-            {error, status(SrvId, internal_error), ApiReq}
+            {error, status(SrvId, internal_error, #{}), ApiReq}
     end.
 
 
@@ -298,6 +309,14 @@ status(_, #{<<"kind">> := <<"Status">>, <<"code">> := _} = Status) ->
     Status;
 
 status(SrvId, Msg) ->
+    status(SrvId, Msg, #{}).
+
+
+
+-spec status(nkservice:id(), nkservice_msg:msg(), status_meta()) ->
+    map().
+
+status(SrvId, Msg, Meta) ->
     {HttpCode, Details} = case ?CALL_SRV(SrvId, status, [Msg]) of
         unknown ->
             lager:warning("Unknown DOMAIN HTTP API Response: ~p", [Msg]),
@@ -315,12 +334,15 @@ status(SrvId, Msg) ->
     #{
         <<"apiVersion">> => <<"v1">>,
         <<"kind">> => <<"Status">>,
-        <<"metadata">> => #{},
+        <<"metadata">> => Meta,
         <<"status">> => Status,
         <<"message">> => StatusMsg,
         <<"reason">> => Reason,
         <<"details">> => Details,
         <<"code">> => HttpCode
     }.
+
+
+
 
 

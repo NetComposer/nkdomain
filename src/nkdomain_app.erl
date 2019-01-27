@@ -69,6 +69,7 @@ start(_Type, _Args) ->
         {ok, _} ->
             {ok, Pid} = nkdomain_sup:start_link(),
             ok = nkservice_util:register_package_class(?PACKAGE_CLASS_DOMAIN, nkdomain, #{unique=>true}),
+            ok = nkdomain_util:add_rpc9_plugin(nkdomain_rpc),
             {ok, Vsn} = application:get_key(nkdomain, vsn),
             lager:info("NkDOMAIN v~s has started.", [Vsn]),
             {ok, Pid};

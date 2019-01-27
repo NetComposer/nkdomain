@@ -796,8 +796,7 @@ file_test() ->
     #{<<"spec">>:=#{<<"bodyBase64">>:=Body}} = F2,
 
     % Get a direct download
-    {ok, {{_, 200, _}, Hds, "123"}} = httpc:request(nkdomain_test_util:http_url("/domains/a-nktest/files/f1/_download")),
-    "type1" = nklib_util:get_value("content-type", Hds),
+    {ok, {{_, 200, _}, Hds, "123"}} = nkdomain_test_util:httpc("/domains/a-nktest/files/f1/_download"),     "type1" = nklib_util:get_value("content-type", Hds),
 
 
     % Cannot update file
@@ -825,10 +824,13 @@ file_test() ->
     <<"_download">> = lists:last(binary:split(Url, <<"/">>, [global])),
 
     % Send direct to _upload
-    {ok, {{_, 400, _}, _Hds, Body4}} = httpc:request(post, {nkdomain_test_util:http_url("/domains/a-nktest/files/f1/_upload"), [], "ct2", <<"321">>}, [], []),
+    {ok, {{_, 400, _}, _Hds, Body4}} = nkdomain_test_util:httpc(post, "/domains/a-nktest/files/f1/_upload", "ct2", <<"321">>),
     #{ <<"message">> := <<"Missing field: 'provider'">>} = nklib_json:decode(Body4),
-    {ok, {{_, 201, _}, _, Body5}} =
-        httpc:request(post, {nkdomain_test_util:http_url("/domains/a-nktest/files/_upload?provider=/apis/core/v1a1/domains/a-nktest/fileproviders/fs1"), [], "ct2", <<"321">>}, [], []),
+    {ok, {{_, 201, _}, _, Body5}} = nkdomain_test_util:httpc(
+        post,
+        "/domains/a-nktest/files/_upload?provider=/apis/core/v1a1/domains/a-nktest/fileproviders/fs1",
+        "ct2",
+        <<"321">>),
     #{
         <<"apiVersion">> := <<"core/v1a1">>,
         <<"kind">> := <<"File">>,
@@ -852,12 +854,19 @@ file_test() ->
 
     % Direct to _upload, but through provider, first one is too large
     {ok, {{_, 400, _}, _, Body6}} =
-        httpc:request(post, {nkdomain_test_util:http_url("/domains/a-nktest/fileproviders/fs1/files/_upload"), [], "ct3", <<"4321">>}, [], []),
+        nkdomain_test_util:httpc(
+            post,
+            "/domains/a-nktest/fileproviders/fs1/files/_upload",
+            "ct3",
+            <<"4321">>),
     #{<<"reason">> := <<"file_too_large">>} = nklib_json:decode(Body6),
 
     % Direct to _upload, but through provider
-    {ok, {{_, 201, _}, _, Body7}} =
-        httpc:request(post, {nkdomain_test_util:http_url("/domains/a-nktest/fileproviders/fs1/files/_upload"), [], "ct3", <<"321">>}, [], []),
+    {ok, {{_, 201, _}, _, Body7}} = nkdomain_test_util:httpc(
+        post,
+        "/domains/a-nktest/fileproviders/fs1/files/_upload",
+        "ct3",
+        <<"321">>),
     #{<<"spec">> := #{<<"contentType">>:=<<"ct3">>, <<"hash">>:=Hash2}} = nklib_json:decode(Body7),
     ok.
 

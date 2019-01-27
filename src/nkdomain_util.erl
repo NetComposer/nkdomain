@@ -21,7 +21,8 @@
 %% @doc NkDomain utilities
 -module(nkdomain_util).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
--export([add_rpc9_plugin/1, get_rpc9_plugins/0]).
+-export([add_api_plugin/1, get_api_spec/2]).
+-export([add_rpc9_plugin/1, get_rpc9_spec/2]).
 
 
 %% ===================================================================
@@ -36,6 +37,30 @@ add_rpc9_plugin(Plugin) when is_atom(Plugin) ->
 
 
 %% @private
-get_rpc9_plugins() ->
-    nklib_config:get(?MODULE, rpc9_plugins, []).
+get_rpc9_spec(SrvId, #{url:=_}=Spec) ->
+    Plugins = nklib_config:get(?MODULE, rpc9_plugins, []),
+    Spec2 = Spec#{
+        plugins => [nkdomain_rpc|Plugins],
+        user_state => {base_srv, SrvId}
+    },
+    lager:notice("NkDOMAIN Starting RPC9 listener (~p)", [Spec2]),
+    nkserver_rpc9_server:get_sup_spec(nkdomain_rpc_srv, Spec2).
+
+
+%% @doc Adds a plugin to the API processing
+-spec add_api_plugin(module()) -> ok | {error, term()}.
+add_api_plugin(Plugin) when is_atom(Plugin) ->
+    ok = nklib_config:add(?MODULE, api_plugins, Plugin).
+
+
+%% @private
+get_api_spec(SrvId, #{url:=_}=Spec) ->
+    Plugins = nklib_config:get(?MODULE, api_plugins, []),
+    Spec2 = Spec#{
+        plugins => [nkdomain_api|Plugins],
+        user_state => {base_srv, SrvId}
+    },
+    lager:notice("NkDOMAIN Starting API listener (~p)", [Spec2]),
+    nkserver_rest:get_sup_spec(nkdomain_api_srv, Spec2).
+
 

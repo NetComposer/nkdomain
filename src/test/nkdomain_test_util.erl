@@ -120,7 +120,9 @@ test_data() ->
 
 
 api(Api) ->
-    case nkdomain_api:request(?ROOT_SRV, Api#{group=>?GROUP_CORE, vsn=>?GROUP_CORE_V1A1}) of
+    Token = nkdomain_plugin:get_domain_cache(?ROOT_SRV, adminToken),
+    Api2 = Api#{auth=>#{token=>Token}},
+    case nkdomain_api:request(?ROOT_SRV, Api2#{group=>?GROUP_CORE, vsn=>?GROUP_CORE_V1A1}) of
         {ok, Reply, _} ->
             {ok, Reply};
         {created, Reply, _} ->
@@ -174,21 +176,21 @@ new_event(Body, #{meta:=#{nkdomain_api_pid:=Pid, nkdomain_api_ref:=Ref}}=ApiReq)
 
 
 http_get(Path) ->
-    {ok, {{_, Code, _}, _Hds, Body}} = httpc:request(http_url(Path)),
+    {ok, {{_, Code, _}, _Hds, Body}} = httpc:request(get, {http_url(Path), http_auth_header()}, [], []),
     {Code, nklib_json:decode(Body)}.
 
 http_post(Path, Body) ->
     Body2 = nklib_json:encode(Body),
-    {ok, {{_, Code, _}, _Hds, Body3}} = httpc:request(post, {http_url(Path), [], "application/json", Body2}, [], []),
+    {ok, {{_, Code, _}, _Hds, Body3}} = httpc:request(post, {http_url(Path), http_auth_header(), "application/json", Body2}, [], []),
     {Code, nklib_json:decode(Body3)}.
 
 http_put(Path, Body) ->
     Body2 = nklib_json:encode(Body),
-    {ok, {{_, Code, _}, _Hds, Body3}} = httpc:request(put, {http_url(Path), [], "application/json", Body2}, [], []),
+    {ok, {{_, Code, _}, _Hds, Body3}} = httpc:request(put, {http_url(Path), http_auth_header(), "application/json", Body2}, [], []),
     {Code, nklib_json:decode(Body3)}.
 
 http_delete(Path) ->
-    {ok, {{_, Code, _}, _Hds, Body}} = httpc:request(delete, {http_url(Path), [], "", ""}, [], []),
+    {ok, {{_, Code, _}, _Hds, Body}} = httpc:request(delete, {http_url(Path), http_auth_header(), "", ""}, [], []),
     {Code, nklib_json:decode(Body)}.
 
 http_list(Path) ->
@@ -199,7 +201,7 @@ http_list(Path) ->
 http_search(Domain, Spec) ->
     Path = binary_to_list(list_to_binary([http_host(), "/search/v1a1/domains/" ++ Domain])),
     Body = nklib_json:encode(Spec),
-    case httpc:request(post, {Path, [], "application/json", Body}, [], []) of
+    case httpc:request(post, {Path, http_auth_header(), "application/json", Body}, [], []) of
         {ok, {{_, 200, _}, _Hds, List}} ->
             #{<<"metadata">> := #{<<"total">>:=Total, <<"size">>:=Size}, <<"items">> := Items} = nklib_json:decode(List),
             {Total, Size, Items};
@@ -211,7 +213,7 @@ http_search(Domain, Spec) ->
 http_search_delete(Domain, Spec) ->
     Path = binary_to_list(list_to_binary([http_host(), "/search/v1a1/domains/" ++ Domain ++ "?delete=true"])),
     Body = nklib_json:encode(Spec),
-    {ok, {{_, Code, _}, _Hds, Body2}} = httpc:request(post, {Path, [], "application/json", Body}, [], []),
+    {ok, {{_, Code, _}, _Hds, Body2}} = httpc:request(post, {Path, http_auth_header(), "application/json", Body}, [], []),
     {Code, nklib_json:decode(Body2)}.
 
 
@@ -229,7 +231,7 @@ http_watch(Path) ->
     Url = "http://127.0.0.1:9001/apis/core/v1a1" ++ Path ++ "?watch=true",
     % lager:error("NKLOG URL ~p", [Url]),
     Opts = [{connect_timeout, 1000}, {recv_timeout, 20000}, async, with_body],
-    {ok, Ref} = hackney:request(get, Url, [], [], Opts),
+    {ok, Ref} = hackney:request(get, Url, http_auth_header(), [], Opts),
     receive
         {hackney_response, Ref, {status, 200, _}} ->
             Ref
@@ -240,6 +242,20 @@ http_watch(Path) ->
 
 http_watch_stop(Ref) ->
     ok = hackney_manager:close_request(Ref).
+
+
+
+http_auth_header() ->
+    Token = nkdomain_plugin:get_domain_cache(?ROOT_SRV, adminToken),
+    [{"x-nkdomain-token", nklib_util:to_list(Token)}].
+
+
+
+httpc(Path) ->
+    httpc:request(get, {http_url(Path), http_auth_header()}, [], []).
+
+httpc(Method, Path, CT, Body) ->
+    httpc:request(Method, {http_url(Path), http_auth_header(), CT, Body}, [], []).
 
 
 %% @private
@@ -285,64 +301,10 @@ wait_http_event(Ref, Reason, Buff) ->
     end.
 
 
-%%http_watch(Path) ->
-%%    Url = "http://127.0.0.1:9001/apis/core/v1a1" ++ Path ++ "?watch=true",
-%%    % lager:error("NKLOG URL ~p", [Url]),
-%%    {ok, Ref} = httpc:request(get, {Url, []}, [{connect_timeout, 1000}],
-%%                 [{sync, false}, {stream, self}]),
-%%    receive
-%%        {http, {Ref, stream_start, Hds}} ->
-%%            #{
-%%                "content-type" := "application/json",
-%%                "transfer-encoding" := "chunked"
-%%            } = maps:from_list(Hds),
-%%            Ref
-%%    after 5000 ->
-%%        error(http_timeout)
-%%    end.
-
-
-%%http_watch_stop(Ref) ->
-%%    catch httpc:cancel_request(Ref).
-%%
-%%
-%%%% @private
-%%wait_http_event(Ref, Reason) ->
-%%    wait_http_event(Ref, Reason, <<>>).
-%%
-%%
-%%%% @private
-%%wait_http_event(Ref, Reason, Buff) ->
-%%    receive
-%%        {http, {Ref, stream, <<"\r\n">>}} ->
-%%            wait_http_event(Ref, Reason, <<>>);
-%%        {http, {Ref, stream, Body}} ->
-%%            Body2 = <<Buff/binary, Body/binary>>,
-%%            case catch nklib_json:decode(Body2) of
-%%                {'EXIT', _} ->
-%%                    % lager:error("NKLOG MORE DATA ~p", [Body2]),
-%%                    wait_http_event(Ref, Reason, Body2);
-%%                Event ->
-%%                    self() ! {http_event, Ref, Event},
-%%                    % io:format("HTTP EVENT ~s\n", [nklib_json:encode_pretty(Event)]),
-%%                    wait_http_event(Ref, Reason, <<>>)
-%%            end;
-%%        {http, {Ref, stream_end, _Hds}} ->
-%%            stream_end;
-%%        stop ->
-%%            stop;
-%%        {http_event, Ref, #{<<"type">>:=Type, <<"object">>:=Ev}} when Reason == <<>> ->
-%%            {Type, Ev};
-%%        {http_event, Ref, #{<<"type">>:=Type, <<"object">>:=#{<<"reason">>:=Reason}=Ev}} ->
-%%            {Type, Ev}
-%%        after 1000 ->
-%%            http_event_timeout
-%%    end.
-
 
 k8s_watch() ->
      Url = "http://127.0.0.1:8001/api/v1/events?watch=true",
-    {ok, Ref} = httpc:request(get, {Url, []}, [], [{sync, false}, {stream, self}]),
+    {ok, Ref} = httpc:request(get, {Url, []}, http_auth_header(), [{sync, false}, {stream, self}]),
     receive
         {http, {Ref, event_stream_start, Hds}} ->
             #{

@@ -44,7 +44,7 @@
 %% SrvId is the service receiving the request
 rest_api(SrvId, Verb, Path, Req) ->
     rest_set_debug(SrvId),
-    try do_rest_api(Verb, Path, Req) of
+    try do_rest_api(SrvId, Verb, Path, Req) of
         {ok, Map} when is_map(Map) ->
             rest_api_reply(200, Map, Req);
         {error, Error} ->
@@ -141,20 +141,20 @@ rest_api_reply(Code, Body, Req) ->
 
 %% @private
 % /
-do_rest_api(<<"GET">>, [], #{srv:=SrvId}) ->
+do_rest_api(SrvId, <<"GET">>, [], _Req) ->
     Paths1 = ?CALL_SRV(SrvId, nkdomain_get_paths, [SrvId, []]),
     Paths2 = lists:usort(lists:flatten(Paths1)),
     {ok, #{<<"paths">>=>Paths2}};
 
-do_rest_api(<<"GET">>, [<<"favicon.ico">>], _Req) ->
+do_rest_api(_SrvId, <<"GET">>, [<<"favicon.ico">>], _Req) ->
     {error, {resource_invalid, <<"favicon.ico">>}};
 
 % /apis
-do_rest_api(<<"GET">>, [<<"apis">>], #{srv:=SrvId}) ->
+do_rest_api(SrvId, <<"GET">>, [<<"apis">>], _Req) ->
     {ok, nkdomain_api_lib:api_group_list(SrvId)};
 
 % /apis/Api
-do_rest_api(<<"GET">>, [<<"apis">>, Group], #{srv:=SrvId}) ->
+do_rest_api(SrvId, <<"GET">>, [<<"apis">>, Group], _Req) ->
     Groups = nkdomain_api_lib:api_groups(SrvId),
     case [Info || #{<<"name">>:=N}=Info <-Groups, N==Group] of
         [Info] ->
@@ -164,7 +164,7 @@ do_rest_api(<<"GET">>, [<<"apis">>, Group], #{srv:=SrvId}) ->
     end;
 
 % /apis/Api/Vsn
-do_rest_api(<<"GET">>, [<<"apis">>, Group, Vsn], #{srv:=SrvId}) ->
+do_rest_api(SrvId, <<"GET">>, [<<"apis">>, Group, Vsn], _Req) ->
     ApiVsn = <<Group/binary, $/, Vsn/binary>>,
     case nkdomain_lib:nkdomain_get_api_resources(SrvId, Group, Vsn) of
         undefined ->
@@ -174,60 +174,57 @@ do_rest_api(<<"GET">>, [<<"apis">>, Group, Vsn], #{srv:=SrvId}) ->
     end;
 
 % /apis/core/v1/domains
-do_rest_api(Verb, [<<"apis">>, Group, Vsn, <<"domains">>], Req) ->
-    do_rest_api(Verb, [<<"apis">>, Group, Vsn, <<"domains">>, ?ROOT_DOMAIN, <<"domains">>], Req);
+do_rest_api(SrvId, Verb, [<<"apis">>, Group, Vsn, <<"domains">>], Req) ->
+    do_rest_api(SrvId, Verb, [<<"apis">>, Group, Vsn, <<"domains">>, ?ROOT_DOMAIN, <<"domains">>], Req);
 
 % /apis/core/v1/domains/Domain
-do_rest_api(Verb, [<<"apis">>, Group, Vsn, <<"domains">>, Name], Req) ->
-    do_rest_api(Verb, [<<"apis">>, Group, Vsn, <<"domains">>, ?ROOT_DOMAIN, <<"domains">>, Name], Req);
+do_rest_api(SrvId, Verb, [<<"apis">>, Group, Vsn, <<"domains">>, Name], Req) ->
+    do_rest_api(SrvId, Verb, [<<"apis">>, Group, Vsn, <<"domains">>, ?ROOT_DOMAIN, <<"domains">>, Name], Req);
 
 % /apis/core/v1/domains/Domain/ResType
-do_rest_api(Verb, [<<"apis">>, Group, Vsn, <<"domains">>, Domain, ResType], Req) ->
-    launch_rest_api(Verb, Group, Vsn, Domain, ResType, <<>>, [], Req);
+do_rest_api(SrvId, Verb, [<<"apis">>, Group, Vsn, <<"domains">>, Domain, ResType], Req) ->
+    launch_rest_api(SrvId, Verb, Group, Vsn, Domain, ResType, <<>>, [], Req);
 
 % /apis/core/v1/domains/Domain/ResType/_upload
-do_rest_api(Verb, [<<"apis">>, Group, Vsn, <<"domains">>, Domain, ResType, <<"_upload">>], Req) ->
-    launch_rest_upload(Verb, Group, Vsn, Domain, ResType, <<>>, [], Req);
+do_rest_api(SrvId, Verb, [<<"apis">>, Group, Vsn, <<"domains">>, Domain, ResType, <<"_upload">>], Req) ->
+    launch_rest_upload(SrvId, Verb, Group, Vsn, Domain, ResType, <<>>, [], Req);
 
 % /apis/core/v1/domains/Domain/ResType/Name/SubRes/_upload
-do_rest_api(Verb, [<<"apis">>, Group, Vsn, <<"domains">>, Domain, ResType, Name, RestType2, <<"_upload">>], Req) ->
-    launch_rest_upload(Verb, Group, Vsn, Domain, ResType, Name, [RestType2], Req);
+do_rest_api(SrvId, Verb, [<<"apis">>, Group, Vsn, <<"domains">>, Domain, ResType, Name, RestType2, <<"_upload">>], Req) ->
+    launch_rest_upload(SrvId, Verb, Group, Vsn, Domain, ResType, Name, [RestType2], Req);
 
 % /apis/core/v1/domains/Domain/ResType/Name...
-do_rest_api(Verb, [<<"apis">>, Group, Vsn, <<"domains">>, Domain, ResType, Name|SubRes], Req) ->
+do_rest_api(SrvId, Verb, [<<"apis">>, Group, Vsn, <<"domains">>, Domain, ResType, Name|SubRes], Req) ->
     case lists:reverse(SubRes) of
         [<<"_upload">>|SubRes2] ->
-            launch_rest_upload(Verb, Group, Vsn, Domain, ResType, Name, lists:reverse(SubRes2), Req);
+            launch_rest_upload(SrvId, Verb, Group, Vsn, Domain, ResType, Name, lists:reverse(SubRes2), Req);
         _ ->
-            launch_rest_api(Verb, Group, Vsn, Domain, ResType, Name, SubRes, Req)
+            launch_rest_api(SrvId, Verb, Group, Vsn, Domain, ResType, Name, SubRes, Req)
     end;
 
 % /apis/core/v1/ResType (implicit 'root' domain)
-do_rest_api(Verb, [<<"apis">>, Group, Vsn, ResType], Req) ->
-    do_rest_api(Verb, [<<"apis">>, Group, Vsn, <<"domains">>, ?ROOT_DOMAIN, ResType], Req);
+do_rest_api(SrvId, Verb, [<<"apis">>, Group, Vsn, ResType], Req) ->
+    do_rest_api(SrvId, Verb, [<<"apis">>, Group, Vsn, <<"domains">>, ?ROOT_DOMAIN, ResType], Req);
 
 % /apis/core/v1/ResType/Name (implicit 'root' domain)
-do_rest_api(Verb, [<<"apis">>, Group, Vsn, ResType, Name|SubRes], Req) ->
-    do_rest_api(Verb, [<<"apis">>, Group, Vsn, <<"domains">>, ?ROOT_DOMAIN, ResType, Name|SubRes], Req);
+do_rest_api(SrvId, Verb, [<<"apis">>, Group, Vsn, ResType, Name|SubRes], Req) ->
+    do_rest_api(SrvId, Verb, [<<"apis">>, Group, Vsn, <<"domains">>, ?ROOT_DOMAIN, ResType, Name|SubRes], Req);
 
 
 % /search/v1
-do_rest_api(Verb, [?GROUP_SEARCH, Vsn], Req) ->
-    do_rest_api(Verb, [?GROUP_SEARCH, Vsn, <<"domains">>, ?ROOT_DOMAIN], Req);
+do_rest_api(SrvId, Verb, [?GROUP_SEARCH, Vsn], Req) ->
+    do_rest_api(SrvId, Verb, [?GROUP_SEARCH, Vsn, <<"domains">>, ?ROOT_DOMAIN], Req);
 
 % /search/v1/domains/Domain
-do_rest_api(Verb, [?GROUP_SEARCH, Vsn, <<"domains">>, Domain], Req) ->
-    launch_rest_search(Verb, Vsn, Domain, Req);
+do_rest_api(SrvId, Verb, [?GROUP_SEARCH, Vsn, <<"domains">>, Domain], Req) ->
+    launch_rest_search(SrvId, Verb, Vsn, Domain, Req);
 
 
 % /graphql
-do_rest_api(<<"POST">>, [<<"graphql">>], _) ->
+do_rest_api(_SrvId, <<"POST">>, [<<"graphql">>], _) ->
     {error, {resource_invalid, <<>>}};
 
-
-
-
-do_rest_api(Verb, [<<"_test">>, <<"faxin">>|Rest], Req) ->
+do_rest_api(_SrvId, Verb, [<<"_test">>, <<"faxin">>|Rest], Req) ->
     BodyOpts = #{max_size=>?MAX_BODY_SIZE},
     {Body, _Req2} = case nkservice_rest_http:get_body(Req, BodyOpts) of
         {ok, B0, R0} ->
@@ -243,10 +240,8 @@ do_rest_api(Verb, [<<"_test">>, <<"faxin">>|Rest], Req) ->
     Rep = <<"<Response><Receive action=\"/fax/received\"/></Response>">>,
     {binary, <<"application/xml">>, Rep};
 
-
-
 % /_test
-do_rest_api(Verb, [<<"_test">>|Rest], Req) ->
+do_rest_api(_SrvId, Verb, [<<"_test">>|Rest], Req) ->
     BodyOpts = #{max_size=>?MAX_BODY_SIZE},
     {Body, _Req2} = case nkservice_rest_http:get_body(Req, BodyOpts) of
         {ok, B0, R0} ->
@@ -261,17 +256,21 @@ do_rest_api(Verb, [<<"_test">>|Rest], Req) ->
                 [Verb, Rest, Qs, Hds, Body]),
     {ok, #{}};
 
-
-
-
-do_rest_api(_Verb, Path, _Req) ->
+do_rest_api(_SrvId, _Verb, Path, _Req) ->
     {error, {resource_invalid, nklib_util:bjoin(Path, $/)}}.
 
 
 %% @doc
-launch_rest_api(Verb, Group, Vsn, Domain, ResType, Name, SubRes, #{srv:=SrvId}=Req) ->
+launch_rest_api(SrvId, Verb, Group, Vsn, Domain, ResType, Name, SubRes, Req) ->
     ?API_DEBUG("HTTP incoming: ~s /apis/~s/~s/domains/~s/~s/~s/~s", [Verb, Group, Vsn, Domain, ResType,Name,SubRes]),
     Qs = maps:from_list(nkservice_rest_http:get_qs(Req)),
+    Hds = nkservice_rest_http:get_headers(Req),
+    Token = case maps:get(<<"x-nkdomain-token">>, Hds, <<>>) of
+        <<>> ->
+            maps:get(<<"adminToken">>, Qs, <<>>);
+        HdToken ->
+            HdToken
+    end,
     BodyOpts = #{max_size=>?MAX_BODY_SIZE, parse=>true},
     {Body, Req2} = case nkservice_rest_http:get_body(Req, BodyOpts) of
         {ok, B0, R0} ->
@@ -320,9 +319,9 @@ launch_rest_api(Verb, Group, Vsn, Domain, ResType, Name, SubRes, #{srv:=SrvId}=R
         subresource => SubRes,
         params => Qs,
         body => Body,
-        auth => #{},
+        auth => #{token => Token},
         callback => ?MODULE,
-        url => nkservice_rest_http:get_external_url(Req),
+        external_url => nkservice_rest_http:get_external_url(Req),
         meta => #{
             nkdomain_http_req => Req2
         }
@@ -337,9 +336,16 @@ launch_rest_api(Verb, Group, Vsn, Domain, ResType, Name, SubRes, #{srv:=SrvId}=R
 
 
 %% @doc
-launch_rest_upload(Verb, Group, Vsn, Domain, ResType, Name, SubRes, #{srv:=SrvId}=Req) ->
+launch_rest_upload(SrvId, Verb, Group, Vsn, Domain, ResType, Name, SubRes, Req) ->
     ?API_DEBUG("HTTP incoming upload: ~s /apis/~s/~s/domains/~s/~s/~s/~s", [Verb, Group, Vsn, Domain, ResType,Name,SubRes]),
     Qs = maps:from_list(nkservice_rest_http:get_qs(Req)),
+    Hds = nkservice_rest_http:get_headers(Req),
+    Token = case maps:get(<<"x-nkdomain-token">>, Hds, <<>>) of
+        <<>> ->
+            maps:get(<<"adminToken">>, Qs, <<>>);
+        HdToken ->
+            HdToken
+    end,
     BodyOpts = #{max_size=>?MAX_UPLOAD_SIZE, parse=>false},
     {Body, Req2} = case nkservice_rest_http:get_body(Req, BodyOpts) of
         {ok, B0, R0} ->
@@ -364,9 +370,9 @@ launch_rest_upload(Verb, Group, Vsn, Domain, ResType, Name, SubRes, #{srv:=SrvId
         subresource => SubRes,
         params => Qs,
         body => Body,
-        auth => #{},
+        auth => #{token => Token},
         callback => ?MODULE,
-        url => nkservice_rest_http:get_external_url(Req),
+        external_url => nkservice_rest_http:get_external_url(Req),
         meta => #{
             nkdomain_http_content_type => CT,
             nkdomain_http_req => Req2
@@ -382,8 +388,15 @@ launch_rest_upload(Verb, Group, Vsn, Domain, ResType, Name, SubRes, #{srv:=SrvId
 
 
 %% @private
-launch_rest_search(Verb, Vsn, Domain, #{srv:=SrvId}=Req) ->
+launch_rest_search(SrvId, Verb, Vsn, Domain, Req) ->
     Qs = maps:from_list(nkservice_rest_http:get_qs(Req)),
+    Hds = nkservice_rest_http:get_headers(Req),
+    Token = case maps:get(<<"x-nkdomain-token">>, Hds, <<>>) of
+        <<>> ->
+            maps:get(<<"adminToken">>, Qs, <<>>);
+        HdToken ->
+            HdToken
+    end,
     BodyOpts = #{max_size=>?MAX_BODY_SIZE, parse=>true},
     {Body, Req2} = case nkservice_rest_http:get_body(Req, BodyOpts) of
         {ok, B0, R0} ->
@@ -407,7 +420,8 @@ launch_rest_search(Verb, Vsn, Domain, #{srv:=SrvId}=Req) ->
         vsn => Vsn,
         domain => Domain,
         body => Body,
-        url => nkservice_rest_http:get_external_url(Req),
+        auth => #{token => Token},
+        external_url => nkservice_rest_http:get_external_url(Req),
         meta => #{
             nkdomain_http_req => Req2
         }

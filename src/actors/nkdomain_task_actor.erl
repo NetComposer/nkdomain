@@ -70,7 +70,7 @@
 -type run_state() ::
     #{
         subtype := binary(),
-        status := init | start | progress | error | success | faillure,
+        status := init | start | progress | error | success | failure,
         progress := 0..100,
         errorMsg => binary(),
         tries := pos_integer()
@@ -181,7 +181,7 @@ init(_Op, #actor_st{unload_policy={expires, _}, actor=Actor}=ActorSt) ->
             {ok, ActorSt2};
         true ->
             RunState3 = RunState2#{
-                status := faillure,
+                status := failure,
                 errorMsg => <<"task_max_tries_reached">>
             },
             % Allow in-queue events to be processed
@@ -227,7 +227,7 @@ event({updated_state, UpdStatus}, #actor_st{actor=Actor}=ActorSt) ->
         success ->
             ApiEv = #{reason => <<"TaskSuccess">>, body => ApiEvBody},
             nkdomain_actor_util:api_event(ApiEv, ActorSt);
-        faillure ->
+        failure ->
             ErrMsg = maps:get(errorMsg, UpdStatus, <<>>),
             ApiEv = #{reason => <<"TaskFaillure">>, message=>ErrMsg, body => ApiEvBody},
             nkdomain_actor_util:api_event(ApiEv, ActorSt)
@@ -259,7 +259,7 @@ async_op(_Op, _ActorSt) ->
 %% @doc
 stop(actor_expired, ActorSt) ->
     RunState = #{
-        status => faillure,
+        status => failure,
         errorMsg => <<"task_max_time_reached">>
     },
     ActorSt2 = set_run_state(RunState, ActorSt),
@@ -289,7 +289,7 @@ make_external(_SrvId, _Actor, _Vsn) ->
 %% @doc
 do_update_state(Body, ActorSt) ->
     Syntax = #{
-        status => {atom, [start, progress, error, success, faillure]},
+        status => {atom, [start, progress, error, success, failure]},
         progress => {integer, 0, 100},
         errorMsg => binary,
         '__mandatory' => [status]
@@ -322,7 +322,7 @@ set_run_state(NewRunState, #actor_st{run_state=RunState}=ActorSt) ->
             nkservice_actor_srv:delayed_async_op(self(), delete, 100);
         error ->
             nkservice_actor_srv:delayed_async_op(self(), {stop, task_status_error}, 100);
-        faillure ->
+        failure ->
             nkservice_actor_srv:delayed_async_op(self(), delete, 100);
         _ ->
             ok

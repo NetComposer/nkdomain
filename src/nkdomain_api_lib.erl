@@ -22,7 +22,7 @@
 -module(nkdomain_api_lib).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([parse_api_request/1]).
+-export([parse_api_request/1, authorize_api_request/2]).
 -export([get_group_vsn/1, api_path_to_actor_path/1]).
 -export([remove_vsn/1, process_links/2]).
 -export([api_group_list/1, api_groups/1, api_resources_list/2, make_actors_list/5]).
@@ -289,6 +289,25 @@ parse_subresource(Term) when is_binary(Term) ->
 
 parse_subresource(Term) ->
     parse_subresource(to_bin(Term)).
+
+
+%% @doc
+authorize_api_request(SrvId, ApiReq) ->
+    case nkdomain_plugin:get_domain_cache(SrvId, adminToken) of
+        <<>> ->
+            true;
+        Token ->
+            case ApiReq of
+                #{auth:=#{token:=Token}} ->
+                    true;
+                _ ->
+                    false
+            end
+    end.
+
+
+
+
 
 
 

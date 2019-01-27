@@ -34,7 +34,7 @@
 
 -export([plugin_deps/0, plugin_config/3, plugin_start/4, plugin_update/5]).
 -export([get_config/1]).
--export([get_domain_cache/2, get_external_urls/1, get_groups/1, get_resources/2,
+-export([get_domain_cache/2, get_callback_url/1, get_groups/1, get_resources/2,
          get_resource_module/3, get_resource_config/3,
          find_resource/3, get_modules/1]).
 
@@ -70,43 +70,32 @@ plugin_config(?PACKAGE_CLASS_DOMAIN, #{config:=Config}=Spec, _Service) ->
     Syntax = #{
         actorModules => {list, module},
         graphqlActorModules => {list, module},
-        apiUrl => binary,
-        apiUrlOpts => nkpacket_syntax:safe_syntax(),
-        apiDebug => {list, {atom, [erlang, ws, http, nkpacket]}},
+        %apiUrl => binary,
+        %apiUrlOpts => nkpacket_syntax:safe_syntax(),
+        %apiDebug => {list, {atom, [erlang, ws, http, nkpacket]}},
         debug_groups => {list, binary},
-        rpcUrl => binary,
-        rpcUrlOpts => #{
-            opts => nkpacket_syntax:safe_syntax(),
-            debug => {list, {atom, [nkpacket, protocol, msgs]}},
-            ping_interval => {integer, 5, none},
-            cmd_timeout => {integer, 5, none},
-            ext_cmd_timeout => {integer, 5, none},
-            max_body => {integer, 1024, none}
-        },
         pbkdfIters => {integer, 1, 100},
         adminPass => binary,
+        adminToken => binary,
+        callbackUrl => binary,
         '__mandatory' => [],
         '__allow_unknown' => true
     },
     case nklib_syntax:parse(Config, Syntax) of
         {ok, Config2, _} ->
-            case get_listen(Config2) of
-                {ok, _Conns, _ConnOpts, ExtUrls} ->
-                    Modules1 = maps:get(actorModules, Config2, []),
-                    Modules2 = core_actor_modules(),
-                    Modules3 = lists:usort(Modules2++Modules1),
-                    Config3 = Config2#{actorModules => Modules3},
-                    GraphQlModules1 = maps:get(graphqlActorModules, Config3, []),
-                    GraphQlModules2 = core_graphql_modules(),
-                    GraphQlModules3 = lists:usort(GraphQlModules2 ++ GraphQlModules1),
-                    Config4 = Config3#{graphqlActorModules => GraphQlModules3},
-                    Spec2 = Spec#{config:=Config4},
-                    Spec3 = add_cache(ExtUrls, Spec2),
-                    Spec4 = add_debug(Spec3),
-                    {ok, Spec4};
-                {error, Error} ->
-                    {error, Error}
-            end;
+            Modules1 = maps:get(actorModules, Config2, []),
+            Modules2 = core_actor_modules(),
+            Modules3 = lists:usort(Modules2++Modules1),
+            Config3 = Config2#{actorModules => Modules3},
+            GraphQlModules1 = maps:get(graphqlActorModules, Config3, []),
+            GraphQlModules2 = core_graphql_modules(),
+            GraphQlModules3 = lists:usort(GraphQlModules2 ++ GraphQlModules1),
+            Config4 = Config3#{graphqlActorModules => GraphQlModules3},
+            lager:error("NKLOG CONFIG4 ~p", [Config4]),
+            Spec2 = Spec#{config:=Config4},
+            Spec3 = add_cache(Spec2),
+            Spec4 = add_debug(Spec3),
+            {ok, Spec4};
         {error, Error} ->
             {error, Error}
     end;
@@ -116,13 +105,14 @@ plugin_config(_Class, _Package, _Service) ->
 
 
 %% @doc
-plugin_start(?PACKAGE_CLASS_DOMAIN, #{id:=Id, config:=Config}, Pid, #{id:=SrvId}=Srv) ->
+plugin_start(?PACKAGE_CLASS_DOMAIN, #{id:=_Id, config:=_Config}, _Pid, #{id:=SrvId}=Srv) ->
     Domain = maps:get(domain, Srv),
     case nkdomain_init:check_database(SrvId, Domain) of
         ok ->
-            {ok, Conns, Opts, _ExtUrls} = get_listen(Config),
-            {ok, Listeners} = make_listen_transps(SrvId, Conns, Opts),
-            insert_listeners(Id, Pid, Listeners);
+%%            {ok, Conns, Opts, _ExtUrls} = get_listen(Config),
+%%            {ok, Listeners} = make_listen_transps(SrvId, Conns, Opts),
+%%            insert_listeners(Id, Pid, Listeners);
+            ok;
         {error, Error} ->
             {error, Error}
     end;
@@ -132,16 +122,16 @@ plugin_start(_Id, _Spec, _Pid, _Service) ->
 
 
 %% @doc
-%% Even if we are called only with modified config, we check if the spec is new
-plugin_update(?PACKAGE_CLASS_DOMAIN, #{id:=Id, config:=#{apiUrl:=_}=NewConfig}, OldSpec, Pid, #{id:=SrvId}) ->
-    case OldSpec of
-        #{config:=NewConfig} ->
-            ok;
-        _ ->
-            {ok, Conns, Opts, _ExtUrls} = get_listen(NewConfig),
-            {ok, Listeners} = make_listen_transps(SrvId, Conns, Opts),
-            insert_listeners(Id, Pid, Listeners)
-    end;
+%%%% Even if we are called only with modified config, we check if the spec is new
+%%plugin_update(?PACKAGE_CLASS_DOMAIN, #{id:=Id, config:=#{apiUrl:=_}=NewConfig}, OldSpec, Pid, #{id:=SrvId}) ->
+%%    case OldSpec of
+%%        #{config:=NewConfig} ->
+%%            ok;
+%%        _ ->
+%%            {ok, Conns, Opts, _ExtUrls} = get_listen(NewConfig),
+%%            {ok, Listeners} = make_listen_transps(SrvId, Conns, Opts),
+%%            insert_listeners(Id, Pid, Listeners)
+%%    end;
 
 plugin_update(_Class, _NewSpec, _OldSpec, _Pid, _Service) ->
     ok.
@@ -201,7 +191,6 @@ get_config(SrvId) ->
 
 -type cache_key() ::
     domain |
-    externalUrls |
     actor_id |
     pbkdfIters |
     groups |
@@ -219,12 +208,14 @@ get_domain_cache(SrvId, CacheKey) ->
     nkservice_util:get_cache(SrvId, nkdomain, single, CacheKey).
 
 
-%% @doc Gets all registered external Urls
--spec get_external_urls(nkservice:id()) ->
-    [binary()].
+%% @doc Gets registered callback url, if configured
+%% Requests coming from http/https would not call this function, but use the
+%% http-connection 'external_url' parameter
+-spec get_callback_url(nkservice:id()) ->
+    [nkservice_actor:group()].
 
-get_external_urls(SrvId) ->
-    get_domain_cache(SrvId, externalUrls).
+get_callback_url(SrvId) ->
+    get_domain_cache(SrvId, callbackUrl).
 
 
 %% @doc Gets all registered groups
@@ -287,10 +278,19 @@ get_modules(SrvId) ->
 %% ===================================================================
 
 %% @private
-add_cache(ExtUrls, #{config:=Config}=Spec) ->
+add_cache(#{config:=Config}=Spec) ->
+    AdminToken = maps:get(adminToken, Config, <<>>),
+    case AdminToken of
+        <<>> ->
+            lager:warning("NkDOMAIN IS CONFIGURED WITHOUT SECURITY!!");
+        _ ->
+            ok
+    end,
+    CallbackUrl = maps:get(callbackUrl, Config, <<>>),
     CacheItems1 = #{
-        externalUrls => ExtUrls,
-        pbkdfIters => maps:get(pbkdfIters, Config, 1)
+        pbkdfIters => maps:get(pbkdfIters, Config, 1),
+        adminToken => AdminToken,
+        callbackUrl => CallbackUrl
     },
     Modules = maps:get(actorModules, Config),
     CacheItems2 = make_type_cache(Modules, CacheItems1),
@@ -420,77 +420,78 @@ make_type_caches_group(Group, Config, Cache) ->
         ShortNames).
 
 
-%% @private
-get_listen(#{apiUrl:=Url}=Entry) ->
-    ApiOpts = maps:get(apiUrlOpts, Entry, #{}),
-    ResolveOpts = ApiOpts#{
-        resolve_type => listen,
-        protocol => nkservice_rest_protocol
-    },
-    case nkpacket_resolve:resolve(Url, ResolveOpts) of
-        {ok, Conns} ->
-            ExtUrls = [maps:get(external_url, Opts) || #nkconn{opts=Opts} <- Conns],
-            Debug = maps:get(apiDebug, Entry, []),
-            ApiOpts2 = ApiOpts#{
-                debug => lists:member(nkpacket, Debug)
-            },
-            {ok, Conns, ApiOpts2, ExtUrls};
-        {error, Error} ->
-            {error, Error}
-    end;
-
-get_listen(_Entry) ->
-    {ok, [], #{}, []}.
-
-
-%% @private
-make_listen_transps(SrvId, Conns, Opts) ->
-    make_listen_transps(SrvId, ?DOMAIN_PKG_ID_API, Conns, Opts, []).
-
-
-%% @private
-make_listen_transps(_SrvId, _Id, [], _Opts, Acc) ->
-    {ok, Acc};
-
-make_listen_transps(SrvId, Id, [Conn|Rest], Opts, Acc) ->
-    #nkconn{opts=ConnOpts} = Conn,
-    Opts2 = maps:merge(ConnOpts, Opts),
-    Opts3 = Opts2#{
-        id => Id,
-        class => {nkservice_rest, SrvId, Id},
-        path => maps:get(path, Opts2, <<"/">>),
-        get_headers => [<<"user-agent">>],
-        idle_timeout => 500000,
-        cowboy_opts => #{
-            inactivity_timeout => 500000,
-            request_timeout => 500000
-        }
-    },
-    Conn2 = Conn#nkconn{opts=Opts3},
-    case nkpacket:get_listener(Conn2) of
-        {ok, Id, Spec} ->
-            make_listen_transps(SrvId, Id, Rest, Opts, [Spec|Acc]);
-        {error, Error} ->
-            {error, Error}
-    end.
-
-
-%% @private
-insert_listeners(Id, Pid, SpecList) ->
-    case nkservice_packages_sup:update_child_multi(Pid, SpecList, #{}) of
-        ok ->
-            ?LLOG(debug, "started ~s", [Id]),
-            ok;
-        not_updated ->
-            ?LLOG(debug, "didn't upgrade ~s", [Id]),
-            ok;
-        upgraded ->
-            ?LLOG(info, "upgraded ~s", [Id]),
-            ok;
-        {error, Error} ->
-            ?LLOG(notice, "start/update error ~s: ~p", [Id, Error]),
-            {error, Error}
-    end.
+%%%% @private
+%%get_listen(#{apiUrl:=Url}=Entry) ->
+%%    ApiOpts = maps:get(apiUrlOpts, Entry, #{}),
+%%    ResolveOpts = ApiOpts#{
+%%        resolve_type => listen,
+%%        protocol => nkservice_rest_protocol
+%%    },
+%%    case nkpacket_resolve:resolve(Url, ResolveOpts) of
+%%        {ok, Conns} ->
+%%            ExtUrls = [maps:get(external_url, Opts) || #nkconn{opts=Opts} <- Conns],
+%%            Debug = maps:get(apiDebug, Entry, []),
+%%            ApiOpts2 = ApiOpts#{
+%%                debug => lists:member(nkpacket, Debug)
+%%            },
+%%            {ok, Conns, ApiOpts2, ExtUrls};
+%%        {error, Error} ->
+%%            {error, Error}
+%%    end;
+%%
+%%get_listen(_Entry) ->
+%%    {ok, [], #{}, []}.
+%%
+%%
+%%%% @private
+%%make_listen_transps(SrvId, Conns, Opts) ->
+%%    make_listen_transps(SrvId, ?DOMAIN_PKG_ID_API, Conns, Opts, []).
+%%
+%%
+%%%% @private
+%%make_listen_transps(_SrvId, _Id, [], _Opts, Acc) ->
+%%    {ok, Acc};
+%%
+%%make_listen_transps(SrvId, Id, [Conn|Rest], Opts, Acc) ->
+%%    #nkconn{opts=ConnOpts} = Conn,
+%%    Opts2 = maps:merge(ConnOpts, Opts),
+%%    Opts3 = Opts2#{
+%%        id => Id,
+%%        class => {nkservice_rest, SrvId, Id},
+%%        path => maps:get(path, Opts2, <<"/">>),
+%%        get_headers => [<<"user-agent">>],
+%%        idle_timeout => 500000,
+%%        cowboy_opts => #{
+%%            inactivity_timeout => 500000,
+%%            request_timeout => 500000
+%%        },
+%%        debug => true
+%%    },
+%%    Conn2 = Conn#nkconn{opts=Opts3},
+%%    case nkpacket:get_listener(Conn2) of
+%%        {ok, Id, Spec} ->
+%%            make_listen_transps(SrvId, Id, Rest, Opts, [Spec|Acc]);
+%%        {error, Error} ->
+%%            {error, Error}
+%%    end.
+%%
+%%
+%%%% @private
+%%insert_listeners(Id, Pid, SpecList) ->
+%%    case nkservice_packages_sup:update_child_multi(Pid, SpecList, #{}) of
+%%        ok ->
+%%            ?LLOG(debug, "started ~s", [Id]),
+%%            ok;
+%%        not_updated ->
+%%            ?LLOG(debug, "didn't upgrade ~s", [Id]),
+%%            ok;
+%%        upgraded ->
+%%            ?LLOG(info, "upgraded ~s", [Id]),
+%%            ok;
+%%        {error, Error} ->
+%%            ?LLOG(notice, "start/update error ~s: ~p", [Id, Error]),
+%%            {error, Error}
+%%    end.
 
 
 

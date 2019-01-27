@@ -99,7 +99,8 @@ sync_op({check_pass, Pass}, _From, ActorSt) ->
     #actor_st{srv=SrvId, actor=#actor{data=Data}} = ActorSt,
     #{<<"spec">>:=Spec} = Data,
     Stored = maps:get(<<"password">>, Spec, <<>>),
-    Result =  {ok, store_pass(SrvId, Pass) == Stored},
+    Valid = store_pass(SrvId, Pass) == Stored,
+    Result =  {ok, Valid},
     {reply, Result, ActorSt};
 
 sync_op(_Op, _From, _ActorSt) ->

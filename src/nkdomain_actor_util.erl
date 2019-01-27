@@ -240,11 +240,10 @@ add_labels(Prefix, List, Value, #actor{metadata=Meta}=Actor) ->
 
 
  %% @doc
-get_public_self(SrvId, #actor_id{domain=Domain}=ActorId, Vsn) ->
+get_public_self(#actor_id{domain=Domain}=ActorId, Vsn, ExtUrl) ->
     #actor_id{group=Group, resource=Res, name=Name} = ActorId,
-    [Url|_] = nkdomain_plugin:get_external_urls(SrvId),
     <<
-        Url/binary, "/apis/", Group/binary, "/", Vsn/binary, "/domains/", Domain/binary,
+        ExtUrl/binary, "/apis/", Group/binary, "/", Vsn/binary, "/domains/", Domain/binary,
         $/, Res/binary, $/, Name/binary
     >>.
 

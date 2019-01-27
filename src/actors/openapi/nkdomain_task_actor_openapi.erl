@@ -153,9 +153,9 @@ schemas(SrvId) ->
                     status => #{
                         description => <<"
                             If activated, current status of the task
-                            (start, progress, error, success, faillure).">>,
+                            (start, progress, error, success, failure).">>,
                         type => string,
-                        enum => [start, progress, error, success, faillure]
+                        enum => [start, progress, error, success, failure]
                     },
                     progress => #{
                         description => <<"Current % of completion">>,

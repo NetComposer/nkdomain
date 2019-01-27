@@ -83,11 +83,8 @@ file_test_s3() ->
     {created, _} = api(#{verb=>create, body=>yaml(SFP2)}),
     % Get an upload link (Url1, Id1) for a file with content-type ct1
 
-    {200, L}  =
+    {200, _L}  =
         http_get("/domains/a-nktest/fileproviders/fs3/_rpc/uploadLink?contentType=ct1"),
-    lager:error("NKLOG URL1 ~p", [L]),
-
-
 
     {200, #{<<"method">>:=<<"PUT">>, <<"url">>:=Url1, <<"id">>:=Id1, <<"ttlSecs">>:=1}} =
         http_get("/domains/a-nktest/fileproviders/fs3/_rpc/uploadLink?contentType=ct1"),
@@ -127,11 +124,12 @@ file_test_s3() ->
     {200, F4} = http_get("/domains/a-nktest/files/file3?getBodyInline=true"),
     #{<<"spec">>:=#{<<"bodyBase64">>:=Base64Body}} =F4,
     Base64Body = base64:encode(<<"123">>),
-    {ok, {{_, 200, _}, Hds1, "123"}} = httpc:request(nkdomain_test_util:http_url("/domains/a-nktest/files/file3/_download")),
+    {ok, {{_, 200, _}, Hds1, "123"}} = nkdomain_test_util:httpc("/domains/a-nktest/files/file3/_download"),
     "ct1" = nklib_util:get_value("content-type", Hds1),
 
     % Get a download link
-    {200, #{<<"url">>:=Url2, <<"ttlSecs">>:=1}} = http_get("/domains/a-nktest/files/file3/_rpc/downloadLink"),
+    {200, #{<<"url">>:=Url2, <<"ttlSecs">>:=1}} =
+        nkdomain_test_util:http_get("/domains/a-nktest/files/file3/_rpc/downloadLink"),
     {ok, {{_, 200, _}, Hds2, "123"}} = httpc:request(binary_to_list(Url2)),
     "ct1" = nklib_util:get_value("content-type", Hds2),
 

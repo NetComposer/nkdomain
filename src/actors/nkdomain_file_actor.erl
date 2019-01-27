@@ -42,7 +42,7 @@
 
 -behavior(nkservice_actor).
 
--export([op_get_body/2, op_get_download_link/2, op_get_media/2]).
+-export([op_get_body/2, op_get_download_link/3, op_get_media/2]).
 -export([config/0, parse/3, request/3, sync_op/3]).
 
 
@@ -62,8 +62,8 @@ op_get_body(SrvId, Id) ->
 
 
 %% @doc
-op_get_download_link(SrvId, Id) ->
-    nkservice_actor_srv:sync_op({SrvId, Id}, nkdomain_get_download_link).
+op_get_download_link(SrvId, Id, ExtUrl) ->
+    nkservice_actor_srv:sync_op({SrvId, Id}, {nkdomain_get_download_link, ExtUrl}).
 
 
 op_get_media(SrvId, Id) ->
@@ -230,8 +230,9 @@ request(SrvId, ActorId, #{verb:=get, subresource:=[<<"_download">>]}) ->
             {error, Error}
     end;
 
-request(SrvId, ActorId, #{verb:=get, subresource:=[<<"_rpc">>, <<"downloadLink">>]}) ->
-    case op_get_download_link(SrvId, ActorId) of
+request(SrvId, ActorId, #{verb:=get, subresource:=[<<"_rpc">>, <<"downloadLink">>]}=Req) ->
+    ExtUrl = maps:get(external_url, Req, <<>>),
+    case op_get_download_link(SrvId, ActorId, ExtUrl) of
         {ok, Url, 0} ->
             {ok, #{url=>Url}};
         {ok, Url, TTL} ->
@@ -282,7 +283,7 @@ sync_op(nkdomain_get_body, _From, ActorSt) ->
     end,
     {reply, Reply, ActorSt};
 
-sync_op(nkdomain_get_download_link, _From, ActorSt) ->
+sync_op({nkdomain_get_download_link, ExtUrl}, _From, ActorSt) ->
     #actor_st{srv=SrvId, actor=#actor{id=ActorId, data=Data}=Actor} = ActorSt,
     #{<<"spec">>:=#{<<"externalId">>:=Id}} = Data,
     LinkType = nkdomain_actor_util:link_type(?GROUP_CORE, ?LINK_CORE_FILE_PROVIDER),
@@ -291,7 +292,7 @@ sync_op(nkdomain_get_download_link, _From, ActorSt) ->
         {ok, Link, TTL} ->
             {ok, Link, TTL};
         {error, storage_class_incompatible} ->
-            case nkdomain_actor_util:get_public_self(SrvId, ActorId, ?GROUP_CORE_V1A1) of
+            case nkdomain_actor_util:get_public_self(ActorId, ?GROUP_CORE_V1A1, ExtUrl) of
                 undefined ->
                     {error, no_public_address};
                 Url ->
