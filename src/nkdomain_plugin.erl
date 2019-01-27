@@ -91,7 +91,6 @@ plugin_config(?PACKAGE_CLASS_DOMAIN, #{config:=Config}=Spec, _Service) ->
             GraphQlModules2 = core_graphql_modules(),
             GraphQlModules3 = lists:usort(GraphQlModules2 ++ GraphQlModules1),
             Config4 = Config3#{graphqlActorModules => GraphQlModules3},
-            lager:error("NKLOG CONFIG4 ~p", [Config4]),
             Spec2 = Spec#{config:=Config4},
             Spec3 = add_cache(Spec2),
             Spec4 = add_debug(Spec3),

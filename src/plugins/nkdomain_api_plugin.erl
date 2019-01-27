@@ -25,4 +25,4 @@
 
 
 plugin_deps() ->
-    [].
+    [nkrest].

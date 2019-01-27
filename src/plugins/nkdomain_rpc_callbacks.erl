@@ -41,7 +41,7 @@ rpc9_parse(_Cmd, _Data, _Req, _State) ->
 
 
 %% @doc
-rpc9_allow(<<"core/login">>, #{token:=Token}, _Req, #{baseSrv:=SrvId}) ->
+rpc9_allow(<<"core/login">>, #{token:=Token}, _Req, {base_srv, SrvId}) ->
     case nkdomain_plugin:get_domain_cache(SrvId, adminToken) of
         Token ->
             true;

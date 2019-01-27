@@ -25,4 +25,4 @@
 
 
 plugin_deps() ->
-    [].
+    [nkrpc9_server].
