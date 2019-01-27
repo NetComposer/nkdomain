@@ -11,8 +11,8 @@
         nkservice,
         nkelastic,
         nkfile,
-        nkserver_rest,
-        nkserver_rpc9
+        nkrest,
+        nkrpc9
     ]},
     {env, [
     ]}

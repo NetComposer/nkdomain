@@ -44,7 +44,7 @@ get_rpc9_spec(SrvId, #{url:=_}=Spec) ->
         user_state => {base_srv, SrvId}
     },
     lager:notice("NkDOMAIN Starting RPC9 listener (~p)", [Spec2]),
-    nkserver_rpc9_server:get_sup_spec(nkdomain_rpc_srv, Spec2).
+    nkrpc9_server:get_sup_spec(nkdomain_rpc_srv, Spec2).
 
 
 %% @doc Adds a plugin to the API processing
@@ -61,6 +61,6 @@ get_api_spec(SrvId, #{url:=_}=Spec) ->
         user_state => {base_srv, SrvId}
     },
     lager:notice("NkDOMAIN Starting API listener (~p)", [Spec2]),
-    nkserver_rest:get_sup_spec(nkdomain_api_srv, Spec2).
+    nkrest:get_sup_spec(nkdomain_api_srv, Spec2).
 
 
