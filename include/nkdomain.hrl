@@ -37,6 +37,7 @@
 -define(GROUP_CORE, <<"core">>).
 -define(GROUP_CORE_V1A1, <<"v1a1">>).
 -define(GROUP_SEARCH, <<"search">>).
+-define(GROUP_BULK, <<"bulk">>).
 
 -define(RES_CORE_DOMAINS, <<"domains">>).
 -define(RES_CORE_ACCESS_IDS, <<"accessids">>).

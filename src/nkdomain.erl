@@ -70,7 +70,7 @@
 -module(nkdomain).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -export([delete_old_events/3, get_actor/1]).
--export([load_actors/1]).
+-export([load_actors_path/2, load_actor_data/2]).
 
 -export_type([domain/0, verb/0, actor_config/0]).
 
@@ -141,16 +141,25 @@ get_actor(Path) ->
 %% ===================================================================
 
 %% @doc
-load_actors(Path) ->
+load_actors_path(Path, Token) ->
     Files = filelib:fold_files(Path, "\\.yaml$", false, fun(F, Acc) -> [F|Acc] end, []),
-    load_actor_files(Files).
+    load_actor_files(Files, Token).
+
+
+load_actor_data(Data, Token) ->
+    case catch nklib_yaml:decode(Data) of
+        {error, {yaml_decode_error, Error}} ->
+            {error, {yaml_decode_error, Error}};
+        Objs ->
+            load_actor_objs(Objs, Token)
+    end.
 
 
 %% @private
-load_actor_files([]) ->
+load_actor_files([], _Token) ->
     ok;
 
-load_actor_files([File|Rest]) ->
+load_actor_files([File|Rest], Token) ->
     {ok, Data} = file:read_file(File),
     case catch nklib_yaml:decode(Data) of
         {error, {yaml_decode_error, Error}} ->
@@ -158,9 +167,9 @@ load_actor_files([File|Rest]) ->
             {error, {yaml_decode_error, Error}};
         Objs ->
             lager:warning("Loading actors in file '~s'", [File]),
-            case load_actor_objs(Objs) of
+            case load_actor_objs(Objs, Token) of
                 ok ->
-                    load_actor_files(Rest);
+                    load_actor_files(Rest, Token);
                 {error, Error} ->
                     {error, Error}
             end
@@ -168,15 +177,16 @@ load_actor_files([File|Rest]) ->
 
 
 %% @private
-load_actor_objs([]) ->
+load_actor_objs([], _Token) ->
     ok;
 
-load_actor_objs([Obj|Rest]) ->
+load_actor_objs([Obj|Rest], Token) ->
     case Obj of
         #{<<"metadata">> := #{<<"name">>:=_}} ->
             Op = #{
                 verb => update,
-                body => Obj
+                body => Obj,
+                auth => #{token => Token}
             },
             case nkdomain_api:request(?ROOT_SRV, Op) of
                 {error, Error, _} ->
@@ -184,11 +194,11 @@ load_actor_objs([Obj|Rest]) ->
                 {created, Obj2, _} ->
                     #{<<"metadata">>:=#{<<"uid">>:=UID, <<"selfLink">>:=Self}}= Obj2,
                     lager:warning("Actor ~s (~s) create", [Self, UID]),
-                    load_actor_objs(Rest);
+                    load_actor_objs(Rest, Token);
                 {ok, Obj2, _} ->
                     #{<<"metadata">>:=#{<<"uid">>:=UID, <<"selfLink">>:=Self}}= Obj2,
                     lager:warning("Actor ~s (~s) update", [Self, UID]),
-                    load_actor_objs(Rest)
+                    load_actor_objs(Rest, Token)
             end;
         _ ->
             % We don't want automatic generation of names in bulk loading

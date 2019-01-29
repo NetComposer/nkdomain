@@ -45,6 +45,8 @@
 rest_api(SrvId, Verb, Path, Req) ->
     rest_set_debug(SrvId),
     try do_rest_api(SrvId, Verb, Path, Req) of
+        ok ->
+            rest_api_reply(200, #{}, Req);
         {ok, Map} when is_map(Map) ->
             rest_api_reply(200, Map, Req);
         {error, Error} ->
@@ -68,7 +70,9 @@ rest_api(SrvId, Verb, Path, Req) ->
                 <<"Content-Type">> => CT,
                 <<"Server">> => <<"NetComposer">>
             },
-            {http, 200, Hds, Bin, HttpReq}
+            {http, 200, Hds, Bin, HttpReq};
+        {http, Code, Hds, Body, HttpReq} ->
+            {http, Code, Hds, Body, HttpReq}
     catch
         throw:{error, Error} ->
             #{<<"code">>:=Code} = Status = nkdomain_api:status(SrvId, Error),
@@ -239,6 +243,12 @@ do_rest_api(_SrvId, Verb, [<<"_test">>, <<"faxin">>|Rest], Req) ->
         [Verb, Rest, Qs, Hds, Body]),
     Rep = <<"<Response><Receive action=\"/fax/received\"/></Response>">>,
     {binary, <<"application/xml">>, Rep};
+
+
+% /bulk
+do_rest_api(SrvId, Verb, [?GROUP_BULK], Req) ->
+    launch_rest_bulk(SrvId, Verb, Req);
+
 
 % /_test
 do_rest_api(_SrvId, Verb, [<<"_test">>|Rest], Req) ->
@@ -428,6 +438,35 @@ launch_rest_search(SrvId, Verb, Vsn, Domain, Req) ->
     },
     nkdomain_api:request(SrvId, ApiReq).
 
+
+%% @private
+launch_rest_bulk(SrvId, <<"PUT">>, Req) ->
+    Qs = maps:from_list(nkservice_rest_http:get_qs(Req)),
+    Hds = nkservice_rest_http:get_headers(Req),
+    Token = case maps:get(<<"x-nkdomain-token">>, Hds, <<>>) of
+        <<>> ->
+            maps:get(<<"adminToken">>, Qs, <<>>);
+        HdToken ->
+            HdToken
+    end,
+    BodyOpts = #{max_size=>?MAX_BODY_SIZE, parse=>true},
+    {Body, Req2} = case nkservice_rest_http:get_body(Req, BodyOpts) of
+        {ok, B0, R0} ->
+            {B0, R0};
+        {error, Error} ->
+            ?API_LLOG(warning, "error reading body: ~p" , [Error]),
+            throw({error, request_body_invalid})
+    end,
+    Status = case nkdomain:load_actor_data(Body, Token) of
+        ok ->
+            nkdomain_api:status(SrvId, ok);
+        {error, LoadError} ->
+            nkdomain_api:status(SrvId, {error, LoadError})
+    end,
+    rest_api_reply(200, Status, Req2);
+
+launch_rest_bulk(_SrvId, _Verb, _Req) ->
+    throw({error, method_not_allowed}).
 
 
 %%%% @private
