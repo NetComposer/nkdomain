@@ -257,17 +257,24 @@ pre_create(SrvId, ActorId, Config, ApiReq) ->
         {error, ObjError} ->
             throw({error, ObjError})
     end,
-    Actor1 = case nkdomain_api:api_object_to_actor(SrvId, ActorId, Obj) of
+    Actor1 = case nkdomain_api:api_object_to_actor(ActorId, Obj) of
         {ok, ApiActor} ->
             ApiActor;
         {error, ApiActorError} ->
             throw({error, ApiActorError})
     end,
-    Actor2 = nkservice_actor_util:put_create_fields(Actor1),
+    %% Add domain link and expand any other link
+    Actor2 = case nkdomain_api_lib:process_links(SrvId, Actor1) of
+        {ok, LinkedActor} ->
+            LinkedActor;
+        {error, LinkError} ->
+            throw({error, LinkError})
+    end,
+    Actor3 = nkservice_actor_util:put_create_fields(Actor2),
     % Make sure it is a valid actor, parse data
-    case nkdomain_actor:parse(SrvId, Actor2, Config, ApiReq) of
-        {ok, Actor3} ->
-            Actor3;
+    case nkdomain_actor:parse(SrvId, Actor3, Config, ApiReq) of
+        {ok, Actor4} ->
+            Actor4;
         {error, ParseError} ->
             throw({error, ParseError})
     end.
@@ -303,15 +310,28 @@ pre_update(SrvId, ActorId, Config, ApiReq) ->
         {error, ObjError} ->
             throw({error, ObjError})
     end,
-    Actor1 = case nkdomain_api:api_object_to_actor(SrvId, ActorId, Obj) of
+    Actor1 = case nkdomain_api:api_object_to_actor(ActorId, Obj) of
         {ok, ApiActor} ->
             ApiActor;
         {error, ApiActorError} ->
             throw({error, ApiActorError})
     end,
-    case nkdomain_actor:parse(SrvId, Actor1, Config, ApiReq) of
-        {ok, Actor2} ->
-            Actor2;
+    % If we modified links, we check domain is added and everything is expanded
+    % If not, do nothing so that nkservice_actor_srv keeps the old links
+    Actor2 = case maps:is_key(<<"links">>, Actor1#actor.metadata) of
+        true ->
+            case nkdomain_api_lib:process_links(SrvId, Actor1) of
+                {ok, LinkedActor} ->
+                    LinkedActor;
+                {error, LinkError} ->
+                    throw({error, LinkError})
+            end;
+        false ->
+            Actor1
+    end,
+    case nkdomain_actor:parse(SrvId, Actor2, Config, ApiReq) of
+        {ok, Actor3} ->
+            Actor3;
         {error, ParseError} ->
             throw({error, ParseError})
     end.

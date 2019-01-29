@@ -23,7 +23,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([request/2]).
--export([api_object_to_actor/3, actor_to_external/2, actor_to_external/3]).
+-export([api_object_to_actor/2, actor_to_external/2, actor_to_external/3]).
 -export([set_debug/1, status/2, status/3]).
 -export_type([verb/0, group/0, vsn/0, api_vsn/0, kind/0, resource/0, subresource/0, params/0]).
 -export_type([request/0, response/0, api_event/0]).
@@ -205,7 +205,7 @@ set_debug(SrvId) when is_atom(SrvId) ->
 %% Fixed values: apiVersion, kind, domain, name
 %% If present in fixed, should be the same
 %% Parses metadata
-api_object_to_actor(SrvId, ActorId, Obj) ->
+api_object_to_actor(ActorId, Obj) ->
     % 'data' has everything except fields kind, apiVersion and metadata,
     % kind is extracted and added after parsing
     % apiVersion is extracted to #actor_id{}
@@ -217,7 +217,7 @@ api_object_to_actor(SrvId, ActorId, Obj) ->
         {ok, Meta2, _} ->
             % Fields 'uid', 'name' and 'domain' are represented in #actor_id{}
             Meta3 = maps:without([<<"uid">>, <<"name">>, <<"domain">>, <<"resourceVersion">>], Meta2),
-            Actor1 = #actor{
+            Actor = #actor{
                 id = ActorId#actor_id{
                     uid = maps:get(<<"uid">>, Meta, undefined)
                 },
@@ -225,12 +225,7 @@ api_object_to_actor(SrvId, ActorId, Obj) ->
                 metadata = Meta3,
                 hash = maps:get(<<"resourceVersion">>, Meta, <<>>)
             },
-            case nkdomain_api_lib:process_links(SrvId, Actor1) of
-                {ok, Actor2} ->
-                    {ok, Actor2};
-                {error, Error} ->
-                    {error, Error}
-            end;
+            {ok, Actor};
         {error, Error} ->
             {error, Error}
     end.
