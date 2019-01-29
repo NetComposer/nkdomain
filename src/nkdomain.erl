@@ -151,7 +151,7 @@ load_actor_data(Data, Token) ->
         {error, {yaml_decode_error, Error}} ->
             {error, {yaml_decode_error, Error}};
         Objs ->
-            load_actor_objs(Objs, Token)
+            load_actor_objs(Objs, Token, [])
     end.
 
 
@@ -167,7 +167,7 @@ load_actor_files([File|Rest], Token) ->
             {error, {yaml_decode_error, Error}};
         Objs ->
             lager:warning("Loading actors in file '~s'", [File]),
-            case load_actor_objs(Objs, Token) of
+            case load_actor_objs(Objs, Token, []) of
                 ok ->
                     load_actor_files(Rest, Token);
                 {error, Error} ->
@@ -177,29 +177,30 @@ load_actor_files([File|Rest], Token) ->
 
 
 %% @private
-load_actor_objs([], _Token) ->
-    ok;
+load_actor_objs([], _Token, Acc) ->
+    {ok, lists:reverse(Acc)};
 
-load_actor_objs([Obj|Rest], Token) ->
+load_actor_objs([Obj|Rest], Token, Acc) ->
     case Obj of
-        #{<<"metadata">> := #{<<"name">>:=_}} ->
+        #{<<"metadata">> := #{<<"name">>:=Name}} ->
             Op = #{
                 verb => update,
                 body => Obj,
                 auth => #{token => Token}
             },
-            case nkdomain_api:request(?ROOT_SRV, Op) of
+            Res = case nkdomain_api:request(?ROOT_SRV, Op) of
                 {error, Error, _} ->
                     {error, Error};
                 {created, Obj2, _} ->
                     #{<<"metadata">>:=#{<<"uid">>:=UID, <<"selfLink">>:=Self}}= Obj2,
                     lager:warning("Actor ~s (~s) create", [Self, UID]),
-                    load_actor_objs(Rest, Token);
+                    created;
                 {ok, Obj2, _} ->
                     #{<<"metadata">>:=#{<<"uid">>:=UID, <<"selfLink">>:=Self}}= Obj2,
                     lager:warning("Actor ~s (~s) update", [Self, UID]),
-                    load_actor_objs(Rest, Token)
-            end;
+                    updated
+            end,
+            load_actor_objs(Rest, Token, [{Name, Res}|Acc]);
         _ ->
             % We don't want automatic generation of names in bulk loading
             {error, {field_missing, <<"metadata.name">>}}

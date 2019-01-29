@@ -458,8 +458,14 @@ launch_rest_bulk(SrvId, <<"PUT">>, Req) ->
             throw({error, request_body_invalid})
     end,
     Status = case nkdomain:load_actor_data(Body, Token) of
-        ok ->
-            nkdomain_api:status(SrvId, ok);
+        {ok, Res} ->
+            lists:map(
+                fun
+                    ({Name, created}) -> #{name=>Name, result=>created};
+                    ({Name, updated}) -> #{name=>Name, result=>updated};
+                    ({Name, {error, _Error}}) -> #{name=>Name, result=>error}
+                end,
+                Res);
         {error, LoadError} ->
             nkdomain_api:status(SrvId, {error, LoadError})
     end,
