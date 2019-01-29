@@ -866,6 +866,11 @@ contact_test() ->
                     data1: val1
                   meta:
                     meta1: val1
+            photo:
+                - type: type2
+                  file: file2
+                  meta:
+                    meta2: val2
         metadata:
             subtype: mytest
             name: ct1
@@ -961,6 +966,18 @@ contact_test() ->
                         }
                         startTime
                         stopTime
+                        meta {
+                            key
+                            value
+                        }
+                    }
+                    photo {
+                        type
+                        file
+                        data {
+                            key
+                            value
+                        }
                         meta {
                             key
                             value
@@ -1062,6 +1079,24 @@ contact_test() ->
                     ],
                     <<"startTime">> := <<"2017-01-01T00:00:00Z">>,
                     <<"stopTime">> := <<"2018-02-01T00:00:00Z">>,
+                    <<"meta">> := [
+                        #{
+                            <<"key">> := <<"meta1">>,
+                            <<"value">> := <<"val1">>
+                        }
+                    ]
+                }
+            ],
+            <<"photo">> := [
+                #{
+                    <<"type">> := <<"type2">>,
+                    <<"file">> := <<"file2">>,
+                    <<"data">> := [
+                        #{
+                            <<"key">> := <<"data2">>,
+                            <<"value">> := <<"val2">>
+                        }
+                    ],
                     <<"meta">> := [
                         #{
                             <<"key">> := <<"meta1">>,

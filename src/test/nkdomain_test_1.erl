@@ -978,6 +978,11 @@ contact_test() ->
                     data1: val1
                   meta:
                     meta1: val1
+            photo:
+                - type: type2
+                  file: file2
+                  meta:
+                    meta2: val2
             user: /apis/core/v1a1/domains/b.a-nktest/users/ut1
         metadata:
             name: ct1
@@ -1051,6 +1056,13 @@ contact_test() ->
                     <<"meta">> := #{<<"meta1">> := <<"val1">>},
                     <<"startTime">> := <<"2017-01-01T00:00:00Z">>,
                     <<"stopTime">> := <<"2018-02-01T00:00:00Z">>
+                }
+            ],
+            <<"photo">> := [
+                #{
+                    <<"type">> := <<"type2">>,
+                    <<"file">> := <<"file2">>,
+                    <<"meta">> := #{<<"meta2">> := <<"val2">>}
                 }
             ]
         }=Spec1,

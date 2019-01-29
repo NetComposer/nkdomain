@@ -106,6 +106,13 @@ schema(types) ->
                 meta => {list, 'Map'}
             }
         },
+        'ContactPhoto' => #{
+            fields => #{
+                type => string,
+                file => string,
+                meta => {list, 'Map'}
+            }
+        },
         'ContactSpec' => #{
             fields => #{
                 user => string,
@@ -122,7 +129,8 @@ schema(types) ->
                 im => {list, 'ContactIM'},
                 address => {list, 'ContactAddress'},
                 pubkey => {list, 'ContactPubkey'},
-                profile => {list, 'ContactProfile'}
+                profile => {list, 'ContactProfile'},
+                photo => {list, 'ContactPhoto'}
             }
         },
         'Contact' => #{
@@ -204,7 +212,7 @@ execute(SrvId, Field, {nkdomain, {spec, _Type, Spec, _Actor}}, _Meta, _Params) -
             {ok, Gender};
         _ when Field==<<"url">>;  Field==<<"phone">>;  Field==<<"email">>;
                Field==<<"im">>; Field==<<"address">>;  Field==<<"pubkey">>;
-               Field==<<"profile">> ->
+               Field==<<"profile">>; Field==<<"photo">> ->
             List = maps:get(Field, Spec, []),
             get_object(SrvId, {field, <<"Contact">>, Field, List});
         _ ->
@@ -213,7 +221,8 @@ execute(SrvId, Field, {nkdomain, {spec, _Type, Spec, _Actor}}, _Meta, _Params) -
 
 execute(_SrvId, Field, {nkdomain, {field, <<"Contact">>, Type, Data}}, _Meta, Params)
         when Type==<<"url">>; Type==<<"phone">>; Type==<<"email">>; Type==<<"im">>;
-             Type==<<"address">>; Type==<<"pubkey">>; Type==<<"profile">> ->
+             Type==<<"address">>; Type==<<"pubkey">>; Type==<<"profile">>;
+             Type==<<"photo">> ->
         if
         Field==<<"data">>; Field==<<"meta">> ->
             get_map(Field, Data);

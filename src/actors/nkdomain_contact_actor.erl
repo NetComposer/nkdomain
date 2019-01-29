@@ -142,6 +142,13 @@ parse(SrvId, Actor, _ApiReq) ->
                 <<"meta">> => map,
                 '__mandatory' => [<<"data">>]
             }},
+        <<"photo">> => {list,
+            #{
+                <<"type">> => binary,
+                <<"file">> => binary,
+                <<"meta">> => map,
+                '__mandatory' => [<<"file">>]
+            }},
         % It is always calculated
         <<"normalizedName">> => binary,
         <<"normalizedSurname">> => binary,

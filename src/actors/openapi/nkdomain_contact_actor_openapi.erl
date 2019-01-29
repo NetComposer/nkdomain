@@ -132,6 +132,11 @@ schemas(SrvId) ->
                         description => <<"Profiles associated to this person">>,
                         type => array,
                         items => nkdomain_openapi_util:ref_schema("core.v1a1.ContactProfile")
+                    },
+                    photo => #{
+                        description => <<"Photos associated to this person">>,
+                        type => array,
+                        items => nkdomain_openapi_util:ref_schema("core.v1a1.ContactPhoto")
                     }
                 }
             },
@@ -281,7 +286,6 @@ schemas(SrvId) ->
                 },
                 required => [key]
             },
-
             'core.v1a1.ContactProfile' => #{
                 description => <<"A profile entry">>,
                 type => object,
@@ -304,6 +308,26 @@ schemas(SrvId) ->
                         description => <<"Curriculm data">>,
                         type => object,
                         additionalProperties => true
+                    },
+                    meta => #{
+                        description => <<"Additional metadata">>,
+                        type => object,
+                        additionalProperties => true
+                    }
+                },
+                required => [data]
+            },
+            'core.v1a1.ContactPhoto' => #{
+                description => <<"A photo entry">>,
+                type => object,
+                properties => #{
+                    type => #{
+                        description => <<"A type for this entry">>,
+                        type => string
+                    },
+                    file => #{
+                        description => <<"URL or ID of photo">>,
+                        type => string
                     },
                     meta => #{
                         description => <<"Additional metadata">>,
