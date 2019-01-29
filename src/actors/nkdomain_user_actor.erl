@@ -61,7 +61,10 @@ config() ->
 
 %% @doc
 parse(SrvId, _Actor, _ApiReq) ->
-    Fun = fun(Pass) -> {ok, store_pass(SrvId, Pass)} end,
+    Fun = fun(Pass) ->
+        StoredPass = store_pass(SrvId, Pass),
+        {ok, StoredPass}
+    end,
     {syntax, #{<<"spec">>=>#{<<"password">> => Fun}}}.
 
 
