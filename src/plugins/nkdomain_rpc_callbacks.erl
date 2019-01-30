@@ -49,6 +49,9 @@ rpc9_allow(<<"core/login">>, #{token:=Token}, _Req, {base_srv, SrvId}) ->
             false
     end;
 
+rpc9_allow(<<"core/wait_for_events">>, _Data, _Req, _State) ->
+    true;
+
 rpc9_allow(<<"core/", _Cmd/binary>>, _Data, _Req, _State) ->
     false;
 
@@ -60,6 +63,14 @@ rpc9_allow(_Cmd, _Data, _Req, _State) ->
 %% Server requests
 rpc9_request(<<"core/login">>, _Data, _Req, State) ->
     {login, <<"middle9">>, #{}, State};
+
+rpc9_request(<<"core/wait_for_events">>, _Data, Req, _State) ->
+    Pid = spawn(
+        fun() ->
+            nkdomain_api_events:wait_for_save(),
+            nkrpc9_server:reply(Req, {reply, #{}})
+        end),
+    {ack, Pid};
 
 rpc9_request(<<"core/", _Cmd/binary>>, _Data, _Req, _State) ->
     {error, not_implemented};
