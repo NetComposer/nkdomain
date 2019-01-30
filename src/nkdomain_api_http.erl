@@ -463,7 +463,7 @@ launch_rest_bulk(SrvId, <<"PUT">>, Req) ->
                 fun
                     ({Name, created}) -> #{name=>Name, result=>created};
                     ({Name, updated}) -> #{name=>Name, result=>updated};
-                    ({Name, {error, _Error}}) -> #{name=>Name, result=>error}
+                    ({Name, {error, Error}}) -> #{name=>Name, result=>error, error=>nklib_util:to_binary(Error)}
                 end,
                 Res);
         {error, LoadError} ->
