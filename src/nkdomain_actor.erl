@@ -218,6 +218,7 @@ do_actor_activate(SrvId, Actor, IsNew, ExtraConfig) ->
                             {error, Error}
                     end;
                 _ ->
+                    ?LLOG(error, "Actor has no domain link!", [Actor#actor.id]),
                     {error, actor_is_not_activable}
             end
     end.
