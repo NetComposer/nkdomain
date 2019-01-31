@@ -24,7 +24,7 @@
 
 -export([parse_api_request/1, authorize_api_request/2]).
 -export([get_group_vsn/1, api_path_to_actor_path/1]).
--export([remove_vsn/1, process_links/2]).
+-export([remove_vsn/1, add_domain_link/2, expand_api_links/1]).
 -export([api_group_list/1, api_groups/1, api_resources_list/2, make_actors_list/5]).
 -export([parse_subresource/1]).
 
@@ -187,34 +187,41 @@ remove_vsn(Group) ->
     nklib_util:bjoin(lists:reverse(Rest), $/).
 
 
-%% @private
-process_links(SrvId, #actor{id=ActorId, metadata=Meta}=Actor) ->
+%% @private Adds domain link if not present
+add_domain_link(SrvId, #actor{id=ActorId, metadata=Meta}=Actor) ->
     #actor_id{domain=Domain}= ActorId,
     case nkdomain_register:get_domain_data(SrvId, Domain) of
         {ok, _DomSrvId, DomUID} ->
             Links1 = maps:get(<<"links">>, Meta, #{}),
             DomainLinkType = nkdomain_actor_util:link_type(?GROUP_CORE, ?LINK_CORE_DOMAIN),
-            Links2 = case nkservice_actor_util:get_linked_uids(DomainLinkType, Actor) of
+            case nkservice_actor_util:get_linked_uids(DomainLinkType, Actor) of
                 [DomUID] ->
-                    Links1;
+                    {ok, Actor};
                 _ ->
-                    Links1#{DomUID => DomainLinkType}
-            end,
-            Links3 = expand_links(SrvId, maps:to_list(Links2), #{}),
-            Meta2 = Meta#{<<"links">> => Links3},
-            {ok, Actor#actor{metadata = Meta2}};
+                    Links2 = Links1#{DomUID => DomainLinkType},
+                    Meta2 = Meta#{<<"links">> => Links2},
+                    {ok, Actor#actor{metadata = Meta2}}
+            end;
         {error, Error} ->
             {error, Error}
     end.
 
 
+%% @private Change links format from /api/... to /domain/...
+expand_api_links(#actor{metadata=Meta}=Actor) ->
+    Links1 = maps:get(<<"links">>, Meta, #{}),
+    Links2 = expand_api_links(maps:to_list(Links1), #{}),
+    Meta2 = Meta#{<<"links">> => Links2},
+    Actor#actor{metadata = Meta2}.
+
+
 %% @private
-expand_links(_SrvId, [], Acc) ->
+expand_api_links([], Acc) ->
     Acc;
 
-expand_links(SrvId, [{Id, Type}|Rest], Acc) ->
+expand_api_links([{Id, Type}|Rest], Acc) ->
     Path = nkdomain_api_lib:api_path_to_actor_path(Id),
-    expand_links(SrvId, Rest, Acc#{Path => Type}).
+    expand_api_links(Rest, Acc#{Path => Type}).
 
 
 %% @doc Parses an API and makes sure group and vsn are available,

@@ -54,11 +54,11 @@ pre_create(SrvId, Actor) ->
             {error, ConfigError} ->
                 throw({error, ConfigError})
         end,
-        Actor2 = case nkdomain_api_lib:process_links(SrvId, Actor) of
-            {ok, ActorWithLinks} ->
-                ActorWithLinks;
-            {error, LinksError} ->
-                throw({error, LinksError})
+        Actor2 = case nkdomain_api_lib:add_domain_link(SrvId, Actor) of
+            {ok, ActorWithDomainLink} ->
+                ActorWithDomainLink;
+            {error, DomainLinksError} ->
+                throw({error, DomainLinksError})
         end,
         #actor{metadata=Meta} = Actor2,
         MetaSyntax = nkservice_actor_syntax:meta_syntax(),
@@ -85,7 +85,8 @@ pre_create(SrvId, Actor) ->
             {error, ParseError} ->
                 throw({error, ParseError})
         end,
-        {ok, Actor5, Config}
+        Actor6 = nkdomain_api_lib:expand_api_links(Actor5),
+        {ok, Actor6, Config}
     catch
         throw:Throw ->
             Throw
