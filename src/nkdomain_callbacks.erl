@@ -995,6 +995,9 @@ service_api_allow(_Id, #nkreq{cmd = <<"objects/", _/binary>>, req_state={_Type, 
 service_api_allow(_Id, #nkreq{cmd = <<"event", _/binary>>}) ->
     true;
 
+service_api_allow(_Id, #nkreq{cmd = <<"service", _/binary>>}) ->
+    true;
+
 service_api_allow(_Id, _Req) ->
     continue.
 
