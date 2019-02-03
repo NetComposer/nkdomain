@@ -326,15 +326,24 @@ pre_update(SrvId, ActorId, Config, ApiReq) ->
     Actor3 = nkdomain_api_lib:expand_api_links(Actor2),
     % If we modified links, new links will replace old ones, so we check
     % domain is present and not removed in update
-    Actor4 = case maps:is_key(<<"links">>, Actor3#actor.metadata) of
-        true ->
+    #actor{metadata = Meta3} = Actor3,
+    Actor4 = case maps:find(<<"links">>, Meta3) of
+        {ok, Links} when map_size(Links) > 0 ->
+            lager:error("NKLOG HAS LINKS: ~p", [Actor3#actor.metadata]),
             case nkdomain_api_lib:add_domain_link(SrvId, Actor3) of
                 {ok, LinkedActor} ->
                     LinkedActor;
                 {error, LinkError} ->
                     throw({error, LinkError})
             end;
-        false ->
+        {ok, _} ->
+            % We have a links entry, but it is empty
+            % Let's remove it so that the update process leaves all links
+            lager:error("NKLOG HAS REMOVED LINKS"),
+            Meta4 = maps:remove(<<"links">>, Meta3),
+            Actor3#actor{metadata = Meta4};
+        #{} ->
+            lager:error("NKLOG HAS NO LINKS"),
             Actor3
     end,
     Actor4.
