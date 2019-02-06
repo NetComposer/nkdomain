@@ -109,7 +109,7 @@ filter_parameter(Fields) ->
             Allowed fields to be used as sort indices are:\n\n",
             Fields3/binary, "
 
-            **Example**: `filterSelector=metadata.name:name1,metadata.domain:domain1`
+            **Example**: `fieldSelector=metadata.name:name1,metadata.domain:domain1`
 
             A small query language is available supporting the following operations:
 
@@ -121,8 +121,9 @@ filter_parameter(Fields) ->
             * lte
             * exits
             * prefix
+            * values
 
-            **Example**: `filterSelector=metadata.generation:gte:1,metadata.subtype`
+            **Example**: `fieldSelector=metadata.generation:gte:1,metadata.subtype:values:type1|type2`
             ">>,
         in => query,
         schema => #{

@@ -323,7 +323,6 @@ parse_sort([Field|Rest], Acc) ->
 parse_extra_fields([], Spec) ->
     Spec;
 
-
 parse_extra_fields([Value|Rest], Spec) ->
     {Field, Value2} = case binary:split(Value, <<":">>) of
         [P1, P2] ->
@@ -356,9 +355,14 @@ parse_field_op(Field, Value, Spec) ->
                 lt -> lt;
                 lte -> lte;
                 prefix -> prefix;
+                values -> values;
                 _ -> throw({error, {field_op, Op}})
             end,
-            #{field=>Field, op=>Op2, value=>Value2};
+            Value3 = case Op2 of
+                values -> binary:split(Value2, <<"|">>, [global]);
+                _ -> Value2
+            end,
+            #{field=>Field, op=>Op2, value=>Value3};
         [<<>>] ->
             #{field=>Field, op=>exists, value=>true};
         [Value2] ->
