@@ -161,6 +161,8 @@ check_request_obj(SrvId, ActorId, ApiReq) ->
                 case maps:find(name, ApiReq) of
                     {ok, BodyName} ->
                         ok;
+                    error when BodyName == <<>> ->
+                        ok;
                     _ ->
                         throw({field_invalid, <<"metadata.name">>})
                 end;
