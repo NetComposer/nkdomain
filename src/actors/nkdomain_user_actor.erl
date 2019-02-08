@@ -25,6 +25,7 @@
 
 -behavior(nkservice_actor).
 
+-export([op_check_pass/2]).
 -export([config/0, parse/3, sync_op/3, request/3, make_external/3]).
 -export([store_pass/2]).
 
@@ -41,6 +42,19 @@
 %% ===================================================================
 %% Types
 %% ===================================================================
+
+
+%% ===================================================================
+%% External
+%% ===================================================================
+
+op_check_pass(UserId, Pass) ->
+    case nkservice_actor_srv:sync_op(UserId, {check_pass, Pass}) of
+        {ok, Bool} ->
+            {ok, Bool};
+        {error, Error} ->
+            {error, Error}
+    end.
 
 
 
@@ -73,7 +87,7 @@ request(SrvId, ActorId, #{verb:=get, subresource:=[<<"_rpc">>, <<"checkpass">>],
     Syntax = #{password => binary},
     case nklib_syntax:parse(Params, Syntax) of
         {ok, #{password:=Pass}, _} ->
-            case nkservice_actor_srv:sync_op({SrvId, ActorId}, {check_pass, Pass}) of
+            case op_check_pass({SrvId, ActorId}, Pass) of
                 {ok, true} ->
                     {status, password_valid};
                 {ok, false} ->
