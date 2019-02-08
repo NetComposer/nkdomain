@@ -41,7 +41,7 @@ get_rpc9_spec(SrvId, #{url:=_}=Spec) ->
     Plugins = nklib_config:get(?MODULE, rpc9_plugins, []),
     Spec2 = Spec#{
         plugins => [nkdomain_rpc|Plugins],
-        user_state => {base_srv, SrvId}
+        user_state => #{base_srv => SrvId}
     },
     lager:notice("NkDOMAIN Starting RPC9 listener (~p)", [Spec2]),
     nkrpc9_server:get_sup_spec(nkdomain_rpc_srv, Spec2).
@@ -58,7 +58,7 @@ get_api_spec(SrvId, #{url:=_}=Spec) ->
     Plugins = nklib_config:get(?MODULE, api_plugins, []),
     Spec2 = Spec#{
         plugins => [nkdomain_api|Plugins],
-        user_state => {base_srv, SrvId}
+        user_state => #{base_srv => SrvId}
     },
     lager:notice("NkDOMAIN Starting API listener (~p)", [Spec2]),
     nkrest:get_sup_spec(nkdomain_api_srv, Spec2).

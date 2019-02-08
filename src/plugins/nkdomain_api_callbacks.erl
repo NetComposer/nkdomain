@@ -28,7 +28,7 @@
 %% API callbacks
 %% ===================================================================
 
-request(Method, Path, Req, {base_srv, SrvId}) ->
+request(Method, Path, Req, #{base_srv:=SrvId}) ->
     Path2 = case lists:reverse(Path) of
         [<<>>|Rest] ->
             lists:reverse(Rest);
