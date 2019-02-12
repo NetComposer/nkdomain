@@ -69,7 +69,7 @@ msg({actor_invalid, A})                 -> {"Invalid actor '~s'", [A]};
 msg({api_group_unknown, G})             -> {"Unknown API Group '~s'", [G]};
 msg({api_incompatible, A})              -> {"Incompatible API '~s'", [A]};
 msg({api_unknown, A})                   -> {"Unknown API '~s'", [A]};
-msg({body_too_large, Size, Max})        -> {"Body too large (size is ~p, max is ~p)", [Size, Max]};
+msg({body_too_large, Max})              -> {"Body too large (max is ~p)", [Max]};
 msg({could_not_load_parent, Id})        -> {"Object could not load parent '~s'", [Id]};
 msg({could_not_load_domain, Id})        -> {"Object could not load domain '~s'", [Id]};
 msg({could_not_load_user, Id})          -> {"Object could not load user '~s'", [Id]};
