@@ -78,7 +78,8 @@
     domain_path :: nkdomain:path(),
     srv_id :: nkservice:id(),
     push_data :: nkdomain_user:push_device_data(),
-    updated_time :: binary()
+    updated_time :: binary(),
+    active = false :: boolean()
 }).
 
 -record(status, {
@@ -967,7 +968,8 @@ add_push(DomainPath, SrvId, DeviceId, PushData, State) ->
                 srv_id = SrvId,
                 device_id = DeviceId,
                 push_data = nkdomain_util:atom_keys_to_binary(PushData),
-                updated_time = Now
+                updated_time = Now,
+                active = true
             }
     end,
     PushDevices2 = lists:keystore(DeviceId, #push_device.device_id, PushDevices, PushDevice),
@@ -1015,9 +1017,16 @@ do_send_push(SrvId, Push, #obj_state{id=Id, obj=Obj}=State) ->
         SrvId:object_send_external_push(UserId, Push)
     end),
     lists:foreach(
-        fun(#push_device{device_id=DeviceId, push_data=PushDevice}) ->
-            ?LLOG(debug, "sending PUSH (~s): ~p", [SrvId, Push]),
-            SrvId:object_send_push(DeviceId, PushDevice, Push)
+        fun(#push_device{device_id=DeviceId, push_data=PushDevice, active=Active}) ->
+            case Active of
+                false ->
+                    ?LLOG(debug, "sending PUSH (~s): ~p", [SrvId, Push]),
+                    SrvId:object_send_push(DeviceId, PushDevice, Push);
+                true ->
+                    % Ignore push device
+                    ?LLOG(debug, "IGNORING PUSH (~s): ~p", [SrvId, Push]),
+                    ok
+            end
         end,
         Devices).
 
