@@ -94,6 +94,7 @@ error(member_invalid)                   -> "Invalid member";
 error(multiple_ids)                     -> "Multiple matching ids";
 error(missing_auth_header)              -> "Missing authentication header";
 error({module_failed, Module})          -> {"Module '~s' failed", [Module]};
+error(not_authorized)                   -> "Not authorized";
 error(object_access_not_allowed)        -> "Object access is not allowed";
 error(object_already_exists)            -> "Object already exists";
 error({object_already_exists, ObjIdOrP})-> {"Object already exists: ~s", [ObjIdOrP]};
