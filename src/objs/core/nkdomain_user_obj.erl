@@ -79,7 +79,8 @@
     srv_id :: nkservice:id(),
     push_data :: nkdomain_user:push_device_data(),
     updated_time :: binary(),
-    active = false :: boolean()
+    session_id = undefined :: binary(), % Only in memory
+    active = false :: boolean()         % Only in memory
 }).
 
 -record(status, {
@@ -570,7 +571,8 @@ async_op({unregister_session, SessId}, State) ->
         {ok, #user_session{domain_path=Path, type=Type}} ->
             State2 = rm_session(SessId, State),
             State3 = do_update_presence(Type, Path, State2),
-            {noreply, State3};
+            State4 = deactivate_push_by_session(SessId, State3),
+            {noreply, State4};
         not_found ->
             {noreply, State}
     end;
@@ -638,8 +640,8 @@ async_op({remove_notification, TokenId, Reason}, State) ->
     State2 = do_remove_notification(TokenId, Reason, State),
     {noreply, State2};
 
-async_op({add_push_device, DomainPath, SrvId, DeviceId, PushData}, State) ->
-    State2 = add_push(DomainPath, SrvId, DeviceId, PushData, State),
+async_op({add_push_device, DomainPath, SrvId, SessId, DeviceId, PushData}, State) ->
+    State2 = add_push(DomainPath, SrvId, SessId, DeviceId, PushData, State),
     {noreply, State2};
 
 async_op({send_push, SrvId, Push}, State) ->
@@ -953,22 +955,26 @@ do_save_push([PushDevice|Rest], Acc) ->
 
 
 %% @private
-add_push(DomainPath, SrvId, DeviceId, PushData, State) ->
+add_push(DomainPath, SrvId, SessId, DeviceId, PushData, State) ->
     #obj_state{session=Session} = State,
     #session{push_devices=PushDevices} = Session,
     Now =nkdomain_util:timestamp(),
+    PushData2 = nkdomain_util:atom_keys_to_binary(PushData),
     PushDevice = case lists:keyfind(DeviceId, #push_device.device_id, PushDevices) of
-        #push_device{push_data=PushData} = PD ->
+        #push_device{push_data=PushData2} = PD ->
             PD#push_device{
-                updated_time=Now
+                updated_time = Now,
+                session_id = SessId,
+                active = true
             };
         _ ->
             #push_device{
                 domain_path = DomainPath,
                 srv_id = SrvId,
                 device_id = DeviceId,
-                push_data = nkdomain_util:atom_keys_to_binary(PushData),
+                push_data = PushData2,
                 updated_time = Now,
+                session_id = SessId,
                 active = true
             }
     end,
@@ -1000,6 +1006,23 @@ do_remove_all_push_devices(State) ->
     #obj_state{session=Session} = State,
     Session2 = Session#session{push_devices=[]},
     State#obj_state{session=Session2, is_dirty=true}.
+
+
+%% @private
+deactivate_push_by_session(SessionId, State) ->
+    #obj_state{session=Session} = State,
+    #session{push_devices=PushDevices} = Session,
+    case lists:keyfind(SessionId, #push_device.session_id, PushDevices) of
+        #push_device{device_id=DeviceId} = PD ->
+            PushDevice = PD#push_device{
+                active = false
+            },
+            PushDevices2 = lists:keystore(DeviceId, #push_device.device_id, PushDevices, PushDevice),
+            Session2 = Session#session{push_devices = PushDevices2},
+            State#obj_state{session=Session2};
+        _Other ->
+            State
+    end.
 
 
 %% @doc

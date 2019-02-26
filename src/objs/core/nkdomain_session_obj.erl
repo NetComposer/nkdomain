@@ -109,9 +109,13 @@ object_init(#obj_state{domain_id=DomainId, id=Id, obj=Obj}=State) ->
 
 
 %% @private
-object_stop(_Reason, #obj_state{session_link={Mod, Pid}}=State) ->
+object_stop(_Reason, #obj_state{id=Id, obj=Obj, session_link={Mod, Pid}}=State) ->
     % When the session stops, we stop the WS
     Mod:stop_session(Pid, nkdomain_session_stop),
+    % And we unregister from the user
+    #obj_id_ext{obj_id=SessId} = Id,
+    #{created_by:=UserId} = Obj,
+    ok = nkdomain_user:unregister_session(UserId, SessId),
     {ok, State};
 
 object_stop(_Reason, State) ->
