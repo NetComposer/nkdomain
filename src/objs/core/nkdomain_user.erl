@@ -94,8 +94,8 @@
 -export([get_sessions/1, get_sessions/2, get_presence/2, get_presence/3, update_presence/3]).
 -export([register_session/5, unregister_session/2, launch_session_notifications/2, set_status/4, get_status/3]).
 -export([add_token_notification/4, remove_token_notification/3]).
--export([add_push_device/5, remove_push_device/2, send_push/3, remove_all_push_devices/1, remove_push_devices/2,
-         get_push_devices/2]).
+-export([add_push_device/5, add_push_device/6, remove_push_device/2, send_push/3,
+         remove_all_push_devices/1, remove_push_devices/2, get_push_devices/2]).
 -export([sync_op/2, async_op/2]).
 
 -export_type([events/0, push_msg/0, push_device_id/0, push_device_data/0]).
@@ -454,13 +454,21 @@ launch_session_notifications(Id, SessId) ->
     ok | {error, term()}.
 
 add_push_device(Id, Domain, Srv, DeviceId, PushData) ->
+    add_push_device(Id, Domain, Srv, undefined, DeviceId, PushData).
+
+
+%% @doc Registers a push device
+-spec add_push_device(nkdomain:id(), nkdomain:id(), nkservice:id()|binary(), nkservice:id(), push_device_id(), push_device_data()) ->
+    ok | {error, term()}.
+
+add_push_device(Id, Domain, Srv, SessId, DeviceId, PushData) ->
     case nkdomain_obj_util:get_existing_srv_id(Srv) of
         undefined ->
             {error, invalid_service};
         SrvId ->
             case nkdomain_db:find(Domain) of
                 #obj_id_ext{path=DomainPath} ->
-                    async_op(Id, {add_push_device, DomainPath, SrvId, DeviceId, PushData});
+                    async_op(Id, {add_push_device, DomainPath, SrvId, SessId, DeviceId, PushData});
                 {error, Error} ->
                     {error, Error}
             end

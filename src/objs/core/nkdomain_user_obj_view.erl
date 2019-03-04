@@ -129,7 +129,7 @@ view(Obj, IsNew, #admin_session{user_id=UserId, domain_id=Domain}=Session) ->
                         type => multicombo,
                         label => <<"Tags">>,
                         value => binary:list_to_bin(lists:join(<<",">>, Tags)),
-                        options => [?TAG_ADMIN, ?TAG_DEACTIVATED, ?TAG_PENDING_INVITE],
+                        options => [?TAG_ADMIN, ?TAG_DEACTIVATED, ?TAG_LOGIN_DISABLED, ?TAG_PENDING_INVITE],
                         editable => not IsAdminObj
                     }
                 ]
