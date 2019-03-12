@@ -75,9 +75,24 @@ view(Obj, IsNew, #admin_session{user_id=UserId, domain_id=DefDomain, srv_id=SrvI
         _ ->
             true
     end,
+    CareManagerStatusParent = get_domain_care_manager_status(DomainId, ClientId),
+    CareManagerStatMap = maps:get(<<"care_manager_status_", ClientId/binary>>, Configs, #{<<"list">> => []}),
+    #{<<"list">> := DefaultCareManagerStat} = CareManagerStatMap,
+    CareManagerStatus = case DefaultCareManagerStat of
+        [B2|_] when is_boolean(B2) ->
+            B2;
+        _ ->
+            false
+    end,
     HasAlerts = case ClientId of
         <<"sipstorm">> ->
             AlertsStatusParent;
+        _ ->
+            false
+    end,
+    HasCareManager = case ClientId of
+        <<"sipstorm">> ->
+            CareManagerStatusParent;
         _ ->
             false
     end,
@@ -300,7 +315,8 @@ view(Obj, IsNew, #admin_session{user_id=UserId, domain_id=DefDomain, srv_id=SrvI
                         hidden => IsNew,
                         editable => true
                     },
-                    get_alerts_status_button(FormId, <<"alerts_section">>, IsNew or (not HasAlerts), AlertsStatus, AlertsStatusParent)
+                    get_alerts_status_button(FormId, <<"alerts_section">>, IsNew or (not HasAlerts), AlertsStatus, AlertsStatusParent),
+                    get_care_manager_status_button(IsNew, CareManagerStatus, CareManagerStatusParent)
                 ]
             },
             #{
@@ -345,6 +361,13 @@ update(ObjId, Data, #admin_session{user_id=UserId}=Session) ->
             false
     end,
     AlertsStatusMap = #{<<"list">> => [AlertsStatus]},
+    CareManagerStatus = case Data of
+        #{<<"care_manager_status_button">> := true} ->
+            true;
+        _ ->
+            false
+    end,
+    CareManagerStatusMap = #{<<"list">> => [CareManagerStatus]},
     ClientId = nkdomain_admin_util:get_client_id(Session),
     case nkdomain:update(ObjId, Base) of
         {ok, _} ->
@@ -369,6 +392,13 @@ update(ObjId, Data, #admin_session{user_id=UserId}=Session) ->
                         {error, Error2} ->
                             ?LLOG(notice, "could not update domain ~s: ~p", [ObjId, Error2]),
                             {error, Error2}
+                    end,
+                    case nkdomain_domain:set_config(ObjId, <<"care_manager_status_", ClientId/binary>>, CareManagerStatusMap) of
+                        ok ->
+                            ok;
+                        {error, Error3} ->
+                            ?LLOG(notice, "could not update domain ~s: ~p", [ObjId, Error3]),
+                            {error, Error3}
                     end;
                 {error, Error} ->
                     ?LLOG(notice, "could not update domain ~s: ~p", [ObjId, Error]),
@@ -610,6 +640,44 @@ get_alerts_status_button(FormId, SectionId, Hidden, Status, Enabled) ->
     }.
 
 %% @private
+get_care_manager_status_button(Hidden, Status, Enabled) ->
+    EnabledLabel = <<"Disable Care Manager">>,
+    DisabledLabel = <<"Enable Care Manager">>,
+    EnabledIcon = <<"fa-ban">>,
+    DisabledIcon = <<"fa-circle-thin">>,
+    {Label, Icon} = case Status of
+        true ->
+            {EnabledLabel, EnabledIcon};
+        _ ->
+            {DisabledLabel, DisabledIcon}
+    end,
+    #{
+        id => <<"care_manager_status_button">>,
+        type => button,
+        button_type => <<"iconButton">>,
+        button_icon => Icon,
+        value => Status,
+        label => Label,
+        hidden => Hidden,
+        disabled => not Enabled,
+        onClick => <<"
+            function() {
+                if (!this.getValue()) {
+                    this.setValue(true);
+                    this.data.label = '", EnabledLabel/binary, "';
+                    this.data.icon = '", EnabledIcon/binary, "';
+                    this.refresh();
+                } else {
+                    this.setValue(false);
+                    this.data.label = '", DisabledLabel/binary, "';
+                    this.data.icon = '", DisabledIcon/binary, "';
+                    this.refresh();
+                }
+            }
+        ">>
+    }.
+
+%% @private
 get_domain_alerts_status(Domain, ClientId) ->
     case nkdomain_domain:get_recursive_config(Domain, <<"alerts_status_", ClientId/binary>>, []) of
         {ok, List} ->
@@ -617,5 +685,16 @@ get_domain_alerts_status(Domain, ClientId) ->
             lists:foldl(fun(L, Acc) -> L and Acc end, true, DefaultAlerts);
         {error, Error} ->
             ?LLOG(error, "get_domain_alerts_status: ~p", [Error]),
+            false
+    end.
+
+%% @private
+get_domain_care_manager_status(Domain, ClientId) ->
+    case nkdomain_domain:get_recursive_config(Domain, <<"care_manager_status_", ClientId/binary>>, []) of
+        {ok, List} ->
+            DefaultStatus = lists:flatten([Cs || {<<"list">>, Cs} <- List]),
+            lists:foldl(fun(L, Acc) -> L orelse Acc end, false, DefaultStatus);
+        {error, Error} ->
+            ?LLOG(error, "get_domain_care_manager_status: ~p", [Error]),
             false
     end.
