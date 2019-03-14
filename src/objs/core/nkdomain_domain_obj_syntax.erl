@@ -129,6 +129,13 @@ syntax(<<"create_link">>, Syntax) ->
 	to_parent => binary
     };
 
+syntax(<<"set_config">>, Syntax) ->
+    Syntax#{
+        domain_id => binary,
+        key => binary,
+	    value => map
+    };
+
 syntax(Cmd, Syntax) ->
     nkdomain_obj_syntax:syntax(Cmd, ?DOMAIN_DOMAIN, Syntax).
 

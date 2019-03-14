@@ -192,6 +192,23 @@ cmd(<<"create_link">>, #nkreq{data=#{ from := ChildPath, to_parent := ParentPath
 cmd(<<"clean">>, _Req) ->
     nkdomain:clean();
 
+cmd(<<"set_config">>, #nkreq{user_id=UserId, data=#{ domain_id:=DomainId, key := Key, value := Value }}=Req) ->
+    #nkreq{user_state=#{nkdomain_obj_ids:=#{<<"domain">>:=UserDomain}}} = Req,
+    case nkdomain_admin_util:is_authorized(UserId) of
+        true ->
+            case nkdomain_api_util:is_subdomain(UserDomain, DomainId) of
+                {ok, true} ->
+                    nkdomain_domain:set_config(DomainId, Key, Value),
+                    {ok, #{}, Req};
+                {ok, false} ->
+                    {error, unauthorized, Req};
+                {error, Error} ->
+                    {error, Error, Req}
+            end;
+        false ->
+            {error, unauthorized, Req}
+    end;    
+
 cmd(Cmd, Req) ->
     nkdomain_obj_cmd:cmd(Cmd, ?DOMAIN_DOMAIN, Req).
 
