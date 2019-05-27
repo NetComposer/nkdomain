@@ -190,7 +190,7 @@ start(Obj, Op, StartOpts) ->
 
 
 %% @doc
--spec sync_op(nkdomain:id()|pid(), sync_op()) ->
+-spec sync_op(nkdomain:id()|pid()|{nkdomain:id()|pid(),nkdomain:type()}, sync_op()) ->
     term() | {error, timeout|process_not_found|object_not_found|term()}.
 
 sync_op(IdOrPid, Op) ->
@@ -198,8 +198,28 @@ sync_op(IdOrPid, Op) ->
 
 
 %% @doc
--spec sync_op(nkomain:id()|pid(), sync_op(), timeout()) ->
+-spec sync_op(nkomain:id()|pid()|{nkdomain:id()|pid(),nkdomain:type()}, sync_op(), timeout()) ->
     term() | {error, timeout|process_not_found|object_not_found|term()}.
+
+sync_op({Pid, Type}, Op, Timeout) when is_pid(Pid) ->
+    case nkdomain:get_obj(Pid) of
+        {ok, #{type := Type}} ->
+            sync_op(Pid, Op, Timeout);
+        {ok, _} ->
+            {error, object_not_found};
+        {error, Error} ->
+            {error, Error}
+    end;
+
+sync_op({Id, Type}, Op, Timeout) ->
+    case nkdomain_db:find(Id) of
+        #obj_id_ext{type = Type} ->
+            sync_op(Id, Op, Timeout, 5);
+        #obj_id_ext{} ->
+            {error, object_not_found};
+        {error, Error} ->
+            {error, Error}
+    end;
 
 sync_op(Pid, Op, Timeout) when is_pid(Pid) ->
     nkservice_util:call(Pid, {nkdomain_sync_op, Op}, Timeout);
@@ -229,8 +249,28 @@ sync_op(Id, Op, Timeout, Tries) ->
 
 
 %% @doc
--spec async_op(nkdomain:id()|pid(), async_op()) ->
+-spec async_op(nkdomain:id()|pid()|{nkdomain:id()|pid(),nkdomain:type()}, async_op()) ->
     ok | {error, process_not_found|object_not_found|term()}.
+
+async_op({Pid, Type}, Op) when is_pid(Pid) ->
+    case nkdomain:get_obj(Pid) of
+        {ok, #{type := Type}} ->
+            async_op(Pid, Op);
+        {ok, _} ->
+            {error, object_not_found};
+        {error, Error} ->
+            {error, Error}
+    end;
+
+async_op({Id, Type}, Op) ->
+    case nkdomain_db:find(Id) of
+        #obj_id_ext{type = Type} ->
+            async_op(Id, Op);
+        #obj_id_ext{} ->
+            {error, object_not_found};
+        {error, Error} ->
+            {error, Error}
+    end;
 
 async_op(Pid, Op) when is_pid(Pid) ->
     gen_server:cast(Pid, {nkdomain_async_op, Op});
