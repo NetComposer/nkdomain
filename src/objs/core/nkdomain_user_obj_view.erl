@@ -52,7 +52,7 @@ view(Obj, IsNew, #admin_session{user_id=UserId, domain_id=Domain}=Session) ->
         IconId ->
             nkdomain_admin_util:get_file_url(IconId, Session)
     end,
-    IconImage = <<"<img class='photo' style='padding: 0px 10% 0 10%; width:80%; height:auto;' src='", IconUrl/binary, "'/>">>,
+    IconImage = <<"<img class='photo' style='padding: 0px 10% 0 10%; width:80%; height:auto;' src='", IconUrl/binary, "' onerror=\"this.onerror=null; this.src='img/blank.jpg'\" alt=''/>">>,
     FormId = nkdomain_admin_util:make_obj_view_id(?DOMAIN_USER, ObjId),
     IsAdminObj = ObjId =:= <<"admin">>,
     IsAuthorized = (not IsAdminObj) orelse UserId =:= <<"admin">>,

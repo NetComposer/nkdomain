@@ -57,7 +57,7 @@ view(Obj, IsNew, #admin_session{user_id=UserId, domain_id=DefDomain, srv_id=SrvI
         IconId ->
             nkdomain_admin_util:get_file_url(IconId, Session)
     end,
-    IconImage = <<"<img class='photo' style='padding: 0px 10% 0 10%; width:80%; height:auto;' src='", IconUrl/binary, "'/>">>,
+    IconImage = <<"<img class='photo' style='padding: 0px 10% 0 10%; width:80%; height:auto;' src='", IconUrl/binary, "' onerror=\"this.onerror=null; this.src='img/blank.jpg'\" alt=''/>">>,
     ClientId = nkdomain_admin_util:get_client_id(Session),
     Domain = maps:get(?DOMAIN_DOMAIN, Obj, #{}),
     Configs = maps:get(configs, Domain, #{}),
