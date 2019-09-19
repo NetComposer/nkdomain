@@ -71,7 +71,7 @@ create(SrvId, Domain, UserId, Req) ->
     case nkdomain_obj_make:create(MailObj) of
         {ok, #obj_id_ext{obj_id=MailId}, []} ->
             {ok, MailId};
-        {error, Error} -> 
+        {error, Error} ->
             {error, Error}
     end.
 
@@ -110,7 +110,9 @@ object_info() ->
 object_admin_info() ->
     #{
         class => resource,
-        weight => 8500
+        weight => 8500,
+        type_view_mod => nkdomain_mail_obj_type_view
+        %%obj_view_mod => nkdomain_mail_obj_view
     }.
 
 
