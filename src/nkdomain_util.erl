@@ -26,6 +26,7 @@
 -export([append/2, get_srv_id/1, add_destroyed/3]).
 -export([timestamp/0, remove_nulls/1]).
 -export([parse_obj_id/1, parse_obj_ids/1]).
+-export([filter_obj_id/1, filter_obj_ids/1]).
 -export([atom_keys_to_binary/1]).
 -export_type([error/0]).
 
@@ -354,6 +355,47 @@ do_parse_obj_ids([Key|Rest], Acc) ->
             do_parse_obj_ids(Rest, [ObjId|Acc]);
         error ->
             error
+    end.
+
+
+
+%% @doc
+filter_obj_id(Val) when is_binary(Val) ->
+    case nkdomain_db:find(Val) of
+        #obj_id_ext{obj_id=ObjId} ->
+            {ok, ObjId};
+        _ ->
+            {ok, <<>>}
+    end;
+
+filter_obj_id(Val) ->
+    Bin = nklib_util:to_binary(Val),
+    true = is_binary(Bin),
+    filter_obj_id(Bin).
+
+
+%% @doc
+filter_obj_ids([First|_]=Str) when is_integer(First) ->
+    filter_obj_ids([to_bin(Str)]);
+
+filter_obj_ids(List) when is_list(List) ->
+    do_filter_obj_ids(List, []);
+
+filter_obj_ids(Term) ->
+    filter_obj_ids([to_bin(Term)]).
+
+
+
+%% @private
+do_filter_obj_ids([], List) ->
+    {ok, lists:reverse(List)};
+
+do_filter_obj_ids([Key|Rest], Acc) ->
+    case filter_obj_id(Key) of
+        {ok, <<>>} ->
+            do_filter_obj_ids(Rest, Acc);
+        {ok, ObjId} ->
+            do_filter_obj_ids(Rest, [ObjId|Acc])
     end.
 
 
