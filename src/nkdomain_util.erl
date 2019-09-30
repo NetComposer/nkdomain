@@ -360,6 +360,9 @@ do_parse_obj_ids([Key|Rest], Acc) ->
 
 
 %% @doc
+filter_obj_id(<<>>) ->
+    {ok, <<>>};
+
 filter_obj_id(Val) when is_binary(Val) ->
     case nkdomain_db:find(Val) of
         #obj_id_ext{obj_id=ObjId} ->
