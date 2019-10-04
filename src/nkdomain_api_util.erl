@@ -131,8 +131,8 @@ token_login(User, #nkreq{srv_id=SrvId, data=Data, session_meta=SessMeta, user_st
 check_token(Token, #nkreq{session_meta=NewSessMeta, user_state=NewState}=Req) ->
     case check_raw_token(Token) of
         {ok, UserId, DomainId, Data, SessId} ->
-            TokenSessMeta = maps:get(session_meta, Data, #{}),
-            TokenState = maps:get(user_state, Data, #{}),
+            TokenSessMeta = maps:get(session_meta, Data, maps:get(<<"session_meta">>, Data, #{})),
+            TokenState = maps:get(user_state, Data, maps:get(<<"user_state">>, Data, #{})),
             Req2 = Req#nkreq{
                 session_meta = maps:merge(TokenSessMeta, NewSessMeta),
                 user_state = maps:merge(TokenState, NewState)
@@ -306,7 +306,7 @@ is_subdomain(BaseDomain, Domain, Opts) ->
                         _ ->
                             {ok, false}
                     end
-            end;            
+            end;
         _ ->
             {error, object_not_found}
     end.
@@ -351,7 +351,7 @@ wait_for_condition(N, MaxRetries, WaitTime, ActionFun, ConditionFun) when N =< M
 wait_for_condition(_, _MaxRetries, _, _, _) ->
     ?LLOG(error, "Maximum number of tries reached (~p)", [_MaxRetries]),
     {ok, false}.
-   
+
 
 %% @doc
 is_not_loaded_condition_fun(DomainPath) ->
