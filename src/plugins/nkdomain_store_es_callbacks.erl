@@ -24,8 +24,8 @@
 
 -export([error/1]).
 -export([object_db_init/1, object_db_read/1, object_db_save/1, object_db_delete/1,
-         object_db_find_obj/2, object_db_search_objs/4, object_db_agg_objs/4,
-         object_db_iterate_objs/6, object_db_clean/0]).
+         object_db_find_obj/2, object_db_search_objs/4, object_db_delete_objs/4,
+         object_db_agg_objs/4, object_db_iterate_objs/6, object_db_clean/0]).
 
 
 -include("nkdomain.hrl").
@@ -105,6 +105,25 @@ object_db_delete(ObjId) ->
     case nkdomain_store_es_util:get_opts() of
         {ok, EsOpts} ->
             nkelastic:delete(ObjId, EsOpts);
+        _ ->
+            continue
+    end.
+
+
+%% @doc
+-spec object_db_delete_objs(nkservice:id(), nkdomain:type()|core, nkdomain_db:search_type(), nkdomain_db:opts()) ->
+    {ok, integer(), Meta::map()} | {error, term()}.
+
+object_db_delete_objs(SrvId, Type, SearchType, DbOpts) ->
+    case nkdomain_store_es_util:get_opts() of
+        {ok, EsOpts} ->
+            case ?CALL_SRV(SrvId, object_db_get_query, [nkelastic, Type, SearchType, DbOpts]) of
+                {ok, {nkelastic, Filters, Opts}} ->
+                    ExtraFilters = maps:get(extra_filters, Opts, []),
+                    nkdomain_store_es_search:delete_objs(Filters++ExtraFilters, Opts, EsOpts);
+                {error, Error} ->
+                    {error, Error}
+            end;
         _ ->
             continue
     end.

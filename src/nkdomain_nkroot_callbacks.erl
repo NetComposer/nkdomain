@@ -22,7 +22,8 @@
 -module(nkdomain_nkroot_callbacks).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -export([object_db_init/1, object_db_read/1, object_db_save/1, object_db_delete/1]).
--export([object_db_find_obj/2, object_db_search_objs/4, object_db_agg_objs/4,
+-export([object_db_find_obj/2, object_db_search_objs/4,
+         object_db_delete_objs/4, object_db_agg_objs/4,
          object_db_iterate_objs/6, object_db_clean/0,
          object_db_get_query/4, object_db_get_agg/4]).
 -export([service_init/2, service_handle_cast/2, service_handle_info/2]).
@@ -128,6 +129,14 @@ object_db_save(_Obj) ->
     {ok, Meta::map()} | {error, term()}.
 
 object_db_delete(_ObjId) ->
+    {error, db_not_defined}.
+
+
+%% @doc This function must be implemented by DB plugins like nkdomain_store_es
+-spec object_db_delete_objs(nkservice:id(), type()|core, nkdomain_db:search_type(), nkdomain_db:opts()) ->
+    {ok, Total::integer(), [nkdomain_db:search_objs()]}| {error, term()}.
+
+object_db_delete_objs(_SrvId, _Type, _SearchType, _DbOpts) ->
     {error, db_not_defined}.
 
 

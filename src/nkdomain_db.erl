@@ -24,6 +24,7 @@
 
 -export([find/1, find/2, find_loaded/1, read/1, read/2, load/1, load/2]).
 -export([delete/1, delete/2, hard_delete/1, hard_delete/2]).
+-export([hard_delete_objs/2, hard_delete_objs/3]).
 -export([search/2, iterate/4, aggs/2, aggs/3]).
 -export_type([search_obj/0, search_objs_opts/0]).
 
@@ -311,6 +312,23 @@ hard_delete(Id, Opts) ->
         {error, Error} ->
             {error, Error}
     end.
+
+
+%% @doc
+-spec hard_delete_objs(nkdomain:type()|core, search_type()) ->
+    {ok, integer(), [search_obj()]} | {error, term()}.
+
+hard_delete_objs(ObjType, SearchType) ->
+    hard_delete_objs(ObjType, SearchType, #{}).
+
+
+%% @doc
+-spec hard_delete_objs(nkdomain:type()|core, search_type(), opts()) ->
+    {ok, integer(), Meta::map()} | {error, term()}.
+
+hard_delete_objs(ObjType, SearchType, Opts) ->
+    SrvId = maps:get(srv_id, Opts, ?NKROOT),
+    ?CALL_SRV(SrvId, object_db_delete_objs, [SrvId, ObjType, SearchType, Opts]).
 
 
 %% @doc

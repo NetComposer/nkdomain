@@ -23,7 +23,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([find_obj/3, search_objs/3, search_agg_objs/4, iterate_objs/5]).
--export([search/2]).
+-export([search/2, delete_objs/3]).
 -export([clean/1, import_objects/3, print/2]).
 
 -define(ES_ITER_SIZE, 100).
@@ -99,6 +99,17 @@ search_objs(Filters, Opts, EsOpts) ->
     Spec1 = maps:with([from, size, sort], Opts),
     Spec2 = Spec1#{filter_list=>Filters2, fields=>Fields2},
     do_search_objs(Spec2, EsOpts).
+
+
+
+%% @doc Generic delete
+-spec delete_objs(nkelastic_search:filter_list(), search_objs_opts(), nkelastic:opts()) ->
+    {ok, integer(), Aggs::map(), meta()} | {error, term()}.
+
+delete_objs(Filters, Opts, EsOpts) ->
+    Filters2 = get_filters(Filters, Opts),
+    Spec = #{filter_list=>Filters2},
+    do_delete(Spec, EsOpts).
 
 
 
@@ -315,6 +326,25 @@ do_search(Spec, EsOpts) ->
                 {error, Error} ->
                     ?LLOG(notice, "Error calling search (~p): ~p", [Query, Error]),
                     {ok, 0, [], #{}, #{}}
+            end;
+        {error, Error} ->
+            ?LLOG(warning, "query error ~p: ~p", [Spec, Error]),
+            {error, Error}
+    end.
+
+
+%% @private
+do_delete(Spec, EsOpts) ->
+    case nkelastic_search:query(Spec) of
+        {ok, Query} ->
+            case nkelastic:delete_by_query(Query, EsOpts) of
+                {ok, Aggs, Meta} ->
+                    {ok, maps:get(<<"total">>, Aggs, 0), Aggs, Meta};
+                {error, {search_error, _}} ->
+                    {ok, 0, #{}, #{error=>search_error}};
+                {error, Error} ->
+                    ?LLOG(notice, "Error calling search (~p): ~p", [Query, Error]),
+                    {ok, 0, #{}, #{}}
             end;
         {error, Error} ->
             ?LLOG(warning, "query error ~p: ~p", [Spec, Error]),
