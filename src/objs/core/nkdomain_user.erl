@@ -89,7 +89,7 @@
 -module(nkdomain_user).
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
--export([create/2, auth/2, make_token/4, get_name/1, get_info/2]).
+-export([get/1, create/2, update/2, auth/2, make_token/4, get_name/1, get_info/2]).
 -export([user_pass/1]).
 -export([get_sessions/1, get_sessions/2, get_presence/2, get_presence/3, update_presence/3]).
 -export([register_session/5, unregister_session/2, launch_session_notifications/2, set_status/4, get_status/3]).
@@ -192,12 +192,35 @@
         surname => binary(),
         email => binary()
 
+-type update_opts() ::
+    #{
+        tags => [binary()],
+        name => binary(),
+        surname => binary(),
+        email => binary(),
+        password => binary()
     }.
 
 
 %% ===================================================================
 %% API
 %% ===================================================================
+
+
+%% @doc
+-spec get(UserId::nkdomain:obj_id()) ->
+    {ok, map()} | {error, term()}.
+
+get(User) ->
+    case nkdomain:find(User) of
+        {ok, ?DOMAIN_USER, UserId, _Path, _PID} ->
+            nkdomain:get_obj(UserId);
+        {ok, _Type, _ObjId, _Path, _PID} ->
+            {error, object_not_found};
+        {error, Error} ->
+            {error, Error}
+    end.
+
 
 
 %% @doc
@@ -224,6 +247,31 @@ create(Domain, Opts) ->
             {error, Error}
     end.
 
+
+-spec update(nkdomain:obj_id(), update_opts()) ->
+    ok | {error, term()}.
+
+update(UserId, Opts) ->
+    Base = maps:with([tags, aliases], Opts),
+    User = maps:with([name, surname, email, password], Opts),
+    case nkdomain:update(UserId, Base#{?DOMAIN_USER => User}) of
+        {ok, _} ->
+            case Opts of
+                #{obj_name := Username} ->
+                    case nkdomain:update_name(UserId, Username) of
+                        {ok, _} ->
+                            ok;
+                        {error, Error} ->
+                            ?LLOG(error, "could not update user ~s: ~p", [UserId, Error]),
+                            {error, Error}
+                    end;
+                _ ->
+                    ok
+            end;
+        {error, Error} ->
+            ?LLOG(error, "could not update user ~s: ~p", [UserId, Error]),
+            {error, Error}
+    end.
 
 
 %% @doc
