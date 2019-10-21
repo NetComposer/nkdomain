@@ -185,15 +185,20 @@
 -type create_opts() ::
     #{
         parent_id => nkdomain:id(),
+        aliases => [binary()],
         created_by => nkdomain:id(),
         ttl => integer(),
         tags => [binary()],
         name => binary(),
         surname => binary(),
-        email => binary()
+        email => binary(),
+        password => binary()
+    }.
+
 
 -type update_opts() ::
     #{
+        aliases => [binary()],
         tags => [binary()],
         name => binary(),
         surname => binary(),
@@ -228,7 +233,7 @@ get(User) ->
     {ok, #obj_id_ext{}, [Unknown::binary()]} | {error, term()}.
 
 create(Domain, Opts) ->
-    Base = maps:with([obj_name, parent_id, created_by, ttl, tags], Opts),
+    Base = maps:with([obj_name, parent_id, created_by, ttl, tags, aliases], Opts),
     User = maps:with([name, surname, email, password], Opts),
     Obj = Base#{
         type => ?DOMAIN_USER,
