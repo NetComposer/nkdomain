@@ -119,6 +119,7 @@
 -define(TAG_DEACTIVATED, <<"deactivated">>).
 -define(TAG_PENDING_INVITE, <<"pending_invite">>).
 -define(TAG_LOGIN_DISABLED, <<"login_disabled">>).
+-define(TAG_ROLE, <<"role">>).
 
 -define(TAG_MAIL_FROM, <<"mail_from">>).
 -define(TAG_MAIL_TO, <<"mail_to">>).
