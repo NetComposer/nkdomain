@@ -1083,6 +1083,21 @@ api_server_http_auth(_Id, HttpReq, #nkreq{}=Req) ->
 nkservice_rest_http(<<"nkroot_graphql">>, Method, Path, Req) ->
     nkdomain_graphiql:http(Method, Path, Req);
 
+nkservice_rest_http(_Id, get, [], Req) ->
+    case nkdomain_store_es_util:get_opts() of
+        {ok, Opts} ->
+            case nkelastic:health(Opts) of
+                {ok, Status, StatusMap, _Time} when Status =:= yellow; Status =:= green ->
+                    {http, 200, [{<<"Content-Type">>, <<"application/json">>}], nklib_json:encode(StatusMap), Req};
+                {ok, _Status, StatusMap, _Time} ->
+                    {http, 503, [{<<"Content-Type">>, <<"application/json">>}], nklib_json:encode(StatusMap), Req};
+                {error, Error} ->
+                    {http, 500, [{<<"Content-Type">>, <<"plain/text">>}], nklib_util:to_binary(Error)}
+            end;
+        {error, Error} ->
+            {http, 500, [{<<"Content-Type">>, <<"plain/text">>}], nklib_util:to_binary(Error)}
+    end;
+
 nkservice_rest_http(_Id, get, [<<"_file">>, FileId], Req) ->
     case nkdomain_file_obj:http_get(FileId, Req) of
         {ok, CT, Bin, Req2} ->
