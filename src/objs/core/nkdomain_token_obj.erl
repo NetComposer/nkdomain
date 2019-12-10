@@ -67,7 +67,7 @@
     {ok, TokenId::nkdomain:obj_id(), pid(), integer()} | {error, term()}.
 
 create(DomainId, Opts, Data) ->
-    Base = maps:with([parent_id, name, created_by, subtype, srv_id], Opts),
+    Base = maps:with([parent_id, name, created_by, subtype, srv_id, tags], Opts),
     TokenData = maps:with([module, function], Opts),
     case check_ttl(Opts) of
         {ok, TTL} ->
