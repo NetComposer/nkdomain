@@ -25,11 +25,12 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([create/3]).
--export([object_info/0, object_es_mapping/0, object_parse/2, object_send_event/2,
+-export([object_info/0, object_es_mapping/0, object_db_get_query/3, object_parse/2, object_send_event/2,
          object_stop/2, object_sync_op/3, object_async_op/2]).
 -export([object_admin_info/0]).
 -export([get_token_data/1, set_token_data/2, add_tag/2, consume_token/2, execute_token/1, execute_token/2]).
 -export([object_execute/5, object_schema/1, object_query/3, object_mutation/3]).
+-export_type([query/0]).
 
 -include("nkdomain.hrl").
 -include("nkdomain_debug.hrl").
@@ -67,7 +68,7 @@
     {ok, TokenId::nkdomain:obj_id(), pid(), integer()} | {error, term()}.
 
 create(DomainId, Opts, Data) ->
-    Base = maps:with([parent_id, name, created_by, subtype, srv_id], Opts),
+    Base = maps:with([parent_id, name, created_by, subtype, srv_id, tags], Opts),
     TokenData = maps:with([module, function], Opts),
     case check_ttl(Opts) of
         {ok, TTL} ->
@@ -181,6 +182,70 @@ object_query(QueryName, Params, Ctx) ->
 %% @doc
 object_mutation(MutationName, Params, Ctx) ->
     nkdomain_token_obj_schema:object_mutation(MutationName, Params, Ctx).
+
+
+-type query() ::
+    {query_tokens, nkdomain:id(), #{module=>binary(), function=>binary(),
+     subtype=>binary(), is_deleted=>boolean(), tags=>[binary()], is_deleted=>boolean()},
+     nkdomain_db:search_objs_opts()}.
+
+%% @doc
+object_db_get_query(nkelastic, {query_tokens, Domain, Filters, Opts}, DbOpts) ->
+    case nkdomain_store_es_util:get_path(Domain) of
+        {ok, DomainPath} ->
+            Filters1 = [
+                {path, subdir, DomainPath}
+            ],
+            Filters2 = case Filters of
+                #{module := Module} ->
+                    [{[?DOMAIN_TOKEN, "module"], eq, nklib_util:to_binary(Module)}|Filters1];
+                _ ->
+                    Filters1
+            end,
+            Filters3 = case Filters of
+                #{function := Function} ->
+                    [{[?DOMAIN_TOKEN, "function"], eq, Function}|Filters2];
+                _ ->
+                    Filters2
+            end,
+            Filters4 = case Filters of
+                #{subtype := Subtypes} when is_list(Subtypes) ->
+                    case io_lib:printable_unicode_list(Subtypes) of
+                        true ->
+                            [{["subtype"], eq, Subtypes}|Filters3];
+                        false ->
+                            [{["subtype"], values, Subtypes}|Filters3]
+                    end;
+                #{subtype := Subtype} ->
+                    [{["subtype"], eq, Subtype}|Filters3];
+                _ ->
+                    Filters3
+            end,
+            Filters5 = case Filters of
+                #{tags := Tags} ->
+                    [{["tags"], values, Tags}|Filters4];
+                _ ->
+                    Filters4
+            end,
+            {GetDeleted, Filters6} = case Filters of
+                #{is_deleted := true} ->
+                    {true, [{["is_deleted"], eq, true}|Filters5]};
+                #{is_deleted := false} ->
+                    {false, [{'not', {["is_deleted"], eq, true}}|Filters5]};
+                _ ->
+                    {false, Filters5}
+            end,
+            Opts2 = maps:with([fields, from, size], Opts),
+            Sort = maps:get(sort, Opts, <<"asc:created_time">>),
+            Opts3 = Opts2#{
+                type => ?DOMAIN_TOKEN,
+                get_deleted => GetDeleted,
+                sort => Sort
+            },
+            {ok, {nkelastic, Filters6, maps:merge(DbOpts, Opts3)}};
+        {error, Error} ->
+            {error, Error}
+    end.
 
 
 %% @private
