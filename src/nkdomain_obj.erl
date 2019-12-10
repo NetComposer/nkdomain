@@ -1015,6 +1015,8 @@ do_delete(#obj_state{childs=Childs}=State) when map_size(Childs)==0 ->
             {ok, do_event(deleted, State3)};
         {error, object_has_childs, State3} ->
             {{error, object_has_childs}, State3};
+        {error, object_not_found, State3} ->
+            {{error, object_not_found}, State3};
         {error, Error, State3} ->
             ?LLOG(warning, "object could not be deleted: ~p", [Error], State3),
             {{error, Error}, State3}
