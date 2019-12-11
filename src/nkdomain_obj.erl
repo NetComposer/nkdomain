@@ -184,6 +184,7 @@
 start(Obj, Op, StartOpts) ->
     case gen_server:start(?MODULE, {Op, Obj, StartOpts}, []) of
         {ok, Pid} -> {ok, Pid};
+        {error, {shutdown, {already_registered, Pid}}} -> {ok, Pid};
         {error, {already_registered, Pid}} -> {ok, Pid};
         {error, Error} -> {error, Error}
     end.
@@ -360,6 +361,8 @@ init({Op, Obj, StartOpts}) when Op==loaded; Op==created ->
                         {error, Error} ->
                             {stop, Error}
                     end;
+                {error, {already_registered, Pid}} ->
+                    {stop, {shutdown, {already_registered, Pid}}};
                 {error, Error} ->
                     {stop, Error}
             end;
