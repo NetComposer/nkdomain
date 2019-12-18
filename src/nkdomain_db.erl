@@ -25,7 +25,7 @@
 -export([find/1, find/2, find_loaded/1, read/1, read/2, load/1, load/2]).
 -export([delete/1, delete/2, hard_delete/1, hard_delete/2]).
 -export([hard_delete_objs/2, hard_delete_objs/3]).
--export([search/2, iterate/4, aggs/2, aggs/3]).
+-export([search/2, iterate/4, aggs/2, aggs/3, aggs/4]).
 -export_type([search_obj/0, search_objs_opts/0]).
 
 -include("nkdomain.hrl").
@@ -380,6 +380,20 @@ aggs(Type, AggType) ->
 aggs(Type, AggType, Opts) ->
     SrvId = maps:get(srv_id, Opts, ?NKROOT),
     case ?CALL_SRV(SrvId, object_db_agg_objs, [SrvId, Type, AggType, Opts]) of
+        {ok, Total, Data, Meta} ->
+            {ok, Total, Data, Meta};
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
+%% @doc
+-spec aggs(type()|core, Field::binary(), search_type(), opts()) ->
+    {ok, integer(), [{binary(), integer()}], Meta::map()} | {error, term()}.
+
+aggs(Type, Field, SearchType, Opts) ->
+    SrvId = maps:get(srv_id, Opts, ?NKROOT),
+    case ?CALL_SRV(SrvId, object_db_agg_objs, [SrvId, Type, Field, SearchType, Opts]) of
         {ok, Total, Data, Meta} ->
             {ok, Total, Data, Meta};
         {error, Error} ->

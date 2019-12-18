@@ -23,7 +23,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 -export([object_db_init/1, object_db_read/1, object_db_save/1, object_db_delete/1]).
 -export([object_db_find_obj/2, object_db_search_objs/4,
-         object_db_delete_objs/4, object_db_agg_objs/4,
+         object_db_delete_objs/4, object_db_agg_objs/4, object_db_agg_objs/5,
          object_db_iterate_objs/6, object_db_clean/0,
          object_db_get_query/4, object_db_get_agg/4]).
 -export([service_init/2, service_handle_cast/2, service_handle_info/2]).
@@ -213,6 +213,14 @@ object_db_iterate_objs(_SrvId, _Type, _SearchType, _Fun, _Acc, _DbOpts) ->
     {ok, Total::integer(), [{binary(), integer()}]}| {error, term()}.
 
 object_db_agg_objs(_SrvId, _Type, _AggType, _DbOpts) ->
+    {error, db_not_defined}.
+
+
+%% @doc
+-spec object_db_agg_objs(nkservice:id(), type()|core, Field::binary, nkdomain_db:search_type(), nkdomain_db:opts()) ->
+    {ok, Total::integer(), [{binary(), integer()}]}| {error, term()}.
+
+object_db_agg_objs(_SrvId, _Type, _Field, _SearchType, _DbOpts) ->
     {error, db_not_defined}.
 
 

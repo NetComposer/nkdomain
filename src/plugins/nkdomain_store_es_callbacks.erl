@@ -25,7 +25,8 @@
 -export([error/1]).
 -export([object_db_init/1, object_db_read/1, object_db_save/1, object_db_delete/1,
          object_db_find_obj/2, object_db_search_objs/4, object_db_delete_objs/4,
-         object_db_agg_objs/4, object_db_iterate_objs/6, object_db_clean/0]).
+         object_db_agg_objs/4, object_db_agg_objs/5,
+         object_db_iterate_objs/6, object_db_clean/0]).
 
 
 -include("nkdomain.hrl").
@@ -171,6 +172,26 @@ object_db_agg_objs(SrvId, Type, Spec, DbOpts) ->
         {ok, EsOpts} ->
             case ?CALL_SRV(SrvId, object_db_get_agg, [nkelastic, Type, Spec, DbOpts]) of
                 {ok, {nkelastic, Filters, Field, Opts}} ->
+                    ExtraFilters = maps:get(extra_filters, Opts, []),
+                    nkdomain_store_es_search:search_agg_objs(Filters++ExtraFilters, Field, Opts, EsOpts);
+                {error, Error} ->
+                    {error, Error}
+            end;
+        _ ->
+            continue
+    end.
+
+
+%% @doc
+-spec object_db_agg_objs(nkservice:id(), nkdomain:type()|core, Field::binary(), nkdomain_db:search_type(), nkdomain_db:opts()) ->
+    {ok, Total::integer(), [{binary(), integer()}], Meta::map()} |
+    {error, term()}.
+
+object_db_agg_objs(SrvId, Type, Field, SearchType, DbOpts) ->
+    case nkdomain_store_es_util:get_opts() of
+        {ok, EsOpts} ->
+            case ?CALL_SRV(SrvId, object_db_get_query, [nkelastic, Type, SearchType, DbOpts]) of
+                {ok, {nkelastic, Filters, Opts}} ->
                     ExtraFilters = maps:get(extra_filters, Opts, []),
                     nkdomain_store_es_search:search_agg_objs(Filters++ExtraFilters, Field, Opts, EsOpts);
                 {error, Error} ->
