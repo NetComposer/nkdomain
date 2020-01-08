@@ -120,11 +120,12 @@ delete_objs(Filters, Opts, EsOpts) ->
 search_agg_objs(Filters, Field, Opts, EsOpts) ->
     Filters2 = get_filters(Filters, Opts),
     Size = maps:get(size, Opts, 100),
+    TermsBase = maps:with([include, min_doc_count], Opts),
     Spec = #{
         filter_list => Filters2,
         aggs => #{
             my_fields => #{
-                terms => #{
+                terms => TermsBase#{
                     field => Field,
                     size => Size
                 }
