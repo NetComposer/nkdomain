@@ -121,35 +121,77 @@ search_agg_objs(Filters, Field, Opts, EsOpts) ->
     Filters2 = get_filters(Filters, Opts),
     Size = maps:get(size, Opts, 100),
     TermsBase = maps:with([include, min_doc_count], Opts),
+    Fields = case is_list(Field) of
+        true ->
+            case io_lib:printable_unicode_list(Field) of
+                true ->
+                    [to_bin(Field)];
+                false ->
+                    Field
+            end;
+        false ->
+            [to_bin(Field)]
+    end,
+    AggsList = lists:foldr(fun(F, AggAcc) ->
+        Include = maps:get(include, TermsBase, undefined),
+        TermsBase2 = case Include of
+            undefined ->
+                TermsBase;
+            _ ->
+                case is_map(Include) andalso maps:is_key(F, Include) of
+                    true ->
+                        TermsBase#{
+                            include => maps:get(F, Include, [])
+                        };
+                    false ->
+                        maps:without([include], TermsBase)
+                end
+        end,
+        [{F, #{
+            terms => TermsBase2#{
+                field => F,
+                size => Size
+            }
+        }}|AggAcc]
+    end,
+    [],
+    Fields),
     Spec = #{
         filter_list => Filters2,
-        aggs => #{
-            my_fields => #{
-                terms => TermsBase#{
-                    field => Field,
-                    size => Size
-                }
-            }
-        },
+        aggs => maps:from_list(AggsList),
         size => 0
     },
     case do_search(Spec, EsOpts) of
-        {ok, N, [], #{<<"my_fields">>:=MyFields}, Meta} ->
-            #{
-                <<"buckets">> := Buckets,
-                <<"doc_count_error_upper_bound">> := Error,
-                <<"sum_other_doc_count">> := SumOther
-            } = MyFields,
-            Meta2 = Meta#{
-                agg_error => Error,
-                agg_sum_other => SumOther
-            },
-            Data = lists:map(
-                fun(#{<<"key">>:=Key, <<"doc_count">>:=Count}) -> {Key, Count} end,
-                Buckets),
-            {ok, N, Data, Meta2};
-        {ok, 0, [], _Agg, Meta} ->
-            {ok, 0, [], Meta};
+        {ok, N, [], Results, Meta} ->
+            {Data, AggError, AggSumOther} = lists:foldr(fun(F, {Acc, AccError, AccSumOther}) ->
+                MyFields = maps:get(F, Results),
+                #{
+                    <<"buckets">> := Buckets,
+                    <<"doc_count_error_upper_bound">> := Error,
+                    <<"sum_other_doc_count">> := SumOther
+                } = MyFields,
+                {Acc#{F => lists:map(
+                    fun(#{<<"key">>:=Key, <<"doc_count">>:=Count}) -> {Key, Count} end,
+                Buckets)},
+                [Error|AccError],
+                [SumOther|AccSumOther]}
+            end,
+            {#{}, [], []},
+            Fields),
+            {Data2, Meta2} = case Fields of
+                [F|[]] ->
+                    {maps:get(F, Data),
+                    Meta#{
+                        agg_error => lists:nth(1, AggError),
+                        agg_sum_other => lists:nth(1, AggSumOther)
+                    }};
+                _ ->
+                    {Data, Meta#{
+                        agg_error => AggError,
+                        agg_sum_other => AggSumOther
+                    }}
+            end,
+            {ok, N, Data2, Meta2};
         {error, Error} ->
             {error, Error}
     end.
