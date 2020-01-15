@@ -127,7 +127,7 @@ search_agg_objs(Filters, Field, Opts, EsOpts) ->
                 true ->
                     [to_bin(Field)];
                 false ->
-                    Field
+                    [to_bin(F) || F <- Field]
             end;
         false ->
             [to_bin(Field)]
@@ -164,12 +164,12 @@ search_agg_objs(Filters, Field, Opts, EsOpts) ->
     case do_search(Spec, EsOpts) of
         {ok, N, [], Results, Meta} ->
             {Data, AggError, AggSumOther} = lists:foldr(fun(F, {Acc, AccError, AccSumOther}) ->
-                MyFields = maps:get(F, Results),
+                MyField = maps:get(F, Results),
                 #{
                     <<"buckets">> := Buckets,
                     <<"doc_count_error_upper_bound">> := Error,
                     <<"sum_other_doc_count">> := SumOther
-                } = MyFields,
+                } = MyField,
                 {Acc#{F => lists:map(
                     fun(#{<<"key">>:=Key, <<"doc_count">>:=Count}) -> {Key, Count} end,
                 Buckets)},
