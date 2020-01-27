@@ -135,8 +135,10 @@ find_in_db(Id, Opts) ->
                     {error, object_not_found};
                 {ok, N, [#{<<"type">>:=Type, <<"obj_id">>:=ObjId, <<"path">>:=Path}|_], _Meta}->
                     case N > 1 of
-                        true ->
+                        true when Id =/= <<>> ->
                             lager:notice("NkDOMAIN: duplicated alias for ~s", [Id]);
+                        true ->
+                            ok;
                         false ->
                             ok
                     end,
