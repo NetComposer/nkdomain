@@ -164,7 +164,11 @@ search_agg_objs(Filters, Field, Opts, EsOpts) ->
     case do_search(Spec, EsOpts) of
         {ok, N, [], Results, Meta} ->
             {Data, AggError, AggSumOther} = lists:foldr(fun(F, {Acc, AccError, AccSumOther}) ->
-                MyField = maps:get(F, Results),
+                MyField = maps:get(F, Results, #{
+                    <<"buckets">> => [],
+                    <<"doc_count_error_upper_bound">> => 0,
+                    <<"sum_other_doc_count">> => 0
+                }),
                 #{
                     <<"buckets">> := Buckets,
                     <<"doc_count_error_upper_bound">> := Error,
