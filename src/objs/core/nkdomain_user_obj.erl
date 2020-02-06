@@ -195,8 +195,8 @@ object_parse(_Mode, Obj) ->
 object_es_mapping() ->
     #{
         name => #{type => text},
-        surname => #{type => text},
         name_sort => #{type => keyword},
+        surname => #{type => text},
         surname_sort =>  #{type => keyword},
         fullname_norm => #{type => keyword},
         email => #{type => keyword},
@@ -223,8 +223,7 @@ object_es_mapping() ->
                 user_status => #{enabled => false},
                 updated_time => #{type => date}
             }
-        },
-        name_sort => #{type => keyword}
+        }
     }.
 
 
