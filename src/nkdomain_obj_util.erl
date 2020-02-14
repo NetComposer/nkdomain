@@ -190,7 +190,7 @@ get_obj_info(#obj_state{id=#obj_id_ext{obj_id=ObjId, path=Path}, obj=Obj}) ->
         end,
         case maps:get(aliases, Obj, []) of
             [] -> [];
-            Tags -> {tags, Tags}
+            Aliases -> {aliases, Aliases}
         end,
         case maps:get(icon_id, Obj, <<>>) of
             <<>> -> [];
