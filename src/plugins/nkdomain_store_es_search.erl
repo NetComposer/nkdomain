@@ -142,7 +142,8 @@ search_agg_objs(Filters, Field, Opts, EsOpts) ->
                 case is_map(Include) andalso maps:is_key(F, Include) of
                     true ->
                         TermsBase#{
-                            include => maps:get(F, Include, [])
+                            include => maps:get(F, Include, []),
+                            missing => 0
                         };
                     false ->
                         maps:without([include], TermsBase)
@@ -198,9 +199,21 @@ search_agg_objs(Filters, Field, Opts, EsOpts) ->
                             <<"doc_count_error_upper_bound">> := Error,
                             <<"sum_other_doc_count">> := SumOther
                         } = MyField,
-                        {Acc#{F => lists:map(
+                        FRes = lists:map(
                             fun(#{<<"key">>:=Key, <<"doc_count">>:=Count}) -> {Key, Count} end,
-                        Buckets)},
+                        Buckets),
+                        FResKeys = [Key || {Key, _} <- FRes],
+                        FInclude = case is_map(Include) andalso maps:is_key(F, Include) of
+                            true ->
+                                maps:get(F, Include, []);
+                            false ->
+                                []
+                        end,
+                        MissingKeys = lists:subtract(FInclude, FResKeys),
+                        %% Adding missing keys with a default value because ES
+                        %% is not returning some values even with "include" and "missing"
+                        FRes2 = FRes ++ [{Key, 0} || Key <- MissingKeys],
+                        {Acc#{F => FRes2},
                         [Error|AccError],
                         [SumOther|AccSumOther]}
                 end
