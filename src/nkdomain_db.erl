@@ -172,6 +172,7 @@ read(Id, Opts) ->
                 {ok, Obj} ->
                     {ok, ObjIdExt, Obj};
                 {error, Error} ->
+                    ?LLOG(error, "Couldn't read loaded object ~p from process ~p because: ~p", [Id, Pid, Error]),
                     {error, Error}
             end;
         #obj_id_ext{obj_id=ObjId}=ObjIdExt ->
@@ -181,9 +182,11 @@ read(Id, Opts) ->
                 {deleted, Obj} ->
                     {deleted, ObjIdExt, Obj};
                 {error, Error} ->
+                    ?LLOG(error, "Couldn't read unloaded object ~p because: ~p", [Id, Error]),
                     {error, Error}
             end;
         {error, Error} ->
+            ?LLOG(error, "Couldn't find object ~p while trying to read it because: ~p", [Id, Error]),
             {error, Error}
     end.
 
@@ -442,6 +445,7 @@ do_read(ObjId, Opts) ->
                     {error, Error}
             end;
         {error, Error} ->
+            ?LLOG(error, "cannot read object ~s: ~p", [ObjId, Error]),
             {error, Error}
     end.
 
