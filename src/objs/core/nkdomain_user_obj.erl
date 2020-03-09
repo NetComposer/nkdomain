@@ -247,7 +247,8 @@ object_es_unparse(Obj, Base) ->
 
 -type query() ::
     {query_user_email, binary(), nkdomain_db:search_objs_opts()} |
-    {query_user_tag, binary(), nkdomain_db:search_objs_opts()}.
+    {query_user_tag, binary(), nkdomain_db:search_objs_opts()} |
+    {query_users, nkdomain:id(), map(), nkdomain_db:search_objs_opts()}.
 
 
 
@@ -268,6 +269,74 @@ object_db_get_query(nkelastic, {query_user_tag, Tag, Opts}, DbOpts) ->
         type => ?DOMAIN_USER
     },
     {ok, {nkelastic, Filters, maps:merge(DbOpts, Opts3)}};
+
+%% @private
+object_db_get_query(nkelastic, {query_users, Domain, Filters, Opts}, DbOpts) ->
+    case nkdomain_store_es_util:get_path(Domain) of
+        {ok, DomainPath} ->
+            Filters2 = maps:fold(fun(Key, Value, Acc) ->
+                case {Key, Value} of
+                    {date_range, PeriodOpts} ->
+                        [{["created_time"], date_range, PeriodOpts}|Acc];
+                    {email, Email} ->
+                        [{[?DOMAIN_USER, ".email"], prefix, nklib_util:to_binary(Email)}|Acc];
+                    {fullname, Fullname} ->
+                        [{[?DOMAIN_USER, ".fullname_norm"], prefix, nklib_util:to_binary(Fullname)}|Acc];
+                    {name, Name} ->
+                        [{[?DOMAIN_USER, ".name"], prefix, nklib_util:to_binary(Name)}|Acc];
+                    {search_words, Value} ->
+                        Fs = [{'or', [
+                            {["aliases"], query_string, <<"*", Word/binary, "*">>},
+                            {["aliases"], query_string, <<"*", (nklib_util:to_upper(Word))/binary, "*">>},
+                            {[?DOMAIN_USER, ".email"], query_string, <<"*", Word/binary, "*">>},
+                            {[?DOMAIN_USER, ".fullname_norm"], query_string, <<"*", Word/binary, "*">>}]}
+                        || Word <- nkdomain_store_es_util:normalize_multi(Value)],
+                        Fs ++ Acc;
+                    {surname, Surname} ->
+                        [{[?DOMAIN_USER, ".surname"], prefix, nklib_util:to_binary(Surname)}|Acc];
+                    {tags, Tags} ->
+                        TagFilters = lists:map(fun(Tag) ->
+                            case is_list(Tag) of
+                                true ->
+                                    {["tags"], values, Tag};
+                                false ->
+                                    {["tags"], values, [Tag]}
+                            end
+                        end,
+                        Tags),
+                        TagFilters ++ Acc;
+                    _ ->
+                        Acc
+                end
+            end,
+            [{path, subdir, DomainPath}],
+            Filters),
+            Sort = maps:get(sort, Opts, <<"asc:", (?DOMAIN_USER)/binary, ".fullname_norm">>),
+            Sort2 = case Sort of
+                <<"asc:fullname">> ->
+                    <<"asc:", (?DOMAIN_USER)/binary, ".fullname_norm">>;
+                <<"desc:fullname">> ->
+                    <<"desc:", (?DOMAIN_USER)/binary, ".fullname_norm">>;
+                <<"asc:name">> ->
+                    <<"asc:", (?DOMAIN_USER)/binary, ".name_sort">>;
+                <<"desc:name">> ->
+                    <<"desc:", (?DOMAIN_USER)/binary, ".name_sort">>;
+                <<"asc:surname">> ->
+                    <<"asc:", (?DOMAIN_USER)/binary, ".surname_sort">>;
+                <<"desc:surname">> ->
+                    <<"desc:", (?DOMAIN_USER)/binary, ".surname_sort">>;
+                _ ->
+                    Sort
+            end,
+            Opts2 = maps:with([fields, from, size], Opts),
+            Opts3 = Opts2#{
+                type => ?DOMAIN_USER,
+                sort => Sort2
+            },
+            {ok, {nkelastic, Filters2, maps:merge(DbOpts, Opts3)}};
+        {error, Error} ->
+            {error, Error}
+    end;
 
 object_db_get_query(nkelastic, QueryType, _DbOpts) ->
     {error, {unknown_query_type, QueryType}};

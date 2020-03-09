@@ -90,6 +90,7 @@
 -author('Carlos Gonzalez <carlosj.gf@gmail.com>').
 
 -export([get/1, create/2, update/2, auth/2, make_token/4, get_name/1, get_info/2]).
+-export([get_users/3, get_users_aggs/4]).
 -export([user_pass/1]).
 -export([get_sessions/1, get_sessions/2, get_presence/2, get_presence/3, update_presence/3]).
 -export([register_session/5, unregister_session/2, launch_session_notifications/2, set_status/4, get_status/3]).
@@ -379,6 +380,26 @@ get_name(Id) ->
 
 get_info(Id, Opts) ->
     sync_op(Id, {get_info, Opts}).
+
+
+%% @doc
+get_users(Domain, Filters, Opts) ->
+    case nkdomain_db:search(?DOMAIN_USER, {query_users, Domain, Filters, Opts}) of
+        {ok, N, List, _Meta} ->
+            {ok, N, List};
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
+%% @doc
+get_users_aggs(Domain, Field, Filters, Opts) ->
+    case nkdomain_db:aggs(?DOMAIN_USER, Field, {query_users, Domain, Filters, Opts}, Opts) of
+        {ok, N, List, _Meta} ->
+            {ok, N, List};
+        {error, Error} ->
+            {error, Error}
+    end.
 
 
 %% @doc
