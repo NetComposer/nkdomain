@@ -305,6 +305,15 @@ object_db_get_query(nkelastic, {query_users, Domain, Filters, Opts}, DbOpts) ->
                         end,
                         Tags),
                         TagFilters ++ Acc;
+                    {users, []} ->
+                        Acc;
+                    {users, Users} ->
+                        case is_binary(Users) orelse io_lib:printable_unicode_list(Users) of
+                            true ->
+                                [{"obj_id", eq, nklib_util:to_binary(Users)}|Acc];
+                            false ->
+                                [{"obj_id", values, Users}|Acc]
+                        end;
                     _ ->
                         Acc
                 end
