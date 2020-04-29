@@ -193,48 +193,38 @@ object_mutation(MutationName, Params, Ctx) ->
 object_db_get_query(nkelastic, {query_tokens, Domain, Filters, Opts}, DbOpts) ->
     case nkdomain_store_es_util:get_path(Domain) of
         {ok, DomainPath} ->
-            Filters1 = [
-                {path, subdir, DomainPath}
-            ],
-            Filters2 = case Filters of
-                #{module := Module} ->
-                    [{[?DOMAIN_TOKEN, "module"], eq, nklib_util:to_binary(Module)}|Filters1];
-                _ ->
-                    Filters1
+            Filters2 = maps:fold(fun(Key, Value, Acc) ->
+                case {Key, Value} of
+                    {created_by, CreatorId} ->
+                        [{["created_by"], eq, CreatorId}|Acc];
+                    {function, Function} ->
+                        [{[?DOMAIN_TOKEN, "function"], eq, Function}|Acc];
+                    {is_deleted, false} ->
+                        [{'not', {["is_deleted"], eq, true}}|Acc];
+                    {is_deleted, true} ->
+                        [{["is_deleted"], eq, true}|Acc];
+                    {module, Module} ->
+                        [{[?DOMAIN_TOKEN, "module"], eq, nklib_util:to_binary(Module)}|Acc];
+                    {parent_id, ParentId} ->
+                        [{["parent_id"], eq, ParentId}|Acc];
+                    {subtype, Subtypes} ->
+                        case is_binary(Subtypes) orelse io_lib:printable_unicode_list(Subtypes) of
+                            true ->
+                                [{["subtype"], eq, Subtypes}|Acc];
+                            false ->
+                                [{["subtype"], values, Subtypes}|Acc]
+                        end;
+                    {tags, []} ->
+                        Acc;
+                    {tags, Tags} ->
+                        [{["tags"], values, Tags}|Acc];
+                    _ ->
+                        Acc
+                end
             end,
-            Filters3 = case Filters of
-                #{function := Function} ->
-                    [{[?DOMAIN_TOKEN, "function"], eq, Function}|Filters2];
-                _ ->
-                    Filters2
-            end,
-            Filters4 = case Filters of
-                #{subtype := Subtypes} when is_list(Subtypes) ->
-                    case io_lib:printable_unicode_list(Subtypes) of
-                        true ->
-                            [{["subtype"], eq, Subtypes}|Filters3];
-                        false ->
-                            [{["subtype"], values, Subtypes}|Filters3]
-                    end;
-                #{subtype := Subtype} ->
-                    [{["subtype"], eq, Subtype}|Filters3];
-                _ ->
-                    Filters3
-            end,
-            Filters5 = case Filters of
-                #{tags := Tags} ->
-                    [{["tags"], values, Tags}|Filters4];
-                _ ->
-                    Filters4
-            end,
-            {GetDeleted, Filters6} = case Filters of
-                #{is_deleted := true} ->
-                    {true, [{["is_deleted"], eq, true}|Filters5]};
-                #{is_deleted := false} ->
-                    {false, [{'not', {["is_deleted"], eq, true}}|Filters5]};
-                _ ->
-                    {false, Filters5}
-            end,
+            [{path, subdir, DomainPath}],
+            Filters),
+            GetDeleted = maps:get(is_deleted, Filters, false),
             Opts2 = maps:with([fields, from, size], Opts),
             Sort = maps:get(sort, Opts, <<"asc:created_time">>),
             Opts3 = Opts2#{
@@ -242,7 +232,7 @@ object_db_get_query(nkelastic, {query_tokens, Domain, Filters, Opts}, DbOpts) ->
                 get_deleted => GetDeleted,
                 sort => Sort
             },
-            {ok, {nkelastic, Filters6, maps:merge(DbOpts, Opts3)}};
+            {ok, {nkelastic, Filters2, maps:merge(DbOpts, Opts3)}};
         {error, Error} ->
             {error, Error}
     end.
