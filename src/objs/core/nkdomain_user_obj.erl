@@ -934,30 +934,33 @@ notify_token_sessions(Notify, Op, State) ->
                 0,
                 UserSessions),
             case Op of
-                _ when Num > 0 ->
-                    ok;
                 created ->
-                    notify_wakeup_push(Data, State);
+                    notify_wakeup_push(Num, Data, State);
                 {removed, Reason} ->
                     ?LLOG(notice, "~s session notification removed: ~p", [Type, Reason])
             end;
         error when Op==created ->
-            notify_wakeup_push(Data, State);
+            notify_wakeup_push(0, Data, State);
         error ->
             ok
     end.
 
 %% @private
-notify_wakeup_push(#{?DOMAIN_USER:=#{<<"notification">>:=#{<<"srv_id">>:=Srv, <<"wakeup_push">>:=Push}}}, State) ->
-    ?LLOG(notice, "no session found: send wakeup (~p)", [Push], State),
+notify_wakeup_push(NumSessions, #{?DOMAIN_USER:=#{<<"notification">>:=#{<<"srv_id">>:=Srv, <<"wakeup_push">>:=Push}}}, State) ->
+    case NumSessions > 0 of
+        false ->
+            ?LLOG(notice, "no session found: send wakeup (~p)", [Push], State);
+        true ->
+            ok
+    end,
     case nkdomain_obj_util:get_existing_srv_id(Srv) of
         undefined ->
             ?LLOG(notice, "could not send push: unknown service '~s'", [Srv], State);
         SrvId ->
-            do_send_push(SrvId, Push, State)
+            do_send_push(SrvId, Push#{num_sessions => NumSessions}, State)
     end;
 
-notify_wakeup_push(S, State) ->
+notify_wakeup_push(_NumSessions, S, State) ->
     lager:error("NKLOG NO WAKE ~p", [S]),
     ?LLOG(notice, "no session found (and no wakeup)", [], State).
 
