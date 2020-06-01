@@ -217,7 +217,16 @@ object_db_get_query(nkelastic, {query_tokens, Domain, Filters, Opts}, DbOpts) ->
                     {tags, []} ->
                         Acc;
                     {tags, Tags} ->
-                        [{["tags"], values, Tags}|Acc];
+                        TagFilters = lists:map(fun(Tag) ->
+                            case is_list(Tag) of
+                                true ->
+                                    {["tags"], values, Tag};
+                                false ->
+                                    {["tags"], values, [Tag]}
+                            end
+                        end,
+                        Tags),
+                        TagFilters ++ Acc;
                     _ ->
                         Acc
                 end
